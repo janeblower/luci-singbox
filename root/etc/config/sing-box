@@ -1,0 +1,12 @@
+config fakeip 'fakeip'
+	option enabled '0'
+	list inet4_range '198.18.0.0/15'
+	list inet6_range 'fc00::/18'
+
+config tproxy 'tproxy'
+	option enabled '0'
+	option interface 'br-lan'
+	option port '7893'
+
+config nftables 'nftables'
+	option enabled '0'

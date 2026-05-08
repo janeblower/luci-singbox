@@ -1,0 +1,10 @@
+#!/bin/sh
+# Run by OpenWrt on first boot after package install. Removes itself on success.
+
+# Force LuCI's RPC ACL cache to reload so the menu entry appears immediately.
+rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
+
+# Reload rpcd so the new ACL JSON is picked up.
+/etc/init.d/rpcd reload >/dev/null 2>&1
+
+exit 0
