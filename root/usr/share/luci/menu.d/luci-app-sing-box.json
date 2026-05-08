@@ -1,0 +1,14 @@
+{
+    "admin/services/sing-box": {
+        "title": "Sing-Box",
+        "order": 60,
+        "action": {
+            "type": "view",
+            "path": "sing-box/main"
+        },
+        "depends": {
+            "acl": [ "luci-app-sing-box" ],
+            "uci": { "sing-box": true }
+        }
+    }
+}
