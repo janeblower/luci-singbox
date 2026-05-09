@@ -1,0 +1,96 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # required by action-gh-release to upload assets on tag push
+
+jobs:
+  test:
+    name: Local test suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            lua5.1 lua-cjson shellcheck jq nftables
+
+      - name: Run tests/run.sh
+        run: sh tests/run.sh
+
+  build:
+    name: Build OpenWrt package (apk, SNAPSHOT)
+    needs: test
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout into a feed-shaped subdirectory: <workspace>/feed/<package-name>/
+      # The OpenWrt SDK action treats FEED_DIR as a feed root and scans its
+      # immediate subdirs for package Makefiles.
+      - name: Checkout (as feed/<package>)
+        uses: actions/checkout@v4
+        with:
+          path: feed/luci-app-sing-box
+
+      # ARCH=x86_64 (no version suffix) selects the OpenWrt SNAPSHOT SDK image,
+      # which is the current master branch and ships apk as the default package
+      # format. Once OpenWrt 25.x is tagged you can pin to e.g. ARCH=x86_64-25.xx.x.
+      # The package is LUCI_PKGARCH:=all so the choice of arch is irrelevant —
+      # any SNAPSHOT SDK produces the same .apk.
+      - name: Build via openwrt/gh-action-sdk
+        uses: openwrt/gh-action-sdk@v10
+        env:
+          ARCH: x86_64
+          FEED_DIR: ${{ github.workspace }}/feed
+          FEEDNAME: action
+          PACKAGES: luci-app-sing-box
+          NO_REFRESH_CHECK: 1
+          V: s
+
+      - name: Locate produced package
+        id: pkg
+        run: |
+          set -euo pipefail
+          mapfile -t found < <(find bin/packages -type f \
+            \( -name 'luci-app-sing-box*.apk' -o -name 'luci-app-sing-box*.ipk' \))
+          if [ "${#found[@]}" -eq 0 ]; then
+            echo "::error::No package produced. Tree under bin/:"
+            find bin -maxdepth 4 -type f || true
+            exit 1
+          fi
+          # Prefer .apk if both formats are present.
+          chosen=""
+          for f in "${found[@]}"; do
+            case "$f" in *.apk) chosen=$f; break;; esac
+          done
+          [ -n "$chosen" ] || chosen=${found[0]}
+          echo "Built: $chosen"
+          echo "path=$chosen" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$chosen")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.pkg.outputs.name }}
+          path: ${{ steps.pkg.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.pkg.outputs.path }}
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
