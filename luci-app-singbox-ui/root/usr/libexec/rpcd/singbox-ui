@@ -1,15 +1,15 @@
 #!/bin/sh
-# rpcd handler for sing-box. Methods:
-#   generate        run /usr/share/sing-box/generate.lua
-#   nftables {action}  run /etc/sing-box/nftables.sh apply|remove
+# rpcd handler for singbox-ui. Methods:
+#   generate        run /usr/share/singbox-ui/generate.lua
+#   nftables {action}  run /etc/singbox-ui/nftables.sh apply|remove
 #
 # On OpenWrt, libubox's jshn.sh is available. For dev tests we shell out to
 # `jq` if jshn.sh is missing.
 #
 # NFTABLES_SH and GENERATE_LUA env vars override the script paths (used by tests).
 
-NFTABLES_SH=${NFTABLES_SH:-/etc/sing-box/nftables.sh}
-GENERATE_LUA=${GENERATE_LUA:-/usr/share/sing-box/generate.lua}
+NFTABLES_SH=${NFTABLES_SH:-/etc/singbox-ui/nftables.sh}
+GENERATE_LUA=${GENERATE_LUA:-/usr/share/singbox-ui/generate.lua}
 
 emit_list() {
 	cat <<'EOF'

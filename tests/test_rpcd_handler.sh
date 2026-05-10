@@ -2,7 +2,7 @@
 # tests/test_rpcd_handler.sh
 set -e
 
-H=root/usr/libexec/rpcd/sing-box
+H=luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui
 
 if [ ! -x "$H" ]; then
   echo "FAIL: $H not present or not executable"; exit 1

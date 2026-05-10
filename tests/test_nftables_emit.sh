@@ -2,7 +2,7 @@
 # tests/test_nftables_emit.sh
 set -e
 
-SCRIPT=root/etc/sing-box/nftables.sh
+SCRIPT=luci-app-singbox-ui/root/etc/singbox-ui/nftables.sh
 
 if [ ! -x "$SCRIPT" ]; then
   echo "FAIL: $SCRIPT not present or not executable"
@@ -14,7 +14,7 @@ shellcheck -s sh "$SCRIPT"
 
 echo "-- emit prints rules referencing port and ranges"
 out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18")
-echo "$out" | grep -q "table inet sing_box"  || { echo "FAIL: missing table"; exit 1; }
+echo "$out" | grep -q "table inet singbox_ui"  || { echo "FAIL: missing table"; exit 1; }
 echo "$out" | grep -q "127.0.0.1:7893"        || { echo "FAIL: missing v4 tproxy target"; exit 1; }
 echo "$out" | grep -q "\[::1\]:7893"          || { echo "FAIL: missing v6 tproxy target"; exit 1; }
 echo "$out" | grep -q "198.18.0.0/15"         || { echo "FAIL: missing v4 range"; exit 1; }

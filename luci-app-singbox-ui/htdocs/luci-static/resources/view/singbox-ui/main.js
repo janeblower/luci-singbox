@@ -6,16 +6,16 @@
 'require ui';
 'require network';
 
-// rpcd binding: sing-box.generate
+// rpcd binding: singbox-ui.generate
 var callGenerate = rpc.declare({
-	object: 'sing-box',
+	object: 'singbox-ui',
 	method: 'generate',
 	expect: { status: 'error' }
 });
 
-// rpcd binding: sing-box.nftables
+// rpcd binding: singbox-ui.nftables
 var callNftables = rpc.declare({
-	object: 'sing-box',
+	object: 'singbox-ui',
 	method: 'nftables',
 	params: [ 'action' ],
 	expect: { status: 'error' }
@@ -40,19 +40,19 @@ return view.extend({
 	load: function () {
 		return Promise.all([
 			network.getDevices(),
-			uci.load('sing-box')
+			uci.load('singbox-ui')
 		]);
 	},
 
 	render: function (data) {
 		var devices = data[0];
-		var prevNftEnabled = uci.get('sing-box', 'nftables', 'enabled') === '1';
+		var prevNftEnabled = uci.get('singbox-ui', 'nftables', 'enabled') === '1';
 
 		var m, s, o;
 
-		m = new form.Map('sing-box', _('Sing-Box'),
+		m = new form.Map('singbox-ui', _('Singbox-UI'),
 			_('Configure FakeIP, TProxy inbound, and nftables redirect rules. ' +
-			  'Use the Generate Config button to write /tmp/sing-box.json.'));
+			  'Use the Generate Config button to write /tmp/singbox-ui.json.'));
 
 		// --- FakeIP ---
 		s = m.section(form.NamedSection, 'fakeip', 'fakeip', _('FakeIP'));
@@ -98,7 +98,7 @@ return view.extend({
 
 		// Hook the post-save step: act on the new nftables.enabled value.
 		m.onSaveAfter = function () {
-			var nextEnabled = uci.get('sing-box', 'nftables', 'enabled') === '1';
+			var nextEnabled = uci.get('singbox-ui', 'nftables', 'enabled') === '1';
 			return syncNftables(prevNftEnabled, nextEnabled).then(function () {
 				prevNftEnabled = nextEnabled;
 			});
@@ -111,7 +111,7 @@ return view.extend({
 				return callGenerate().then(function (status) {
 					if (!status || status === 'ok') {
 						ui.addNotification(null,
-							E('p', _('sing-box config written to /tmp/sing-box.json')),
+							E('p', _('singbox-ui config written to /tmp/singbox-ui.json')),
 							'info');
 					} else {
 						ui.addNotification(null,

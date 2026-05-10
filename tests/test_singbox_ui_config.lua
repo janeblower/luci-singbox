@@ -1,6 +1,6 @@
-package.path = "root/usr/share/sing-box/?.lua;tests/?.lua;" .. package.path
+package.path = "luci-app-singbox-ui/root/usr/share/singbox-ui/?.lua;tests/?.lua;" .. package.path
 local h = require("helpers")
-local sbc = require("sing_box_config")
+local sbc = require("singbox_ui_config")
 
 h.test("build_config: empty when nothing enabled", function()
   local out = sbc.build_config({
@@ -74,7 +74,7 @@ end)
 
 h.test("read_uci: parses '1' as enabled and string port as number", function()
   local cur = h.fake_cursor({
-    ["sing-box"] = {
+    ["singbox-ui"] = {
       fakeip = {
         enabled = "1",
         inet4_range = { "198.18.0.0/15" },
@@ -95,7 +95,7 @@ h.test("read_uci: parses '1' as enabled and string port as number", function()
 end)
 
 h.test("read_uci: missing values fall back to safe defaults", function()
-  local cur = h.fake_cursor({ ["sing-box"] = {} })
+  local cur = h.fake_cursor({ ["singbox-ui"] = {} })
   local s = sbc.read_uci(cur)
   h.assert_deep_equal(s.fakeip.enabled, false)
   h.assert_deep_equal(s.fakeip.inet4_range, {})

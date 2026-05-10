@@ -1,0 +1,49 @@
+include $(TOPDIR)/rules.mk
+
+PKG_NAME:=luci-app-singbox-ui
+PKG_VERSION:=0.1.0
+PKG_RELEASE:=1
+PKG_LICENSE:=GPL-2.0-or-later
+PKG_MAINTAINER:=Jyn
+
+LUCI_TITLE:=LuCI support for singbox-ui
+LUCI_DEPENDS:=+luci-base +nftables +sing-box
+LUCI_PKGARCH:=all
+
+include $(TOPDIR)/feeds/luci/luci.mk
+
+define Package/$(PKG_NAME)/install
+	$(INSTALL_DIR) $(1)/etc/config
+	$(INSTALL_CONF) ./root/etc/config/singbox-ui $(1)/etc/config/singbox-ui
+
+	$(INSTALL_DIR) $(1)/etc/uci-defaults
+	$(INSTALL_BIN) ./root/etc/uci-defaults/99-luci-app-singbox-ui \
+	  $(1)/etc/uci-defaults/99-luci-app-singbox-ui
+
+	$(INSTALL_DIR) $(1)/etc/singbox-ui
+	$(INSTALL_BIN) ./root/etc/singbox-ui/nftables.sh $(1)/etc/singbox-ui/nftables.sh
+
+	$(INSTALL_DIR) $(1)/usr/libexec/rpcd
+	$(INSTALL_BIN) ./root/usr/libexec/rpcd/singbox-ui $(1)/usr/libexec/rpcd/singbox-ui
+
+	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
+	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-singbox-ui.json \
+	  $(1)/usr/share/luci/menu.d/luci-app-singbox-ui.json
+
+	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
+	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json \
+	  $(1)/usr/share/rpcd/acl.d/luci-app-singbox-ui.json
+
+	$(INSTALL_DIR) $(1)/usr/share/singbox-ui
+	$(INSTALL_DATA) ./root/usr/share/singbox-ui/generate.lua \
+	  $(1)/usr/share/singbox-ui/generate.lua
+	$(INSTALL_DATA) ./root/usr/share/singbox-ui/singbox_ui_config.lua \
+	  $(1)/usr/share/singbox-ui/singbox_ui_config.lua
+
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
+	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
+	  $(1)/www/luci-static/resources/view/singbox-ui/main.js
+endef
+
+# call BuildPackage - OpenWrt buildroot signature
+$(eval $(call BuildPackage,$(PKG_NAME)))

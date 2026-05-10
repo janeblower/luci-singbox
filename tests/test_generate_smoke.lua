@@ -3,7 +3,7 @@ local h = dofile("tests/helpers.lua")
 
 -- Stub the OpenWrt-only modules.
 local fake_data = {
-  ["sing-box"] = {
+  ["singbox-ui"] = {
     fakeip = {
       enabled = "1",
       inet4_range = { "198.18.0.0/15" },
@@ -23,18 +23,18 @@ package.preload["luci.jsonc"] = function()
   return { stringify = function(v) return cjson.encode(v) end }
 end
 
--- Redirect /tmp/sing-box.json to a unique tmp file.
+-- Redirect /tmp/singbox-ui.json to a unique tmp file.
 local tmp = os.tmpname()
 local real_open = io.open
 io.open = function(path, mode)
-  if path == "/tmp/sing-box.json" then return real_open(tmp, mode) end
+  if path == "/tmp/singbox-ui.json" then return real_open(tmp, mode) end
   return real_open(path, mode)
 end
 
 -- Make the entrypoint find the helper module locally.
-package.path = "root/usr/share/sing-box/?.lua;" .. package.path
+package.path = "luci-app-singbox-ui/root/usr/share/singbox-ui/?.lua;" .. package.path
 
-dofile("root/usr/share/sing-box/generate.lua")
+dofile("luci-app-singbox-ui/root/usr/share/singbox-ui/generate.lua")
 
 local f = assert(io.open(tmp, "r"))
 local body = f:read("*a")

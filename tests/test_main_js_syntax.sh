@@ -2,7 +2,7 @@
 # tests/test_main_js_syntax.sh
 set -e
 
-JS=htdocs/luci-static/resources/view/sing-box/main.js
+JS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js
 
 if [ ! -f "$JS" ]; then
   echo "FAIL: $JS not present"; exit 1
@@ -36,7 +36,7 @@ grep -q "tproxy"   "$JS" || { echo "FAIL: no tproxy section"; exit 1; }
 grep -q "nftables" "$JS" || { echo "FAIL: no nftables section"; exit 1; }
 
 echo "-- wires the rpcd methods"
-grep -q "sing-box.*generate"  "$JS" || { echo "FAIL: no generate rpc binding"; exit 1; }
-grep -q "sing-box.*nftables"  "$JS" || { echo "FAIL: no nftables rpc binding"; exit 1; }
+grep -q "singbox-ui.*generate"  "$JS" || { echo "FAIL: no generate rpc binding"; exit 1; }
+grep -q "singbox-ui.*nftables"  "$JS" || { echo "FAIL: no nftables rpc binding"; exit 1; }
 
 echo "OK"

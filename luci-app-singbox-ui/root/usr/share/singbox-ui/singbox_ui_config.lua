@@ -7,10 +7,10 @@ end
 function M.read_uci(cursor)
   local cur = cursor or require("uci").cursor()
   local function get(section, option)
-    return cur:get("sing-box", section, option)
+    return cur:get("singbox-ui", section, option)
   end
   local function list(section, option)
-    return cur:get_list("sing-box", section, option) or {}
+    return cur:get_list("singbox-ui", section, option) or {}
   end
   return {
     fakeip = {

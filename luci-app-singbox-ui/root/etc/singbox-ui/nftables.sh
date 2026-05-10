@@ -1,8 +1,8 @@
 #!/bin/sh
-# Apply or remove the sing-box nftables redirect rules.
+# Apply or remove the singbox-ui nftables redirect rules.
 # Subcommands:
 #   apply           Read UCI, generate rules, apply via nft.
-#   remove          Delete the sing_box table.
+#   remove          Delete the singbox_ui table.
 #   emit P V4 V6    Print rules to stdout (used by tests). V4/V6 are
 #                   already comma-separated set bodies.
 
@@ -13,7 +13,7 @@ emit() {
 	v4="$2"
 	v6="$3"
 	cat <<EOF
-table inet sing_box {
+table inet singbox_ui {
 	chain prerouting {
 		type filter hook prerouting priority mangle; policy accept;
 
@@ -26,10 +26,10 @@ EOF
 
 apply() {
 	# UCI list values come back space-separated; nft set syntax wants commas.
-	port=$(uci -q get sing-box.tproxy.port)
+	port=$(uci -q get singbox-ui.tproxy.port)
 	port=${port:-7893}
-	v4=$(uci -q get sing-box.fakeip.inet4_range | tr ' ' ',')
-	v6=$(uci -q get sing-box.fakeip.inet6_range | tr ' ' ',')
+	v4=$(uci -q get singbox-ui.fakeip.inet4_range | tr ' ' ',')
+	v6=$(uci -q get singbox-ui.fakeip.inet6_range | tr ' ' ',')
 
 	if [ -z "$v4" ] && [ -z "$v6" ]; then
 		echo "nftables.sh: no fakeip ranges configured; nothing to apply" >&2
@@ -37,12 +37,12 @@ apply() {
 	fi
 
 	# Replace any prior incarnation atomically: delete-if-exists then re-add.
-	nft delete table inet sing_box 2>/dev/null || true
+	nft delete table inet singbox_ui 2>/dev/null || true
 	emit "$port" "$v4" "$v6" | nft -f -
 }
 
 remove() {
-	nft delete table inet sing_box 2>/dev/null || true
+	nft delete table inet singbox_ui 2>/dev/null || true
 }
 
 case "${1:-}" in

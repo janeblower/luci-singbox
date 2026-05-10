@@ -1,0 +1,17 @@
+{
+	"luci-app-singbox-ui": {
+		"description": "Grant access to the singbox-ui LuCI page",
+		"read": {
+			"uci": [ "singbox-ui" ],
+			"ubus": {
+				"network.interface": [ "dump" ]
+			}
+		},
+		"write": {
+			"uci": [ "singbox-ui" ],
+			"ubus": {
+				"singbox-ui": [ "generate", "nftables" ]
+			}
+		}
+	}
+}
