@@ -50,6 +50,82 @@ function to_json(val, depth) {
 	return sprintf("%J", val);
 }
 
+function parse_query(query_string) {
+	let params = {};
+	for (let part in split(query_string, "&")) {
+		let eq = index(part, "=");
+		if (eq < 0) continue;
+		let k = substr(part, 0, eq);
+		let v = substr(part, eq + 1);
+		params[k] = v;
+	}
+	return params;
+}
+
+function parse_vless(url) {
+	// vless://uuid@host:port?params
+	let m = match(url, /^vless:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
+	if (!m) return null;
+	let uuid = m[1];
+	let host = m[2];
+	let port = +m[3];
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+
+	let out = {
+		type: "vless",
+		server: host,
+		server_port: port,
+		uuid: uuid,
+	};
+
+	let security = params["security"];
+	if (security === "tls" || security === "reality") {
+		let sni = params["sni"] ?? host;
+		out.tls = { enabled: true, server_name: sni };
+		if (params["fp"])
+			out.tls.utls = { enabled: true, fingerprint: params["fp"] };
+		if (security === "reality" && params["pbk"])
+			out.tls.reality = { enabled: true, public_key: params["pbk"] };
+	}
+
+	let transport_type = params["type"];
+	if (transport_type && transport_type !== "tcp")
+		out.transport = { type: transport_type };
+
+	return out;
+}
+
+function parse_hy2(url) {
+	// hy2://password@host:port?params  (also hysteria2://)
+	let m = match(url, /^(?:hy2|hysteria2):\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
+	if (!m) return null;
+	let password = m[1];
+	let host = m[2];
+	let port = +m[3];
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+
+	let out = {
+		type: "hysteria2",
+		server: host,
+		server_port: port,
+		password: password,
+		tls: { enabled: true, server_name: params["sni"] ?? host },
+	};
+
+	if (params["obfs"] === "salamander") {
+		out.obfs = { type: "salamander", password: params["obfs-password"] ?? "" };
+	}
+
+	return out;
+}
+
+function parse_proxy_url(url) {
+	if (match(url, /^vless:\/\//))              return parse_vless(url);
+	if (match(url, /^(?:hy2|hysteria2):\/\//)) return parse_hy2(url);
+	warn("generate.uc: unsupported proxy URL scheme: " + url + "\n");
+	return null;
+}
+
 function build_outbounds_and_routes() {
 	let outbounds = [];
 	let route_rules = [];
@@ -69,8 +145,11 @@ function build_outbounds_and_routes() {
 			if (proxy_type === "interface") {
 				outbound = { tag: name, type: "direct", bind_interface: section.interface };
 			} else if (proxy_type === "url") {
-				// URL parsing added in next task; skip for now
-				warn("generate.uc: proxy url not yet supported for section: " + name + "\n");
+				let parsed = parse_proxy_url(section.proxy_url ?? "");
+				if (parsed) {
+					parsed.tag = name;
+					outbound = parsed;
+				}
 			}
 		}
 
