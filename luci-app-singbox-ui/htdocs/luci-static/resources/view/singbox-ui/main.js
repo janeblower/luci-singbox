@@ -4,7 +4,7 @@
 'require uci';
 'require rpc';
 'require ui';
-'require network';
+'require tools.widgets';
 
 // rpcd binding: singbox-ui restart
 var callRestart = rpc.declare({
@@ -14,15 +14,11 @@ var callRestart = rpc.declare({
 
 return view.extend({
 	load: function () {
-		return Promise.all([
-			network.getDevices(),
-			uci.load('singbox-ui')
-		]);
+		return uci.load('singbox-ui');
 	},
 
-	render: function (data) {
+	render: function () {
 		var self = this;
-		var devices = data[0];
 
 		// ---- Input form ----
 		var mInput = new form.Map('singbox-ui', _('Input'),
@@ -54,11 +50,8 @@ return view.extend({
 		o = s.option(form.Flag, 'enabled', _('Enable'));
 		o.rmempty = false;
 
-		o = s.option(form.ListValue, 'interface', _('Interface'));
-		(devices || []).forEach(function (d) {
-			var name = d.getName();
-			if (name) o.value(name, name);
-		});
+		o = s.option(widgets.DeviceSelect, 'interface', _('Interface'));
+		o.noaliases = true;
 
 		o = s.option(form.Value, 'port', _('Port'));
 		o.datatype = 'port';
@@ -72,6 +65,11 @@ return view.extend({
 		s = mOutput.section(form.TypedSection, 'outbound', _('Outbounds'));
 		s.anonymous = false;
 		s.addremove = true;
+		s.modaltitle = function (section_id) {
+			var action = uci.get('singbox-ui', section_id, 'action') || '';
+			return _('Outbound') + ': ' + section_id +
+			       (action ? ' (' + action + ')' : '');
+		};
 
 		s.tab('settings', _('Settings'));
 		s.tab('conditions', _('Conditions'));
@@ -87,11 +85,8 @@ return view.extend({
 		o.value('url', _('URL (share link)'));
 		o.depends('action', 'proxy');
 
-		o = s.taboption('settings', form.ListValue, 'interface', _('Interface'));
-		(devices || []).forEach(function (d) {
-			var name = d.getName();
-			if (name) o.value(name, name);
-		});
+		o = s.taboption('settings', widgets.DeviceSelect, 'interface', _('Interface'));
+		o.noaliases = true;
 		o.depends({ action: 'proxy', proxy_type: 'interface' });
 
 		o = s.taboption('settings', form.Value, 'proxy_url', _('URL'));
@@ -116,7 +111,10 @@ return view.extend({
 			function switchTab(ev) {
 				var tab = ev.currentTarget.getAttribute('data-tab');
 				document.querySelectorAll('.sb-tab-header > li').forEach(function (el) {
-					el.classList.toggle('cbi-tab-active', el.getAttribute('data-tab') === tab);
+					el.classList.remove('cbi-tab', 'cbi-tab-disabled');
+					el.classList.add(
+						el.getAttribute('data-tab') === tab ? 'cbi-tab' : 'cbi-tab-disabled'
+					);
 				});
 				inputNode.style.display  = (tab === 'input')  ? '' : 'none';
 				outputNode.style.display = (tab === 'output') ? '' : 'none';
@@ -125,12 +123,12 @@ return view.extend({
 			return E('div', {}, [
 				E('ul', { 'class': 'cbi-tabmenu sb-tab-header' }, [
 					E('li', {
-						'class': 'cbi-tab-active',
+						'class': 'cbi-tab',
 						'data-tab': 'input',
 						'click': switchTab
 					}, _('Input')),
 					E('li', {
-						'class': 'cbi-tab',
+						'class': 'cbi-tab-disabled',
 						'data-tab': 'output',
 						'click': switchTab
 					}, _('Output'))

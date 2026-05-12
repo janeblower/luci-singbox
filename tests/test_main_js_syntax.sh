@@ -23,12 +23,12 @@ fi
 rm -f "$tmp"
 
 echo "-- declares all expected requires"
-grep -q "'require view'"    "$JS" || { echo "FAIL: missing 'require view'"; exit 1; }
-grep -q "'require form'"    "$JS" || { echo "FAIL: missing 'require form'"; exit 1; }
-grep -q "'require uci'"     "$JS" || { echo "FAIL: missing 'require uci'"; exit 1; }
-grep -q "'require rpc'"     "$JS" || { echo "FAIL: missing 'require rpc'"; exit 1; }
-grep -q "'require ui'"      "$JS" || { echo "FAIL: missing 'require ui'"; exit 1; }
-grep -q "'require network'" "$JS" || { echo "FAIL: missing 'require network'"; exit 1; }
+grep -q "'require view'"          "$JS" || { echo "FAIL: missing 'require view'"; exit 1; }
+grep -q "'require form'"          "$JS" || { echo "FAIL: missing 'require form'"; exit 1; }
+grep -q "'require uci'"           "$JS" || { echo "FAIL: missing 'require uci'"; exit 1; }
+grep -q "'require rpc'"           "$JS" || { echo "FAIL: missing 'require rpc'"; exit 1; }
+grep -q "'require ui'"            "$JS" || { echo "FAIL: missing 'require ui'"; exit 1; }
+grep -q "'require tools.widgets'" "$JS" || { echo "FAIL: missing 'require tools.widgets'"; exit 1; }
 
 echo "-- references input UCI sections"
 grep -q "fakeip"   "$JS" || { echo "FAIL: no fakeip section"; exit 1; }
