@@ -97,7 +97,8 @@ function parse_vless(url) {
 
 function parse_hy2(url) {
 	// hy2://password@host:port?params  (also hysteria2://)
-	let m = match(url, /^(?:hy2|hysteria2):\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
+	let m = match(url, /^hy2:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/) ||
+	        match(url, /^hysteria2:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
 	if (!m) return null;
 	let password = m[1];
 	let host = m[2];
@@ -120,8 +121,9 @@ function parse_hy2(url) {
 }
 
 function parse_proxy_url(url) {
-	if (match(url, /^vless:\/\//))              return parse_vless(url);
-	if (match(url, /^(?:hy2|hysteria2):\/\//)) return parse_hy2(url);
+	if (match(url, /^vless:\/\//))    return parse_vless(url);
+	if (match(url, /^hy2:\/\//) ||
+	    match(url, /^hysteria2:\/\//)) return parse_hy2(url);
 	warn("generate.uc: unsupported proxy URL scheme: " + url + "\n");
 	return null;
 }
