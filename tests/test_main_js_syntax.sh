@@ -23,20 +23,24 @@ fi
 rm -f "$tmp"
 
 echo "-- declares all expected requires"
-grep -q "'require view'"   "$JS" || { echo "FAIL: missing 'require view'"; exit 1; }
-grep -q "'require form'"   "$JS" || { echo "FAIL: missing 'require form'"; exit 1; }
-grep -q "'require uci'"    "$JS" || { echo "FAIL: missing 'require uci'"; exit 1; }
-grep -q "'require rpc'"    "$JS" || { echo "FAIL: missing 'require rpc'"; exit 1; }
-grep -q "'require ui'"     "$JS" || { echo "FAIL: missing 'require ui'"; exit 1; }
+grep -q "'require view'"    "$JS" || { echo "FAIL: missing 'require view'"; exit 1; }
+grep -q "'require form'"    "$JS" || { echo "FAIL: missing 'require form'"; exit 1; }
+grep -q "'require uci'"     "$JS" || { echo "FAIL: missing 'require uci'"; exit 1; }
+grep -q "'require rpc'"     "$JS" || { echo "FAIL: missing 'require rpc'"; exit 1; }
+grep -q "'require ui'"      "$JS" || { echo "FAIL: missing 'require ui'"; exit 1; }
 grep -q "'require network'" "$JS" || { echo "FAIL: missing 'require network'"; exit 1; }
 
-echo "-- references all three UCI sections"
+echo "-- references input UCI sections"
 grep -q "fakeip"   "$JS" || { echo "FAIL: no fakeip section"; exit 1; }
 grep -q "tproxy"   "$JS" || { echo "FAIL: no tproxy section"; exit 1; }
-grep -q "nftables" "$JS" || { echo "FAIL: no nftables section"; exit 1; }
 
-echo "-- wires the rpcd methods"
-grep -q "singbox-ui.*generate"  "$JS" || { echo "FAIL: no generate rpc binding"; exit 1; }
-grep -q "singbox-ui.*nftables"  "$JS" || { echo "FAIL: no nftables rpc binding"; exit 1; }
+echo "-- references outbound TypedSection"
+grep -q "outbound" "$JS" || { echo "FAIL: no outbound TypedSection"; exit 1; }
+
+echo "-- wires the restart rpc method"
+grep -q "singbox-ui.*restart" "$JS" || { echo "FAIL: no restart rpc binding"; exit 1; }
+
+echo "-- has handleSaveApply"
+grep -q "handleSaveApply" "$JS" || { echo "FAIL: no handleSaveApply"; exit 1; }
 
 echo "OK"
