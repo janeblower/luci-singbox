@@ -1,0 +1,104 @@
+# Russian translation for luci-app-singbox-ui
+# Copyright (C) 2026
+#
+msgid ""
+msgstr ""
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+
+# Page tabs
+msgid "Input"
+msgstr "Вход"
+
+msgid "Output"
+msgstr "Выход"
+
+# Input form description
+msgid "Configure FakeIP and TProxy inbound. nftables redirect rules are applied automatically when TProxy is enabled and the service starts."
+msgstr "Настройка FakeIP и входящего TProxy. Правила перенаправления nftables применяются автоматически при включённом TProxy во время запуска службы."
+
+# FakeIP section
+msgid "FakeIP"
+msgstr "FakeIP"
+
+msgid "Enable"
+msgstr "Включить"
+
+msgid "IPv4 ranges"
+msgstr "Диапазоны IPv4"
+
+msgid "IPv6 ranges"
+msgstr "Диапазоны IPv6"
+
+# TProxy section
+msgid "TProxy Inbound"
+msgstr "Входящий TProxy"
+
+msgid "Interface"
+msgstr "Интерфейс"
+
+msgid "Port"
+msgstr "Порт"
+
+# Output form
+msgid "Add, configure, and remove outbounds. Each outbound can have routing conditions (rule sets and domains)."
+msgstr "Добавление, настройка и удаление аутбаундов. Для каждого аутбаунда можно задать условия маршрутизации (наборы правил и домены)."
+
+msgid "Outbounds"
+msgstr "Аутбаунды"
+
+# Table columns
+msgid "Name"
+msgstr "Имя"
+
+msgid "Action"
+msgstr "Действие"
+
+msgid "Target"
+msgstr "Цель"
+
+# Modal title
+msgid "Outbound"
+msgstr "Аутбаунд"
+
+# Action values
+msgid "Direct"
+msgstr "Прямое подключение"
+
+msgid "Block"
+msgstr "Блокировать"
+
+msgid "Proxy"
+msgstr "Прокси"
+
+# Modal tabs
+msgid "Settings"
+msgstr "Настройки"
+
+msgid "Conditions"
+msgstr "Условия"
+
+# Settings tab fields
+msgid "Type"
+msgstr "Тип"
+
+msgid "URL (share link)"
+msgstr "URL (ссылка)"
+
+msgid "URL"
+msgstr "URL"
+
+# Conditions tab fields
+msgid "Rule sets"
+msgstr "Наборы правил"
+
+msgid "Domains"
+msgstr "Домены"
+
+# Notifications
+msgid "Service restarted successfully."
+msgstr "Служба успешно перезапущена."
+
+msgid "Restart failed: %s"
+msgstr "Ошибка перезапуска: %s"

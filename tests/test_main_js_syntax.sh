@@ -34,8 +34,10 @@ echo "-- references input UCI sections"
 grep -q "fakeip"   "$JS" || { echo "FAIL: no fakeip section"; exit 1; }
 grep -q "tproxy"   "$JS" || { echo "FAIL: no tproxy section"; exit 1; }
 
-echo "-- references outbound TypedSection"
-grep -q "outbound" "$JS" || { echo "FAIL: no outbound TypedSection"; exit 1; }
+echo "-- references outbound GridSection"
+grep -q "GridSection"  "$JS" || { echo "FAIL: no GridSection"; exit 1; }
+grep -q "outbound"     "$JS" || { echo "FAIL: no outbound section"; exit 1; }
+grep -q "modaltitle"   "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
 
 echo "-- wires the restart rpc method"
 grep -q "singbox-ui.*restart" "$JS" || { echo "FAIL: no restart rpc binding"; exit 1; }
