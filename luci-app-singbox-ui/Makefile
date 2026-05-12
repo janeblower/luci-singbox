@@ -23,6 +23,9 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/etc/singbox-ui
 	$(INSTALL_BIN) ./root/etc/singbox-ui/nftables.sh $(1)/etc/singbox-ui/nftables.sh
 
+	$(INSTALL_DIR) $(1)/etc/init.d
+	$(INSTALL_BIN) ./root/etc/init.d/singbox-ui $(1)/etc/init.d/singbox-ui
+
 	$(INSTALL_DIR) $(1)/usr/libexec/rpcd
 	$(INSTALL_BIN) ./root/usr/libexec/rpcd/singbox-ui $(1)/usr/libexec/rpcd/singbox-ui
 
@@ -35,10 +38,8 @@ define Package/$(PKG_NAME)/install
 	  $(1)/usr/share/rpcd/acl.d/luci-app-singbox-ui.json
 
 	$(INSTALL_DIR) $(1)/usr/share/singbox-ui
-	$(INSTALL_DATA) ./root/usr/share/singbox-ui/generate.lua \
-	  $(1)/usr/share/singbox-ui/generate.lua
-	$(INSTALL_DATA) ./root/usr/share/singbox-ui/singbox_ui_config.lua \
-	  $(1)/usr/share/singbox-ui/singbox_ui_config.lua
+	$(INSTALL_DATA) ./root/usr/share/singbox-ui/generate.uc \
+	  $(1)/usr/share/singbox-ui/generate.uc
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
