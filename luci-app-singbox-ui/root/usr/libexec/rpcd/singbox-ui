@@ -1,21 +1,21 @@
 #!/bin/sh
 # rpcd handler for singbox-ui. Methods:
-#   generate        run /usr/share/singbox-ui/generate.lua
+#   generate        run /usr/share/singbox-ui/generate.uc
 #   nftables {action}  run /etc/singbox-ui/nftables.sh apply|remove
+#   restart         restart /etc/init.d/singbox-ui (full service restart)
 #
-# On OpenWrt, libubox's jshn.sh is available. For dev tests we shell out to
-# `jq` if jshn.sh is missing.
-#
-# NFTABLES_SH and GENERATE_LUA env vars override the script paths (used by tests).
+# NFTABLES_SH, GENERATE_UC, SINGBOX_INIT env vars override paths (used by tests).
 
 NFTABLES_SH=${NFTABLES_SH:-/etc/singbox-ui/nftables.sh}
-GENERATE_LUA=${GENERATE_LUA:-/usr/share/singbox-ui/generate.lua}
+GENERATE_UC=${GENERATE_UC:-/usr/share/singbox-ui/generate.uc}
+SINGBOX_INIT=${SINGBOX_INIT:-/etc/init.d/singbox-ui}
 
 emit_list() {
 	cat <<'EOF'
 {
 	"generate": {},
-	"nftables": { "action": "string" }
+	"nftables": { "action": "string" },
+	"restart": {}
 }
 EOF
 }
@@ -25,17 +25,11 @@ emit_ok() {
 }
 
 emit_err() {
-	# $1 is the message
-	# Use printf with %s and a manual escape for embedded quotes; messages here
-	# are short and controlled, so a basic escape is sufficient.
 	msg=$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
 	printf '{"status":"error","message":"%s"}\n' "$msg"
 }
 
 read_action() {
-	# stdin is the JSON args object. Pull `action` out via jq if available,
-	# else fall back to a hand-rolled grep. We deliberately keep this simple;
-	# the LuCI frontend is the only caller.
 	if command -v jq >/dev/null 2>&1; then
 		jq -r '.action // empty'
 	else
@@ -53,13 +47,11 @@ call)
 	method="${2:-}"
 	case "$method" in
 	generate)
-		# Drain stdin even though we ignore args.
 		cat >/dev/null
-		# Let stderr flow through to the rpcd log; capture stdout only.
-		if lua "$GENERATE_LUA" >/dev/null; then
+		if ucode "$GENERATE_UC" >/dev/null; then
 			emit_ok
 		else
-			emit_err "generate.lua failed"
+			emit_err "generate.uc failed"
 		fi
 		;;
 	nftables)
@@ -76,6 +68,14 @@ call)
 			emit_err "invalid action: ${action:-<missing>}"
 			;;
 		esac
+		;;
+	restart)
+		cat >/dev/null
+		if "$SINGBOX_INIT" restart >/dev/null 2>&1; then
+			emit_ok
+		else
+			emit_err "service restart failed"
+		fi
 		;;
 	*)
 		emit_err "unknown method: $method"
