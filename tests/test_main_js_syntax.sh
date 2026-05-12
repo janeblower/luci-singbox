@@ -28,7 +28,7 @@ grep -q "'require form'"          "$JS" || { echo "FAIL: missing 'require form'"
 grep -q "'require uci'"           "$JS" || { echo "FAIL: missing 'require uci'"; exit 1; }
 grep -q "'require rpc'"           "$JS" || { echo "FAIL: missing 'require rpc'"; exit 1; }
 grep -q "'require ui'"            "$JS" || { echo "FAIL: missing 'require ui'"; exit 1; }
-grep -q "'require tools.widgets'" "$JS" || { echo "FAIL: missing 'require tools.widgets'"; exit 1; }
+grep -q "'require tools.widgets as widgets'" "$JS" || { echo "FAIL: missing 'require tools.widgets as widgets'"; exit 1; }
 
 echo "-- references input UCI sections"
 grep -q "fakeip"   "$JS" || { echo "FAIL: no fakeip section"; exit 1; }

@@ -4,7 +4,7 @@
 'require uci';
 'require rpc';
 'require ui';
-'require tools.widgets';
+'require tools.widgets as widgets';
 
 // rpcd binding: singbox-ui restart
 var callRestart = rpc.declare({
