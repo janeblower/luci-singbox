@@ -9,8 +9,7 @@
 // rpcd binding: singbox-ui restart
 var callRestart = rpc.declare({
 	object: 'singbox-ui',
-	method: 'restart',
-	expect: { status: 'error' }
+	method: 'restart'
 });
 
 return view.extend({
@@ -152,14 +151,15 @@ return view.extend({
 	handleSaveApply: function (ev) {
 		var self = this;
 		return self.handleSave(ev).then(function () {
-			return callRestart().then(function (status) {
-				if (!status || status === 'ok') {
+			return callRestart().then(function (result) {
+				if (!result || result.status === 'ok') {
 					ui.addNotification(null,
 						E('p', _('Service restarted successfully.')),
 						'info');
 				} else {
+					var msg = (result && result.message) || (result && result.status) || 'unknown error';
 					ui.addNotification(null,
-						E('p', _('Restart failed: %s').format(String(status))),
+						E('p', _('Restart failed: %s').format(String(msg))),
 						'danger');
 				}
 			});
