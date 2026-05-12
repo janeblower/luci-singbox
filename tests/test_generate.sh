@@ -19,7 +19,8 @@ check() {
 
 write_cfg() { printf '%s\n' "$1" > "$TMPDIR/singbox-ui"; }
 
-run_gen() { UCI_CONFIG_DIR="$TMPDIR" ucode "$GENERATE_UC" > "$TMPDIR/out.json"; }
+# generate.uc writes to /tmp/singbox-ui.json; copy it to out.json for checking.
+run_gen() { UCI_CONFIG_DIR="$TMPDIR" ucode "$GENERATE_UC" >/dev/null && cp /tmp/singbox-ui.json "$TMPDIR/out.json"; }
 
 # ---- fakeip + tproxy ----
 echo "-- fakeip and tproxy inbound"
