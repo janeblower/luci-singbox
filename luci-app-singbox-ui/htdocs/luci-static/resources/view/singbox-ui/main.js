@@ -6,35 +6,12 @@
 'require ui';
 'require network';
 
-// rpcd binding: singbox-ui.generate
-var callGenerate = rpc.declare({
+// rpcd binding: singbox-ui restart
+var callRestart = rpc.declare({
 	object: 'singbox-ui',
-	method: 'generate',
+	method: 'restart',
 	expect: { status: 'error' }
 });
-
-// rpcd binding: singbox-ui.nftables
-var callNftables = rpc.declare({
-	object: 'singbox-ui',
-	method: 'nftables',
-	params: [ 'action' ],
-	expect: { status: 'error' }
-});
-
-function syncNftables(prevEnabled, nextEnabled) {
-	if (prevEnabled === nextEnabled) return Promise.resolve();
-	var action = nextEnabled ? 'apply' : 'remove';
-	return callNftables(action).then(function (status) {
-		// expect:{status:'error'} returns the value of the `status` key, falling
-		// back to the literal 'error' if the key is missing. So 'ok' is success
-		// and anything else is failure.
-		if (status && status !== 'ok') {
-			ui.addNotification(null,
-				E('p', _('nftables %s failed: %s').format(action, String(status))),
-				'danger');
-		}
-	});
-}
 
 return view.extend({
 	load: function () {
@@ -45,17 +22,19 @@ return view.extend({
 	},
 
 	render: function (data) {
+		var self = this;
 		var devices = data[0];
-		var prevNftEnabled = uci.get('singbox-ui', 'nftables', 'enabled') === '1';
 
-		var m, s, o;
+		// ---- Input form ----
+		var mInput = new form.Map('singbox-ui', _('Input'),
+			_('Configure FakeIP and TProxy inbound. ' +
+			  'nftables redirect rules are applied automatically ' +
+			  'when TProxy is enabled and the service starts.'));
 
-		m = new form.Map('singbox-ui', _('Singbox-UI'),
-			_('Configure FakeIP, TProxy inbound, and nftables redirect rules. ' +
-			  'Use the Generate Config button to write /tmp/singbox-ui.json.'));
+		var s, o;
 
-		// --- FakeIP ---
-		s = m.section(form.NamedSection, 'fakeip', 'fakeip', _('FakeIP'));
+		// FakeIP
+		s = mInput.section(form.NamedSection, 'fakeip', 'fakeip', _('FakeIP'));
 		s.anonymous = true;
 
 		o = s.option(form.Flag, 'enabled', _('Enable'));
@@ -69,8 +48,8 @@ return view.extend({
 		o.datatype = 'cidr6';
 		o.placeholder = 'fc00::/18';
 
-		// --- TProxy Inbound ---
-		s = m.section(form.NamedSection, 'tproxy', 'tproxy', _('TProxy Inbound'));
+		// TProxy
+		s = mInput.section(form.NamedSection, 'tproxy', 'tproxy', _('TProxy Inbound'));
 		s.anonymous = true;
 
 		o = s.option(form.Flag, 'enabled', _('Enable'));
@@ -86,52 +65,107 @@ return view.extend({
 		o.datatype = 'port';
 		o.placeholder = '7893';
 
-		// --- nftables ---
-		s = m.section(form.NamedSection, 'nftables', 'nftables', _('nftables'),
-			_('Apply the redirect rules required to send FakeIP traffic to ' +
-			  'the TProxy inbound. Toggling this flag invokes apply or remove ' +
-			  'on save.'));
-		s.anonymous = true;
+		// ---- Output form ----
+		var mOutput = new form.Map('singbox-ui', _('Output'),
+			_('Add, configure, and remove outbounds. ' +
+			  'Each outbound can have routing conditions (rule sets and domains).'));
 
-		o = s.option(form.Flag, 'enabled', _('Enable'));
+		s = mOutput.section(form.TypedSection, 'outbound', _('Outbounds'));
+		s.anonymous = false;
+		s.addremove = true;
+
+		s.tab('settings', _('Settings'));
+		s.tab('conditions', _('Conditions'));
+
+		o = s.taboption('settings', form.ListValue, 'action', _('Action'));
+		o.value('direct', _('Direct'));
+		o.value('block', _('Block'));
+		o.value('proxy', _('Proxy'));
 		o.rmempty = false;
 
-		// Hook the post-save step: act on the new nftables.enabled value.
-		m.onSaveAfter = function () {
-			var nextEnabled = uci.get('singbox-ui', 'nftables', 'enabled') === '1';
-			return syncNftables(prevNftEnabled, nextEnabled).then(function () {
-				prevNftEnabled = nextEnabled;
-			});
-		};
+		o = s.taboption('settings', form.ListValue, 'proxy_type', _('Type'));
+		o.value('interface', _('Interface'));
+		o.value('url', _('URL (share link)'));
+		o.depends('action', 'proxy');
 
-		// --- Generate Config button (outside the form) ---
-		var generateBtn = E('button', {
-			'class': 'btn cbi-button cbi-button-action',
-			'click': ui.createHandlerFn(this, function () {
-				return callGenerate().then(function (status) {
-					if (!status || status === 'ok') {
-						ui.addNotification(null,
-							E('p', _('singbox-ui config written to /tmp/singbox-ui.json')),
-							'info');
-					} else {
-						ui.addNotification(null,
-							E('p', _('Generate failed: %s').format(String(status))),
-							'danger');
-					}
+		o = s.taboption('settings', form.ListValue, 'interface', _('Interface'));
+		(devices || []).forEach(function (d) {
+			var name = d.getName();
+			if (name) o.value(name, name);
+		});
+		o.depends({ action: 'proxy', proxy_type: 'interface' });
+
+		o = s.taboption('settings', form.Value, 'proxy_url', _('URL'));
+		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host';
+		o.depends({ action: 'proxy', proxy_type: 'url' });
+
+		o = s.taboption('conditions', form.DynamicList, 'ruleset', _('Rule sets'));
+		o.placeholder = 'https://example.com/geosite.srs  or  /etc/singbox-ui/rules.json';
+
+		o = s.taboption('conditions', form.DynamicList, 'domain', _('Domains'));
+		o.placeholder = 'example.com';
+
+		self._mInput  = mInput;
+		self._mOutput = mOutput;
+
+		return Promise.all([ mInput.render(), mOutput.render() ]).then(function (nodes) {
+			var inputNode  = nodes[0];
+			var outputNode = nodes[1];
+
+			outputNode.style.display = 'none';
+
+			function switchTab(ev) {
+				var tab = ev.currentTarget.getAttribute('data-tab');
+				document.querySelectorAll('.sb-tab-header > li').forEach(function (el) {
+					el.classList.toggle('cbi-tab-active', el.getAttribute('data-tab') === tab);
 				});
-			})
-		}, _('Generate Config'));
+				inputNode.style.display  = (tab === 'input')  ? '' : 'none';
+				outputNode.style.display = (tab === 'output') ? '' : 'none';
+			}
 
-		return m.render().then(function (mapNode) {
-			return E([], [
-				mapNode,
-				E('div', { 'class': 'cbi-page-actions', 'style': 'margin-top:1em' },
-					generateBtn)
+			return E('div', {}, [
+				E('ul', { 'class': 'cbi-tabmenu sb-tab-header' }, [
+					E('li', {
+						'class': 'cbi-tab-active',
+						'data-tab': 'input',
+						'click': switchTab
+					}, _('Input')),
+					E('li', {
+						'class': 'cbi-tab',
+						'data-tab': 'output',
+						'click': switchTab
+					}, _('Output'))
+				]),
+				inputNode,
+				outputNode
 			]);
 		});
 	},
 
-	handleSaveApply: null,
+	handleSave: function (ev) {
+		return Promise.all([
+			this._mInput.save(),
+			this._mOutput.save()
+		]);
+	},
+
+	handleSaveApply: function (ev) {
+		var self = this;
+		return self.handleSave(ev).then(function () {
+			return callRestart().then(function (status) {
+				if (!status || status === 'ok') {
+					ui.addNotification(null,
+						E('p', _('Service restarted successfully.')),
+						'info');
+				} else {
+					ui.addNotification(null,
+						E('p', _('Restart failed: %s').format(String(status))),
+						'danger');
+				}
+			});
+		});
+	},
+
 	handleApply: null,
 	handleReset: null
 });
