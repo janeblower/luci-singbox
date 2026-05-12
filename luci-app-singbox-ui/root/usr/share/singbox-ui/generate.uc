@@ -50,6 +50,36 @@ function to_json(val, depth) {
 	return sprintf("%J", val);
 }
 
+function build_outbounds_and_routes() {
+	let outbounds = [];
+	let route_rules = [];
+	let route_rule_sets = [];
+
+	uci.foreach("singbox-ui", "outbound", function(section) {
+		let name = section[".name"];
+		let action = section.action;
+		let outbound = null;
+
+		if (action === "direct") {
+			outbound = { tag: name, type: "direct" };
+		} else if (action === "block") {
+			outbound = { tag: name, type: "block" };
+		} else if (action === "proxy") {
+			let proxy_type = section.proxy_type;
+			if (proxy_type === "interface") {
+				outbound = { tag: name, type: "direct", bind_interface: section.interface };
+			} else if (proxy_type === "url") {
+				// URL parsing added in next task; skip for now
+				warn("generate.uc: proxy url not yet supported for section: " + name + "\n");
+			}
+		}
+
+		if (outbound) push(outbounds, outbound);
+	});
+
+	return { outbounds, route_rules, route_rule_sets };
+}
+
 let config = {};
 
 if (get_bool("fakeip", "enabled")) {
@@ -69,6 +99,17 @@ if (get_bool("tproxy", "enabled")) {
 		listen: "::",
 		listen_port: port,
 	} ];
+}
+
+let result = build_outbounds_and_routes();
+let outbounds = result.outbounds;
+let route_rules = result.route_rules;
+let route_rule_sets = result.route_rule_sets;
+
+if (length(outbounds)) config.outbounds = outbounds;
+if (length(route_rules)) {
+	config.route = { rules: route_rules };
+	if (length(route_rule_sets)) config.route.rule_set = route_rule_sets;
 }
 
 let f = fs.open("/tmp/singbox-ui.json", "w");
