@@ -19,7 +19,7 @@ No Lua anywhere — all server-side logic is ucode. Existing `generate.lua` and 
 |---|---|
 | `htdocs/.../main.js` | Full rewrite — tabs, outbounds, Apply flow |
 | `root/etc/config/singbox-ui` | Remove nftables section, add outbound examples |
-| `root/etc/uci-defaults/99-luci-app-singbox-ui` | Remove nftables defaults |
+| `root/etc/uci-defaults/99-luci-app-singbox-ui` | No change |
 | `root/etc/init.d/singbox-ui` | **New** — procd service |
 | `root/etc/singbox-ui/nftables.sh` | No change |
 | `root/usr/libexec/rpcd/singbox-ui` | Add `restart` method, remove Lua references |
@@ -335,8 +335,9 @@ Sections omitted if their UCI `enabled = 0` or if there are no outbounds / no ro
 ## Makefile changes
 
 - Install `root/etc/init.d/singbox-ui` via `$(INSTALL_BIN)`
-- Remove install lines for `generate.lua` and `singbox_ui_config.lua`
 - `LUCI_DEPENDS` stays: `+luci-base +nftables +sing-box`
+
+`generate.lua` and `singbox_ui_config.lua` are not referenced in the current Makefile — remove them from the repo via `git rm`.
 
 ---
 
