@@ -28,7 +28,6 @@ return view.extend({
 
 		var s, o;
 
-		// FakeIP
 		s = mInput.section(form.NamedSection, 'fakeip', 'fakeip', _('FakeIP'));
 		s.anonymous = true;
 
@@ -43,7 +42,6 @@ return view.extend({
 		o.datatype = 'cidr6';
 		o.placeholder = 'fc00::/18';
 
-		// TProxy
 		s = mInput.section(form.NamedSection, 'tproxy', 'tproxy', _('TProxy Inbound'));
 		s.anonymous = true;
 
@@ -62,41 +60,80 @@ return view.extend({
 			_('Add, configure, and remove outbounds. ' +
 			  'Each outbound can have routing conditions (rule sets and domains).'));
 
-		s = mOutput.section(form.TypedSection, 'outbound', _('Outbounds'));
-		s.anonymous = false;
-		s.addremove = true;
+		s = mOutput.section(form.GridSection, 'outbound', _('Outbounds'));
+		s.anonymous  = false;
+		s.addremove  = true;
+		s.sortable   = false;
 		s.modaltitle = function (section_id) {
 			var action = uci.get('singbox-ui', section_id, 'action') || '';
 			return _('Outbound') + ': ' + section_id +
-			       (action ? ' (' + action + ')' : '');
+			       (action ? ' (' + _(action) + ')' : '');
 		};
 
-		s.tab('settings', _('Settings'));
+		// ---- Table columns (display only, not editable inline) ----
+
+		// Name column — shows the UCI section identifier
+		o = s.option(form.DummyValue, '__col_name', _('Name'));
+		o.modalonly = false;
+		o.cfgvalue  = function (section_id) { return section_id; };
+
+		// Action column — human-readable label
+		o = s.option(form.DummyValue, '__col_action', _('Action'));
+		o.modalonly = false;
+		o.cfgvalue  = function (section_id) {
+			var v = uci.get('singbox-ui', section_id, 'action') || '';
+			return { direct: _('Direct'), block: _('Block'), proxy: _('Proxy') }[v] || '—';
+		};
+
+		// Target column — interface or URL summary for proxy outbounds
+		o = s.option(form.DummyValue, '__col_target', _('Target'));
+		o.modalonly = false;
+		o.cfgvalue  = function (section_id) {
+			if (uci.get('singbox-ui', section_id, 'action') !== 'proxy') return '—';
+			var t = uci.get('singbox-ui', section_id, 'proxy_type');
+			if (t === 'interface')
+				return uci.get('singbox-ui', section_id, 'interface') || '—';
+			var url = uci.get('singbox-ui', section_id, 'proxy_url') || '';
+			var m   = url.match(/^[\w+.-]+:\/\/[^/?@#]*/);
+			return m ? m[0] : (url || '—');
+		};
+
+		// ---- Modal tabs (all modalonly — only shown in the edit dialog) ----
+
+		s.tab('settings',   _('Settings'));
 		s.tab('conditions', _('Conditions'));
 
+		// Settings tab
 		o = s.taboption('settings', form.ListValue, 'action', _('Action'));
+		o.modalonly = true;
 		o.value('direct', _('Direct'));
-		o.value('block', _('Block'));
-		o.value('proxy', _('Proxy'));
+		o.value('block',  _('Block'));
+		o.value('proxy',  _('Proxy'));
 		o.rmempty = false;
 
 		o = s.taboption('settings', form.ListValue, 'proxy_type', _('Type'));
+		o.modalonly = true;
 		o.value('interface', _('Interface'));
-		o.value('url', _('URL (share link)'));
+		o.value('url',       _('URL (share link)'));
 		o.depends('action', 'proxy');
 
 		o = s.taboption('settings', widgets.DeviceSelect, 'interface', _('Interface'));
-		o.noaliases = true;
+		o.modalonly  = true;
+		o.noaliases  = true;
 		o.depends({ action: 'proxy', proxy_type: 'interface' });
 
 		o = s.taboption('settings', form.Value, 'proxy_url', _('URL'));
+		o.modalonly   = true;
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host';
 		o.depends({ action: 'proxy', proxy_type: 'url' });
 
+		// Conditions tab
 		o = s.taboption('conditions', form.DynamicList, 'ruleset', _('Rule sets'));
+		o.modalonly   = true;
 		o.placeholder = 'https://example.com/geosite.srs  or  /etc/singbox-ui/rules.json';
 
 		o = s.taboption('conditions', form.DynamicList, 'domain', _('Domains'));
+		o.modalonly   = true;
 		o.placeholder = 'example.com';
 
 		self._mInput  = mInput;
