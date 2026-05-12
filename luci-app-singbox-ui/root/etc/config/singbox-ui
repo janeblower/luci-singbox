@@ -8,5 +8,8 @@ config tproxy 'tproxy'
 	option interface 'br-lan'
 	option port '7893'
 
-config nftables 'nftables'
-	option enabled '0'
+config outbound 'direct_out'
+	option action 'direct'
+
+config outbound 'block_out'
+	option action 'block'
