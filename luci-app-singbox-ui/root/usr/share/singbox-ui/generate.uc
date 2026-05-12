@@ -153,7 +153,38 @@ function build_outbounds_and_routes() {
 			}
 		}
 
-		if (outbound) push(outbounds, outbound);
+		if (!outbound) return;
+		push(outbounds, outbound);
+
+		// Build routing rule from Conditions tab fields.
+		let rulesets = section.ruleset ?? [];
+		if (type(rulesets) === "string") rulesets = [ rulesets ];
+		let domains = section.domain ?? [];
+		if (type(domains) === "string") domains = [ domains ];
+
+		if (!length(rulesets) && !length(domains)) return;
+
+		let rule = { outbound: name };
+		let rs_tags = [];
+
+		for (let i, rs in rulesets) {
+			let rs_tag = "rs_" + name + "_" + i;
+			let is_local = (substr(rs, 0, 1) === "/");
+			let format = match(rs, /\.srs$/) ? "binary" : "source";
+			let rs_obj;
+			if (is_local) {
+				rs_obj = { tag: rs_tag, type: "local", format: format, path: rs };
+			} else {
+				rs_obj = { tag: rs_tag, type: "remote", format: format, url: rs };
+			}
+			push(route_rule_sets, rs_obj);
+			push(rs_tags, rs_tag);
+		}
+
+		if (length(rs_tags)) rule.rule_set = rs_tags;
+		if (length(domains)) rule.domain_suffix = domains;
+
+		push(route_rules, rule);
 	});
 
 	return { outbounds, route_rules, route_rule_sets };
