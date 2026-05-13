@@ -97,8 +97,8 @@ msgid "Domains"
 msgstr "Домены"
 
 # Notifications
-msgid "Service restarted successfully."
-msgstr "Служба успешно перезапущена."
+msgid "Configuration saved and service restarted."
+msgstr "Конфигурация сохранена и служба перезапущена."
 
 msgid "Restart failed: %s"
 msgstr "Ошибка перезапуска: %s"
