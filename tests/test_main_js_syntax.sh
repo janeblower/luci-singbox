@@ -42,7 +42,10 @@ grep -q "modaltitle"   "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
 echo "-- wires the restart rpc method"
 grep -q "singbox-ui.*restart" "$JS" || { echo "FAIL: no restart rpc binding"; exit 1; }
 
-echo "-- has handleSaveApply"
+echo "-- has handleSaveApply with uci.apply and enabled flag"
 grep -q "handleSaveApply" "$JS" || { echo "FAIL: no handleSaveApply"; exit 1; }
+grep -q "uci.apply"       "$JS" || { echo "FAIL: no uci.apply call"; exit 1; }
+grep -q "uci.changes"     "$JS" || { echo "FAIL: no uci.changes check"; exit 1; }
+grep -q "'enabled'"       "$JS" || { echo "FAIL: no enabled flag"; exit 1; }
 
 echo "OK"

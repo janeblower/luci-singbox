@@ -9,7 +9,9 @@ config tproxy 'tproxy'
 	option port '7893'
 
 config outbound 'direct_out'
+	option enabled '1'
 	option action 'direct'
 
 config outbound 'block_out'
+	option enabled '1'
 	option action 'block'

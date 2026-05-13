@@ -70,47 +70,24 @@ return view.extend({
 			       (action ? ' (' + _(action) + ')' : '');
 		};
 
-		// ---- Table columns (display only, not editable inline) ----
-
-		// Name column — shows the UCI section identifier
-		o = s.option(form.DummyValue, '__col_name', _('Name'));
-		o.modalonly = false;
-		o.cfgvalue  = function (section_id) { return section_id; };
-
-		// Action column — human-readable label
-		o = s.option(form.DummyValue, '__col_action', _('Action'));
-		o.modalonly = false;
-		o.cfgvalue  = function (section_id) {
-			var v = uci.get('singbox-ui', section_id, 'action') || '';
-			return { direct: _('Direct'), block: _('Block'), proxy: _('Proxy') }[v] || '—';
-		};
-
-		// Target column — interface or URL summary for proxy outbounds
-		o = s.option(form.DummyValue, '__col_target', _('Target'));
-		o.modalonly = false;
-		o.cfgvalue  = function (section_id) {
-			if (uci.get('singbox-ui', section_id, 'action') !== 'proxy') return '—';
-			var t = uci.get('singbox-ui', section_id, 'proxy_type');
-			if (t === 'interface')
-				return uci.get('singbox-ui', section_id, 'interface') || '—';
-			var url = uci.get('singbox-ui', section_id, 'proxy_url') || '';
-			var m   = url.match(/^[\w+.-]+:\/\/[^/?@#]*/);
-			return m ? m[0] : (url || '—');
-		};
-
-		// ---- Modal tabs (all modalonly — only shown in the edit dialog) ----
-
 		s.tab('settings',   _('Settings'));
 		s.tab('conditions', _('Conditions'));
 
-		// Settings tab
+		// ---- Enable: shown as editable checkbox in the table row
+		//      AND in the Settings tab of the modal ----
+		o = s.taboption('settings', form.Flag, 'enabled', _('Enable'));
+		o.default  = '1';
+		o.editable = true;   // allow toggling directly in the grid row
+
+		// ---- Action: shown as read-only text in the table row (no editable flag)
+		//      AND as a dropdown in the Settings tab of the modal ----
 		o = s.taboption('settings', form.ListValue, 'action', _('Action'));
-		o.modalonly = true;
 		o.value('direct', _('Direct'));
 		o.value('block',  _('Block'));
 		o.value('proxy',  _('Proxy'));
 		o.rmempty = false;
 
+		// ---- The rest only appear inside the modal ----
 		o = s.taboption('settings', form.ListValue, 'proxy_type', _('Type'));
 		o.modalonly = true;
 		o.value('interface', _('Interface'));
@@ -118,8 +95,8 @@ return view.extend({
 		o.depends('action', 'proxy');
 
 		o = s.taboption('settings', widgets.DeviceSelect, 'interface', _('Interface'));
-		o.modalonly  = true;
-		o.noaliases  = true;
+		o.modalonly = true;
+		o.noaliases = true;
 		o.depends({ action: 'proxy', proxy_type: 'interface' });
 
 		o = s.taboption('settings', form.Value, 'proxy_url', _('URL'));
@@ -127,7 +104,6 @@ return view.extend({
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host';
 		o.depends({ action: 'proxy', proxy_type: 'url' });
 
-		// Conditions tab
 		o = s.taboption('conditions', form.DynamicList, 'ruleset', _('Rule sets'));
 		o.modalonly   = true;
 		o.placeholder = 'https://example.com/geosite.srs  or  /etc/singbox-ui/rules.json';
@@ -186,13 +162,27 @@ return view.extend({
 	handleSaveApply: function (ev) {
 		var self = this;
 		return self.handleSave(ev).then(function () {
-			return callRestart().then(function (result) {
+			// Check whether any UCI changes were staged by form.save()
+			var changes = uci.changes();
+			var hasChanges = Object.keys(changes || {}).some(function (k) {
+				return Array.isArray(changes[k]) && changes[k].length > 0;
+			});
+
+			if (!hasChanges) return;   // nothing to commit, nothing to restart
+
+			// Commit staged changes to disk, then restart the service.
+			// .catch() absorbs the LuCI apply-rollback rejection so we can
+			// always reach callRestart after a successful uci.apply().
+			return uci.apply().catch(function () {}).then(function () {
+				return callRestart();
+			}).then(function (result) {
 				if (!result || result.status === 'ok') {
 					ui.addNotification(null,
-						E('p', _('Service restarted successfully.')),
+						E('p', _('Configuration saved and service restarted.')),
 						'info');
 				} else {
-					var msg = (result && result.message) || (result && result.status) || 'unknown error';
+					var msg = (result && result.message) ||
+					          (result && result.status)  || 'unknown error';
 					ui.addNotification(null,
 						E('p', _('Restart failed: %s').format(String(msg))),
 						'danger');

@@ -134,6 +134,8 @@ function build_outbounds_and_routes() {
 	let route_rule_sets = [];
 
 	uci.foreach("singbox-ui", "outbound", function(section) {
+		if (section.enabled === "0") return;   // skip disabled outbounds
+
 		let name = section[".name"];
 		let action = section.action;
 		let outbound = null;
