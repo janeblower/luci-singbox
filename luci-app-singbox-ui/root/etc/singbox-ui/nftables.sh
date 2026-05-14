@@ -123,9 +123,12 @@ apply() {
 	v4=$(uci -q get singbox-ui.fakeip.inet4_range | tr ' ' ',')
 	v6=$(uci -q get singbox-ui.fakeip.inet6_range | tr ' ' ',')
 
-	if [ -z "$v4" ] && [ -z "$v6" ]; then
-		echo "nftables.sh: no fakeip ranges configured; nothing to apply" >&2
-		return 1
+	emit_ruleset_data  # populates RS_MARK_RULES
+
+	if [ -z "$v4" ] && [ -z "$v6" ] && [ -z "$RS_MARK_RULES" ]; then
+		nft delete table inet singbox_ui 2>/dev/null || true
+		echo "nftables.sh: no fakeip ranges and no ruleset rules; table removed" >&2
+		return 0
 	fi
 
 	# Replace any prior incarnation atomically: delete-if-exists then re-add.
