@@ -139,7 +139,7 @@ function load_subscription_outbound(name) {
 	return parsed;
 }
 
-function build_outbounds_and_routes() {
+function build_outbounds() {
 	let outbounds = [];
 
 	uci.foreach("singbox-ui", "outbound", function(section) {
@@ -257,7 +257,7 @@ if (get_bool("tproxy", "enabled")) {
 	} ];
 }
 
-let outbounds = build_outbounds_and_routes();
+let outbounds = build_outbounds();
 if (length(outbounds)) config.outbounds = outbounds;
 
 let route = build_route_config();
