@@ -221,7 +221,17 @@ function build_route_config() {
 		push(rules, { rule_set: resolved, outbound: target });
 	});
 
-	return { rules, rule_sets };
+	// Final/default route (optional).
+	let final_target = null;
+	let rd = uci.get_all("singbox-ui", "route_default");
+	if (rd) {
+		let action = rd.action ?? "direct";
+		if (action === "direct")        final_target = "direct";
+		else if (action === "block")    final_target = "block";
+		else if (action === "outbound") final_target = rd.outbound ?? null;
+	}
+
+	return { rules, rule_sets, final: final_target };
 }
 
 function build_dns_rules() {
@@ -261,9 +271,12 @@ let outbounds = build_outbounds();
 if (length(outbounds)) config.outbounds = outbounds;
 
 let route = build_route_config();
-if (length(route.rules)) {
-	config.route = { rules: route.rules };
-	if (length(route.rule_sets)) config.route.rule_set = route.rule_sets;
+if (length(route.rules) || route.final) {
+	config.route = {};
+	if (length(route.rules))     config.route.rules     = route.rules;
+	if (length(route.rule_sets)) config.route.rule_set  = route.rule_sets;
+	if (route.final && route.final !== "direct")
+		config.route.final = route.final;
 }
 
 let f = fs.open("/tmp/singbox-ui.json", "w");

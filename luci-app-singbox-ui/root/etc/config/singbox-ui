@@ -22,3 +22,6 @@ config route_rule 'cn_to_direct'
 	option enabled '0'
 	list ruleset 'geosite_cn'
 	option action 'direct'
+
+config route_default 'route_default'
+	option action 'direct'
