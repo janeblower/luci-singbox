@@ -77,52 +77,45 @@ return view.extend({
 		s.addremove  = true;
 		s.sortable   = true;
 		s.modaltitle = function (section_id) {
-			var action = uci.get('singbox-ui', section_id, 'action') || '';
+			var t = uci.get('singbox-ui', section_id, 'proxy_type') || '';
 			return _('Outbound') + ': ' + section_id +
-			       (action ? ' (' + _(action) + ')' : '');
+			       (t ? ' (' + _(t) + ')' : '');
 		};
 
 		o = s.option(form.Flag, 'enabled', _('Enable'));
 		o.default  = '1';
 		o.editable = true;
 
-		o = s.option(form.ListValue, 'action', _('Action'));
-		o.value('direct', _('Direct'));
-		o.value('block',  _('Block'));
-		o.value('proxy',  _('Proxy'));
-		o.rmempty = false;
-
 		o = s.option(form.ListValue, 'proxy_type', _('Type'));
-		o.modalonly = true;
 		o.value('interface',    _('Interface'));
 		o.value('url',          _('URL (share link)'));
 		o.value('json',         _('Raw JSON'));
 		o.value('subscription', _('Subscription URL'));
-		o.depends('action', 'proxy');
+		o.rmempty = false;
 
 		o = s.option(widgets.DeviceSelect, 'interface', _('Interface'));
 		o.modalonly = true;
 		o.noaliases = true;
-		o.depends({ action: 'proxy', proxy_type: 'interface' });
+		o.depends('proxy_type', 'interface');
 
 		o = s.option(form.Value, 'proxy_url', _('URL'));
 		o.modalonly   = true;
 		o.placeholder = 'vless://uuid@host:443?security=tls&sni=host';
-		o.depends({ action: 'proxy', proxy_type: 'url' });
+		o.depends('proxy_type', 'url');
 
 		o = s.option(TextareaValue, 'proxy_json', _('JSON outbound'));
 		o.modalonly   = true;
 		o.placeholder = '{"type":"vless","server":"host","server_port":443,"uuid":"..."}';
-		o.depends({ action: 'proxy', proxy_type: 'json' });
+		o.depends('proxy_type', 'json');
 
 		o = s.option(form.Value, 'sub_url', _('Subscription URL'));
 		o.modalonly   = true;
 		o.placeholder = 'https://sub.example.com/config';
-		o.depends({ action: 'proxy', proxy_type: 'subscription' });
+		o.depends('proxy_type', 'subscription');
 
 		o = s.option(form.ListValue, 'sub_update_via', _('Update via'));
 		o.modalonly = true;
-		o.depends({ action: 'proxy', proxy_type: 'subscription' });
+		o.depends('proxy_type', 'subscription');
 		o.value('direct', _('Direct (WAN)'));
 		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
 			if (sec.proxy_type === 'interface')
@@ -133,7 +126,7 @@ return view.extend({
 		o.modalonly   = true;
 		o.datatype    = 'uinteger';
 		o.placeholder = '3600';
-		o.depends({ action: 'proxy', proxy_type: 'subscription' });
+		o.depends('proxy_type', 'subscription');
 
 		// =================================================================
 		// Output: Rule-Sets sub-tab

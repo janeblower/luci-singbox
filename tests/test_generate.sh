@@ -61,43 +61,21 @@ grep -q '"inet4_range":\s*\[' "$TMPDIR/out.json" \
 	&& { echo "FAIL: inet4_range must be a string, not an array"; cat "$TMPDIR/out.json"; exit 1; }
 echo "  PASS: inet4_range is not an array"
 
-# ---- direct outbound ----
-echo "-- direct outbound"
-write_cfg "
-config outbound 'direct_out'
-	option action 'direct'
-"
-run_gen
-check "direct tag"  '"tag": "direct_out"' "$TMPDIR/out.json"
-check "direct type" '"type": "direct"'    "$TMPDIR/out.json"
-
-# ---- block outbound ----
-echo "-- block outbound"
-write_cfg "
-config outbound 'block_out'
-	option action 'block'
-"
-run_gen
-check "block tag"  '"tag": "block_out"' "$TMPDIR/out.json"
-check "block type" '"type": "block"'    "$TMPDIR/out.json"
-
 # ---- proxy via interface ----
 echo "-- proxy via interface"
 write_cfg "
 config outbound 'via_wg0'
-	option action 'proxy'
 	option proxy_type 'interface'
 	option interface 'wg0'
 "
 run_gen
-check "interface proxy tag"  '"tag": "via_wg0"'        "$TMPDIR/out.json"
+check "interface proxy tag"  '"tag": "via_wg0"'         "$TMPDIR/out.json"
 check "bind_interface"       '"bind_interface": "wg0"'  "$TMPDIR/out.json"
 
 # ---- vless URL ----
 echo "-- vless:// URL"
 write_cfg "
 config outbound 'my_vless'
-	option action 'proxy'
 	option proxy_type 'url'
 	option proxy_url 'vless://test-uuid-1234@example.com:443?security=tls&sni=example.com&type=tcp'
 "
@@ -112,7 +90,6 @@ check "vless tls"    '"enabled": true'           "$TMPDIR/out.json"
 echo "-- hy2:// URL"
 write_cfg "
 config outbound 'my_hy2'
-	option action 'proxy'
 	option proxy_type 'url'
 	option proxy_url 'hy2://mypassword@vpn.example.com:8443?sni=vpn.example.com'
 "
@@ -126,16 +103,26 @@ echo "-- proxy_type=json"
 write_cfg "
 config outbound 'my_json_out'
 	option enabled '1'
-	option action 'proxy'
 	option proxy_type 'json'
 	option proxy_json '{\"type\":\"vmess\",\"server\":\"json.example.com\",\"server_port\":8443,\"uuid\":\"abc-123\"}'
 "
 run_gen
-check "json tag"    '"tag": "my_json_out"'        "$TMPDIR/out.json"
-check "json type"   '"type": "vmess"'             "$TMPDIR/out.json"
+check "json tag"    '"tag": "my_json_out"'         "$TMPDIR/out.json"
+check "json type"   '"type": "vmess"'              "$TMPDIR/out.json"
 check "json server" '"server": "json.example.com"' "$TMPDIR/out.json"
-check "json port"   '"server_port": 8443'         "$TMPDIR/out.json"
-check "json uuid"   '"uuid": "abc-123"'           "$TMPDIR/out.json"
+check "json port"   '"server_port": 8443'          "$TMPDIR/out.json"
+check "json uuid"   '"uuid": "abc-123"'            "$TMPDIR/out.json"
+
+# ---- outbound without proxy_type is skipped (no longer a valid outbound) ----
+echo "-- outbound without proxy_type is skipped"
+write_cfg "
+config outbound 'leftover_direct_out'
+	option action 'direct'
+"
+run_gen
+grep -q '"tag": "leftover_direct_out"' "$TMPDIR/out.json" \
+	&& { echo "FAIL: outbound without proxy_type must be skipped"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: outbound without proxy_type is skipped"
 
 # ---- subscription outbound ----
 echo "-- proxy_type=subscription"
@@ -145,7 +132,6 @@ printf 'vless://sub-uuid-9999@sub.example.com:443?security=tls&sni=sub.example.c
 write_cfg "
 config outbound 'my_sub_out'
 	option enabled '1'
-	option action 'proxy'
 	option proxy_type 'subscription'
 	option sub_url 'https://sub.example.com/config'
 	option sub_update_via 'direct'
@@ -163,7 +149,6 @@ echo "-- ruleset + route_rule basic"
 write_cfg "
 config outbound 'my_vless'
 	option enabled '1'
-	option action 'proxy'
 	option proxy_type 'url'
 	option proxy_url 'vless://uuid-aaaa@vless.example.com:443?security=tls&sni=vless.example.com'
 

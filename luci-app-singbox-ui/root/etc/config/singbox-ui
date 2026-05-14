@@ -8,14 +8,6 @@ config tproxy 'tproxy'
 	option interface 'br-lan'
 	option port '7893'
 
-config outbound 'direct_out'
-	option enabled '1'
-	option action 'direct'
-
-config outbound 'block_out'
-	option enabled '1'
-	option action 'block'
-
 config ruleset 'geosite_cn'
 	option enabled '0'
 	option type 'remote'

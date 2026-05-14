@@ -173,28 +173,21 @@ function build_outbounds_and_routes() {
 		if (section.enabled === "0") return;
 
 		let name = section[".name"];
-		let action = section.action;
+		let proxy_type = section.proxy_type;
 		let outbound = null;
 
-		if (action === "direct") {
-			outbound = { tag: name, type: "direct" };
-		} else if (action === "block") {
-			outbound = { tag: name, type: "block" };
-		} else if (action === "proxy") {
-			let proxy_type = section.proxy_type;
-			if (proxy_type === "interface") {
-				outbound = { tag: name, type: "direct", bind_interface: section.interface };
-			} else if (proxy_type === "url") {
-				let parsed = parse_proxy_url(section.proxy_url ?? "");
-				if (parsed) {
-					parsed.tag = name;
-					outbound = parsed;
-				}
-			} else if (proxy_type === "json") {
-				outbound = parse_json_outbound(section.proxy_json, name);
-			} else if (proxy_type === "subscription") {
-				outbound = load_subscription_outbound(name);
+		if (proxy_type === "interface") {
+			outbound = { tag: name, type: "direct", bind_interface: section.interface };
+		} else if (proxy_type === "url") {
+			let parsed = parse_proxy_url(section.proxy_url ?? "");
+			if (parsed) {
+				parsed.tag = name;
+				outbound = parsed;
 			}
+		} else if (proxy_type === "json") {
+			outbound = parse_json_outbound(section.proxy_json, name);
+		} else if (proxy_type === "subscription") {
+			outbound = load_subscription_outbound(name);
 		}
 
 		if (!outbound) return;
