@@ -10,6 +10,8 @@ LUCI_TITLE:=LuCI support for singbox-ui
 LUCI_DEPENDS:=+luci-base +nftables +sing-box +jq +curl
 LUCI_PKGARCH:=all
 
+PO_DIR := $(CURDIR)/po
+
 include $(TOPDIR)/feeds/luci/luci.mk
 
 define Package/$(PKG_NAME)/install
@@ -48,6 +50,12 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
 	  $(1)/www/luci-static/resources/view/singbox-ui/main.js
+
+	if [ -f $(PO_DIR)/ru/luci-app-singbox-ui.po ]; then \
+		$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n; \
+		po2lmo $(PO_DIR)/ru/luci-app-singbox-ui.po \
+		       $(1)/usr/lib/lua/luci/i18n/luci-app-singbox-ui.ru.lmo; \
+	fi
 endef
 
 # call BuildPackage - OpenWrt buildroot signature
