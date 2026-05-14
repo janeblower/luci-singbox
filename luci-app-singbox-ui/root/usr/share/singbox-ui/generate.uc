@@ -14,6 +14,15 @@ function get_list(section, opt) {
 	return (all != null) ? (all[opt] ?? []) : [];
 }
 
+// First entry of a UCI list option as a plain string, or null if absent.
+// Accepts an `option` value (already a string) too.
+function get_first(section, opt) {
+	let v = uci.get("singbox-ui", section, opt);
+	if (v == null) return null;
+	if (type(v) === "array") return length(v) ? v[0] : null;
+	return v;
+}
+
 // Produce indented JSON (4-space indent).
 function indent_of(depth) {
 	let s = "";
@@ -263,13 +272,12 @@ function build_dns_rules() {
 let config = {};
 
 if (get_bool("fakeip", "enabled")) {
-	config.dns = {
-		fakeip: {
-			enabled: true,
-			inet4_range: get_list("fakeip", "inet4_range"),
-			inet6_range: get_list("fakeip", "inet6_range"),
-		},
-	};
+	let fakeip = { enabled: true };
+	let v4 = get_first("fakeip", "inet4_range");
+	let v6 = get_first("fakeip", "inet6_range");
+	if (v4) fakeip.inet4_range = v4;
+	if (v6) fakeip.inet6_range = v6;
+	config.dns = { fakeip: fakeip };
 	let dns_rules = build_dns_rules();
 	if (length(dns_rules)) config.dns.rules = dns_rules;
 }

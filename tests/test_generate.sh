@@ -51,10 +51,15 @@ config tproxy 'tproxy'
 	option port '7893'
 "
 run_gen
-check "fakeip enabled"   '"enabled": true'         "$TMPDIR/out.json"
-check "inet4_range"      '"198.18.0.0/15"'          "$TMPDIR/out.json"
-check "tproxy inbound"   '"type": "tproxy"'         "$TMPDIR/out.json"
-check "listen_port 7893" '"listen_port": 7893'      "$TMPDIR/out.json"
+check "fakeip enabled"    '"enabled": true'              "$TMPDIR/out.json"
+check "inet4_range str"   '"inet4_range": "198.18.0.0/15"' "$TMPDIR/out.json"
+check "inet6_range str"   '"inet6_range": "fc00::/18"'     "$TMPDIR/out.json"
+check "tproxy inbound"    '"type": "tproxy"'              "$TMPDIR/out.json"
+check "listen_port 7893"  '"listen_port": 7893'           "$TMPDIR/out.json"
+# Negative: must NOT emit as an array (sing-box 1.12+ rejects arrays here)
+grep -q '"inet4_range":\s*\[' "$TMPDIR/out.json" \
+	&& { echo "FAIL: inet4_range must be a string, not an array"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: inet4_range is not an array"
 
 # ---- direct outbound ----
 echo "-- direct outbound"
