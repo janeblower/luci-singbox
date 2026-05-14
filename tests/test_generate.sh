@@ -4,7 +4,19 @@
 # Skips automatically on dev machines where ucode is unavailable.
 set -e
 
-command -v ucode >/dev/null 2>&1 || { echo "SKIP: ucode not available"; exit 0; }
+# Local dev fallback: if `ucode` isn't on PATH, look for a locally-built one and
+# our test stub for the uci module. Allows running tests on Ubuntu/WSL where
+# ucode-mod-uci isn't packaged.
+if command -v ucode >/dev/null 2>&1; then
+	UCODE_BIN=ucode
+	UCODE_LIB_FLAGS=""
+elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
+	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
+else
+	echo "SKIP: ucode not available (set UCODE_BIN + UCODE_STUB_DIR [+ UCODE_LIB_DIR] to run locally)"
+	exit 0
+fi
 
 GENERATE_UC=luci-app-singbox-ui/root/usr/share/singbox-ui/generate.uc
 TMPDIR=$(mktemp -d)
@@ -20,7 +32,11 @@ check() {
 write_cfg() { printf '%s\n' "$1" > "$TMPDIR/singbox-ui"; }
 
 # generate.uc writes to /tmp/singbox-ui.json; copy it to out.json for checking.
-run_gen() { UCI_CONFIG_DIR="$TMPDIR" ucode "$GENERATE_UC" >/dev/null && cp /tmp/singbox-ui.json "$TMPDIR/out.json"; }
+run_gen() {
+	# shellcheck disable=SC2086
+	UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$GENERATE_UC" >/dev/null \
+		&& cp /tmp/singbox-ui.json "$TMPDIR/out.json"
+}
 
 # ---- fakeip + tproxy ----
 echo "-- fakeip and tproxy inbound"
@@ -99,5 +115,21 @@ run_gen
 check "hy2 type"     '"type": "hysteria2"'         "$TMPDIR/out.json"
 check "hy2 password" '"password": "mypassword"'    "$TMPDIR/out.json"
 check "hy2 server"   '"server": "vpn.example.com"' "$TMPDIR/out.json"
+
+# ---- json outbound ----
+echo "-- proxy_type=json"
+write_cfg "
+config outbound 'my_json_out'
+	option enabled '1'
+	option action 'proxy'
+	option proxy_type 'json'
+	option proxy_json '{\"type\":\"vmess\",\"server\":\"json.example.com\",\"server_port\":8443,\"uuid\":\"abc-123\"}'
+"
+run_gen
+check "json tag"    '"tag": "my_json_out"'        "$TMPDIR/out.json"
+check "json type"   '"type": "vmess"'             "$TMPDIR/out.json"
+check "json server" '"server": "json.example.com"' "$TMPDIR/out.json"
+check "json port"   '"server_port": 8443'         "$TMPDIR/out.json"
+check "json uuid"   '"uuid": "abc-123"'           "$TMPDIR/out.json"
 
 echo "OK"
