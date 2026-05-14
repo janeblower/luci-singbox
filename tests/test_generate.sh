@@ -153,4 +153,103 @@ check "sub uuid"   '"uuid": "sub-uuid-9999"'     "$TMPDIR/out.json"
 check "sub server" '"server": "sub.example.com"' "$TMPDIR/out.json"
 rm -f /tmp/singbox-ui/sub_my_sub_out.txt
 
+# ---- ruleset + route_rule basic flow ----
+echo "-- ruleset + route_rule basic"
+write_cfg "
+config outbound 'my_vless'
+	option enabled '1'
+	option action 'proxy'
+	option proxy_type 'url'
+	option proxy_url 'vless://uuid-aaaa@vless.example.com:443?security=tls&sni=vless.example.com'
+
+config ruleset 'geosite_cn'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/geosite-cn.srs'
+	option format 'binary'
+
+config ruleset 'geoip_ru'
+	option enabled '1'
+	option type 'local'
+	option path '/etc/singbox-ui/rules/ru.json'
+	option format 'source'
+
+config route_rule 'rule_cn_vless'
+	option enabled '1'
+	list ruleset 'geosite_cn'
+	option action 'outbound'
+	option outbound 'my_vless'
+
+config route_rule 'rule_ru_direct'
+	option enabled '1'
+	list ruleset 'geoip_ru'
+	option action 'direct'
+"
+run_gen
+check "route rules key"       '\"rules\":'                              "$TMPDIR/out.json"
+check "rule_set key"          '\"rule_set\":'                           "$TMPDIR/out.json"
+check "cn tag"                '"tag": "geosite_cn"'                     "$TMPDIR/out.json"
+check "ru tag"                '"tag": "geoip_ru"'                       "$TMPDIR/out.json"
+check "cn remote type"        '"type": "remote"'                        "$TMPDIR/out.json"
+check "ru local type"         '"type": "local"'                         "$TMPDIR/out.json"
+check "ru local path"         '"path": "/etc/singbox-ui/rules/ru.json"' "$TMPDIR/out.json"
+check "cn binary format"      '"format": "binary"'                      "$TMPDIR/out.json"
+check "ru source format"      '"format": "source"'                      "$TMPDIR/out.json"
+check "route rule cn->vless"  '"outbound": "my_vless"'                  "$TMPDIR/out.json"
+check "route rule ru->direct" '"outbound": "direct"'                    "$TMPDIR/out.json"
+
+# ---- disabled ruleset skipped ----
+echo "-- disabled ruleset skipped"
+write_cfg "
+config ruleset 'geo_off'
+	option enabled '0'
+	option type 'remote'
+	option url 'https://example.com/off.srs'
+	option format 'binary'
+
+config ruleset 'geo_on'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/on.srs'
+	option format 'binary'
+
+config route_rule 'rule_mix'
+	option enabled '1'
+	list ruleset 'geo_off'
+	list ruleset 'geo_on'
+	option action 'direct'
+"
+run_gen
+check "enabled ruleset present" '"tag": "geo_on"' "$TMPDIR/out.json"
+grep -q '"tag": "geo_off"' "$TMPDIR/out.json" \
+	&& { echo "FAIL: disabled ruleset must not appear"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: disabled ruleset skipped"
+
+# ---- duplicate rule_set entries deduplicated ----
+echo "-- duplicate ruleset dedup"
+write_cfg "
+config ruleset 'dup_rs'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/dup.srs'
+	option format 'binary'
+
+config route_rule 'rule_a'
+	option enabled '1'
+	list ruleset 'dup_rs'
+	option action 'direct'
+
+config route_rule 'rule_b'
+	option enabled '1'
+	list ruleset 'dup_rs'
+	option action 'block'
+"
+run_gen
+count=$(grep -c '"tag": "dup_rs"' "$TMPDIR/out.json" || true)
+[ "$count" = "1" ] \
+	|| { echo "FAIL: dup_rs should appear once, got $count"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: duplicate rule_set deduplicated"
+check "rule_a -> direct" '"outbound": "direct"' "$TMPDIR/out.json"
+check "rule_b -> block"  '"outbound": "block"'  "$TMPDIR/out.json"
+
 echo "OK"

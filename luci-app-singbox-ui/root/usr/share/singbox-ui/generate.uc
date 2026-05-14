@@ -195,6 +195,60 @@ function build_outbounds_and_routes() {
 	return outbounds;
 }
 
+function build_route_config() {
+	let rules = [];
+	let rule_sets = [];
+	let seen = {};
+
+	let rs_by_name = {};
+	uci.foreach("singbox-ui", "ruleset", function(section) {
+		rs_by_name[section[".name"]] = section;
+	});
+
+	uci.foreach("singbox-ui", "route_rule", function(section) {
+		if (section.enabled === "0") return;
+
+		let refs = section.ruleset ?? [];
+		if (type(refs) === "string") refs = [ refs ];
+
+		let resolved = [];
+		for (let rs_name in refs) {
+			let rs = rs_by_name[rs_name];
+			if (!rs) continue;
+			if (rs.enabled === "0") continue;
+
+			if (!seen[rs_name]) {
+				let entry = {
+					tag: rs_name,
+					type: rs.type ?? "remote",
+					format: rs.format ?? "binary",
+				};
+				if (entry.type === "remote") {
+					if (rs.url) entry.url = rs.url;
+				} else if (entry.type === "local") {
+					if (rs.path) entry.path = rs.path;
+				}
+				push(rule_sets, entry);
+				seen[rs_name] = true;
+			}
+			push(resolved, rs_name);
+		}
+
+		if (!length(resolved)) return;
+
+		let action = section.action ?? "direct";
+		let target;
+		if (action === "direct")        target = "direct";
+		else if (action === "block")    target = "block";
+		else if (action === "outbound") target = section.outbound;
+		if (!target) return;
+
+		push(rules, { rule_set: resolved, outbound: target });
+	});
+
+	return { rules, rule_sets };
+}
+
 let config = {};
 
 if (get_bool("fakeip", "enabled")) {
@@ -218,6 +272,12 @@ if (get_bool("tproxy", "enabled")) {
 
 let outbounds = build_outbounds_and_routes();
 if (length(outbounds)) config.outbounds = outbounds;
+
+let route = build_route_config();
+if (length(route.rules)) {
+	config.route = { rules: route.rules };
+	if (length(route.rule_sets)) config.route.rule_set = route.rule_sets;
+}
 
 let f = fs.open("/tmp/singbox-ui.json", "w");
 if (!f) {
