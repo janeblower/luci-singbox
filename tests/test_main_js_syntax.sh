@@ -34,10 +34,31 @@ echo "-- references input UCI sections"
 grep -q "fakeip"   "$JS" || { echo "FAIL: no fakeip section"; exit 1; }
 grep -q "tproxy"   "$JS" || { echo "FAIL: no tproxy section"; exit 1; }
 
-echo "-- references outbound GridSection"
-grep -q "GridSection"  "$JS" || { echo "FAIL: no GridSection"; exit 1; }
-grep -q "outbound"     "$JS" || { echo "FAIL: no outbound section"; exit 1; }
-grep -q "modaltitle"   "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
+echo "-- references all three output GridSections"
+grep -q "GridSection"           "$JS" || { echo "FAIL: no GridSection"; exit 1; }
+grep -q "'outbound'"            "$JS" || { echo "FAIL: no outbound section type"; exit 1; }
+grep -q "'ruleset'"             "$JS" || { echo "FAIL: no ruleset section type"; exit 1; }
+grep -q "'route_rule'"          "$JS" || { echo "FAIL: no route_rule section type"; exit 1; }
+grep -q "modaltitle"            "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
+
+echo "-- references new outbound proxy types"
+grep -q "'json'"                 "$JS" || { echo "FAIL: no proxy_type=json"; exit 1; }
+grep -q "'subscription'"         "$JS" || { echo "FAIL: no proxy_type=subscription"; exit 1; }
+grep -q "proxy_json"             "$JS" || { echo "FAIL: no proxy_json field"; exit 1; }
+grep -q "sub_url"                "$JS" || { echo "FAIL: no sub_url field"; exit 1; }
+grep -q "sub_update_via"         "$JS" || { echo "FAIL: no sub_update_via field"; exit 1; }
+grep -q "sub_interval"           "$JS" || { echo "FAIL: no sub_interval field"; exit 1; }
+grep -q "TextareaValue"          "$JS" || { echo "FAIL: no TextareaValue custom widget"; exit 1; }
+
+echo "-- references ruleset fields"
+grep -q "dns_fakeip"             "$JS" || { echo "FAIL: no dns_fakeip field"; exit 1; }
+grep -q "nft_rules"              "$JS" || { echo "FAIL: no nft_rules field"; exit 1; }
+grep -q "update_interval"        "$JS" || { echo "FAIL: no update_interval field"; exit 1; }
+
+echo "-- has sub-tab data-tab markers"
+grep -q "data-tab.*outbounds"    "$JS" || { echo "FAIL: no outbounds sub-tab marker"; exit 1; }
+grep -q "data-tab.*rulesets"     "$JS" || { echo "FAIL: no rulesets sub-tab marker"; exit 1; }
+grep -q "data-tab.*routerules"   "$JS" || { echo "FAIL: no routerules sub-tab marker"; exit 1; }
 
 echo "-- wires the restart rpc method"
 grep -q "singbox-ui.*restart" "$JS" || { echo "FAIL: no restart rpc binding"; exit 1; }
