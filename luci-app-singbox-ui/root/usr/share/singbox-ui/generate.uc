@@ -159,11 +159,9 @@ function load_subscription_outbound(name) {
 
 function build_outbounds_and_routes() {
 	let outbounds = [];
-	let route_rules = [];
-	let route_rule_sets = [];
 
 	uci.foreach("singbox-ui", "outbound", function(section) {
-		if (section.enabled === "0") return;   // skip disabled outbounds
+		if (section.enabled === "0") return;
 
 		let name = section[".name"];
 		let action = section.action;
@@ -192,39 +190,9 @@ function build_outbounds_and_routes() {
 
 		if (!outbound) return;
 		push(outbounds, outbound);
-
-		// Build routing rule from Conditions tab fields.
-		let rulesets = section.ruleset ?? [];
-		if (type(rulesets) === "string") rulesets = [ rulesets ];
-		let domains = section.domain ?? [];
-		if (type(domains) === "string") domains = [ domains ];
-
-		if (!length(rulesets) && !length(domains)) return;
-
-		let rule = { outbound: name };
-		let rs_tags = [];
-
-		for (let i, rs in rulesets) {
-			let rs_tag = "rs_" + name + "_" + i;
-			let is_local = (substr(rs, 0, 1) === "/");
-			let format = match(rs, /\.srs$/) ? "binary" : "source";
-			let rs_obj;
-			if (is_local) {
-				rs_obj = { tag: rs_tag, type: "local", format: format, path: rs };
-			} else {
-				rs_obj = { tag: rs_tag, type: "remote", format: format, url: rs };
-			}
-			push(route_rule_sets, rs_obj);
-			push(rs_tags, rs_tag);
-		}
-
-		if (length(rs_tags)) rule.rule_set = rs_tags;
-		if (length(domains)) rule.domain_suffix = domains;
-
-		push(route_rules, rule);
 	});
 
-	return { outbounds, route_rules, route_rule_sets };
+	return outbounds;
 }
 
 let config = {};
@@ -248,16 +216,8 @@ if (get_bool("tproxy", "enabled")) {
 	} ];
 }
 
-let result = build_outbounds_and_routes();
-let outbounds = result.outbounds;
-let route_rules = result.route_rules;
-let route_rule_sets = result.route_rule_sets;
-
+let outbounds = build_outbounds_and_routes();
 if (length(outbounds)) config.outbounds = outbounds;
-if (length(route_rules)) {
-	config.route = { rules: route_rules };
-	if (length(route_rule_sets)) config.route.rule_set = route_rule_sets;
-}
 
 let f = fs.open("/tmp/singbox-ui.json", "w");
 if (!f) {
