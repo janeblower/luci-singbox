@@ -249,6 +249,17 @@ function build_route_config() {
 	return { rules, rule_sets };
 }
 
+function build_dns_rules() {
+	let rules = [];
+	uci.foreach("singbox-ui", "ruleset", function(section) {
+		if (section.enabled === "0") return;
+		if (section.dns_fakeip !== "1") return;
+		let server_tag = section.dns_fakeip_tag ?? "fakeip";
+		push(rules, { rule_set: [ section[".name"] ], server: server_tag });
+	});
+	return rules;
+}
+
 let config = {};
 
 if (get_bool("fakeip", "enabled")) {
@@ -259,6 +270,8 @@ if (get_bool("fakeip", "enabled")) {
 			inet6_range: get_list("fakeip", "inet6_range"),
 		},
 	};
+	let dns_rules = build_dns_rules();
+	if (length(dns_rules)) config.dns.rules = dns_rules;
 }
 
 if (get_bool("tproxy", "enabled")) {

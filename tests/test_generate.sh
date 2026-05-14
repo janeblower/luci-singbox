@@ -252,4 +252,55 @@ echo "  PASS: duplicate rule_set deduplicated"
 check "rule_a -> direct" '"outbound": "direct"' "$TMPDIR/out.json"
 check "rule_b -> block"  '"outbound": "block"'  "$TMPDIR/out.json"
 
+# ---- dns.rules from ruleset.dns_fakeip ----
+echo "-- dns_fakeip emits dns.rules entry"
+write_cfg "
+config fakeip 'fakeip'
+	option enabled '1'
+	list inet4_range '198.18.0.0/15'
+	list inet6_range 'fc00::/18'
+
+config ruleset 'geosite_cn'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/geosite-cn.srs'
+	option format 'binary'
+	option dns_fakeip '1'
+	option dns_fakeip_tag 'fakeip'
+
+config route_rule 'cn_direct'
+	option enabled '1'
+	list ruleset 'geosite_cn'
+	option action 'direct'
+"
+run_gen
+check "dns block present" '\"dns\":'           "$TMPDIR/out.json"
+check "dns.rules present" '\"rules\":'         "$TMPDIR/out.json"
+check "dns rule_set cn"   '\"rule_set\":'      "$TMPDIR/out.json"
+check "dns server fakeip" '"server": "fakeip"' "$TMPDIR/out.json"
+
+# ---- dns.rules omitted when no dns_fakeip ruleset ----
+echo "-- no dns.rules without dns_fakeip"
+write_cfg "
+config fakeip 'fakeip'
+	option enabled '1'
+	list inet4_range '198.18.0.0/15'
+
+config ruleset 'plain'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/plain.srs'
+	option format 'binary'
+
+config route_rule 'plain_rule'
+	option enabled '1'
+	list ruleset 'plain'
+	option action 'direct'
+"
+run_gen
+# The dns object should exist but have no rules array inside it
+awk '/"dns":/,/^    }/' "$TMPDIR/out.json" | grep -q '"rules":' \
+	&& { echo "FAIL: dns.rules emitted without any dns_fakeip=1 ruleset"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: dns.rules omitted when no dns_fakeip ruleset"
+
 echo "OK"
