@@ -59,6 +59,15 @@ function to_json(val, depth) {
 	return sprintf("%J", val);
 }
 
+function url_decode(s) {
+	if (s == null) return s;
+	// Replace + with space, then percent-decode.
+	let out = replace(s, "+", " ");
+	return replace(out, /%([0-9a-fA-F]{2})/g, function(m, h) {
+		return chr(hex(h));
+	});
+}
+
 function parse_query(query_string) {
 	let params = {};
 	for (let part in split(query_string, "&")) {
@@ -66,7 +75,7 @@ function parse_query(query_string) {
 		if (eq < 0) continue;
 		let k = substr(part, 0, eq);
 		let v = substr(part, eq + 1);
-		params[k] = v;
+		params[k] = url_decode(v);
 	}
 	return params;
 }
