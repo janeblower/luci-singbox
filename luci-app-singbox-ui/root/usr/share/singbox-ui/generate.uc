@@ -128,6 +128,16 @@ function parse_proxy_url(url) {
 	return null;
 }
 
+function parse_json_outbound(json_str, name) {
+	let parsed = json(json_str ?? "");
+	if (!parsed || type(parsed) !== "object") {
+		warn("generate.uc: invalid JSON outbound for " + name + "\n");
+		return null;
+	}
+	parsed.tag = name;
+	return parsed;
+}
+
 function build_outbounds_and_routes() {
 	let outbounds = [];
 	let route_rules = [];
@@ -154,6 +164,8 @@ function build_outbounds_and_routes() {
 					parsed.tag = name;
 					outbound = parsed;
 				}
+			} else if (proxy_type === "json") {
+				outbound = parse_json_outbound(section.proxy_json, name);
 			}
 		}
 
