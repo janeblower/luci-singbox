@@ -46,6 +46,8 @@ define Package/$(PKG_NAME)/install
 	  $(1)/usr/share/singbox-ui/fetch_subscriptions.sh
 	$(INSTALL_BIN) ./root/usr/share/singbox-ui/fetch_rulesets.sh \
 	  $(1)/usr/share/singbox-ui/fetch_rulesets.sh
+	$(INSTALL_BIN) ./root/usr/share/singbox-ui/refresh.sh \
+	  $(1)/usr/share/singbox-ui/refresh.sh
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
