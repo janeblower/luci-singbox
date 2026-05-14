@@ -23,42 +23,6 @@ function get_first(section, opt) {
 	return v;
 }
 
-// Produce indented JSON (4-space indent).
-function indent_of(depth) {
-	let s = "";
-	for (let i = 0; i < depth; i++) s += "    ";
-	return s;
-}
-
-function to_json(val, depth) {
-	if (depth == null) depth = 0;
-	let t = type(val);
-
-	if (t === "object") {
-		let ks = keys(val);
-		if (!length(ks)) return "{}";
-		let inner = indent_of(depth + 1);
-		let outer = indent_of(depth);
-		let parts = [];
-		for (let k in ks)
-			push(parts, inner + sprintf("%J", k) + ": " + to_json(val[k], depth + 1));
-		return "{\n" + join(",\n", parts) + "\n" + outer + "}";
-	}
-
-	if (t === "array") {
-		if (!length(val)) return "[]";
-		let inner = indent_of(depth + 1);
-		let outer = indent_of(depth);
-		let parts = [];
-		for (let v in val)
-			push(parts, inner + to_json(v, depth + 1));
-		return "[\n" + join(",\n", parts) + "\n" + outer + "]";
-	}
-
-	// Primitives: string, int, double, bool, null — %J handles all of them.
-	return sprintf("%J", val);
-}
-
 function url_decode(s) {
 	if (s == null) return s;
 	// Replace + with space, then percent-decode.
@@ -307,7 +271,7 @@ if (!f) {
 	warn("generate.uc: cannot open /tmp/singbox-ui.json for writing\n");
 	exit(1);
 }
-f.write(to_json(config) + "\n");
+f.write(sprintf("%.4J\n", config));
 f.close();
 
 print("OK\n");
