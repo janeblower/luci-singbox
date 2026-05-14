@@ -34,11 +34,13 @@ fetch_one() {
 	decoded=$(printf '%s' "$raw" | base64 -d 2>/dev/null) || decoded=""
 	[ -z "$decoded" ] && decoded="$raw"
 
-	first_url=$(printf '%s\n' "$decoded" | grep -m1 '^[a-z][a-z0-9+.-]*://') || first_url=""
-	[ -z "$first_url" ] && { echo "fetch_subscriptions: no valid proxy URL in response for $name" >&2; return 1; }
+	# Keep ALL valid proxy URLs (one per line). generate.uc picks the first
+	# one for sub_multi=0 outbounds, all of them for sub_multi=1.
+	urls=$(printf '%s\n' "$decoded" | grep -E '^[a-z][a-z0-9+.-]*://') || urls=""
+	[ -z "$urls" ] && { echo "fetch_subscriptions: no valid proxy URL in response for $name" >&2; return 1; }
 
-	printf '%s\n' "$first_url" > "$out"
-	echo "fetch_subscriptions: $name -> $out"
+	printf '%s\n' "$urls" > "$out"
+	echo "fetch_subscriptions: $name -> $out ($(printf '%s' "$urls" | wc -l) urls)"
 }
 
 uci show singbox-ui 2>/dev/null | \
