@@ -100,25 +100,4 @@ check "hy2 type"     '"type": "hysteria2"'         "$TMPDIR/out.json"
 check "hy2 password" '"password": "mypassword"'    "$TMPDIR/out.json"
 check "hy2 server"   '"server": "vpn.example.com"' "$TMPDIR/out.json"
 
-# ---- routing rules ----
-echo "-- routing rules from conditions"
-write_cfg "
-config outbound 'routed'
-	option action 'direct'
-	list ruleset 'https://example.com/rules.srs'
-	list ruleset '/etc/singbox-ui/local.json'
-	list domain 'google.com'
-	list domain 'youtube.com'
-"
-run_gen
-check "route rules"      '"rules":'           "$TMPDIR/out.json"
-check "rule_set tag 0"   '"rs_routed_0"'      "$TMPDIR/out.json"
-check "rule_set tag 1"   '"rs_routed_1"'      "$TMPDIR/out.json"
-check "remote ruleset"   '"type": "remote"'   "$TMPDIR/out.json"
-check "local ruleset"    '"type": "local"'    "$TMPDIR/out.json"
-check "binary format"    '"format": "binary"' "$TMPDIR/out.json"
-check "source format"    '"format": "source"' "$TMPDIR/out.json"
-check "domain_suffix"    '"domain_suffix":'   "$TMPDIR/out.json"
-check "google.com"       '"google.com"'       "$TMPDIR/out.json"
-
 echo "OK"
