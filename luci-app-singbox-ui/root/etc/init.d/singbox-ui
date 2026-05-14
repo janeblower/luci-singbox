@@ -7,10 +7,12 @@ STOP=01
 GENERATE_UC=/usr/share/singbox-ui/generate.uc
 NFTABLES_SH=/etc/singbox-ui/nftables.sh
 FETCH_SUBSCRIPTIONS=/usr/share/singbox-ui/fetch_subscriptions.sh
+FETCH_RULESETS=/usr/share/singbox-ui/fetch_rulesets.sh
 
 start_service() {
 	mkdir -p /tmp/singbox-ui
 	[ -x "$FETCH_SUBSCRIPTIONS" ] && "$FETCH_SUBSCRIPTIONS"
+	[ -x "$FETCH_RULESETS" ]      && "$FETCH_RULESETS"
 	ucode "$GENERATE_UC"
 	[ "$(uci -q get singbox-ui.tproxy.enabled)" = "1" ] && \
 		"$NFTABLES_SH" apply
