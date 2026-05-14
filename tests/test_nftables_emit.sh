@@ -55,4 +55,12 @@ echo "$out" | grep -q "127.0.0.1:1234"    || { echo "FAIL: wrong port"; exit 1; 
 echo "$out" | grep -q 'iifname "eth0"'    || { echo "FAIL: wrong interface"; exit 1; }
 echo "$out" | grep -q "ip6 daddr"         && { echo "FAIL: ip6 rule emitted for empty v6"; exit 1; }
 
+echo "-- empty rs_*.json cache: output is phase-2-equivalent"
+rm -f /tmp/singbox-ui/rs_*.json 2>/dev/null
+out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan")
+echo "$out" | grep -q "table inet singbox_ui"  || { echo "FAIL: missing table"; exit 1; }
+echo "$out" | grep -q "chain prerouting_mark"  || { echo "FAIL: missing mark chain"; exit 1; }
+echo "$out" | grep -q "set rs_"                && { echo "FAIL: unexpected nfset emitted with empty cache"; exit 1; }
+echo "$out" | grep -q "@rs_"                   && { echo "FAIL: unexpected nfset rule emitted"; exit 1; }
+
 echo "OK"
