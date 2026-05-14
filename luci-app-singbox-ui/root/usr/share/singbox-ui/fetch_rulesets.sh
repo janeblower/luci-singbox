@@ -28,7 +28,7 @@ fetch_ruleset() {
 
 	case "$rs_type" in
 	remote)
-		if ! curl -sf --max-time 30 -o "$raw" "$src" 2>/dev/null; then
+		if ! curl -sfL --max-time 30 -o "$raw" "$src" 2>/dev/null; then
 			echo "fetch_rulesets: download failed: $src" >&2
 			return 1
 		fi

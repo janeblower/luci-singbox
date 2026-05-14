@@ -16,12 +16,12 @@ fetch_one() {
 
 	case "$update_via" in
 	direct|"")
-		raw=$(curl -sf --max-time 15 "$url" 2>/dev/null) || raw=""
+		raw=$(curl -sfL --max-time 15 "$url" 2>/dev/null) || raw=""
 		;;
 	*)
 		iface=$(uci -q get "singbox-ui.${update_via}.interface")
 		if [ -n "$iface" ]; then
-			raw=$(curl -sf --max-time 15 --interface "$iface" "$url" 2>/dev/null) || raw=""
+			raw=$(curl -sfL --max-time 15 --interface "$iface" "$url" 2>/dev/null) || raw=""
 		else
 			echo "fetch_subscriptions: outbound '$update_via' has no interface" >&2
 			return 1

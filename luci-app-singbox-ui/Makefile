@@ -7,7 +7,7 @@ PKG_LICENSE:=GPL-2.0-or-later
 PKG_MAINTAINER:=Jyn
 
 LUCI_TITLE:=LuCI support for singbox-ui
-LUCI_DEPENDS:=+luci-base +nftables +sing-box +jq
+LUCI_DEPENDS:=+luci-base +nftables +sing-box +jq +curl
 LUCI_PKGARCH:=all
 
 include $(TOPDIR)/feeds/luci/luci.mk
