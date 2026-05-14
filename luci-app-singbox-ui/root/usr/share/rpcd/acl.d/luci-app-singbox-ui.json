@@ -4,7 +4,7 @@
 		"read": {
 			"uci": [ "singbox-ui" ],
 			"ubus": {
-				"singbox-ui": [ "generate", "nftables", "restart" ]
+				"singbox-ui": [ "generate", "nftables", "restart", "refresh", "status", "read_config" ]
 			}
 		},
 		"write": {

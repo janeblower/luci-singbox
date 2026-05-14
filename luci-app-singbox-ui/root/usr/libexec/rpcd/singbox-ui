@@ -1,21 +1,31 @@
 #!/bin/sh
 # rpcd handler for singbox-ui. Methods:
-#   generate        run /usr/share/singbox-ui/generate.uc
-#   nftables {action}  run /etc/singbox-ui/nftables.sh apply|remove
-#   restart         restart /etc/init.d/singbox-ui (full service restart)
+#   generate            run /usr/share/singbox-ui/generate.uc
+#   nftables {action}   run /etc/singbox-ui/nftables.sh apply|remove
+#   restart             restart /etc/init.d/singbox-ui (full service restart)
+#   refresh {what}      run refresh.sh subscriptions|rulesets|all (force)
+#   status              return JSON: { running, subscriptions[], rulesets[] }
+#   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
 #
-# NFTABLES_SH, GENERATE_UC, SINGBOX_INIT env vars override paths (used by tests).
+# Env overrides (used by tests):
+#   NFTABLES_SH GENERATE_UC SINGBOX_INIT REFRESH_SH SINGBOX_TMP SINGBOX_CONFIG
 
 NFTABLES_SH=${NFTABLES_SH:-/etc/singbox-ui/nftables.sh}
 GENERATE_UC=${GENERATE_UC:-/usr/share/singbox-ui/generate.uc}
 SINGBOX_INIT=${SINGBOX_INIT:-/etc/init.d/singbox-ui}
+REFRESH_SH=${REFRESH_SH:-/usr/share/singbox-ui/refresh.sh}
+TMPDIR=${SINGBOX_TMP:-/tmp/singbox-ui}
+CONFIG_JSON=${SINGBOX_CONFIG:-/tmp/singbox-ui.json}
 
 emit_list() {
 	cat <<'EOF'
 {
 	"generate": {},
 	"nftables": { "action": "string" },
-	"restart": {}
+	"restart": {},
+	"refresh": { "what": "string" },
+	"status": {},
+	"read_config": {}
 }
 EOF
 }
@@ -29,13 +39,61 @@ emit_err() {
 	printf '{"status":"error","message":"%s"}\n' "$msg"
 }
 
-read_action() {
+read_field() {
+	field="$1"
 	if command -v jq >/dev/null 2>&1; then
-		jq -r '.action // empty'
+		jq -r --arg f "$field" '.[$f] // empty'
 	else
-		grep -oE '"action"[[:space:]]*:[[:space:]]*"[^"]*"' \
+		grep -oE "\"$field\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
 			| sed -E 's/.*"([^"]*)"$/\1/' \
 			| head -n1
+	fi
+}
+
+emit_status() {
+	if pgrep -f 'sing-box run' >/dev/null 2>&1; then
+		running='true'
+	else
+		running='false'
+	fi
+
+	subs='[]'
+	rs='[]'
+	if [ -d "$TMPDIR" ] && command -v jq >/dev/null 2>&1; then
+		subs=$(
+			for f in "$TMPDIR"/sub_*.txt; do
+				[ -f "$f" ] || continue
+				name=$(basename "$f" .txt); name=${name#sub_}
+				mt=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+				printf '{"name":"%s","mtime":%s}\n' "$name" "$mt"
+			done | jq -s '.'
+		)
+		rs=$(
+			for f in "$TMPDIR"/rs_*.json; do
+				[ -f "$f" ] || continue
+				name=$(basename "$f" .json); name=${name#rs_}
+				mt=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+				printf '{"name":"%s","mtime":%s}\n' "$name" "$mt"
+			done | jq -s '.'
+		)
+		[ -z "$subs" ] && subs='[]'
+		[ -z "$rs" ]   && rs='[]'
+	fi
+
+	printf '{"status":"ok","running":%s,"subscriptions":%s,"rulesets":%s}\n' \
+		"$running" "$subs" "$rs"
+}
+
+emit_read_config() {
+	if [ ! -f "$CONFIG_JSON" ]; then
+		emit_err "config not generated yet"
+		return
+	fi
+	if command -v jq >/dev/null 2>&1; then
+		jq -Rs --arg s "ok" '{status:$s, content: .}' < "$CONFIG_JSON"
+	else
+		esc=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' "$CONFIG_JSON" | awk '{printf "%s\\n", $0}')
+		printf '{"status":"ok","content":"%s"}\n' "$esc"
 	fi
 }
 
@@ -55,7 +113,7 @@ call)
 		fi
 		;;
 	nftables)
-		action=$(read_action)
+		action=$(read_field action)
 		case "$action" in
 		apply|remove)
 			if "$NFTABLES_SH" "$action" >/dev/null; then
@@ -76,6 +134,27 @@ call)
 		else
 			emit_err "service restart failed"
 		fi
+		;;
+	refresh)
+		what=$(read_field what)
+		case "$what" in
+		subscriptions|rulesets|all|"") ;;
+		*) emit_err "invalid what: $what"; exit 0 ;;
+		esac
+		[ -z "$what" ] && what=all
+		if "$REFRESH_SH" "$what" force >/dev/null 2>&1; then
+			emit_ok
+		else
+			emit_err "refresh.sh $what failed"
+		fi
+		;;
+	status)
+		cat >/dev/null
+		emit_status
+		;;
+	read_config)
+		cat >/dev/null
+		emit_read_config
 		;;
 	*)
 		emit_err "unknown method: $method"
