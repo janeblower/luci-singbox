@@ -26,7 +26,6 @@ echo "-- declares all expected requires"
 grep -q "'require view'"          "$JS" || { echo "FAIL: missing 'require view'"; exit 1; }
 grep -q "'require form'"          "$JS" || { echo "FAIL: missing 'require form'"; exit 1; }
 grep -q "'require uci'"           "$JS" || { echo "FAIL: missing 'require uci'"; exit 1; }
-grep -q "'require rpc'"           "$JS" || { echo "FAIL: missing 'require rpc'"; exit 1; }
 grep -q "'require ui'"            "$JS" || { echo "FAIL: missing 'require ui'"; exit 1; }
 grep -q "'require tools.widgets as widgets'" "$JS" || { echo "FAIL: missing 'require tools.widgets as widgets'"; exit 1; }
 
@@ -60,13 +59,9 @@ grep -q "data-tab.*outbounds"    "$JS" || { echo "FAIL: no outbounds sub-tab mar
 grep -q "data-tab.*rulesets"     "$JS" || { echo "FAIL: no rulesets sub-tab marker"; exit 1; }
 grep -q "data-tab.*routerules"   "$JS" || { echo "FAIL: no routerules sub-tab marker"; exit 1; }
 
-echo "-- wires the restart rpc method"
-grep -q "singbox-ui.*restart" "$JS" || { echo "FAIL: no restart rpc binding"; exit 1; }
-
-echo "-- has handleSaveApply with uci.apply and enabled flag"
-grep -q "handleSaveApply" "$JS" || { echo "FAIL: no handleSaveApply"; exit 1; }
-grep -q "uci.apply"       "$JS" || { echo "FAIL: no uci.apply call"; exit 1; }
-grep -q "uci.changes"     "$JS" || { echo "FAIL: no uci.changes check"; exit 1; }
-grep -q "'enabled'"       "$JS" || { echo "FAIL: no enabled flag"; exit 1; }
+echo "-- has handleSaveApply via ui.changes.apply"
+grep -q "handleSaveApply"  "$JS" || { echo "FAIL: no handleSaveApply"; exit 1; }
+grep -q "ui.changes.apply" "$JS" || { echo "FAIL: no ui.changes.apply call (needed for /admin/uci/apply_rollback)"; exit 1; }
+grep -q "'enabled'"        "$JS" || { echo "FAIL: no enabled flag"; exit 1; }
 
 echo "OK"
