@@ -132,4 +132,25 @@ check "json server" '"server": "json.example.com"' "$TMPDIR/out.json"
 check "json port"   '"server_port": 8443'         "$TMPDIR/out.json"
 check "json uuid"   '"uuid": "abc-123"'           "$TMPDIR/out.json"
 
+# ---- subscription outbound ----
+echo "-- proxy_type=subscription"
+mkdir -p /tmp/singbox-ui
+printf 'vless://sub-uuid-9999@sub.example.com:443?security=tls&sni=sub.example.com\n' \
+	> /tmp/singbox-ui/sub_my_sub_out.txt
+write_cfg "
+config outbound 'my_sub_out'
+	option enabled '1'
+	option action 'proxy'
+	option proxy_type 'subscription'
+	option sub_url 'https://sub.example.com/config'
+	option sub_update_via 'direct'
+	option sub_interval '3600'
+"
+run_gen
+check "sub tag"    '"tag": "my_sub_out"'         "$TMPDIR/out.json"
+check "sub type"   '"type": "vless"'             "$TMPDIR/out.json"
+check "sub uuid"   '"uuid": "sub-uuid-9999"'     "$TMPDIR/out.json"
+check "sub server" '"server": "sub.example.com"' "$TMPDIR/out.json"
+rm -f /tmp/singbox-ui/sub_my_sub_out.txt
+
 echo "OK"

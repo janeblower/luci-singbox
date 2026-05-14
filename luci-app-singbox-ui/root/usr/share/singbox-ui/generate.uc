@@ -138,6 +138,25 @@ function parse_json_outbound(json_str, name) {
 	return parsed;
 }
 
+function load_subscription_outbound(name) {
+	let path = "/tmp/singbox-ui/sub_" + name + ".txt";
+	let f = fs.open(path, "r");
+	if (!f) {
+		warn("generate.uc: subscription state missing: " + path + "\n");
+		return null;
+	}
+	let url = trim(f.read("all") ?? "");
+	f.close();
+	if (!url) {
+		warn("generate.uc: subscription state empty: " + path + "\n");
+		return null;
+	}
+	let parsed = parse_proxy_url(url);
+	if (!parsed) return null;
+	parsed.tag = name;
+	return parsed;
+}
+
 function build_outbounds_and_routes() {
 	let outbounds = [];
 	let route_rules = [];
@@ -166,6 +185,8 @@ function build_outbounds_and_routes() {
 				}
 			} else if (proxy_type === "json") {
 				outbound = parse_json_outbound(section.proxy_json, name);
+			} else if (proxy_type === "subscription") {
+				outbound = load_subscription_outbound(name);
 			}
 		}
 
