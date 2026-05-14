@@ -63,4 +63,65 @@ echo "$out" | grep -q "chain prerouting_mark"  || { echo "FAIL: missing mark cha
 echo "$out" | grep -q "set rs_"                && { echo "FAIL: unexpected nfset emitted with empty cache"; exit 1; }
 echo "$out" | grep -q "@rs_"                   && { echo "FAIL: unexpected nfset rule emitted"; exit 1; }
 
+command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not available for ruleset emit tests"; echo "OK"; exit 0; }
+
+# Clean any leftover ruleset caches from earlier failed runs so each scenario
+# starts from a known state.
+rm -f /tmp/singbox-ui/rs_test_*.json 2>/dev/null
+trap 'rm -f /tmp/singbox-ui/rs_test_*.json' EXIT
+
+echo "-- rs_*.json cache: nft set definition + marking rule (basic ip_cidr)"
+mkdir -p /tmp/singbox-ui
+cat >/tmp/singbox-ui/rs_test_basic.json <<'JSON'
+{
+  "version": 1,
+  "rules": [
+    { "ip_cidr": ["1.2.3.0/24", "4.5.6.0/16"] }
+  ]
+}
+JSON
+out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+echo "$out" | grep -q "set rs_test_basic_0"              || { echo "FAIL: missing set definition"; echo "$out"; exit 1; }
+echo "$out" | grep -q "type ipv4_addr"                   || { echo "FAIL: set missing type"; exit 1; }
+echo "$out" | grep -q "flags interval"                   || { echo "FAIL: set missing flags interval"; exit 1; }
+echo "$out" | grep -q "1.2.3.0/24"                       || { echo "FAIL: missing first cidr"; exit 1; }
+echo "$out" | grep -q "4.5.6.0/16"                       || { echo "FAIL: missing second cidr"; exit 1; }
+echo "$out" | grep -q "ip daddr @rs_test_basic_0"        || { echo "FAIL: missing marking rule"; echo "$out"; exit 1; }
+echo "$out" | grep -q "meta l4proto { tcp, udp }"        || { echo "FAIL: missing l4proto (no network)"; exit 1; }
+echo "$out" | grep -q "meta mark set 0x1"                || { echo "FAIL: missing mark set"; exit 1; }
+echo "$out" | grep -q "ct state new"                     || { echo "FAIL: missing ct state new"; exit 1; }
+echo "$out" | grep -q "198.18.0.0/15"                    || { echo "FAIL: fakeip v4 rule missing alongside nfset"; exit 1; }
+rm -f /tmp/singbox-ui/rs_test_basic.json
+
+echo "-- rs_*.json cache: network=tcp emits 'meta l4proto tcp'"
+cat >/tmp/singbox-ui/rs_test_tcp.json <<'JSON'
+{
+  "version": 1,
+  "rules": [
+    { "ip_cidr": ["10.0.0.0/8"], "network": "tcp" }
+  ]
+}
+JSON
+out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+mark_section=$(echo "$out" | awk '/chain prerouting_mark/,/^[[:space:]]*}/')
+echo "$mark_section" | grep -q "ip daddr @rs_test_tcp_0 meta l4proto tcp" \
+	|| { echo "FAIL: tcp-network rule missing exact l4proto match"; echo "$mark_section"; exit 1; }
+echo "$mark_section" | grep -q "meta l4proto { tcp, udp }.*@rs_test_tcp_0" \
+	&& { echo "FAIL: tcp-network rule used default l4proto"; exit 1; }
+rm -f /tmp/singbox-ui/rs_test_tcp.json
+
+echo "-- rs_*.json cache: network=tcp + port_range=['80:443'] emits 'tcp dport 80-443'"
+cat >/tmp/singbox-ui/rs_test_port.json <<'JSON'
+{
+  "version": 1,
+  "rules": [
+    { "ip_cidr": ["172.16.0.0/12"], "network": "tcp", "port_range": ["80:443"] }
+  ]
+}
+JSON
+out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+echo "$out" | grep -q "ip daddr @rs_test_port_0 meta l4proto tcp tcp dport 80-443 ct state new meta mark set 0x1" \
+	|| { echo "FAIL: missing tcp+port_range marking rule"; echo "$out"; exit 1; }
+rm -f /tmp/singbox-ui/rs_test_port.json
+
 echo "OK"
