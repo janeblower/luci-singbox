@@ -31,11 +31,14 @@ emit_ruleset_data() {
 		fname=$(basename "$json_file" .json)
 		name=${fname#rs_}
 
+		# Decompiled .srs rules can have ip_cidr / port_range as either a
+		# scalar string or an array of strings — normalise both shapes to a
+		# comma-joined string before the shell-side loop.
 		rules=$(jq -r '
 			.rules[]? | select(.ip_cidr) |
-			((.ip_cidr | join(",")) + "|" +
-			 (.network // "") + "|" +
-			 (.port_range // [] | join(",")))
+			((.ip_cidr    | if type == "array" then join(",") else tostring end) + "|" +
+			 (.network    // "") + "|" +
+			 ((.port_range // []) | if type == "array" then join(",") else tostring end))
 		' "$json_file" 2>/dev/null) || rules=""
 		[ -z "$rules" ] && continue
 

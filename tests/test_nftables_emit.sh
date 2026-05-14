@@ -124,4 +124,42 @@ echo "$out" | grep -q "ip daddr @rs_test_port_0 meta l4proto tcp tcp dport 80-44
 	|| { echo "FAIL: missing tcp+port_range marking rule"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_port.json
 
+# Real .srs rule-sets emit ip_cidr and port_range as either scalars or arrays.
+# Both forms must produce identical nft output.
+echo "-- rs_*.json cache: scalar ip_cidr + scalar port_range (real sing-box shape)"
+cat >/tmp/singbox-ui/rs_test_scalar.json <<'JSON'
+{
+  "version": 3,
+  "rules": [
+    { "ip_cidr": "104.16.0.0/12", "network": "udp", "port_range": "19000:20000" }
+  ]
+}
+JSON
+out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+echo "$out" | grep -q "set rs_test_scalar_0" \
+	|| { echo "FAIL: scalar ip_cidr — set not emitted"; echo "$out"; exit 1; }
+echo "$out" | grep -q "elements = { 104.16.0.0/12 }" \
+	|| { echo "FAIL: scalar ip_cidr — element body wrong"; echo "$out"; exit 1; }
+echo "$out" | grep -q "ip daddr @rs_test_scalar_0 meta l4proto udp udp dport 19000-20000 ct state new meta mark set 0x1" \
+	|| { echo "FAIL: scalar port_range — marking rule wrong"; echo "$out"; exit 1; }
+rm -f /tmp/singbox-ui/rs_test_scalar.json
+
+echo "-- rs_*.json cache: domain-only rule is skipped, ip_cidr rule still emits"
+cat >/tmp/singbox-ui/rs_test_mixed.json <<'JSON'
+{
+  "version": 3,
+  "rules": [
+    { "domain_suffix": ["example.com"] },
+    { "ip_cidr": ["10.0.0.0/8"], "network": "tcp" }
+  ]
+}
+JSON
+out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+echo "$out" | grep -q "set rs_test_mixed_0" \
+	|| { echo "FAIL: mixed — ip_cidr rule not emitted as first set"; echo "$out"; exit 1; }
+# domain_suffix rule must not create a set
+echo "$out" | grep -q "set rs_test_mixed_1" \
+	&& { echo "FAIL: mixed — domain-only rule produced an unexpected set"; exit 1; }
+rm -f /tmp/singbox-ui/rs_test_mixed.json
+
 echo "OK"
