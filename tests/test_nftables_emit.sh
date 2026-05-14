@@ -81,12 +81,12 @@ cat >/tmp/singbox-ui/rs_test_basic.json <<'JSON'
 }
 JSON
 out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
-echo "$out" | grep -q "set rs_test_basic_0"              || { echo "FAIL: missing set definition"; echo "$out"; exit 1; }
+echo "$out" | grep -q "set rs_test_basic_0_v4"           || { echo "FAIL: missing set definition"; echo "$out"; exit 1; }
 echo "$out" | grep -q "type ipv4_addr"                   || { echo "FAIL: set missing type"; exit 1; }
 echo "$out" | grep -q "flags interval"                   || { echo "FAIL: set missing flags interval"; exit 1; }
 echo "$out" | grep -q "1.2.3.0/24"                       || { echo "FAIL: missing first cidr"; exit 1; }
 echo "$out" | grep -q "4.5.6.0/16"                       || { echo "FAIL: missing second cidr"; exit 1; }
-echo "$out" | grep -q "ip daddr @rs_test_basic_0"        || { echo "FAIL: missing marking rule"; echo "$out"; exit 1; }
+echo "$out" | grep -q "ip daddr @rs_test_basic_0_v4"     || { echo "FAIL: missing marking rule"; echo "$out"; exit 1; }
 echo "$out" | grep -q "meta l4proto { tcp, udp }"        || { echo "FAIL: missing l4proto (no network)"; exit 1; }
 echo "$out" | grep -q "meta mark set 0x1"                || { echo "FAIL: missing mark set"; exit 1; }
 echo "$out" | grep -q "ct state new"                     || { echo "FAIL: missing ct state new"; exit 1; }
@@ -104,9 +104,9 @@ cat >/tmp/singbox-ui/rs_test_tcp.json <<'JSON'
 JSON
 out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 mark_section=$(echo "$out" | awk '/chain prerouting_mark/,/^[[:space:]]*}/')
-echo "$mark_section" | grep -q "ip daddr @rs_test_tcp_0 meta l4proto tcp" \
+echo "$mark_section" | grep -q "ip daddr @rs_test_tcp_0_v4 meta l4proto tcp" \
 	|| { echo "FAIL: tcp-network rule missing exact l4proto match"; echo "$mark_section"; exit 1; }
-echo "$mark_section" | grep -q "meta l4proto { tcp, udp }.*@rs_test_tcp_0" \
+echo "$mark_section" | grep -q "meta l4proto { tcp, udp }.*@rs_test_tcp_0_v4" \
 	&& { echo "FAIL: tcp-network rule used default l4proto"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_tcp.json
 
@@ -120,7 +120,7 @@ cat >/tmp/singbox-ui/rs_test_port.json <<'JSON'
 }
 JSON
 out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
-echo "$out" | grep -q "ip daddr @rs_test_port_0 meta l4proto tcp tcp dport 80-443 ct state new meta mark set 0x1" \
+echo "$out" | grep -q "ip daddr @rs_test_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new meta mark set 0x1" \
 	|| { echo "FAIL: missing tcp+port_range marking rule"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_port.json
 
@@ -136,11 +136,11 @@ cat >/tmp/singbox-ui/rs_test_scalar.json <<'JSON'
 }
 JSON
 out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
-echo "$out" | grep -q "set rs_test_scalar_0" \
+echo "$out" | grep -q "set rs_test_scalar_0_v4" \
 	|| { echo "FAIL: scalar ip_cidr — set not emitted"; echo "$out"; exit 1; }
 echo "$out" | grep -q "elements = { 104.16.0.0/12 }" \
 	|| { echo "FAIL: scalar ip_cidr — element body wrong"; echo "$out"; exit 1; }
-echo "$out" | grep -q "ip daddr @rs_test_scalar_0 meta l4proto udp udp dport 19000-20000 ct state new meta mark set 0x1" \
+echo "$out" | grep -q "ip daddr @rs_test_scalar_0_v4 meta l4proto udp udp dport 19000-20000 ct state new meta mark set 0x1" \
 	|| { echo "FAIL: scalar port_range — marking rule wrong"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_scalar.json
 
@@ -155,7 +155,7 @@ cat >/tmp/singbox-ui/rs_test_mixed.json <<'JSON'
 }
 JSON
 out=$("$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
-echo "$out" | grep -q "set rs_test_mixed_0" \
+echo "$out" | grep -q "set rs_test_mixed_0_v4" \
 	|| { echo "FAIL: mixed — ip_cidr rule not emitted as first set"; echo "$out"; exit 1; }
 # domain_suffix rule must not create a set
 echo "$out" | grep -q "set rs_test_mixed_1" \

@@ -51,13 +51,22 @@ emit_ruleset_data() {
 			rest=${line#*|}
 			network=${rest%%|*}
 			ports=${rest#*|}
-			set_name="rs_${name}_${idx}"
 
-			printf '\tset %s {\n'           "$set_name"
-			printf '\t\ttype ipv4_addr\n'
-			printf '\t\tflags interval\n'
-			printf '\t\telements = { %s }\n' "$cidrs"
-			printf '\t}\n\n'
+			# Split cidrs into v4 / v6 by presence of ':'. IFS is set to
+			# newline for the outer rules loop, so temporarily restore the
+			# default IFS to let word-splitting break $cidrs on spaces.
+			v4_list=""
+			v6_list=""
+			IFS=$old_ifs
+			for c in $(printf '%s' "$cidrs" | tr ',' ' '); do
+				[ -z "$c" ] && continue
+				case "$c" in
+					*:*) v6_list="${v6_list:+$v6_list,}$c" ;;
+					*)   v4_list="${v4_list:+$v4_list,}$c" ;;
+				esac
+			done
+			IFS='
+'
 
 			case "$network" in
 				tcp) l4proto_expr="meta l4proto tcp" ;;
@@ -78,10 +87,32 @@ emit_ruleset_data() {
 				esac
 			fi
 
-			line_out=$(printf '\t\tip daddr @%s %s%s ct state new meta mark set 0x1\n' \
-				"$set_name" "$l4proto_expr" "$port_expr")
-			RS_MARK_RULES="${RS_MARK_RULES}${line_out}
+			if [ -n "$v4_list" ]; then
+				set_name="rs_${name}_${idx}_v4"
+				printf '\tset %s {\n'           "$set_name"
+				printf '\t\ttype ipv4_addr\n'
+				printf '\t\tflags interval\n'
+				printf '\t\telements = { %s }\n' "$v4_list"
+				printf '\t}\n\n'
+				line_out=$(printf '\t\tip daddr @%s %s%s ct state new meta mark set 0x1\n' \
+					"$set_name" "$l4proto_expr" "$port_expr")
+				RS_MARK_RULES="${RS_MARK_RULES}${line_out}
 "
+			fi
+
+			if [ -n "$v6_list" ]; then
+				set_name="rs_${name}_${idx}_v6"
+				printf '\tset %s {\n'           "$set_name"
+				printf '\t\ttype ipv6_addr\n'
+				printf '\t\tflags interval\n'
+				printf '\t\telements = { %s }\n' "$v6_list"
+				printf '\t}\n\n'
+				line_out=$(printf '\t\tip6 daddr @%s %s%s ct state new meta mark set 0x1\n' \
+					"$set_name" "$l4proto_expr" "$port_expr")
+				RS_MARK_RULES="${RS_MARK_RULES}${line_out}
+"
+			fi
+
 			idx=$((idx + 1))
 		done
 		IFS=$old_ifs
