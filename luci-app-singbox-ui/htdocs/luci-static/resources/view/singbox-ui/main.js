@@ -2,15 +2,8 @@
 'require view';
 'require form';
 'require uci';
-'require rpc';
 'require ui';
 'require tools.widgets as widgets';
-
-// rpcd binding: singbox-ui restart
-var callRestart = rpc.declare({
-	object: 'singbox-ui',
-	method: 'restart'
-});
 
 // Custom widget: a <textarea> for editing raw JSON in the outbound modal.
 var TextareaValue = form.Value.extend({
@@ -319,33 +312,16 @@ return view.extend({
 		]);
 	},
 
-	handleSaveApply: function (ev) {
-		var self = this;
-		return self.handleSave(ev).then(function () {
-			var changes = uci.changes();
-			var hasChanges = Object.keys(changes || {}).some(function (k) {
-				return Array.isArray(changes[k]) && changes[k].length > 0;
-			});
-			if (!hasChanges) return;
-
-			return uci.apply().catch(function () {}).then(function () {
-				return callRestart();
-			}).then(function (result) {
-				if (!result || result.status === 'ok') {
-					ui.addNotification(null,
-						E('p', _('Configuration saved and service restarted.')),
-						'info');
-				} else {
-					var msg = (result && result.message) ||
-					          (result && result.status)  || 'unknown error';
-					ui.addNotification(null,
-						E('p', _('Restart failed: %s').format(String(msg))),
-						'danger');
-				}
-			});
+	handleSaveApply: function (ev, mode) {
+		// Standard LuCI flow: stage form changes server-side via Map.save(),
+		// then hand off to ui.changes.apply() which POSTs /admin/uci/apply_rollback
+		// (or apply_unchecked) and orchestrates the rollback countdown + per-package
+		// reload. singbox-ui's init.d reload_config does stop+start, so sing-box
+		// is regenerated and restarted automatically — no manual rpcd restart needed.
+		return this.handleSave(ev, true).then(function () {
+			return ui.changes.apply(mode == 'force-apply');
 		});
 	},
 
-	handleApply: null,
 	handleReset: null
 });
