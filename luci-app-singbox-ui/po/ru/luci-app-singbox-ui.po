@@ -7,33 +7,42 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-# Page tabs
+# Top-level tabs
 msgid "Input"
 msgstr "Вход"
 
 msgid "Output"
 msgstr "Выход"
 
-# Input form description
+# Input map description
 msgid "Configure FakeIP and TProxy inbound. nftables redirect rules are applied automatically when TProxy is enabled and the service starts."
-msgstr "Настройка FakeIP и входящего TProxy. Правила перенаправления nftables применяются автоматически при включённом TProxy во время запуска службы."
+msgstr "Настройка FakeIP и входящего TProxy. Правила nftables применяются автоматически при включённом TProxy во время запуска службы."
 
-# FakeIP section
+# Sections
 msgid "FakeIP"
 msgstr "FakeIP"
 
+msgid "TProxy Inbound"
+msgstr "Входящий TProxy"
+
+msgid "Outbounds"
+msgstr "Исходящие"
+
+msgid "Rule-Sets"
+msgstr "Наборы правил"
+
+msgid "Route Rules"
+msgstr "Правила маршрутизации"
+
+msgid "Default"
+msgstr "По умолчанию"
+
+# Common fields
 msgid "Enable"
 msgstr "Включить"
 
-msgid "IPv4 ranges"
-msgstr "Диапазоны IPv4"
-
-msgid "IPv6 ranges"
-msgstr "Диапазоны IPv6"
-
-# TProxy section
-msgid "TProxy Inbound"
-msgstr "Входящий TProxy"
+msgid "Type"
+msgstr "Тип"
 
 msgid "Interface"
 msgstr "Интерфейс"
@@ -41,64 +50,163 @@ msgstr "Интерфейс"
 msgid "Port"
 msgstr "Порт"
 
-# Output form
-msgid "Add, configure, and remove outbounds. Each outbound can have routing conditions (rule sets and domains)."
-msgstr "Добавление, настройка и удаление аутбаундов. Для каждого аутбаунда можно задать условия маршрутизации (наборы правил и домены)."
+msgid "URL"
+msgstr "URL"
 
-msgid "Outbounds"
-msgstr "Аутбаунды"
+msgid "Path"
+msgstr "Путь"
 
-# Table columns
-msgid "Name"
-msgstr "Имя"
+msgid "Format"
+msgstr "Формат"
 
 msgid "Action"
 msgstr "Действие"
 
-msgid "Target"
-msgstr "Цель"
+# FakeIP
+msgid "IPv4 ranges"
+msgstr "Диапазоны IPv4"
 
-# Modal title
+msgid "IPv6 ranges"
+msgstr "Диапазоны IPv6"
+
+# Map descriptions
+msgid "Define outbounds: direct, block, or proxy via interface / URL / raw JSON / subscription."
+msgstr "Опишите исходящие подключения: direct, block или прокси через интерфейс / URL / JSON / подписку."
+
+msgid "Remote (.srs/.json) or local rule-sets, referenced by route rules."
+msgstr "Удалённые (.srs/.json) или локальные наборы правил, на которые ссылаются правила маршрутизации."
+
+msgid "Match traffic against one or more rule-sets and send it to an outbound, direct, or block."
+msgstr "Сопоставляет трафик с одним или несколькими наборами правил и направляет его в outbound, direct или block."
+
+msgid "Final route applied to traffic that does not match any rule."
+msgstr "Финальное правило для трафика, не совпавшего ни с одним правилом."
+
+# Outbound modal
 msgid "Outbound"
-msgstr "Аутбаунд"
+msgstr "Outbound"
 
-# Action values
+msgid "URL (share link)"
+msgstr "URL (share-ссылка)"
+
+msgid "Raw JSON"
+msgstr "Сырой JSON"
+
+msgid "Subscription URL"
+msgstr "URL подписки"
+
+msgid "JSON outbound"
+msgstr "JSON outbound"
+
+msgid "Update via"
+msgstr "Обновлять через"
+
+msgid "Direct (WAN)"
+msgstr "Напрямую (WAN)"
+
+msgid "Update interval (s)"
+msgstr "Интервал обновления (с)"
+
+msgid "Expand to selector"
+msgstr "Развернуть в selector"
+
+msgid "Selector type"
+msgstr "Тип селектора"
+
+# Rule-set modal
+msgid "Rule-Set"
+msgstr "Набор правил"
+
+msgid "Remote"
+msgstr "Удалённый"
+
+msgid "Local"
+msgstr "Локальный"
+
+msgid "Binary (.srs)"
+msgstr "Бинарный (.srs)"
+
+msgid "Source (.json)"
+msgstr "Исходный (.json)"
+
+msgid "Route DNS to FakeIP"
+msgstr "Маршрутизировать DNS в FakeIP"
+
+msgid "FakeIP DNS tag"
+msgstr "Тег FakeIP DNS"
+
+msgid "Create nftables rules"
+msgstr "Создавать правила nftables"
+
+# Route rule modal
+msgid "Route Rule"
+msgstr "Правило маршрутизации"
+
 msgid "Direct"
 msgstr "Прямое подключение"
 
 msgid "Block"
 msgstr "Блокировать"
 
-msgid "Proxy"
-msgstr "Прокси"
+# Action bar
+msgid "Refresh subscriptions"
+msgstr "Обновить подписки"
 
-# Modal tabs
-msgid "Settings"
-msgstr "Настройки"
+msgid "Refresh rule-sets"
+msgstr "Обновить наборы правил"
 
-msgid "Conditions"
-msgstr "Условия"
+msgid "Restart service"
+msgstr "Перезапустить службу"
 
-# Settings tab fields
-msgid "Type"
-msgstr "Тип"
+msgid "Preview generated config"
+msgstr "Показать сгенерированный конфиг"
 
-msgid "URL (share link)"
-msgstr "URL (ссылка)"
+msgid "Close"
+msgstr "Закрыть"
 
-msgid "URL"
-msgstr "URL"
+# Status panel
+msgid "Status"
+msgstr "Статус"
 
-# Conditions tab fields
-msgid "Rule sets"
-msgstr "Наборы правил"
+msgid "Service running"
+msgstr "Служба запущена"
 
-msgid "Domains"
-msgstr "Домены"
+msgid "Service stopped"
+msgstr "Служба остановлена"
+
+msgid "Status unavailable"
+msgstr "Статус недоступен"
+
+msgid "Subscriptions"
+msgstr "Подписки"
+
+msgid "Last fetch"
+msgstr "Последнее обновление"
+
+msgid "never"
+msgstr "никогда"
 
 # Notifications
-msgid "Configuration saved and service restarted."
-msgstr "Конфигурация сохранена и служба перезапущена."
+msgid "Done"
+msgstr "Готово"
 
-msgid "Restart failed: %s"
-msgstr "Ошибка перезапуска: %s"
+msgid "Failed: %s"
+msgstr "Ошибка: %s"
+
+msgid "Refresh subscriptions failed"
+msgstr "Ошибка обновления подписок"
+
+msgid "Refresh rule-sets failed"
+msgstr "Ошибка обновления наборов правил"
+
+msgid "Restart failed"
+msgstr "Ошибка перезапуска"
+
+msgid "Invalid JSON: "
+msgstr "Некорректный JSON: "
+
+msgid "unknown error"
+msgstr "неизвестная ошибка"
+
+msgid "not generated"
+msgstr "не сгенерировано"
