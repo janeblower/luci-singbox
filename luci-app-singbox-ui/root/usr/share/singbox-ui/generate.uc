@@ -120,23 +120,21 @@ function parse_json_outbound(json_str, name) {
 	return parsed;
 }
 
-function load_subscription_outbound(name) {
+function read_subscription_urls(name) {
 	let path = "/tmp/singbox-ui/sub_" + name + ".txt";
 	let f = fs.open(path, "r");
 	if (!f) {
 		warn("generate.uc: subscription state missing: " + path + "\n");
-		return null;
+		return [];
 	}
-	let url = trim(f.read("all") ?? "");
+	let body = f.read("all") ?? "";
 	f.close();
-	if (!url) {
-		warn("generate.uc: subscription state empty: " + path + "\n");
-		return null;
+	let urls = [];
+	for (let line in split(body, "\n")) {
+		let t = trim(line);
+		if (length(t)) push(urls, t);
 	}
-	let parsed = parse_proxy_url(url);
-	if (!parsed) return null;
-	parsed.tag = name;
-	return parsed;
+	return urls;
 }
 
 function build_outbounds() {
@@ -160,7 +158,41 @@ function build_outbounds() {
 		} else if (proxy_type === "json") {
 			outbound = parse_json_outbound(section.proxy_json, name);
 		} else if (proxy_type === "subscription") {
-			outbound = load_subscription_outbound(name);
+			let urls = read_subscription_urls(name);
+			if (!length(urls)) return;
+
+			if (section.sub_multi === "1") {
+				let children = [];
+				let i = 0;
+				for (let u in urls) {
+					let parsed = parse_proxy_url(u);
+					if (!parsed) { i++; continue; }
+					let tag = name + "__" + i;
+					parsed.tag = tag;
+					push(outbounds, parsed);
+					push(children, tag);
+					i++;
+				}
+				if (length(children)) {
+					let selector_type = section.sub_selector_type ?? "selector";
+					push(outbounds, {
+						tag: name,
+						type: selector_type,
+						outbounds: children,
+					});
+				}
+				return;  // done with this section
+			}
+
+			// Single-URL fallback (sub_multi=0): pick the first parseable one.
+			for (let u in urls) {
+				let parsed = parse_proxy_url(u);
+				if (parsed) {
+					parsed.tag = name;
+					outbound = parsed;
+					break;
+				}
+			}
 		}
 
 		if (!outbound) return;
