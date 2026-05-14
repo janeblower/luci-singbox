@@ -123,7 +123,7 @@ apply() {
 	v4=$(uci -q get singbox-ui.fakeip.inet4_range | tr ' ' ',')
 	v6=$(uci -q get singbox-ui.fakeip.inet6_range | tr ' ' ',')
 
-	emit_ruleset_data  # populates RS_MARK_RULES
+	emit_ruleset_data >/dev/null  # populates RS_MARK_RULES; emit() re-runs it for the actual nft input
 
 	if [ -z "$v4" ] && [ -z "$v6" ] && [ -z "$RS_MARK_RULES" ]; then
 		nft delete table inet singbox_ui 2>/dev/null || true
