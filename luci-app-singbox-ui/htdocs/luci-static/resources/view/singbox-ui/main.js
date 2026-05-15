@@ -11,6 +11,54 @@ var callRestart    = rpc.declare({ object: 'singbox-ui', method: 'restart' });
 var callStatus     = rpc.declare({ object: 'singbox-ui', method: 'status' });
 var callReadConfig = rpc.declare({ object: 'singbox-ui', method: 'read_config' });
 
+// Attach a per-row "Rename" button to a GridSection. LuCI ships no rename
+// affordance for named sections, so we wrap renderRowActions and prepend a
+// button that prompts for a new name, stages a uci.rename + saves pending
+// edits, then reloads the page so the form rebinds to the new section name.
+function addRenameButton(s) {
+	var proto = Object.getPrototypeOf(s);
+	var origRender = proto.renderRowActions;
+	s.renderRowActions = function (section_id, more_label) {
+		var td = origRender.apply(this, arguments);
+		var self = this;
+		var btn = E('button', {
+			'class': 'cbi-button cbi-button-neutral',
+			'title': _('Rename section'),
+			'click': function (ev) {
+				ev.preventDefault();
+				ev.stopPropagation();
+				var name = prompt(_('Rename to:'), section_id);
+				if (name == null || name === '' || name === section_id) return;
+				if (!/^[a-zA-Z0-9_]+$/.test(name)) {
+					ui.addNotification(null,
+						E('p', _('Invalid name: only letters, digits and underscore allowed')),
+						'danger');
+					return;
+				}
+				if (uci.get('singbox-ui', name) != null) {
+					ui.addNotification(null,
+						E('p', _('Name already in use: ') + name),
+						'danger');
+					return;
+				}
+				uci.rename('singbox-ui', section_id, name);
+				self.map.save().then(function () {
+					return uci.save();
+				}).then(function () {
+					location.reload();
+				}).catch(function (err) {
+					ui.addNotification(null,
+						E('p', _('Rename failed: ') + (err.message || err)),
+						'danger');
+				});
+			}
+		}, _('Rename'));
+		var host = td.querySelector('.td.cbi-section-actions > div') || td.firstChild || td;
+		host.insertBefore(btn, host.firstChild);
+		return td;
+	};
+}
+
 var TextareaValue = form.Value.extend({
 	renderWidget: function (section_id, option_index, cfgvalue) {
 		return E('textarea', {
@@ -75,6 +123,7 @@ function buildOutboundsMap() {
 		var t = uci.get('singbox-ui', section_id, 'proxy_type') || '';
 		return _('Outbound') + ': ' + section_id + (t ? ' (' + _(t) + ')' : '');
 	};
+	addRenameButton(s);
 
 	var o;
 	o = s.option(form.Flag, 'enabled', _('Enable'));
@@ -154,6 +203,7 @@ function buildRulesetsMap() {
 	s.addremove  = true;
 	s.sortable   = true;
 	s.modaltitle = function (section_id) { return _('Rule-Set') + ': ' + section_id; };
+	addRenameButton(s);
 
 	var o;
 	o = s.option(form.Flag, 'enabled', _('Enable'));
@@ -175,11 +225,8 @@ function buildRulesetsMap() {
 	o.placeholder = '/etc/singbox-ui/rules/cn.json';
 	o.depends('type', 'local');
 
-	o = s.option(form.ListValue, 'format', _('Format'));
-	o.modalonly = true;
-	o.value('binary', _('Binary (.srs)'));
-	o.value('source', _('Source (.json)'));
-	o.default = 'binary';
+	// Format is auto-detected from the file extension by fetch_rulesets.sh
+	// and generate.uc (.srs → binary, .json → source). No UI field.
 
 	o = s.option(form.Flag, 'dns_fakeip', _('Route DNS to FakeIP'));
 	o.modalonly = true;
@@ -212,6 +259,7 @@ function buildRouteRulesMap() {
 	s.addremove  = true;
 	s.sortable   = true;
 	s.modaltitle = function (section_id) { return _('Route Rule') + ': ' + section_id; };
+	addRenameButton(s);
 
 	var o;
 	o = s.option(form.Flag, 'enabled', _('Enable'));

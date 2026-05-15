@@ -75,13 +75,22 @@ uci show singbox-ui 2>/dev/null | \
 		[ "$enabled" = "0" ] && continue
 
 		rs_type=$(uci_get_or_empty "singbox-ui.${section}.type")
-		fmt=$(uci_get_or_empty "singbox-ui.${section}.format")
 		case "$rs_type" in
 		remote) target=$(uci_get_or_empty "singbox-ui.${section}.url") ;;
 		local)  target=$(uci_get_or_empty "singbox-ui.${section}.path") ;;
 		*)      target="" ;;
 		esac
 		[ -z "$target" ] && continue
+		# Auto-detect format from the file extension. UCI's optional `format`
+		# field is honoured as an override for backward compatibility only.
+		fmt=$(uci_get_or_empty "singbox-ui.${section}.format")
+		if [ -z "$fmt" ]; then
+			case "$target" in
+				*.srs|*.SRS)   fmt=binary ;;
+				*.json|*.JSON) fmt=source ;;
+				*)             fmt=binary ;;
+			esac
+		fi
 		fetch_ruleset "$section" "$rs_type" "$target" "$fmt"
 	done
 

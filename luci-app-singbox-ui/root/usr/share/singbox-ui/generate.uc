@@ -202,6 +202,16 @@ function build_outbounds() {
 	return outbounds;
 }
 
+// Pick the sing-box rule-set format. Honour UCI `format` if set (legacy
+// configs); otherwise infer from the file extension of url/path.
+function detect_format(rs) {
+	if (rs.format) return rs.format;
+	let src = (rs.type === "local") ? (rs.path ?? "") : (rs.url ?? "");
+	if (match(src, /\.srs$/i))  return "binary";
+	if (match(src, /\.json$/i)) return "source";
+	return "binary";
+}
+
 function build_route_config() {
 	let rules = [];
 	let rule_sets = [];
@@ -228,7 +238,7 @@ function build_route_config() {
 				let entry = {
 					tag: rs_name,
 					type: rs.type ?? "remote",
-					format: rs.format ?? "binary",
+					format: detect_format(rs),
 				};
 				if (entry.type === "remote") {
 					if (rs.url) entry.url = rs.url;
