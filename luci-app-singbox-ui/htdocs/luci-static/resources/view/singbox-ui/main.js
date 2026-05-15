@@ -277,8 +277,8 @@ function buildRouteDefaultMap() {
 	return m;
 }
 
-function wireTabs(headerSelector, paneByTab, defaultTab) {
-	var headerLis = document.querySelectorAll(headerSelector + ' > li');
+function wireTabs(root, headerSelector, paneByTab, defaultTab) {
+	var headerLis = root.querySelectorAll(headerSelector + ' > li');
 	function activate(tab) {
 		headerLis.forEach(function (el) {
 			el.classList.remove('cbi-tab', 'cbi-tab-disabled');
@@ -432,13 +432,13 @@ return view.extend({
 			]);
 
 			setTimeout(function () {
-				wireTabs('.sb-subtab-header', {
+				wireTabs(root, '.sb-subtab-header', {
 					outbounds:  outboundsNode,
 					rulesets:   rulesetsNode,
 					routerules: routerulesNode,
 					routedef:   routedefNode
 				}, 'outbounds');
-				wireTabs('.sb-tab-header', {
+				wireTabs(root, '.sb-tab-header', {
 					input:  inputNode,
 					output: outputWrap
 				}, 'input');
