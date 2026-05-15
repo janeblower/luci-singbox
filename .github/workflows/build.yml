@@ -39,6 +39,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history so `git rev-list --count HEAD` produces a
+          # strictly-monotonic release number. Shallow clones report 1 on
+          # every build, which collides with apk v3's world-hash check.
+          fetch-depth: 0
 
       - name: Install build deps
         run: |
