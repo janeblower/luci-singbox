@@ -155,7 +155,10 @@ function fetch_one_ruleset(cur, name) {
 	let target = "";
 	if (rs_type === "remote") target = uci_get_or_empty(cur, name, "url");
 	else if (rs_type === "local") target = uci_get_or_empty(cur, name, "path");
-	if (target === "") return;
+	if (target === "") {
+		log_err(`fetch_rulesets: ${name} has no ${rs_type === "local" ? "path" : "url"}, skipping`);
+		return;
+	}
 
 	let fmt = detect_format(target, uci_get_or_empty(cur, name, "format"));
 	let raw_path = `${TMPDIR}/rs_${name}.raw`;
@@ -168,7 +171,7 @@ function fetch_one_ruleset(cur, name) {
 		}
 	} else if (rs_type === "local") {
 		// Copy with cp(1) to keep the same set of dependencies (no fs.copy in ucode).
-		if (system(["cp", target, raw_path]) !== 0) {
+		if (system(["cp", "--", target, raw_path]) !== 0) {
 			log_err(`fetch_rulesets: cannot read: ${target}`);
 			return;
 		}
@@ -184,7 +187,7 @@ function fetch_one_ruleset(cur, name) {
 			return;
 		}
 	} else {
-		if (system(["cp", raw_path, out_path]) !== 0) {
+		if (system(["cp", "--", raw_path, out_path]) !== 0) {
 			log_err(`fetch_rulesets: cannot copy source for ${name}`);
 			fs.unlink(raw_path);
 			return;
@@ -196,8 +199,15 @@ function fetch_one_ruleset(cur, name) {
 
 function cmd_fetch_rulesets(cur) {
 	let names = sections_where(cur, "nft_rules", "1");
+	if (!length(names)) {
+		log_err("fetch_rulesets: no rule-sets configured (nft_rules=1)");
+		return 0;
+	}
 	for (let name in names) {
-		if (uci_get_or_empty(cur, name, "enabled") === "0") continue;
+		if (uci_get_or_empty(cur, name, "enabled") === "0") {
+			log_err(`fetch_rulesets: ${name} disabled, skipping`);
+			continue;
+		}
 		fetch_one_ruleset(cur, name);
 	}
 	return 0;
