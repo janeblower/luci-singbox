@@ -208,12 +208,13 @@ mkpkg_app() {
     -I "name:$APP_NAME" \
     -I "version:$VERSION" \
     -I "description:$APP_DESC" \
-    -I "arch:all" \
+    -I "arch:noarch" \
     -I "license:$PKG_LICENSE" \
     -I "origin:$APP_NAME" \
     -I "maintainer:$PKG_MAINTAINER" \
     -I "url:$PKG_URL" \
     -I "depends:$APP_DEPENDS" \
+    -I "provides:${APP_NAME}-any" \
     -s "post-install:$APP_SCRIPTS/post-install.sh" \
     -s "pre-deinstall:$APP_SCRIPTS/pre-deinstall.sh" \
     -s "post-upgrade:$APP_SCRIPTS/post-upgrade.sh"
@@ -226,12 +227,13 @@ mkpkg_i18n() {
     -I "name:$I18N_NAME" \
     -I "version:$VERSION" \
     -I "description:$I18N_DESC" \
-    -I "arch:all" \
+    -I "arch:noarch" \
     -I "license:$PKG_LICENSE" \
     -I "origin:$APP_NAME" \
     -I "maintainer:$PKG_MAINTAINER" \
     -I "url:$PKG_URL" \
     -I "depends:$I18N_DEPENDS" \
+    -I "provides:${I18N_NAME}-any" \
     -s "post-install:$I18N_SCRIPTS/post-install.sh"
 }
 
@@ -254,16 +256,18 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
     "$APK_BIN" mkpkg \
       --files "$APP_ROOT" --output "$APP_OUT" \
       -I "name:$APP_NAME" -I "version:$VERSION" -I "description:$APP_DESC" \
-      -I "arch:all" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
+      -I "arch:noarch" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
       -I "maintainer:$PKG_MAINTAINER" -I "url:$PKG_URL" -I "depends:$APP_DEPENDS" \
+      -I "provides:${APP_NAME}-any" \
       -s "post-install:$APP_SCRIPTS/post-install.sh" \
       -s "pre-deinstall:$APP_SCRIPTS/pre-deinstall.sh" \
       -s "post-upgrade:$APP_SCRIPTS/post-upgrade.sh"
     "$APK_BIN" mkpkg \
       --files "$I18N_ROOT" --output "$I18N_OUT" \
       -I "name:$I18N_NAME" -I "version:$VERSION" -I "description:$I18N_DESC" \
-      -I "arch:all" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
+      -I "arch:noarch" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
       -I "maintainer:$PKG_MAINTAINER" -I "url:$PKG_URL" -I "depends:$I18N_DEPENDS" \
+      -I "provides:${I18N_NAME}-any" \
       -s "post-install:$I18N_SCRIPTS/post-install.sh"
   '
 else
@@ -275,16 +279,18 @@ else
     "$APK_BIN" mkpkg \
       --files "$APP_ROOT" --output "$APP_OUT" \
       -I "name:$APP_NAME" -I "version:$VERSION" -I "description:$APP_DESC" \
-      -I "arch:all" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
+      -I "arch:noarch" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
       -I "maintainer:$PKG_MAINTAINER" -I "url:$PKG_URL" -I "depends:$APP_DEPENDS" \
+      -I "provides:${APP_NAME}-any" \
       -s "post-install:$APP_SCRIPTS/post-install.sh" \
       -s "pre-deinstall:$APP_SCRIPTS/pre-deinstall.sh" \
       -s "post-upgrade:$APP_SCRIPTS/post-upgrade.sh"
     "$APK_BIN" mkpkg \
       --files "$I18N_ROOT" --output "$I18N_OUT" \
       -I "name:$I18N_NAME" -I "version:$VERSION" -I "description:$I18N_DESC" \
-      -I "arch:all" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
+      -I "arch:noarch" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
       -I "maintainer:$PKG_MAINTAINER" -I "url:$PKG_URL" -I "depends:$I18N_DEPENDS" \
+      -I "provides:${I18N_NAME}-any" \
       -s "post-install:$I18N_SCRIPTS/post-install.sh"
   '
 fi
