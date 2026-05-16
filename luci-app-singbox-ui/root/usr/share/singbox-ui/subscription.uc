@@ -141,7 +141,67 @@ function cmd_fetch_subs(cur) {
 	}
 	return 0;
 }
-function cmd_fetch_rulesets(cur)           { /* TODO Task 3 */ }
+// detect_format(target, override) — auto-detect from extension; override wins.
+function detect_format(target, override) {
+	if (override === "binary" || override === "source") return override;
+	let lower = lc(target);
+	if (substr(lower, -4) === ".srs")   return "binary";
+	if (substr(lower, -5) === ".json")  return "source";
+	return "binary";
+}
+
+function fetch_one_ruleset(cur, name) {
+	let rs_type = uci_get_or_empty(cur, name, "type");
+	let target = "";
+	if (rs_type === "remote") target = uci_get_or_empty(cur, name, "url");
+	else if (rs_type === "local") target = uci_get_or_empty(cur, name, "path");
+	if (target === "") return;
+
+	let fmt = detect_format(target, uci_get_or_empty(cur, name, "format"));
+	let raw_path = `${TMPDIR}/rs_${name}.raw`;
+	let out_path = `${TMPDIR}/rs_${name}.json`;
+
+	if (rs_type === "remote") {
+		if (!http_download(target, raw_path, { timeout: 30 })) {
+			log_err(`fetch_rulesets: download failed: ${target}`);
+			return;
+		}
+	} else if (rs_type === "local") {
+		// Copy with cp(1) to keep the same set of dependencies (no fs.copy in ucode).
+		if (system(["cp", target, raw_path]) !== 0) {
+			log_err(`fetch_rulesets: cannot read: ${target}`);
+			return;
+		}
+	} else {
+		log_err(`fetch_rulesets: unknown type '${rs_type}' for ${name}`);
+		return;
+	}
+
+	if (fmt === "binary") {
+		if (system([SINGBOX, "rule-set", "decompile", raw_path, "-o", out_path]) !== 0) {
+			log_err(`fetch_rulesets: decompile failed for ${name}`);
+			fs.unlink(raw_path);
+			return;
+		}
+	} else {
+		if (system(["cp", raw_path, out_path]) !== 0) {
+			log_err(`fetch_rulesets: cannot copy source for ${name}`);
+			fs.unlink(raw_path);
+			return;
+		}
+	}
+	fs.unlink(raw_path);
+	log(`fetch_rulesets: ${name} -> ${out_path}`);
+}
+
+function cmd_fetch_rulesets(cur) {
+	let names = sections_where(cur, "nft_rules", "1");
+	for (let name in names) {
+		if (uci_get_or_empty(cur, name, "enabled") === "0") continue;
+		fetch_one_ruleset(cur, name);
+	}
+	return 0;
+}
 function cmd_refresh(cur, what, force)     { /* TODO Task 4 */ }
 
 let uci_dir = getenv("UCI_CONFIG_DIR");
