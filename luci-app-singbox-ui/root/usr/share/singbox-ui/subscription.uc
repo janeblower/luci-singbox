@@ -21,7 +21,119 @@ let uci_mod = require("uci");
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn(msg + "\n"); }
 
-function cmd_fetch_subs(cur)               { /* TODO Task 2 */ }
+// uci_get_or_empty(cur, section, opt) — never throws, returns "".
+function uci_get_or_empty(cur, section, opt) {
+	let v = cur.get("singbox-ui", section, opt);
+	return (v == null) ? "" : (type(v) === "array" ? (length(v) ? v[0] : "") : v);
+}
+
+// sections_where(cur, opt, value) — list of section names where opt == value.
+function sections_where(cur, opt, value) {
+	let out = [];
+	cur.foreach("singbox-ui", null, function (s) {
+		if (s[opt] === value) push(out, s[".name"]);
+	});
+	return out;
+}
+
+// http_download(url, outpath, opts) -> bool
+// opts: { timeout (s), interface, user_agent }
+function http_download(url, outpath, opts) {
+	opts = opts || {};
+	let argv = [
+		"curl", "-sfL",
+		"--max-time", `${opts.timeout || 15}`,
+		"-A", opts.user_agent || DEFAULT_UA,
+		"-o", outpath,
+	];
+	if (opts.interface) {
+		push(argv, "--interface", opts.interface);
+	}
+	push(argv, url);
+	let rc = system(argv);
+	if (rc !== 0) return false;
+	let st = fs.stat(outpath);
+	return st && st.size > 0;
+}
+
+// try_b64_decode(s) — returns decoded text if it decodes to printable bytes,
+// otherwise returns the original string. Mirrors the bash `base64 -d || raw`
+// fallback used by the previous fetch_subscriptions.sh.
+function try_b64_decode(s) {
+	try {
+		let dec = b64dec(s);
+		if (dec != null && length(dec) > 0) return dec;
+	} catch (e) { /* fall through */ }
+	return s;
+}
+
+function cmd_fetch_subs(cur) {
+	let names = sections_where(cur, "proxy_type", "subscription");
+	if (!length(names)) {
+		log_err("fetch_subs: no subscription outbounds configured");
+		return 0;
+	}
+
+	for (let name in names) {
+		if (uci_get_or_empty(cur, name, "enabled") === "0") {
+			log_err(`fetch_subs: ${name} disabled, skipping`);
+			continue;
+		}
+		let url = uci_get_or_empty(cur, name, "sub_url");
+		if (url === "") {
+			log_err(`fetch_subs: ${name} has no sub_url, skipping`);
+			continue;
+		}
+
+		let via = uci_get_or_empty(cur, name, "sub_update_via");
+		let iface = null;
+		if (via !== "" && via !== "direct") {
+			iface = uci_get_or_empty(cur, via, "interface");
+			if (iface === "") {
+				log_err(`fetch_subs: outbound '${via}' has no interface`);
+				continue;
+			}
+		}
+
+		let raw_path = `${TMPDIR}/sub_${name}.raw`;
+		let out_path = `${TMPDIR}/sub_${name}.txt`;
+		if (!http_download(url, raw_path, { timeout: 15, interface: iface })) {
+			log_err(`fetch_subs: download failed for ${name} (${url})`);
+			continue;
+		}
+
+		let raw_fd = fs.open(raw_path, "r");
+		let raw = raw_fd ? raw_fd.read("all") : "";
+		if (raw_fd) raw_fd.close();
+		fs.unlink(raw_path);
+		if (!raw || length(raw) === 0) {
+			log_err(`fetch_subs: empty body for ${name}`);
+			continue;
+		}
+
+		let decoded = try_b64_decode(raw);
+		let urls = [];
+		for (let line in split(decoded, "\n")) {
+			let t = trim(line);
+			if (t !== "" && match(t, /^[a-z][a-z0-9+.-]*:\/\//))
+				push(urls, t);
+		}
+		if (!length(urls)) {
+			log_err(`fetch_subs: no valid proxy URL in response for ${name}`);
+			continue;
+		}
+
+		let out_fd = fs.open(out_path, "w");
+		if (!out_fd) {
+			log_err(`fetch_subs: cannot write ${out_path}`);
+			continue;
+		}
+		for (let u in urls) out_fd.write(u + "\n");
+		out_fd.close();
+		log(`fetch_subs: ${name} -> ${out_path} (${length(urls)} urls)`);
+	}
+	return 0;
+}
 function cmd_fetch_rulesets(cur)           { /* TODO Task 3 */ }
 function cmd_refresh(cur, what, force)     { /* TODO Task 4 */ }
 
