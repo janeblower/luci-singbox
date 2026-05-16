@@ -42,7 +42,7 @@ function http_download(url, outpath, opts) {
 	opts = opts || {};
 	let argv = [
 		"curl", "-sfL",
-		"--max-time", `${opts.timeout || 15}`,
+		"--max-time", `${opts.timeout ?? 15}`,
 		"-A", opts.user_agent || DEFAULT_UA,
 		"-o", outpath,
 	];
@@ -56,14 +56,16 @@ function http_download(url, outpath, opts) {
 	return st && st.size > 0;
 }
 
-// try_b64_decode(s) — returns decoded text if it decodes to printable bytes,
-// otherwise returns the original string. Mirrors the bash `base64 -d || raw`
-// fallback used by the previous fetch_subscriptions.sh.
+// Subscription bodies are usually base64-encoded plaintext containing one
+// proxy URL per line; some servers return plaintext directly. Decode only
+// when the decoded payload looks like proxy URLs (contains "://"). This
+// keeps plaintext bodies that happen to use only base64-alphabet chars
+// from being silently mangled.
 function try_b64_decode(s) {
-	try {
-		let dec = b64dec(s);
-		if (dec != null && length(dec) > 0) return dec;
-	} catch (e) { /* fall through */ }
+	let dec = null;
+	try { dec = b64dec(s); } catch (e) { /* invalid base64 */ }
+	if (dec != null && length(dec) > 0 && index(dec, "://") >= 0)
+		return dec;
 	return s;
 }
 
@@ -103,10 +105,15 @@ function cmd_fetch_subs(cur) {
 		}
 
 		let raw_fd = fs.open(raw_path, "r");
-		let raw = raw_fd ? raw_fd.read("all") : "";
-		if (raw_fd) raw_fd.close();
+		if (!raw_fd) {
+			log_err(`fetch_subs: cannot read ${raw_path}`);
+			fs.unlink(raw_path);
+			continue;
+		}
+		let raw = raw_fd.read("all") ?? "";
+		raw_fd.close();
 		fs.unlink(raw_path);
-		if (!raw || length(raw) === 0) {
+		if (length(raw) === 0) {
 			log_err(`fetch_subs: empty body for ${name}`);
 			continue;
 		}
