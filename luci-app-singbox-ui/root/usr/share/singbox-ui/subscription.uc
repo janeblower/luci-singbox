@@ -213,7 +213,7 @@ function cmd_fetch_rulesets(cur) {
 	return 0;
 }
 // is_stale(path, interval_s, force) -> bool. Missing file / zero interval / no
-// interval => stale. Matches refresh.sh behaviour.
+// interval => stale.
 function is_stale(path, interval_s, force) {
 	if (force) return true;
 	let st = fs.stat(path);

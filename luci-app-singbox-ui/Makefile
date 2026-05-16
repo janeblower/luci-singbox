@@ -42,12 +42,8 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/usr/share/singbox-ui
 	$(INSTALL_DATA) ./root/usr/share/singbox-ui/generate.uc \
 	  $(1)/usr/share/singbox-ui/generate.uc
-	$(INSTALL_BIN) ./root/usr/share/singbox-ui/fetch_subscriptions.sh \
-	  $(1)/usr/share/singbox-ui/fetch_subscriptions.sh
-	$(INSTALL_BIN) ./root/usr/share/singbox-ui/fetch_rulesets.sh \
-	  $(1)/usr/share/singbox-ui/fetch_rulesets.sh
-	$(INSTALL_BIN) ./root/usr/share/singbox-ui/refresh.sh \
-	  $(1)/usr/share/singbox-ui/refresh.sh
+	$(INSTALL_BIN) ./root/usr/share/singbox-ui/subscription.uc \
+	  $(1)/usr/share/singbox-ui/subscription.uc
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \

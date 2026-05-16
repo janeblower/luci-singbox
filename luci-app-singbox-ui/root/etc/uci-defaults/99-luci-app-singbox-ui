@@ -8,12 +8,12 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
 /etc/init.d/rpcd reload >/dev/null 2>&1
 
 # Install cron entry: refresh subscriptions+rulesets every 30 minutes.
-# Per-section update_interval / sub_interval is honoured by refresh.sh itself.
-CRON_LINE='*/30 * * * * /usr/share/singbox-ui/refresh.sh all >/dev/null 2>&1'
+# Per-section update_interval / sub_interval is honoured by subscription.uc itself.
+CRON_LINE='*/30 * * * * /usr/bin/ucode /usr/share/singbox-ui/subscription.uc refresh all >/dev/null 2>&1'
 CRON_FILE=/etc/crontabs/root
 mkdir -p "$(dirname "$CRON_FILE")"
 touch "$CRON_FILE"
-if ! grep -qF '/usr/share/singbox-ui/refresh.sh' "$CRON_FILE"; then
+if ! grep -qF '/usr/share/singbox-ui/subscription.uc' "$CRON_FILE"; then
 	echo "$CRON_LINE" >> "$CRON_FILE"
 	/etc/init.d/cron restart >/dev/null 2>&1 || /etc/init.d/cron start >/dev/null 2>&1
 fi

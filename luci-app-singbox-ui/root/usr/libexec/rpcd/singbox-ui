@@ -1,19 +1,19 @@
 #!/bin/sh
 # rpcd handler for singbox-ui. Methods:
 #   generate            run /usr/share/singbox-ui/generate.uc
-#   nftables {action}   run /etc/singbox-ui/nftables.sh apply|remove
+#   nftables {action}   run /usr/share/singbox-ui/nftables.sh apply|remove
 #   restart             restart /etc/init.d/singbox-ui (full service restart)
-#   refresh {what}      run refresh.sh subscriptions|rulesets|all (force)
+#   refresh {what}      run subscription.uc refresh subscriptions|rulesets|all force
 #   status              return JSON: { running, subscriptions[], rulesets[] }
 #   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
 #
 # Env overrides (used by tests):
 #   NFTABLES_SH GENERATE_UC SINGBOX_INIT REFRESH_SH SINGBOX_TMP SINGBOX_CONFIG
 
-NFTABLES_SH=${NFTABLES_SH:-/etc/singbox-ui/nftables.sh}
+NFTABLES_SH=${NFTABLES_SH:-/usr/share/singbox-ui/nftables.sh}
 GENERATE_UC=${GENERATE_UC:-/usr/share/singbox-ui/generate.uc}
 SINGBOX_INIT=${SINGBOX_INIT:-/etc/init.d/singbox-ui}
-REFRESH_SH=${REFRESH_SH:-/usr/share/singbox-ui/refresh.sh}
+REFRESH_SH=${REFRESH_SH:-/usr/share/singbox-ui/subscription.uc}
 TMPDIR=${SINGBOX_TMP:-/tmp/singbox-ui}
 CONFIG_JSON=${SINGBOX_CONFIG:-/tmp/singbox-ui.json}
 
@@ -142,10 +142,10 @@ call)
 		*) emit_err "invalid what: $what"; exit 0 ;;
 		esac
 		[ -z "$what" ] && what=all
-		if "$REFRESH_SH" "$what" force >/dev/null 2>&1; then
+		if ucode "$REFRESH_SH" refresh "$what" force >/dev/null 2>&1; then
 			emit_ok
 		else
-			emit_err "refresh.sh $what failed"
+			emit_err "refresh $what failed"
 		fi
 		;;
 	status)

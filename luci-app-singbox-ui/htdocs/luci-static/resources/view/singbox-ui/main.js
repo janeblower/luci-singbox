@@ -225,7 +225,7 @@ function buildRulesetsMap() {
 	o.placeholder = '/etc/singbox-ui/rules/cn.json';
 	o.depends('type', 'local');
 
-	// Format is auto-detected from the file extension by fetch_rulesets.sh
+	// Format is auto-detected from the file extension by subscription.uc
 	// and generate.uc (.srs → binary, .json → source). No UI field.
 
 	o = s.option(form.Flag, 'dns_fakeip', _('Route DNS to FakeIP'));
