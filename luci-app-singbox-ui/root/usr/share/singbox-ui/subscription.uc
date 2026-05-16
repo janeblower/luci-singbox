@@ -212,7 +212,55 @@ function cmd_fetch_rulesets(cur) {
 	}
 	return 0;
 }
-function cmd_refresh(cur, what, force)     { /* TODO Task 4 */ }
+// is_stale(path, interval_s, force) -> bool. Missing file / zero interval / no
+// interval => stale. Matches refresh.sh behaviour.
+function is_stale(path, interval_s, force) {
+	if (force) return true;
+	let st = fs.stat(path);
+	if (!st) return true;
+	if (interval_s == null || interval_s === 0) return true;
+	return (time() - st.mtime) >= interval_s;
+}
+
+function any_subs_stale(cur, force) {
+	for (let name in sections_where(cur, "proxy_type", "subscription")) {
+		if (uci_get_or_empty(cur, name, "enabled") === "0") continue;
+		let iv = +uci_get_or_empty(cur, name, "sub_interval");
+		if (iv === 0) iv = 3600;
+		if (is_stale(`${TMPDIR}/sub_${name}.txt`, iv, force)) return true;
+	}
+	return false;
+}
+
+function any_rulesets_stale(cur, force) {
+	for (let name in sections_where(cur, "nft_rules", "1")) {
+		if (uci_get_or_empty(cur, name, "enabled") === "0") continue;
+		let iv = +uci_get_or_empty(cur, name, "update_interval");
+		if (iv === 0) iv = 86400;
+		if (is_stale(`${TMPDIR}/rs_${name}.json`, iv, force)) return true;
+	}
+	return false;
+}
+
+function cmd_refresh(cur, what, force) {
+	let refreshed = false;
+	if (what === "subscriptions" || what === "all") {
+		if (any_subs_stale(cur, force)) {
+			cmd_fetch_subs(cur);
+			refreshed = true;
+		}
+	}
+	if (what === "rulesets" || what === "all") {
+		if (any_rulesets_stale(cur, force)) {
+			cmd_fetch_rulesets(cur);
+			refreshed = true;
+		}
+	}
+	if (refreshed && getenv("SINGBOX_NO_RELOAD") !== "1") {
+		system(["/etc/init.d/singbox-ui", "reload"]);
+	}
+	return 0;
+}
 
 let uci_dir = getenv("UCI_CONFIG_DIR");
 let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
