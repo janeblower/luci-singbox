@@ -9,7 +9,11 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write   # required by action-gh-release to upload assets on tag push
+  contents: write   # required to publish releases on tag/main push
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
   test:
@@ -28,12 +32,11 @@ jobs:
         run: sh tests/run.sh
 
   build:
-    name: Build OpenWrt package (apk)
-    needs: test
+    name: Build OpenWrt packages (apk)
     runs-on: ubuntu-latest
 
     env:
-      # Pin to a tagged OpenWrt 25.x release. The package is LUCI_PKGARCH:=all
+      # Pin to a tagged OpenWrt 25.x release. Packages are LUCI_PKGARCH:=all
       # (noarch), so any apk-capable SDK produces the same artifact.
       SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
@@ -84,22 +87,25 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Using version: $VERSION"
 
-      - name: Build apk package
+      - name: Build apk packages
         run: bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
 
-      - name: Locate produced package
+      - name: List produced packages
         id: pkg
         run: |
           set -euo pipefail
-          file="$(ls -1 dist/luci-app-singbox-ui_*.apk | head -n1)"
-          echo "path=$file" >> "$GITHUB_OUTPUT"
-          echo "name=$(basename "$file")" >> "$GITHUB_OUTPUT"
+          ls -la dist/
+          {
+            echo 'files<<EOF'
+            ls -1 dist/*.apk
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ steps.pkg.outputs.name }}
-          path: ${{ steps.pkg.outputs.path }}
+          name: luci-app-singbox-ui-${{ steps.version.outputs.version }}
+          path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -120,14 +126,14 @@ jobs:
             --title "Latest build" \
             --notes "Auto-built from \`main\` @ \`${GITHUB_SHA::7}\`. This pre-release is replaced on every push to main." \
             --prerelease \
-            "${{ steps.pkg.outputs.path }}"
+            dist/*.apk
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ steps.pkg.outputs.path }}
+          files: dist/*.apk
           fail_on_unmatched_files: true
           generate_release_notes: true
         env:
