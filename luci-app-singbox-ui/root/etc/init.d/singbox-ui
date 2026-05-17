@@ -6,7 +6,7 @@ STOP=01
 
 GENERATE_UC=/usr/share/singbox-ui/generate.uc
 SUBSCRIPTION_UC=/usr/share/singbox-ui/subscription.uc
-NFTABLES_SH=/usr/share/singbox-ui/nftables.sh
+NFTABLES_UC=/usr/share/singbox-ui/nftables.uc
 
 start_service() {
 	mkdir -p /tmp/singbox-ui
@@ -14,7 +14,7 @@ start_service() {
 	ucode "$SUBSCRIPTION_UC" fetch-rulesets
 	ucode "$GENERATE_UC"
 	[ "$(uci -q get singbox-ui.tproxy.enabled)" = "1" ] && \
-		"$NFTABLES_SH" apply
+		ucode "$NFTABLES_UC" apply
 
 	procd_open_instance
 	procd_set_param command /usr/bin/sing-box run -c /tmp/singbox-ui.json
@@ -23,7 +23,7 @@ start_service() {
 }
 
 stop_service() {
-	"$NFTABLES_SH" remove
+	ucode "$NFTABLES_UC" remove
 }
 
 reload_config() {

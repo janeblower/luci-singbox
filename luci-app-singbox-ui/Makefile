@@ -41,8 +41,8 @@ define Package/$(PKG_NAME)/install
 	  $(1)/usr/share/singbox-ui/generate.uc
 	$(INSTALL_BIN) ./root/usr/share/singbox-ui/subscription.uc \
 	  $(1)/usr/share/singbox-ui/subscription.uc
-	$(INSTALL_BIN) ./root/usr/share/singbox-ui/nftables.sh \
-	  $(1)/usr/share/singbox-ui/nftables.sh
+	$(INSTALL_BIN) ./root/usr/share/singbox-ui/nftables.uc \
+	  $(1)/usr/share/singbox-ui/nftables.uc
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
