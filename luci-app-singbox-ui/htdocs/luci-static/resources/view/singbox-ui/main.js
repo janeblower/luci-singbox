@@ -329,11 +329,14 @@ function notify(promise, okLabel, errPrefix) {
 	});
 }
 
-function renderActionBar() {
+function renderActionBar(statusHolder) {
+	function refreshStatus() { renderStatusPanel(statusHolder); }
 	function btn(label, handler) {
 		return E('button', {
 			'class': 'btn cbi-button cbi-button-action',
-			'click': ui.createHandlerFn(this, handler)
+			'click': ui.createHandlerFn(this, function () {
+				return Promise.resolve(handler.call(this)).then(refreshStatus);
+			})
 		}, _(label));
 	}
 	return E('div', { 'class': 'sb-actionbar', 'style': 'display:flex;gap:.5em;margin:.5em 0' }, [
@@ -364,18 +367,20 @@ function renderActionBar() {
 }
 
 function renderStatusPanel(holder) {
-	function fmtAgo(mt) {
+	// Use the server-supplied `now` so 'X ago' stays accurate even when the
+	// browser clock has drifted from the router (common on routers without NTP).
+	function fmtAgo(now, mt) {
 		if (!mt) return _('never');
-		var ago = Math.floor(Date.now() / 1000) - mt;
+		var ago = Math.max(0, now - mt);
 		if (ago < 60)    return ago + 's';
 		if (ago < 3600)  return Math.floor(ago / 60)   + 'm';
 		if (ago < 86400) return Math.floor(ago / 3600) + 'h';
 		return Math.floor(ago / 86400) + 'd';
 	}
 
-	callStatus().then(function (res) {
+	return callStatus().then(function (res) {
+		holder.innerHTML = '';
 		if (!res || res.status !== 'ok') {
-			holder.innerHTML = '';
 			holder.appendChild(E('em', _('Status unavailable')));
 			return;
 		}
@@ -390,7 +395,7 @@ function renderStatusPanel(holder) {
 			return E('div', {}, [
 				E('strong', label + ': '),
 				items.map(function (it) {
-					return it.name + ' (' + fmtAgo(it.mtime) + ')';
+					return it.name + ' (' + fmtAgo(res.now, it.mtime) + ')';
 				}).join(', ')
 			]);
 		}
@@ -399,7 +404,6 @@ function renderStatusPanel(holder) {
 		var rs = entryList(_('Rule-Sets'), res.rulesets);
 		if (rs) rows.push(rs);
 
-		holder.innerHTML = '';
 		rows.forEach(function (r) { holder.appendChild(r); });
 	});
 }
@@ -425,8 +429,8 @@ return view.extend({
 			var routerulesNode = nodes[3];
 			var routedefNode   = nodes[4];
 
-			var actionBar    = renderActionBar();
 			var statusHolder = E('div', { 'class': 'sb-status', 'style': 'margin:.5em 0;padding:.5em;border:1px solid #ddd;border-radius:4px' });
+			var actionBar    = renderActionBar(statusHolder);
 
 			var outputWrap = E('div', {}, [
 				E('ul', { 'class': 'cbi-tabmenu sb-subtab-header' }, [
