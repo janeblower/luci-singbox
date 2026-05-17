@@ -19,6 +19,9 @@ jobs:
   test:
     name: Local test suite
     runs-on: ubuntu-latest
+    env:
+      SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +29,37 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            lua5.1 lua-cjson shellcheck jq nftables
+            shellcheck jq nftables zstd wget
+
+      - name: Cache OpenWrt SDK
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/luci-app-singbox-ui/openwrt-sdk
+          key: openwrt-sdk-25.12.3-x86-64-v1
+
+      - name: Extract ucode + modules from SDK
+        id: ucode
+        run: |
+          set -euo pipefail
+          cache="$HOME/.cache/luci-app-singbox-ui/openwrt-sdk"
+          mkdir -p "$cache"
+          tarball="$cache/$(basename "$SDK_URL")"
+          if [ ! -f "$tarball" ]; then
+            wget -q -O "$tarball.part" "$SDK_URL"
+            mv "$tarball.part" "$tarball"
+          fi
+          sdk="$PWD/.ci-sdk"
+          mkdir -p "$sdk"
+          tar --zstd -xf "$tarball" -C "$sdk" --strip-components=1
+          # Resolve ucode binary + .so modules out of the SDK staging tree.
+          ucode_bin="$(find "$sdk/staging_dir" -name ucode -type f -perm -u+x | head -n1)"
+          ucode_lib="$(find "$sdk/staging_dir" -name 'fs.so' -path '*/ucode/*' -print -quit | xargs -r dirname)"
+          [ -x "$ucode_bin" ] || { echo "ucode binary not found in SDK"; exit 1; }
+          [ -d "$ucode_lib" ] || { echo "ucode lib dir not found in SDK"; exit 1; }
+          echo "UCODE_BIN=$ucode_bin" >>"$GITHUB_ENV"
+          echo "UCODE_LIB_DIR=$ucode_lib" >>"$GITHUB_ENV"
+          echo "Using ucode: $ucode_bin"
+          echo "Using ucode lib dir: $ucode_lib"
 
       - name: Run tests/run.sh
         run: sh tests/run.sh
