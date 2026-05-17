@@ -95,52 +95,6 @@ function load_rs_rules() {
 	return out;
 }
 
-function cmd_remove() {
-	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc; idempotent
-}
-
-function cmd_apply(cur) {
-	let port  = uci_get_or_empty(cur, "tproxy", "port");
-	if (port === "") port = "7893";
-	let iface = uci_get_or_empty(cur, "tproxy", "interface");
-	if (iface === "") iface = "br-lan";
-
-	// UCI list values come back as arrays; join them with "," for the nft set body.
-	let v4 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet4_range")));
-	let v6 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet6_range")));
-	let rules = load_rs_rules();
-
-	if (v4 === "" && v6 === "" && !length(rules)) {
-		system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
-		log_err("nftables: no fakeip ranges and no ruleset rules; table removed");
-		return 0;
-	}
-
-	let ruleset = build_ruleset(port, v4, v6, iface);
-
-	// Atomic-ish replace: delete-then-create. Matches prior bash behaviour.
-	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
-
-	// Write to a temp file and `nft -f path`. Avoids fs.popen write-mode
-	// quirks across ucode versions; mirrors what nftables.sh did effectively.
-	fs.mkdir(TMPDIR, 0o755);
-	let tmp = `${TMPDIR}/nftables.in`;
-	let fd = fs.open(tmp, "w");
-	if (!fd) {
-		log_err(`nftables: cannot open ${tmp}`);
-		return 1;
-	}
-	fd.write(ruleset);
-	fd.close();
-	let rc = system(["nft", "-f", tmp]);
-	fs.unlink(tmp);
-	if (rc !== 0) {
-		log_err("nftables: nft -f failed");
-		return 1;
-	}
-	return 0;
-}
-
 // l4proto_expr(network) → "meta l4proto tcp" / "udp" / "{ tcp, udp }"
 function l4proto_expr(network) {
 	if (network === "tcp") return "meta l4proto tcp";
@@ -220,6 +174,55 @@ function build_ruleset(port, v4, v6, iface) {
 
 function cmd_emit(port, v4, v6, iface) {
 	print(build_ruleset(port, v4, v6, iface));
+}
+
+// cmd_apply / cmd_remove come after build_ruleset because ucode does not
+// hoist function declarations (unlike JavaScript) — forward references
+// fail at call time with "left-hand side is not a function".
+function cmd_remove() {
+	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc; idempotent
+}
+
+function cmd_apply(cur) {
+	let port  = uci_get_or_empty(cur, "tproxy", "port");
+	if (port === "") port = "7893";
+	let iface = uci_get_or_empty(cur, "tproxy", "interface");
+	if (iface === "") iface = "br-lan";
+
+	// UCI list values come back as arrays; join them with "," for the nft set body.
+	let v4 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet4_range")));
+	let v6 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet6_range")));
+	let rules = load_rs_rules();
+
+	if (v4 === "" && v6 === "" && !length(rules)) {
+		system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
+		log_err("nftables: no fakeip ranges and no ruleset rules; table removed");
+		return 0;
+	}
+
+	let ruleset = build_ruleset(port, v4, v6, iface);
+
+	// Atomic-ish replace: delete-then-create. Matches prior bash behaviour.
+	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
+
+	// Write to a temp file and `nft -f path`. Avoids fs.popen write-mode
+	// quirks across ucode versions; mirrors what nftables.sh did effectively.
+	fs.mkdir(TMPDIR, 0o755);
+	let tmp = `${TMPDIR}/nftables.in`;
+	let fd = fs.open(tmp, "w");
+	if (!fd) {
+		log_err(`nftables: cannot open ${tmp}`);
+		return 1;
+	}
+	fd.write(ruleset);
+	fd.close();
+	let rc = system(["nft", "-f", tmp]);
+	fs.unlink(tmp);
+	if (rc !== 0) {
+		log_err("nftables: nft -f failed");
+		return 1;
+	}
+	return 0;
 }
 
 let uci_dir = getenv("UCI_CONFIG_DIR");
