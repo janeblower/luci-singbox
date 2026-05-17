@@ -59,10 +59,10 @@ function buildInputMap() {
 	s.anonymous = true;
 	o = s.option(form.Flag, 'enabled', _('Enable'));
 	o.rmempty = false;
-	o = s.option(form.DynamicList, 'inet4_range', _('IPv4 ranges'));
+	o = s.option(form.Value, 'inet4_range', _('IPv4 range'));
 	o.datatype = 'cidr4';
 	o.placeholder = '198.18.0.0/15';
-	o = s.option(form.DynamicList, 'inet6_range', _('IPv6 ranges'));
+	o = s.option(form.Value, 'inet6_range', _('IPv6 range'));
 	o.datatype = 'cidr6';
 	o.placeholder = 'fc00::/18';
 

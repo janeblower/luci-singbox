@@ -14,15 +14,6 @@ function get_list(section, opt) {
 	return (all != null) ? (all[opt] ?? []) : [];
 }
 
-// First entry of a UCI list option as a plain string, or null if absent.
-// Accepts an `option` value (already a string) too.
-function get_first(section, opt) {
-	let v = uci.get("singbox-ui", section, opt);
-	if (v == null) return null;
-	if (type(v) === "array") return length(v) ? v[0] : null;
-	return v;
-}
-
 function url_decode(s) {
 	if (s == null) return s;
 	// Replace + with space, then percent-decode.
@@ -294,8 +285,12 @@ let config = {};
 
 if (get_bool("fakeip", "enabled")) {
 	let fakeip = { enabled: true };
-	let v4 = get_first("fakeip", "inet4_range");
-	let v6 = get_first("fakeip", "inet6_range");
+	let v4 = uci.get("singbox-ui", "fakeip", "inet4_range");
+	let v6 = uci.get("singbox-ui", "fakeip", "inet6_range");
+	// Defensive: if a legacy list-form config slipped past migration, take
+	// the first element. sing-box 1.12+ rejects array form here.
+	if (type(v4) === "array") v4 = length(v4) ? v4[0] : null;
+	if (type(v6) === "array") v6 = length(v6) ? v6[0] : null;
 	if (v4) fakeip.inet4_range = v4;
 	if (v6) fakeip.inet6_range = v6;
 	config.dns = { fakeip: fakeip };

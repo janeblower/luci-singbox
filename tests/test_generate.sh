@@ -43,8 +43,8 @@ echo "-- fakeip and tproxy inbound"
 write_cfg "
 config fakeip 'fakeip'
 	option enabled '1'
-	list inet4_range '198.18.0.0/15'
-	list inet6_range 'fc00::/18'
+	option inet4_range '198.18.0.0/15'
+	option inet6_range 'fc00::/18'
 
 config tproxy 'tproxy'
 	option enabled '1'
@@ -247,8 +247,8 @@ echo "-- dns_fakeip emits dns.rules entry"
 write_cfg "
 config fakeip 'fakeip'
 	option enabled '1'
-	list inet4_range '198.18.0.0/15'
-	list inet6_range 'fc00::/18'
+	option inet4_range '198.18.0.0/15'
+	option inet6_range 'fc00::/18'
 
 config ruleset 'geosite_cn'
 	option enabled '1'
@@ -274,7 +274,7 @@ echo "-- no dns.rules without dns_fakeip"
 write_cfg "
 config fakeip 'fakeip'
 	option enabled '1'
-	list inet4_range '198.18.0.0/15'
+	option inet4_range '198.18.0.0/15'
 
 config ruleset 'plain'
 	option enabled '1'

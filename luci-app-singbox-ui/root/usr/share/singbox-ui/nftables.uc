@@ -194,9 +194,8 @@ function cmd_apply(cur) {
 	let iface = uci_get_or_empty(cur, "tproxy", "interface");
 	if (iface === "") iface = "br-lan";
 
-	// UCI list values come back as arrays; join them with "," for the nft set body.
-	let v4 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet4_range")));
-	let v6 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet6_range")));
+	let v4 = uci_get_or_empty(cur, "fakeip", "inet4_range");
+	let v6 = uci_get_or_empty(cur, "fakeip", "inet6_range");
 	let rules = load_rs_rules();
 
 	if (v4 === "" && v6 === "" && !length(rules)) {

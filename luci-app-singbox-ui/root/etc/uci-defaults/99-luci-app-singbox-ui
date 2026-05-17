@@ -25,4 +25,34 @@ if grep -qF '/usr/share/singbox-ui/refresh.sh' "$CRON_FILE" \
 	/etc/init.d/cron restart >/dev/null 2>&1 || /etc/init.d/cron start >/dev/null 2>&1
 fi
 
+# ---------------------------------------------------------------------------
+# Migrate legacy FakeIP list form (multiple `list inet*_range`) to scalar
+# `option inet*_range`. sing-box 1.12+ rejects array form; we now expose only
+# the first element in the UI. Other elements are dropped with a warning.
+# ---------------------------------------------------------------------------
+migrate_fakeip_list_to_option() {
+	# $1 = inet4_range | inet6_range
+	# `uci get` for a list option returns values space-joined.
+	_mig_raw=$(uci -q get singbox-ui.fakeip."$1" 2>/dev/null || true)
+	[ -n "$_mig_raw" ] || return 0
+
+	# If it was already a scalar option, `uci show` won't include a numeric
+	# index. List form shows like:  singbox-ui.fakeip.inet4_range='1.2.3.0/24 4.5.6.0/16'
+	# in `uci get`, and `uci show` lists multiple `=` lines per element only
+	# in newer uci. The simplest heuristic: count words in $_mig_raw.
+	_mig_first="${_mig_raw%% *}"
+	_mig_rest="${_mig_raw#"$_mig_first"}"
+	if [ -n "$_mig_rest" ]; then
+		logger -t singbox-ui "FakeIP $1 migration: keeping '$_mig_first', dropping: $_mig_rest"
+	fi
+
+	# Re-set as a scalar option (uci delete first removes the list typing).
+	uci -q delete singbox-ui.fakeip."$1" >/dev/null 2>&1 || true
+	uci -q set    singbox-ui.fakeip."$1"="$_mig_first"
+	uci -q commit singbox-ui
+}
+
+migrate_fakeip_list_to_option inet4_range
+migrate_fakeip_list_to_option inet6_range
+
 exit 0
