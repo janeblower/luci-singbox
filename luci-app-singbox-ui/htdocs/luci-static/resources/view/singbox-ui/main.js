@@ -14,6 +14,19 @@ var callReadConfig = rpc.declare({ object: 'singbox-ui', method: 'read_config' }
 // Insert a synthetic "Name" field as the first option of a GridSection's
 // edit modal. cfgvalue returns the section id, write triggers uci.rename.
 // We don't write a real UCI option; remove() is a no-op for the same reason.
+// loadOutboundList(o) — populate an `outbound` ListValue with the current
+// UCI outbound section names. Shared between route_rule and route_default.
+function loadOutboundList(o) {
+	o.load = function (section_id) {
+		this.keylist = [];
+		this.vallist = [];
+		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
+			this.value(sec['.name'], sec['.name']);
+		}.bind(this));
+		return form.ListValue.prototype.load.apply(this, arguments);
+	};
+}
+
 function addRenameField(s) {
 	var o = s.option(form.Value, '__rename', _('Name'));
 	o.modalonly = true;
@@ -258,14 +271,7 @@ function buildRouteRulesMap() {
 
 	o = s.option(form.ListValue, 'outbound', _('Outbound'));
 	o.depends('action', 'outbound');
-	o.load = function (section_id) {
-		this.keylist = [];
-		this.vallist = [];
-		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
-			this.value(sec['.name'], sec['.name']);
-		}.bind(this));
-		return form.ListValue.prototype.load.apply(this, arguments);
-	};
+	loadOutboundList(o);
 
 	return m;
 }
@@ -286,14 +292,7 @@ function buildRouteDefaultMap() {
 
 	o = s.option(form.ListValue, 'outbound', _('Outbound'));
 	o.depends('action', 'outbound');
-	o.load = function (section_id) {
-		this.keylist = [];
-		this.vallist = [];
-		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
-			this.value(sec['.name'], sec['.name']);
-		}.bind(this));
-		return form.ListValue.prototype.load.apply(this, arguments);
-	};
+	loadOutboundList(o);
 
 	return m;
 }
