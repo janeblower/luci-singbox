@@ -1,173 +1,169 @@
-#!/bin/sh
-# rpcd handler for singbox-ui. Methods:
-#   generate            run /usr/share/singbox-ui/generate.uc
-#   nftables {action}   run /usr/share/singbox-ui/nftables.uc apply|remove
-#   restart             restart /etc/init.d/singbox-ui (full service restart)
-#   refresh {what}      run subscription.uc refresh subscriptions|rulesets|all force
-#   status              return JSON: { running, subscriptions[], rulesets[] }
-#   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
-#
-# Env overrides (used by tests):
-#   NFTABLES_CMD GENERATE_UC SINGBOX_INIT REFRESH_SH SINGBOX_TMP SINGBOX_CONFIG
+#!/usr/bin/ucode
+// rpcd handler for singbox-ui. Methods:
+//   generate            run /usr/share/singbox-ui/generate.uc
+//   nftables {action}   run /usr/share/singbox-ui/nftables.uc apply|remove
+//   restart             restart /etc/init.d/singbox-ui (full service restart)
+//   refresh {what}      run subscription.uc refresh subscriptions|rulesets|all force
+//   status              return JSON: { running, subscriptions[], rulesets[] }
+//   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
+//
+// Env overrides (used by tests):
+//   NFTABLES_CMD GENERATE_UC SINGBOX_INIT REFRESH_SH SINGBOX_TMP SINGBOX_CONFIG
 
-NFTABLES_CMD=${NFTABLES_CMD:-"ucode /usr/share/singbox-ui/nftables.uc"}
-GENERATE_UC=${GENERATE_UC:-/usr/share/singbox-ui/generate.uc}
-SINGBOX_INIT=${SINGBOX_INIT:-/etc/init.d/singbox-ui}
-REFRESH_SH=${REFRESH_SH:-/usr/share/singbox-ui/subscription.uc}
-TMPDIR=${SINGBOX_TMP:-/tmp/singbox-ui}
-CONFIG_JSON=${SINGBOX_CONFIG:-/tmp/singbox-ui.json}
+'use strict';
 
-emit_list() {
-	cat <<'EOF'
-{
-	"generate": {},
-	"nftables": { "action": "string" },
-	"restart": {},
-	"refresh": { "what": "string" },
-	"status": {},
-	"read_config": {}
-}
-EOF
-}
+let fs = require("fs");
 
-emit_ok() {
-	printf '{"status":"ok"}\n'
+const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode /usr/share/singbox-ui/nftables.uc";
+const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
+const SINGBOX_INIT = getenv("SINGBOX_INIT") || "/etc/init.d/singbox-ui";
+const REFRESH_SH   = getenv("REFRESH_SH")   || "/usr/share/singbox-ui/subscription.uc";
+const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
+const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
+
+function emit(obj) { printf("%J\n", obj); }
+function emit_ok()        { emit({ status: "ok" }); }
+function emit_err(msg)    { emit({ status: "error", message: msg }); }
+
+function drain_stdin() {
+	try { fs.stdin.read("all"); } catch (e) {}
 }
 
-emit_err() {
-	msg=$(printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g')
-	printf '{"status":"error","message":"%s"}\n' "$msg"
+function parse_args() {
+	let raw = "";
+	try { raw = fs.stdin.read("all") || ""; } catch (e) { raw = ""; }
+	if (!length(raw)) return {};
+	try {
+		let v = json(raw);
+		return (type(v) === "object") ? v : {};
+	} catch (e) { return {}; }
 }
 
-read_field() {
-	field="$1"
-	if command -v jq >/dev/null 2>&1; then
-		jq -r --arg f "$field" '.[$f] // empty'
-	else
-		grep -oE "\"$field\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" \
-			| sed -E 's/.*"([^"]*)"$/\1/' \
-			| head -n1
-	fi
+function emit_list() {
+	emit({
+		generate:    {},
+		nftables:    { action: "string" },
+		restart:     {},
+		refresh:     { what: "string" },
+		status:      {},
+		read_config: {}
+	});
 }
 
-emit_status() {
-	if pgrep -f 'sing-box run' >/dev/null 2>&1; then
-		running='true'
-	else
-		running='false'
-	fi
+// sq(s) — single-quote escape for /bin/sh.
+function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
 
-	subs='[]'
-	rs='[]'
-	if [ -d "$TMPDIR" ] && command -v jq >/dev/null 2>&1; then
-		subs=$(
-			for f in "$TMPDIR"/sub_*.txt; do
-				[ -f "$f" ] || continue
-				name=$(basename "$f" .txt); name=${name#sub_}
-				mt=$(stat -c %Y "$f" 2>/dev/null || echo 0)
-				printf '{"name":"%s","mtime":%s}\n' "$name" "$mt"
-			done | jq -s '.'
-		)
-		rs=$(
-			for f in "$TMPDIR"/rs_*.json; do
-				[ -f "$f" ] || continue
-				name=$(basename "$f" .json); name=${name#rs_}
-				mt=$(stat -c %Y "$f" 2>/dev/null || echo 0)
-				printf '{"name":"%s","mtime":%s}\n' "$name" "$mt"
-			done | jq -s '.'
-		)
-		[ -z "$subs" ] && subs='[]'
-		[ -z "$rs" ]   && rs='[]'
-	fi
-
-	printf '{"status":"ok","running":%s,"subscriptions":%s,"rulesets":%s}\n' \
-		"$running" "$subs" "$rs"
+// run(cmd, ...extra) — cmd is either an argv array or a shell-style string
+// (whitespace-split into argv). We always execute through /bin/sh so we can
+// redirect child stdout/stderr away from our own — anything the child prints
+// would otherwise corrupt the JSON response we emit to rpcd.
+function run(cmd, ...extra) {
+	let argv = (type(cmd) === "array") ? [...cmd] : split(cmd, " ");
+	for (let a in extra) push(argv, a);
+	let quoted = [];
+	for (let a in argv) push(quoted, sq(a));
+	let shcmd = join(" ", quoted) + " >/dev/null";
+	return system(shcmd) === 0;
 }
 
-emit_read_config() {
-	if [ ! -f "$CONFIG_JSON" ]; then
-		emit_err "config not generated yet"
-		return
-	fi
-	if command -v jq >/dev/null 2>&1; then
-		jq -Rs --arg s "ok" '{status:$s, content: .}' < "$CONFIG_JSON"
-	else
-		esc=$(sed -e 's/\\/\\\\/g' -e 's/"/\\"/g' "$CONFIG_JSON" | awk '{printf "%s\\n", $0}')
-		printf '{"status":"ok","content":"%s"}\n' "$esc"
-	fi
+function is_singbox_running() {
+	return system(["pgrep", "-f", "sing-box run"]) === 0;
 }
 
-case "${1:-}" in
-list)
-	emit_list
-	;;
-call)
-	method="${2:-}"
-	case "$method" in
-	generate)
-		cat >/dev/null
-		if ucode "$GENERATE_UC" >/dev/null; then
-			emit_ok
-		else
-			emit_err "generate.uc failed"
-		fi
-		;;
-	nftables)
-		action=$(read_field action)
-		case "$action" in
-		apply|remove)
-			# NFTABLES_CMD is intentionally unquoted so the default
-			# "ucode <path>" splits into argv[0]=ucode, argv[1]=<path>.
-			# Tests inject a single executable path; word-split still
-			# produces a valid argv.
-			# shellcheck disable=SC2086
-			if $NFTABLES_CMD "$action" >/dev/null; then
-				emit_ok
-			else
-				emit_err "nftables $action failed"
-			fi
-			;;
-		*)
-			emit_err "invalid action: ${action:-<missing>}"
-			;;
-		esac
-		;;
-	restart)
-		cat >/dev/null
-		if "$SINGBOX_INIT" restart >/dev/null 2>&1; then
-			emit_ok
-		else
-			emit_err "service restart failed"
-		fi
-		;;
-	refresh)
-		what=$(read_field what)
-		case "$what" in
-		subscriptions|rulesets|all|"") ;;
-		*) emit_err "invalid what: $what"; exit 0 ;;
-		esac
-		[ -z "$what" ] && what=all
-		if ucode "$REFRESH_SH" refresh "$what" force >/dev/null 2>&1; then
-			emit_ok
-		else
-			emit_err "refresh $what failed"
-		fi
-		;;
-	status)
-		cat >/dev/null
-		emit_status
-		;;
-	read_config)
-		cat >/dev/null
-		emit_read_config
-		;;
-	*)
-		emit_err "unknown method: $method"
-		;;
-	esac
-	;;
-*)
-	echo "Usage: $0 {list|call <method>}" >&2
-	exit 1
-	;;
-esac
+function list_files_with_mtime(dir, prefix, suffix) {
+	let out = [];
+	let entries;
+	try { entries = fs.lsdir(dir); } catch (e) { return out; }
+	if (!entries) return out;
+	let plen = length(prefix), slen = length(suffix);
+	for (let name in entries) {
+		if (substr(name, 0, plen) !== prefix) continue;
+		if (substr(name, -slen) !== suffix) continue;
+		let st;
+		try { st = fs.stat(`${dir}/${name}`); } catch (e) { continue; }
+		if (!st || st.type !== "file") continue;
+		let bare = substr(name, plen, length(name) - plen - slen);
+		push(out, { name: bare, mtime: st.mtime });
+	}
+	return out;
+}
+
+function call_generate() {
+	drain_stdin();
+	if (run(["ucode", GENERATE_UC])) emit_ok();
+	else emit_err("generate.uc failed");
+}
+
+function call_nftables() {
+	let args = parse_args();
+	let action = args.action || "";
+	if (action !== "apply" && action !== "remove") {
+		emit_err("invalid action: " + (length(action) ? action : "<missing>"));
+		return;
+	}
+	if (run(NFTABLES_CMD, action)) emit_ok();
+	else emit_err(`nftables ${action} failed`);
+}
+
+function call_restart() {
+	drain_stdin();
+	if (run([SINGBOX_INIT, "restart"])) emit_ok();
+	else emit_err("service restart failed");
+}
+
+function call_refresh() {
+	let args = parse_args();
+	let what = args.what || "all";
+	if (what !== "subscriptions" && what !== "rulesets" && what !== "all") {
+		emit_err(`invalid what: ${what}`);
+		return;
+	}
+	if (run(["ucode", REFRESH_SH, "refresh", what, "force"])) emit_ok();
+	else emit_err(`refresh ${what} failed`);
+}
+
+function call_status() {
+	drain_stdin();
+	let subs = list_files_with_mtime(TMPDIR, "sub_", ".txt");
+	let rs   = list_files_with_mtime(TMPDIR, "rs_",  ".json");
+	emit({
+		status:        "ok",
+		running:       is_singbox_running(),
+		subscriptions: subs,
+		rulesets:      rs
+	});
+}
+
+function call_read_config() {
+	drain_stdin();
+	let fd = fs.open(CONFIG_JSON, "r");
+	if (!fd) { emit_err("config not generated yet"); return; }
+	let content = fd.read("all") || "";
+	fd.close();
+	emit({ status: "ok", content: content });
+}
+
+let argv   = ARGV;
+let cmd    = argv[0] || "";
+let method = argv[1] || "";
+
+if (cmd === "list") {
+	emit_list();
+	exit(0);
+}
+
+if (cmd === "call") {
+	switch (method) {
+	case "generate":    call_generate();     break;
+	case "nftables":    call_nftables();     break;
+	case "restart":     call_restart();      break;
+	case "refresh":     call_refresh();      break;
+	case "status":      call_status();       break;
+	case "read_config": call_read_config();  break;
+	default:            emit_err(`unknown method: ${method}`); break;
+	}
+	exit(0);
+}
+
+warn("Usage: singbox-ui {list|call <method>}\n");
+exit(1);

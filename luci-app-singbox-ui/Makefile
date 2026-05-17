@@ -6,8 +6,12 @@ PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-or-later
 PKG_MAINTAINER:=Jyn
 
+# Conflicts with the legacy iptables-based firewall (fw3); singbox-ui drives
+# nftables directly and fw3 would clobber the ruleset on reload.
+PKG_CONFLICTS:=firewall
+
 LUCI_TITLE:=LuCI support for singbox-ui
-LUCI_DEPENDS:=+luci-base +nftables +sing-box +jq +curl
+LUCI_DEPENDS:=+luci-base +nftables +sing-box +curl +ucode +ucode-mod-fs
 LUCI_PKGARCH:=all
 
 PO_DIR := $(CURDIR)/po
