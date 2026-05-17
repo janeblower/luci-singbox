@@ -109,6 +109,7 @@ pass "malformed JSON skipped"
 
 # ---- emitted ruleset prefixes table with atomic transaction (add/delete/table) ----
 echo "-- atomic replace: 'add table' + 'delete table' prelude before 'table {' declaration"
+# shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 add_ln=$(printf    "%s\n" "$out" | grep -n '^add table inet singbox_ui'    | head -n1 | cut -d: -f1)
 delete_ln=$(printf "%s\n" "$out" | grep -n '^delete table inet singbox_ui' | head -n1 | cut -d: -f1)
