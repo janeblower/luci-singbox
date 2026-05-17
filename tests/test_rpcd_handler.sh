@@ -105,4 +105,20 @@ echo "-- call with unknown method returns error"
 out=$(echo '{}' | run_h call frobnicate)
 printf "%s\n" "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: unknown method should return error"; exit 1; }
 
+echo "-- run() redirects both stdout and stderr"
+# Use a stub ucode that writes to stderr; that text must NOT appear in the
+# JSON we emit. Drive a `call generate` and inspect stdout for a clean JSON.
+cat >"$tmpdir/ucode" <<'EOF'
+#!/bin/sh
+echo "stderr-noise" >&2
+echo "stdout-noise"
+exit 0
+EOF
+chmod +x "$tmpdir/ucode"
+out=$(echo '{}' | PATH="$tmpdir:$PATH" run_h call generate 2>/dev/null)
+echo "$out" | grep -q 'stderr-noise' && { echo "FAIL: stderr leaked into response"; exit 1; }
+echo "$out" | grep -q 'stdout-noise' && { echo "FAIL: stdout leaked into response"; exit 1; }
+printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: status not ok"; exit 1; }
+echo "  PASS: stderr+stdout suppressed"
+
 echo "OK"

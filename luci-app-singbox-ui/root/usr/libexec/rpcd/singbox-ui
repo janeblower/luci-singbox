@@ -62,7 +62,7 @@ function run(cmd, ...extra) {
 	for (let a in extra) push(argv, a);
 	let quoted = [];
 	for (let a in argv) push(quoted, sq(a));
-	let shcmd = join(" ", quoted) + " >/dev/null";
+	let shcmd = join(" ", quoted) + " >/dev/null 2>&1";
 	return system(shcmd) === 0;
 }
 
