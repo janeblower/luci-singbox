@@ -95,8 +95,51 @@ function load_rs_rules() {
 	return out;
 }
 
-function cmd_apply(cur)             { /* TODO Task 4 */ }
-function cmd_remove()               { /* TODO Task 4 */ }
+function cmd_remove() {
+	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc; idempotent
+}
+
+function cmd_apply(cur) {
+	let port  = uci_get_or_empty(cur, "tproxy", "port");
+	if (port === "") port = "7893";
+	let iface = uci_get_or_empty(cur, "tproxy", "interface");
+	if (iface === "") iface = "br-lan";
+
+	// UCI list values come back as arrays; join them with "," for the nft set body.
+	let v4 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet4_range")));
+	let v6 = join(",", as_array(cur.get("singbox-ui", "fakeip", "inet6_range")));
+	let rules = load_rs_rules();
+
+	if (v4 === "" && v6 === "" && !length(rules)) {
+		system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
+		log_err("nftables: no fakeip ranges and no ruleset rules; table removed");
+		return 0;
+	}
+
+	let ruleset = build_ruleset(port, v4, v6, iface);
+
+	// Atomic-ish replace: delete-then-create. Matches prior bash behaviour.
+	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
+
+	// Write to a temp file and `nft -f path`. Avoids fs.popen write-mode
+	// quirks across ucode versions; mirrors what nftables.sh did effectively.
+	fs.mkdir(TMPDIR, 0o755);
+	let tmp = `${TMPDIR}/nftables.in`;
+	let fd = fs.open(tmp, "w");
+	if (!fd) {
+		log_err(`nftables: cannot open ${tmp}`);
+		return 1;
+	}
+	fd.write(ruleset);
+	fd.close();
+	let rc = system(["nft", "-f", tmp]);
+	fs.unlink(tmp);
+	if (rc !== 0) {
+		log_err("nftables: nft -f failed");
+		return 1;
+	}
+	return 0;
+}
 
 // l4proto_expr(network) → "meta l4proto tcp" / "udp" / "{ tcp, udp }"
 function l4proto_expr(network) {
@@ -140,19 +183,17 @@ function emit_rs_rule(name, idx, family, l4, port_e) {
 	return `\t\t${ip_kw} daddr @${set_name} ${l4}${port_e} ct state new meta mark set 0x1\n`;
 }
 
-function cmd_emit(port, v4, v6, iface) {
+function build_ruleset(port, v4, v6, iface) {
 	let rules = load_rs_rules();
 
 	let buf = [];
 	push(buf, "table inet singbox_ui {\n");
 
-	// Set definitions first (canonical layout).
 	for (let r in rules) {
 		if (length(r.v4)) push(buf, emit_set(`rs_${r.name}_${r.idx}_v4`, "v4", r.v4));
 		if (length(r.v6)) push(buf, emit_set(`rs_${r.name}_${r.idx}_v6`, "v6", r.v6));
 	}
 
-	// prerouting_mark
 	push(buf, "\tchain prerouting_mark {\n");
 	push(buf, "\t\ttype filter hook prerouting priority -150; policy accept;\n\n");
 	if (v4 != null && v4 !== "")
@@ -167,7 +208,6 @@ function cmd_emit(port, v4, v6, iface) {
 	}
 	push(buf, "\t}\n\n");
 
-	// prerouting_tproxy
 	push(buf, "\tchain prerouting_tproxy {\n");
 	push(buf, "\t\ttype filter hook prerouting priority -149; policy accept;\n\n");
 	push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip  to 127.0.0.1:${port}\n`);
@@ -175,7 +215,11 @@ function cmd_emit(port, v4, v6, iface) {
 	push(buf, "\t}\n");
 
 	push(buf, "}\n");
-	print(join("", buf));
+	return join("", buf);
+}
+
+function cmd_emit(port, v4, v6, iface) {
+	print(build_ruleset(port, v4, v6, iface));
 }
 
 let uci_dir = getenv("UCI_CONFIG_DIR");
