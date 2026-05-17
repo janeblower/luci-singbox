@@ -36,12 +36,12 @@ cat >"$tmpdir/nftables.sh" <<'EOF'
 echo "called nftables with: $*" >&2
 EOF
 chmod +x "$tmpdir/nftables.sh"
-out=$(echo '{"action":"apply"}' | NFTABLES_SH="$tmpdir/nftables.sh" "$H" call nftables 2>"$tmpdir/err2")
+out=$(echo '{"action":"apply"}' | NFTABLES_CMD="$tmpdir/nftables.sh" "$H" call nftables 2>"$tmpdir/err2")
 echo "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: nftables apply did not return ok"; cat "$tmpdir/err2"; exit 1; }
 grep -q "called nftables with: apply" "$tmpdir/err2" || { echo "FAIL: nftables.sh not invoked with apply"; cat "$tmpdir/err2"; exit 1; }
 
 echo "-- call nftables with bad action returns error"
-out=$(echo '{"action":"haxx"}' | NFTABLES_SH="$tmpdir/nftables.sh" "$H" call nftables)
+out=$(echo '{"action":"haxx"}' | NFTABLES_CMD="$tmpdir/nftables.sh" "$H" call nftables)
 echo "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: bad action should return error"; exit 1; }
 
 echo "-- list includes restart method"
