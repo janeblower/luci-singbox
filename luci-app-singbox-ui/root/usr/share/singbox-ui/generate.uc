@@ -1,5 +1,13 @@
 #!/usr/bin/ucode
-// Read UCI config and write /tmp/singbox-ui.json for sing-box.
+// Read UCI config and write the sing-box config JSON.
+//
+// Env overrides (used by tests / init.d):
+//   SINGBOX_TMPDIR (default /tmp/singbox-ui) — source dir for sub_*.txt
+//   SINGBOX_CONFIG (default /tmp/singbox-ui.json) — output path
+//   UCI_CONFIG_DIR — honoured by require("uci").cursor
+
+const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
+const CONFIG_OUT = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 
 let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
@@ -112,7 +120,7 @@ function parse_json_outbound(json_str, name) {
 }
 
 function read_subscription_urls(name) {
-	let path = "/tmp/singbox-ui/sub_" + name + ".txt";
+	let path = `${TMPDIR}/sub_${name}.txt`;
 	let f = fs.open(path, "r");
 	if (!f) {
 		warn("generate.uc: subscription state missing: " + path + "\n");
@@ -319,9 +327,9 @@ if (length(route.rules) || route.final) {
 		config.route.final = route.final;
 }
 
-let f = fs.open("/tmp/singbox-ui.json", "w");
+let f = fs.open(CONFIG_OUT, "w");
 if (!f) {
-	warn("generate.uc: cannot open /tmp/singbox-ui.json for writing\n");
+	warn(`generate.uc: cannot open ${CONFIG_OUT} for writing\n`);
 	exit(1);
 }
 f.write(sprintf("%.4J\n", config));

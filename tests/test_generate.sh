@@ -31,11 +31,19 @@ check() {
 
 write_cfg() { printf '%s\n' "$1" > "$TMPDIR/singbox-ui"; }
 
-# generate.uc writes to /tmp/singbox-ui.json; copy it to out.json for checking.
+# Sandbox dir for sub_*.txt and the output config — keeps tests independent
+# of any real /tmp/singbox-ui state on the host.
+SANDBOX_DIR="$TMPDIR/sandbox"
+SANDBOX_CONFIG="$SANDBOX_DIR/singbox-ui.json"
+mkdir -p "$SANDBOX_DIR/subs"
+
 run_gen() {
 	# shellcheck disable=SC2086
-	UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$GENERATE_UC" >/dev/null \
-		&& cp /tmp/singbox-ui.json "$TMPDIR/out.json"
+	UCI_CONFIG_DIR="$TMPDIR" \
+	SINGBOX_TMPDIR="$SANDBOX_DIR/subs" \
+	SINGBOX_CONFIG="$SANDBOX_CONFIG" \
+	"$UCODE_BIN" $UCODE_LIB_FLAGS "$GENERATE_UC" >/dev/null \
+		&& cp "$SANDBOX_CONFIG" "$TMPDIR/out.json"
 }
 
 # ---- fakeip + tproxy ----
@@ -126,9 +134,8 @@ echo "  PASS: outbound without proxy_type is skipped"
 
 # ---- subscription outbound ----
 echo "-- proxy_type=subscription"
-mkdir -p /tmp/singbox-ui
 printf 'vless://sub-uuid-9999@sub.example.com:443?security=tls&sni=sub.example.com\n' \
-	> /tmp/singbox-ui/sub_my_sub_out.txt
+	> "$SANDBOX_DIR/subs/sub_my_sub_out.txt"
 write_cfg "
 config outbound 'my_sub_out'
 	option enabled '1'
@@ -142,7 +149,6 @@ check "sub tag"    '"tag": "my_sub_out"'         "$TMPDIR/out.json"
 check "sub type"   '"type": "vless"'             "$TMPDIR/out.json"
 check "sub uuid"   '"uuid": "sub-uuid-9999"'     "$TMPDIR/out.json"
 check "sub server" '"server": "sub.example.com"' "$TMPDIR/out.json"
-rm -f /tmp/singbox-ui/sub_my_sub_out.txt
 
 # ---- ruleset + route_rule basic flow ----
 echo "-- ruleset + route_rule basic"
@@ -303,8 +309,7 @@ config outbound 'subUT'
 	option sub_urltest_url 'https://probe.example/204'
 "
 # Seed a sub_subUT.txt so generate.uc has something to expand.
-mkdir -p /tmp/singbox-ui
-printf '%s\n' 'vless://u@host:443?security=tls#A' > /tmp/singbox-ui/sub_subUT.txt
+printf '%s\n' 'vless://u@host:443?security=tls#A' > "$SANDBOX_DIR/subs/sub_subUT.txt"
 run_gen
 check "urltest type emitted"      '"type": "urltest"'                          "$TMPDIR/out.json"
 check "urltest probe url emitted" '"url": "https://probe.example/204"'         "$TMPDIR/out.json"
@@ -317,7 +322,7 @@ config outbound 'subUT2'
 	option sub_multi '1'
 	option sub_selector_type 'urltest'
 "
-printf '%s\n' 'vless://u@host:443?security=tls#A' > /tmp/singbox-ui/sub_subUT2.txt
+printf '%s\n' 'vless://u@host:443?security=tls#A' > "$SANDBOX_DIR/subs/sub_subUT2.txt"
 run_gen
 grep -q '"type": "urltest"' "$TMPDIR/out.json" \
 	|| { echo "FAIL: urltest not emitted (default-url case)"; exit 1; }
