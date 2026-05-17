@@ -1,16 +1,16 @@
 #!/bin/sh
 # rpcd handler for singbox-ui. Methods:
 #   generate            run /usr/share/singbox-ui/generate.uc
-#   nftables {action}   run /usr/share/singbox-ui/nftables.sh apply|remove
+#   nftables {action}   run /usr/share/singbox-ui/nftables.uc apply|remove
 #   restart             restart /etc/init.d/singbox-ui (full service restart)
 #   refresh {what}      run subscription.uc refresh subscriptions|rulesets|all force
 #   status              return JSON: { running, subscriptions[], rulesets[] }
 #   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
 #
 # Env overrides (used by tests):
-#   NFTABLES_SH GENERATE_UC SINGBOX_INIT REFRESH_SH SINGBOX_TMP SINGBOX_CONFIG
+#   NFTABLES_CMD GENERATE_UC SINGBOX_INIT REFRESH_SH SINGBOX_TMP SINGBOX_CONFIG
 
-NFTABLES_SH=${NFTABLES_SH:-/usr/share/singbox-ui/nftables.sh}
+NFTABLES_CMD=${NFTABLES_CMD:-"ucode /usr/share/singbox-ui/nftables.uc"}
 GENERATE_UC=${GENERATE_UC:-/usr/share/singbox-ui/generate.uc}
 SINGBOX_INIT=${SINGBOX_INIT:-/etc/init.d/singbox-ui}
 REFRESH_SH=${REFRESH_SH:-/usr/share/singbox-ui/subscription.uc}
@@ -116,10 +116,15 @@ call)
 		action=$(read_field action)
 		case "$action" in
 		apply|remove)
-			if "$NFTABLES_SH" "$action" >/dev/null; then
+			# NFTABLES_CMD is intentionally unquoted so the default
+			# "ucode <path>" splits into argv[0]=ucode, argv[1]=<path>.
+			# Tests inject a single executable path; word-split still
+			# produces a valid argv.
+			# shellcheck disable=SC2086
+			if $NFTABLES_CMD "$action" >/dev/null; then
 				emit_ok
 			else
-				emit_err "nftables.sh $action failed"
+				emit_err "nftables $action failed"
 			fi
 			;;
 		*)
