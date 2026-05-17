@@ -211,21 +211,6 @@ msgstr "неизвестная ошибка"
 msgid "not generated"
 msgstr "не сгенерировано"
 
-# Rename
-msgid "Rename"
-msgstr "Переименовать"
-
-msgid "Rename section"
-msgstr "Переименовать секцию"
-
-msgid "Rename to:"
-msgstr "Новое имя:"
-
-msgid "Invalid name: only letters, digits and underscore allowed"
-msgstr "Недопустимое имя: разрешены только буквы, цифры и подчёркивание"
-
-msgid "Name already in use: "
-msgstr "Имя уже занято: "
-
-msgid "Rename failed: "
-msgstr "Ошибка переименования: "
+# Rename (inside Edit modal)
+msgid "Name"
+msgstr "Имя"
