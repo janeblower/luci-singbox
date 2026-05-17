@@ -97,7 +97,86 @@ function load_rs_rules() {
 
 function cmd_apply(cur)             { /* TODO Task 4 */ }
 function cmd_remove()               { /* TODO Task 4 */ }
-function cmd_emit(port, v4, v6, if_) { /* TODO Task 3 */ }
+
+// l4proto_expr(network) → "meta l4proto tcp" / "udp" / "{ tcp, udp }"
+function l4proto_expr(network) {
+	if (network === "tcp") return "meta l4proto tcp";
+	if (network === "udp") return "meta l4proto udp";
+	return "meta l4proto { tcp, udp }";
+}
+
+// port_expr(network, ports) → " tcp dport 80-443" etc. (leading space if non-empty).
+// Multi-port specs become "{ p1, p2 }"; single ports stay bare.
+function port_expr(network, ports) {
+	if (!length(ports)) return "";
+	let body;
+	if (length(ports) === 1) body = ports[0];
+	else body = `{ ${join(", ", ports)} }`;
+	let kw;
+	if (network === "tcp") kw = "tcp";
+	else if (network === "udp") kw = "udp";
+	else kw = "th";
+	return ` ${kw} dport ${body}`;
+}
+
+// emit_set(set_name, family, cidrs) → string with the nft set definition.
+function emit_set(set_name, family, cidrs) {
+	let typ = (family === "v6") ? "ipv6_addr" : "ipv4_addr";
+	let body = join(",", cidrs);
+	let lines = [
+		`\tset ${set_name} {\n`,
+		`\t\ttype ${typ}\n`,
+		`\t\tflags interval\n`,
+		`\t\telements = { ${body} }\n`,
+		`\t}\n\n`,
+	];
+	return join("", lines);
+}
+
+// emit_rs_rule(name, idx, family, l4, port_e) — single marking rule line.
+function emit_rs_rule(name, idx, family, l4, port_e) {
+	let set_name = `rs_${name}_${idx}_${family}`;
+	let ip_kw = (family === "v6") ? "ip6" : "ip";
+	return `\t\t${ip_kw} daddr @${set_name} ${l4}${port_e} ct state new meta mark set 0x1\n`;
+}
+
+function cmd_emit(port, v4, v6, iface) {
+	let rules = load_rs_rules();
+
+	let buf = [];
+	push(buf, "table inet singbox_ui {\n");
+
+	// Set definitions first (canonical layout).
+	for (let r in rules) {
+		if (length(r.v4)) push(buf, emit_set(`rs_${r.name}_${r.idx}_v4`, "v4", r.v4));
+		if (length(r.v6)) push(buf, emit_set(`rs_${r.name}_${r.idx}_v6`, "v6", r.v6));
+	}
+
+	// prerouting_mark
+	push(buf, "\tchain prerouting_mark {\n");
+	push(buf, "\t\ttype filter hook prerouting priority -150; policy accept;\n\n");
+	if (v4 != null && v4 !== "")
+		push(buf, `\t\tiifname "${iface}" ip  daddr { ${v4} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
+	if (v6 != null && v6 !== "")
+		push(buf, `\t\tiifname "${iface}" ip6 daddr { ${v6} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
+	for (let r in rules) {
+		let l4 = l4proto_expr(r.network);
+		let pe = port_expr(r.network, r.ports);
+		if (length(r.v4)) push(buf, emit_rs_rule(r.name, r.idx, "v4", l4, pe));
+		if (length(r.v6)) push(buf, emit_rs_rule(r.name, r.idx, "v6", l4, pe));
+	}
+	push(buf, "\t}\n\n");
+
+	// prerouting_tproxy
+	push(buf, "\tchain prerouting_tproxy {\n");
+	push(buf, "\t\ttype filter hook prerouting priority -149; policy accept;\n\n");
+	push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip  to 127.0.0.1:${port}\n`);
+	push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip6 to [::1]:${port}\n`);
+	push(buf, "\t}\n");
+
+	push(buf, "}\n");
+	print(join("", buf));
+}
 
 let uci_dir = getenv("UCI_CONFIG_DIR");
 let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
