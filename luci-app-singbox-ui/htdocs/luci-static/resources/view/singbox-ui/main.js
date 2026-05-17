@@ -468,7 +468,7 @@ return view.extend({
 
 	handleSaveApply: function (ev, mode) {
 		return this.handleSave(ev, true).then(function () {
-			return ui.changes.apply(mode == 'force-apply');
+			return ui.changes.apply(mode === 'force-apply');
 		});
 	},
 
