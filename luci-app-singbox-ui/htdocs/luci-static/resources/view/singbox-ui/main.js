@@ -471,7 +471,9 @@ return view.extend({
 	},
 
 	handleSave: function (ev) {
-		return Promise.all(this._maps.map(function (m) { return m.save(); }));
+		return Promise.all(this._maps.map(function (m) {
+			return m.parse().then(function () { return m.save(); });
+		}));
 	},
 
 	handleSaveApply: function (ev, mode) {
