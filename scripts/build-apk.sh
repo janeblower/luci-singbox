@@ -87,7 +87,6 @@ rm -rf "$APP_ROOT" "$APP_SCRIPTS"
 install -d \
   "$APP_ROOT/etc/config" \
   "$APP_ROOT/etc/uci-defaults" \
-  "$APP_ROOT/etc/singbox-ui" \
   "$APP_ROOT/etc/init.d" \
   "$APP_ROOT/usr/libexec/rpcd" \
   "$APP_ROOT/usr/share/luci/menu.d" \
@@ -97,13 +96,13 @@ install -d \
 
 install -m 0644 "$PKG_SRC/root/etc/config/singbox-ui"                        "$APP_ROOT/etc/config/singbox-ui"
 install -m 0755 "$PKG_SRC/root/etc/uci-defaults/99-luci-app-singbox-ui"      "$APP_ROOT/etc/uci-defaults/99-luci-app-singbox-ui"
-install -m 0755 "$PKG_SRC/root/etc/singbox-ui/nftables.sh"                   "$APP_ROOT/etc/singbox-ui/nftables.sh"
 install -m 0755 "$PKG_SRC/root/etc/init.d/singbox-ui"                        "$APP_ROOT/etc/init.d/singbox-ui"
 install -m 0755 "$PKG_SRC/root/usr/libexec/rpcd/singbox-ui"                  "$APP_ROOT/usr/libexec/rpcd/singbox-ui"
 install -m 0644 "$PKG_SRC/root/usr/share/luci/menu.d/luci-app-singbox-ui.json" "$APP_ROOT/usr/share/luci/menu.d/luci-app-singbox-ui.json"
 install -m 0644 "$PKG_SRC/root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"  "$APP_ROOT/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"
 install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/generate.uc"             "$APP_ROOT/usr/share/singbox-ui/generate.uc"
-install -m 0755 "$PKG_SRC/root/usr/share/singbox-ui/subscription.uc"            "$APP_ROOT/usr/share/singbox-ui/subscription.uc"
+install -m 0755 "$PKG_SRC/root/usr/share/singbox-ui/subscription.uc"         "$APP_ROOT/usr/share/singbox-ui/subscription.uc"
+install -m 0755 "$PKG_SRC/root/usr/share/singbox-ui/nftables.sh"             "$APP_ROOT/usr/share/singbox-ui/nftables.sh"
 install -m 0644 "$PKG_SRC/htdocs/luci-static/resources/view/singbox-ui/main.js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/main.js"
 
 list_dir="$APP_ROOT/lib/apk/packages"

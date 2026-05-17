@@ -22,9 +22,6 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_BIN) ./root/etc/uci-defaults/99-luci-app-singbox-ui \
 	  $(1)/etc/uci-defaults/99-luci-app-singbox-ui
 
-	$(INSTALL_DIR) $(1)/etc/singbox-ui
-	$(INSTALL_BIN) ./root/etc/singbox-ui/nftables.sh $(1)/etc/singbox-ui/nftables.sh
-
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./root/etc/init.d/singbox-ui $(1)/etc/init.d/singbox-ui
 
@@ -44,6 +41,8 @@ define Package/$(PKG_NAME)/install
 	  $(1)/usr/share/singbox-ui/generate.uc
 	$(INSTALL_BIN) ./root/usr/share/singbox-ui/subscription.uc \
 	  $(1)/usr/share/singbox-ui/subscription.uc
+	$(INSTALL_BIN) ./root/usr/share/singbox-ui/nftables.sh \
+	  $(1)/usr/share/singbox-ui/nftables.sh
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \

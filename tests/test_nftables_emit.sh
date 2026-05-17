@@ -2,7 +2,7 @@
 # tests/test_nftables_emit.sh
 set -e
 
-SCRIPT=luci-app-singbox-ui/root/etc/singbox-ui/nftables.sh
+SCRIPT=luci-app-singbox-ui/root/usr/share/singbox-ui/nftables.sh
 
 if [ ! -x "$SCRIPT" ]; then
   echo "FAIL: $SCRIPT not present or not executable"
