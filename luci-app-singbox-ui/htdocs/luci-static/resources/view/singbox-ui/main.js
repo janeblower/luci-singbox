@@ -40,26 +40,6 @@ function addRenameField(s) {
 	o.remove = function () {};
 }
 
-var TextareaValue = form.Value.extend({
-	renderWidget: function (section_id, option_index, cfgvalue) {
-		return E('textarea', {
-			'name':  this.cbid(section_id),
-			'class': 'cbi-input-textarea',
-			'rows':  5,
-			'style': 'width:100%;font-family:monospace'
-		}, [ cfgvalue != null ? cfgvalue : '' ]);
-	},
-	formvalue: function (section_id) {
-		var node = this.map.findElement('name', this.cbid(section_id));
-		return node ? node.value : null;
-	},
-	validate: function (section_id, value) {
-		if (value == null || value === '') return true;
-		try { JSON.parse(value); return true; }
-		catch (e) { return _('Invalid JSON: ') + e.message; }
-	}
-});
-
 function buildInputMap() {
 	var m = new form.Map('singbox-ui', _('Input'),
 		_('Configure FakeIP and TProxy inbound. ' +
@@ -129,10 +109,17 @@ function buildOutboundsMap() {
 	o.placeholder = 'vless://uuid@host:443?security=tls&sni=host';
 	o.depends('proxy_type', 'url');
 
-	o = s.option(TextareaValue, 'proxy_json', _('JSON outbound'));
+	o = s.option(form.TextValue, 'proxy_json', _('JSON outbound'));
 	o.modalonly   = true;
+	o.rows        = 5;
+	o.monospace   = true;
 	o.placeholder = '{"type":"vless","server":"host","server_port":443,"uuid":"..."}';
 	o.depends('proxy_type', 'json');
+	o.validate    = function (section_id, value) {
+		if (value == null || value === '') return true;
+		try { JSON.parse(value); return true; }
+		catch (e) { return _('Invalid JSON: ') + e.message; }
+	};
 
 	o = s.option(form.Value, 'sub_url', _('Subscription URL'));
 	o.modalonly   = true;

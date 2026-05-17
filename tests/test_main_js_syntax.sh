@@ -47,7 +47,7 @@ grep -q "proxy_json"             "$JS" || { echo "FAIL: no proxy_json field"; ex
 grep -q "sub_url"                "$JS" || { echo "FAIL: no sub_url field"; exit 1; }
 grep -q "sub_update_via"         "$JS" || { echo "FAIL: no sub_update_via field"; exit 1; }
 grep -q "sub_interval"           "$JS" || { echo "FAIL: no sub_interval field"; exit 1; }
-grep -q "TextareaValue"          "$JS" || { echo "FAIL: no TextareaValue custom widget"; exit 1; }
+grep -q "form.TextValue"         "$JS" || { echo "FAIL: no form.TextValue widget"; exit 1; }
 
 echo "-- references ruleset fields"
 grep -q "dns_fakeip"             "$JS" || { echo "FAIL: no dns_fakeip field"; exit 1; }
