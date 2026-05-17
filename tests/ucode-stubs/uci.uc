@@ -95,6 +95,10 @@ function make_cursor(uci_dir) {
 
 		foreach: function(config, stype, cb) {
 			let c = load(config);
+			if (stype == null) {
+				for (let name in c.order) cb(c.sections[name]);
+				return;
+			}
 			let arr = c.by_type[stype] ?? [];
 			for (let s in arr) cb(s);
 		},

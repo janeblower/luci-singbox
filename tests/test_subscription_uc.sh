@@ -43,6 +43,25 @@ chmod +x "$TMPDIR/bin/curl"
 export PATH="$TMPDIR/bin:$PATH"
 export FAKE_CURL_LOG="$TMPDIR/curl.log"
 
+echo "-- stub foreach(null) returns all sections"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'a'
+	option proxy_type 'subscription'
+config outbound 'b'
+	option proxy_type 'interface'
+EOF
+# Drive a tiny ucode probe through the same loader to verify foreach(null).
+cat >"$TMPDIR/probe.uc" <<'EOF'
+let uci = require("uci").cursor(getenv("UCI_CONFIG_DIR"));
+let n = 0;
+uci.foreach("singbox-ui", null, function (s) { n++; });
+print(n);
+EOF
+# shellcheck disable=SC2086
+out=$(UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/probe.uc")
+[ "$out" = "2" ] || fail "expected 2 sections via foreach(null), got '$out'"
+pass "foreach(null) yields all sections"
+
 run_uc() {
 	# shellcheck disable=SC2086
 	UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$SUB_UC" "$@"
