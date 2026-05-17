@@ -214,3 +214,6 @@ msgstr "не сгенерировано"
 # Rename (inside Edit modal)
 msgid "Name"
 msgstr "Имя"
+
+msgid "URL-test URL"
+msgstr "URL для url-test"

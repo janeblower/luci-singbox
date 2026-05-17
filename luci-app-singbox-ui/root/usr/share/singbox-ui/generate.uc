@@ -175,11 +175,14 @@ function build_outbounds() {
 				}
 				if (length(children)) {
 					let selector_type = section.sub_selector_type ?? "selector";
-					push(outbounds, {
+					let group = {
 						tag: name,
 						type: selector_type,
 						outbounds: children,
-					});
+					};
+					if (selector_type === "urltest" && section.sub_urltest_url)
+						group.url = section.sub_urltest_url;
+					push(outbounds, group);
 				}
 				return;  // done with this section
 			}

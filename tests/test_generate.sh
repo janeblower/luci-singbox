@@ -293,4 +293,36 @@ awk '/"dns":/,/^    }/' "$TMPDIR/out.json" | grep -q '"rules":' \
 	&& { echo "FAIL: dns.rules emitted without any dns_fakeip=1 ruleset"; cat "$TMPDIR/out.json"; exit 1; }
 echo "  PASS: dns.rules omitted when no dns_fakeip ruleset"
 
+echo "-- subscription urltest emits sub_urltest_url verbatim"
+write_cfg "
+config outbound 'subUT'
+	option proxy_type 'subscription'
+	option sub_url 'http://example.test/x'
+	option sub_multi '1'
+	option sub_selector_type 'urltest'
+	option sub_urltest_url 'https://probe.example/204'
+"
+# Seed a sub_subUT.txt so generate.uc has something to expand.
+mkdir -p /tmp/singbox-ui
+printf '%s\n' 'vless://u@host:443?security=tls#A' > /tmp/singbox-ui/sub_subUT.txt
+run_gen
+check "urltest type emitted"      '"type": "urltest"'                          "$TMPDIR/out.json"
+check "urltest probe url emitted" '"url": "https://probe.example/204"'         "$TMPDIR/out.json"
+
+echo "-- subscription urltest without sub_urltest_url omits url"
+write_cfg "
+config outbound 'subUT2'
+	option proxy_type 'subscription'
+	option sub_url 'http://example.test/x'
+	option sub_multi '1'
+	option sub_selector_type 'urltest'
+"
+printf '%s\n' 'vless://u@host:443?security=tls#A' > /tmp/singbox-ui/sub_subUT2.txt
+run_gen
+grep -q '"type": "urltest"' "$TMPDIR/out.json" \
+	|| { echo "FAIL: urltest not emitted (default-url case)"; exit 1; }
+grep -q '"url":' "$TMPDIR/out.json" \
+	&& { echo "FAIL: bare urltest should NOT emit a url field"; exit 1; }
+echo "  PASS: urltest without override has no url field"
+
 echo "OK"

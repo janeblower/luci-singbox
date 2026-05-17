@@ -159,6 +159,11 @@ function buildOutboundsMap() {
 	o.default = 'selector';
 	o.depends({ proxy_type: 'subscription', sub_multi: '1' });
 
+	o = s.option(form.Value, 'sub_urltest_url', _('URL-test URL'));
+	o.modalonly   = true;
+	o.placeholder = 'https://www.gstatic.com/generate_204';
+	o.depends({ proxy_type: 'subscription', sub_multi: '1', sub_selector_type: 'urltest' });
+
 	return m;
 }
 
