@@ -118,6 +118,109 @@ run_uc fetch-rulesets
 grep -q '"rules"' "$SINGBOX_TMPDIR/rs_rA.json" || fail "rs_rA.json content wrong"
 pass "local source ruleset"
 
+# ---- SINGBOX_BOOT_FETCH=1 shortens timeout ----
+echo "-- SINGBOX_BOOT_FETCH=1 uses --max-time 5 for subs"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subA'
+	option proxy_type 'subscription'
+	option sub_url 'https://example.test/sub'
+EOF
+printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
+: >"$FAKE_CURL_LOG"
+SINGBOX_BOOT_FETCH=1 run_uc fetch-subs
+grep -q -- '--max-time 5' "$FAKE_CURL_LOG" \
+    || { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "--max-time 5 missing in boot mode"; }
+pass "boot mode shortens timeout to 5s"
+
+# ---- parallel curl ----
+echo "-- two subscriptions are fetched in parallel"
+# Replace curl stub with one that sleeps 2s and records timestamp.
+cat >"$TMPDIR/bin/curl" <<'EOF'
+#!/bin/sh
+date +%s%N >>"${FAKE_CURL_LOG:-/dev/null}"
+sleep 2
+echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
+out=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        *)  shift ;;
+    esac
+done
+[ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/curl"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subA'
+	option proxy_type 'subscription'
+	option sub_url 'https://example.test/a'
+config outbound 'subB'
+	option proxy_type 'subscription'
+	option sub_url 'https://example.test/b'
+EOF
+printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
+: >"$FAKE_CURL_LOG"
+start=$(date +%s)
+run_uc fetch-subs
+end=$(date +%s)
+elapsed=$((end - start))
+# Sequential = ~4s, parallel = ~2s. Allow some headroom.
+[ "$elapsed" -lt 4 ] || fail "expected parallel (<4s), got ${elapsed}s"
+pass "two curls run in parallel (${elapsed}s)"
+
+# Restore the simple stub for following tests.
+cat >"$TMPDIR/bin/curl" <<'EOF'
+#!/bin/sh
+echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
+out=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        *)  shift ;;
+    esac
+done
+[ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/curl"
+
+# ---- failed curl preserves existing sub_*.txt ----
+echo "-- failed curl does not clobber existing sub_<name>.txt"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subA'
+	option proxy_type 'subscription'
+	option sub_url 'https://example.test/sub'
+EOF
+# Seed an existing sub_subA.txt
+mkdir -p "$SINGBOX_TMPDIR"
+printf 'vless://kept@host:1\n' >"$SINGBOX_TMPDIR/sub_subA.txt"
+# Curl stub returns failure.
+cat >"$TMPDIR/bin/curl" <<'EOF'
+#!/bin/sh
+exit 22
+EOF
+chmod +x "$TMPDIR/bin/curl"
+run_uc fetch-subs
+grep -q '^vless://kept@host:1' "$SINGBOX_TMPDIR/sub_subA.txt" \
+    || fail "cached sub_subA.txt was clobbered by failed curl"
+pass "cache preserved on curl failure"
+# Restore curl stub.
+cat >"$TMPDIR/bin/curl" <<'EOF'
+#!/bin/sh
+echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
+out=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o) out="$2"; shift 2 ;;
+        *)  shift ;;
+    esac
+done
+[ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/curl"
+
 # ---- refresh: no-op when fresh, runs when stale, runs with force ----
 echo "-- refresh respects mtime"
 cat >"$TMPDIR/singbox-ui" <<EOF

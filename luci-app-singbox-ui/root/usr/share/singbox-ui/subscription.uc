@@ -21,6 +21,10 @@ let uci_mod = require("uci");
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn(msg + "\n"); }
 
+// sq(s) — single-quote escape for /bin/sh. Mirrors the helper in the rpcd
+// handler; duplicated locally to avoid cross-file imports.
+function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
+
 // uci_get_or_empty(cur, section, opt) — never throws, returns "".
 function uci_get_or_empty(cur, section, opt) {
 	let v = cur.get("singbox-ui", section, opt);
@@ -36,24 +40,29 @@ function sections_where(cur, opt, value) {
 	return out;
 }
 
-// http_download(url, outpath, opts) -> bool
-// opts: { timeout (s), interface, user_agent }
-function http_download(url, outpath, opts) {
-	opts = opts || {};
-	let argv = [
-		"curl", "-sfL",
-		"--max-time", `${opts.timeout ?? 15}`,
-		"-A", opts.user_agent || DEFAULT_UA,
-		"-o", outpath,
-	];
-	if (opts.interface) {
-		push(argv, "--interface", opts.interface);
+// parallel_download(specs) — kick off multiple curls under /bin/sh and
+// wait for all of them in one transaction. Each spec: {url, outpath, opts}.
+// Failures are surfaced via the post-call fs.stat() in callers; no return
+// value here.
+function parallel_download(specs) {
+	if (!length(specs)) return;
+	let parts = [];
+	for (let spec in specs) {
+		let opts = spec.opts || {};
+		let argv = [
+			"curl", "-sfL",
+			"--max-time", `${opts.timeout ?? 15}`,
+			"-A", opts.user_agent || DEFAULT_UA,
+			"-o", spec.outpath,
+		];
+		if (opts.interface) push(argv, "--interface", opts.interface);
+		push(argv, spec.url);
+		let quoted = [];
+		for (let a in argv) push(quoted, sq(a));
+		push(parts, join(" ", quoted) + " &");
 	}
-	push(argv, url);
-	let rc = system(argv);
-	if (rc !== 0) return false;
-	let st = fs.stat(outpath);
-	return st && st.size > 0;
+	push(parts, "wait");
+	system(["/bin/sh", "-c", join(" ", parts)]);
 }
 
 // Subscription bodies are usually base64-encoded plaintext containing one
@@ -76,6 +85,12 @@ function cmd_fetch_subs(cur) {
 		return 0;
 	}
 
+	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
+	let timeout = boot ? 5 : 15;
+
+	// Phase 1: build download specs.
+	let specs = [];
+	let meta  = [];   // parallel array: { name, raw_path, out_path }
 	for (let name in names) {
 		if (uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_subs: ${name} disabled, skipping`);
@@ -86,7 +101,6 @@ function cmd_fetch_subs(cur) {
 			log_err(`fetch_subs: ${name} has no sub_url, skipping`);
 			continue;
 		}
-
 		let via = uci_get_or_empty(cur, name, "sub_update_via");
 		let iface = null;
 		if (via !== "" && via !== "direct") {
@@ -96,25 +110,35 @@ function cmd_fetch_subs(cur) {
 				continue;
 			}
 		}
-
 		let raw_path = `${TMPDIR}/sub_${name}.raw`;
 		let out_path = `${TMPDIR}/sub_${name}.txt`;
-		if (!http_download(url, raw_path, { timeout: 15, interface: iface })) {
-			log_err(`fetch_subs: download failed for ${name} (${url})`);
+		push(specs, { url: url, outpath: raw_path, opts: { timeout: timeout, interface: iface } });
+		push(meta,  { name: name, raw_path: raw_path, out_path: out_path });
+	}
+
+	// Phase 2: parallel curl.
+	parallel_download(specs);
+
+	// Phase 3: parse each result; on failure, leave existing out_path alone.
+	for (let m in meta) {
+		let st = fs.stat(m.raw_path);
+		if (!st || st.size === 0) {
+			log_err(`fetch_subs: download failed for ${m.name}`);
+			fs.unlink(m.raw_path);
 			continue;
 		}
 
-		let raw_fd = fs.open(raw_path, "r");
+		let raw_fd = fs.open(m.raw_path, "r");
 		if (!raw_fd) {
-			log_err(`fetch_subs: cannot read ${raw_path}`);
-			fs.unlink(raw_path);
+			log_err(`fetch_subs: cannot read ${m.raw_path}`);
+			fs.unlink(m.raw_path);
 			continue;
 		}
 		let raw = raw_fd.read("all") ?? "";
 		raw_fd.close();
-		fs.unlink(raw_path);
+		fs.unlink(m.raw_path);
 		if (length(raw) === 0) {
-			log_err(`fetch_subs: empty body for ${name}`);
+			log_err(`fetch_subs: empty body for ${m.name}`);
 			continue;
 		}
 
@@ -126,18 +150,18 @@ function cmd_fetch_subs(cur) {
 				push(urls, t);
 		}
 		if (!length(urls)) {
-			log_err(`fetch_subs: no valid proxy URL in response for ${name}`);
+			log_err(`fetch_subs: no valid proxy URL in response for ${m.name}`);
 			continue;
 		}
 
-		let out_fd = fs.open(out_path, "w");
+		let out_fd = fs.open(m.out_path, "w");
 		if (!out_fd) {
-			log_err(`fetch_subs: cannot write ${out_path}`);
+			log_err(`fetch_subs: cannot write ${m.out_path}`);
 			continue;
 		}
 		for (let u in urls) out_fd.write(u + "\n");
 		out_fd.close();
-		log(`fetch_subs: ${name} -> ${out_path} (${length(urls)} urls)`);
+		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
 	}
 	return 0;
 }
@@ -150,65 +174,76 @@ function detect_format(target, override) {
 	return "binary";
 }
 
-function fetch_one_ruleset(cur, name) {
-	let rs_type = uci_get_or_empty(cur, name, "type");
-	let target = "";
-	if (rs_type === "remote") target = uci_get_or_empty(cur, name, "url");
-	else if (rs_type === "local") target = uci_get_or_empty(cur, name, "path");
-	if (target === "") {
-		log_err(`fetch_rulesets: ${name} has no ${rs_type === "local" ? "path" : "url"}, skipping`);
-		return;
-	}
-
-	let fmt = detect_format(target, uci_get_or_empty(cur, name, "format"));
-	let raw_path = `${TMPDIR}/rs_${name}.raw`;
-	let out_path = `${TMPDIR}/rs_${name}.json`;
-
-	if (rs_type === "remote") {
-		if (!http_download(target, raw_path, { timeout: 30 })) {
-			log_err(`fetch_rulesets: download failed: ${target}`);
-			return;
-		}
-	} else if (rs_type === "local") {
-		// Copy with cp(1) to keep the same set of dependencies (no fs.copy in ucode).
-		if (system(["cp", "--", target, raw_path]) !== 0) {
-			log_err(`fetch_rulesets: cannot read: ${target}`);
-			return;
-		}
-	} else {
-		log_err(`fetch_rulesets: unknown type '${rs_type}' for ${name}`);
-		return;
-	}
-
-	if (fmt === "binary") {
-		if (system([SINGBOX, "rule-set", "decompile", raw_path, "-o", out_path]) !== 0) {
-			log_err(`fetch_rulesets: decompile failed for ${name}`);
-			fs.unlink(raw_path);
-			return;
-		}
-	} else {
-		if (system(["cp", "--", raw_path, out_path]) !== 0) {
-			log_err(`fetch_rulesets: cannot copy source for ${name}`);
-			fs.unlink(raw_path);
-			return;
-		}
-	}
-	fs.unlink(raw_path);
-	log(`fetch_rulesets: ${name} -> ${out_path}`);
-}
-
 function cmd_fetch_rulesets(cur) {
 	let names = sections_where(cur, "nft_rules", "1");
 	if (!length(names)) {
 		log_err("fetch_rulesets: no rule-sets configured (nft_rules=1)");
 		return 0;
 	}
+
+	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
+	let timeout = boot ? 10 : 30;
+
+	let specs = [];
+	let meta  = [];
 	for (let name in names) {
 		if (uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_rulesets: ${name} disabled, skipping`);
 			continue;
 		}
-		fetch_one_ruleset(cur, name);
+		let rs_type = uci_get_or_empty(cur, name, "type");
+		let raw_path = `${TMPDIR}/rs_${name}.raw`;
+		let out_path = `${TMPDIR}/rs_${name}.json`;
+		let target = (rs_type === "remote") ? uci_get_or_empty(cur, name, "url")
+		             : (rs_type === "local")  ? uci_get_or_empty(cur, name, "path")
+		             : "";
+		if (target === "") {
+			log_err(`fetch_rulesets: ${name} has no source, skipping`);
+			continue;
+		}
+
+		if (rs_type === "remote") {
+			push(specs, { url: target, outpath: raw_path, opts: { timeout: timeout } });
+			push(meta,  { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
+		} else if (rs_type === "local") {
+			// Local copies are cheap, do them inline.
+			if (system(["cp", "--", target, raw_path]) !== 0) {
+				log_err(`fetch_rulesets: cannot read: ${target}`);
+				continue;
+			}
+			push(meta, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
+		} else {
+			log_err(`fetch_rulesets: unknown type '${rs_type}' for ${name}`);
+			continue;
+		}
+	}
+
+	parallel_download(specs);
+
+	// Decompile / promote each raw file.
+	for (let m in meta) {
+		let st = fs.stat(m.raw_path);
+		if (!st || st.size === 0) {
+			log_err(`fetch_rulesets: download failed for ${m.name} (${m.target})`);
+			fs.unlink(m.raw_path);
+			continue;
+		}
+		let fmt = detect_format(m.target, uci_get_or_empty(cur, m.name, "format"));
+		if (fmt === "binary") {
+			if (system([SINGBOX, "rule-set", "decompile", m.raw_path, "-o", m.out_path]) !== 0) {
+				log_err(`fetch_rulesets: decompile failed for ${m.name}`);
+				fs.unlink(m.raw_path);
+				continue;
+			}
+		} else {
+			if (system(["cp", "--", m.raw_path, m.out_path]) !== 0) {
+				log_err(`fetch_rulesets: cannot copy source for ${m.name}`);
+				fs.unlink(m.raw_path);
+				continue;
+			}
+		}
+		fs.unlink(m.raw_path);
+		log(`fetch_rulesets: ${m.name} -> ${m.out_path}`);
 	}
 	return 0;
 }
