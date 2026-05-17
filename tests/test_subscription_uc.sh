@@ -43,6 +43,14 @@ chmod +x "$TMPDIR/bin/curl"
 export PATH="$TMPDIR/bin:$PATH"
 export FAKE_CURL_LOG="$TMPDIR/curl.log"
 
+pass() { echo "  PASS: $1"; }
+fail() { echo "FAIL: $1"; exit 1; }
+
+run_uc() {
+	# shellcheck disable=SC2086
+	UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$SUB_UC" "$@"
+}
+
 echo "-- stub foreach(null) returns all sections"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'a'
@@ -61,14 +69,6 @@ EOF
 out=$(UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/probe.uc")
 [ "$out" = "2" ] || fail "expected 2 sections via foreach(null), got '$out'"
 pass "foreach(null) yields all sections"
-
-run_uc() {
-	# shellcheck disable=SC2086
-	UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$SUB_UC" "$@"
-}
-
-pass() { echo "  PASS: $1"; }
-fail() { echo "FAIL: $1"; exit 1; }
 
 # ---- fetch-subs with base64 body ----
 echo "-- fetch-subs decodes base64 body and writes sub_<name>.txt"

@@ -248,6 +248,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
   export APP_ROOT APP_SCRIPTS APP_OUT APP_NAME APP_DESC APP_DEPENDS \
          I18N_ROOT I18N_SCRIPTS I18N_OUT I18N_NAME I18N_DESC I18N_DEPENDS \
          APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER
+  # shellcheck disable=SC2016
   unshare -r sh -c '
     chown -R 0:0 "$APP_ROOT" "$APP_SCRIPTS" "$I18N_ROOT" "$I18N_SCRIPTS"
     "$APK_BIN" mkpkg \
@@ -271,6 +272,7 @@ else
   export APP_ROOT APP_SCRIPTS APP_OUT APP_NAME APP_DESC APP_DEPENDS \
          I18N_ROOT I18N_SCRIPTS I18N_OUT I18N_NAME I18N_DESC I18N_DEPENDS \
          APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER
+  # shellcheck disable=SC2016
   fakeroot sh -c '
     chown -R 0:0 "$APP_ROOT" "$APP_SCRIPTS" "$I18N_ROOT" "$I18N_SCRIPTS"
     "$APK_BIN" mkpkg \

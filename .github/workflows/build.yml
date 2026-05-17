@@ -64,6 +64,12 @@ jobs:
       - name: Run tests/run.sh
         run: sh tests/run.sh
 
+      - name: shellcheck
+        run: |
+          shellcheck tests/*.sh scripts/*.sh \
+            luci-app-singbox-ui/root/etc/init.d/singbox-ui \
+            luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui
+
   build:
     name: Build OpenWrt packages (apk)
     runs-on: ubuntu-latest
