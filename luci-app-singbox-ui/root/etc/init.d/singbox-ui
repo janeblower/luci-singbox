@@ -10,9 +10,24 @@ NFTABLES_UC=/usr/share/singbox-ui/nftables.uc
 
 start_service() {
 	mkdir -p /tmp/singbox-ui
-	ucode "$SUBSCRIPTION_UC" fetch-subs
-	ucode "$SUBSCRIPTION_UC" fetch-rulesets
+
+	# Always try to refresh on (re)start, with short curl timeouts so boot
+	# stays snappy. subscription.uc keeps prior sub_*.txt / rs_*.json files
+	# untouched on failure, so generate.uc falls back to the cache.
+	SINGBOX_BOOT_FETCH=1 ucode "$SUBSCRIPTION_UC" fetch-subs &
+	SINGBOX_BOOT_FETCH=1 ucode "$SUBSCRIPTION_UC" fetch-rulesets &
+	wait
+
 	ucode "$GENERATE_UC"
+
+	# If neither a fresh download nor a cached config produced anything,
+	# refuse to start; cron will re-run subscription.uc in ≤30 min and call
+	# `reload`, which triggers start_service again.
+	if [ ! -s /tmp/singbox-ui.json ]; then
+		logger -t singbox-ui "refusing to start: no cached config and fetch failed"
+		return 1
+	fi
+
 	[ "$(uci -q get singbox-ui.tproxy.enabled)" = "1" ] && \
 		ucode "$NFTABLES_UC" apply
 
