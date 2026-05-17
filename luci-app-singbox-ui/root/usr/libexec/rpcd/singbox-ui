@@ -8,7 +8,7 @@
 //   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
 //
 // Env overrides (used by tests):
-//   NFTABLES_CMD GENERATE_UC SINGBOX_INIT REFRESH_SH SINGBOX_TMP SINGBOX_CONFIG
+//   NFTABLES_CMD GENERATE_UC SINGBOX_INIT SUBSCRIPTION_UC SINGBOX_TMP SINGBOX_CONFIG
 
 'use strict';
 
@@ -17,7 +17,7 @@ let fs = require("fs");
 const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode /usr/share/singbox-ui/nftables.uc";
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
 const SINGBOX_INIT = getenv("SINGBOX_INIT") || "/etc/init.d/singbox-ui";
-const REFRESH_SH   = getenv("REFRESH_SH")   || "/usr/share/singbox-ui/subscription.uc";
+const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subscription.uc";
 const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 
@@ -118,7 +118,7 @@ function call_refresh() {
 		emit_err(`invalid what: ${what}`);
 		return;
 	}
-	if (run(["ucode", REFRESH_SH, "refresh", what, "force"])) emit_ok();
+	if (run(["ucode", SUBSCRIPTION_UC, "refresh", what, "force"])) emit_ok();
 	else emit_err(`refresh ${what} failed`);
 }
 
