@@ -141,6 +141,11 @@ function build_ruleset(port, v4, v6, iface) {
 	let rules = load_rs_rules();
 
 	let buf = [];
+	// Atomic transaction: `add` is idempotent (creates the table if missing),
+	// `delete` then removes it within the same nft -f transaction, and the
+	// trailing `table {...}` re-creates it. nft applies all three atomically.
+	push(buf, "add table inet singbox_ui\n");
+	push(buf, "delete table inet singbox_ui\n");
 	push(buf, "table inet singbox_ui {\n");
 
 	for (let r in rules) {
@@ -202,11 +207,9 @@ function cmd_apply(cur) {
 
 	let ruleset = build_ruleset(port, v4, v6, iface);
 
-	// Atomic-ish replace: delete-then-create. Matches prior bash behaviour.
-	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
-
+	// Atomic replace handled inside the emitted ruleset (add+delete+table).
 	// Write to a temp file and `nft -f path`. Avoids fs.popen write-mode
-	// quirks across ucode versions; mirrors what nftables.sh did effectively.
+	// quirks across ucode versions.
 	fs.mkdir(TMPDIR, 0o755);
 	let tmp = `${TMPDIR}/nftables.in`;
 	let fd = fs.open(tmp, "w");

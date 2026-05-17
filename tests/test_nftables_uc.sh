@@ -107,4 +107,17 @@ echo "$out" | grep -q "table inet singbox_ui" || fail "bad: table still emitted"
 rm /tmp/singbox-ui/rs_uctest_bad.json
 pass "malformed JSON skipped"
 
+# ---- emitted ruleset prefixes table with atomic transaction (add/delete/table) ----
+echo "-- atomic replace: 'add table' + 'delete table' prelude before 'table {' declaration"
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+add_ln=$(printf    "%s\n" "$out" | grep -n '^add table inet singbox_ui'    | head -n1 | cut -d: -f1)
+delete_ln=$(printf "%s\n" "$out" | grep -n '^delete table inet singbox_ui' | head -n1 | cut -d: -f1)
+table_ln=$(printf  "%s\n" "$out" | grep -n '^table inet singbox_ui {'      | head -n1 | cut -d: -f1)
+[ -n "$add_ln"    ] || fail "no 'add table inet singbox_ui' prelude"
+[ -n "$delete_ln" ] || fail "no 'delete table inet singbox_ui' prelude"
+[ -n "$table_ln"  ] || fail "no 'table inet singbox_ui {' declaration"
+[ "$add_ln"    -lt "$delete_ln" ] || fail "add (line $add_ln) must precede delete (line $delete_ln)"
+[ "$delete_ln" -lt "$table_ln"  ] || fail "delete (line $delete_ln) must precede table { (line $table_ln)"
+pass "atomic prelude present (add=$add_ln, delete=$delete_ln, table={=$table_ln)"
+
 echo "OK"
