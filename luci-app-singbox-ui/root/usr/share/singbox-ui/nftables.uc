@@ -221,10 +221,25 @@ function cmd_apply(cur) {
 	// Write to a temp file and `nft -f path`. Avoids fs.popen write-mode
 	// quirks across ucode versions.
 	fs.mkdir(TMPDIR, 0o755);
-	let tmp = `${TMPDIR}/nftables.in`;
+
+	// Use mktemp so concurrent applies (cron + UI button) don't clobber
+	// each other's scratch file mid-write.
+	let proc = fs.popen(`mktemp -p ${TMPDIR} nftables.XXXXXX`, "r");
+	if (!proc) {
+		log_err("nftables: mktemp failed to spawn");
+		return 1;
+	}
+	let tmp = trim(proc.read("all") || "");
+	proc.close();
+	if (length(tmp) === 0) {
+		log_err("nftables: mktemp returned empty path");
+		return 1;
+	}
+
 	let fd = fs.open(tmp, "w");
 	if (!fd) {
 		log_err(`nftables: cannot open ${tmp}`);
+		fs.unlink(tmp);
 		return 1;
 	}
 	fd.write(ruleset);
