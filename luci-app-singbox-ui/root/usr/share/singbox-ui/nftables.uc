@@ -33,6 +33,17 @@ function as_array(v) {
 	return [v];
 }
 
+// set_name_for(name, idx, family) — nft set names are capped at 31 bytes.
+// When the canonical `rs_${name}_${idx}_${family}` exceeds that, replace
+// the user-provided name segment with a 12-hex-char md5 prefix. The hash
+// is deterministic so set names stay stable across runs.
+function set_name_for(name, idx, family) {
+	let canon = `rs_${name}_${idx}_${family}`;
+	if (length(canon) <= 31) return canon;
+	let h = substr(hexenc(md5(name)), 0, 12);
+	return `rs_${h}_${idx}_${family}`;
+}
+
 // read_json(path) — parse a JSON file. Returns null on missing file or parse
 // failure. Used for rs_*.json caches that may be partial/corrupt.
 function read_json(path) {
@@ -132,7 +143,7 @@ function emit_set(set_name, family, cidrs) {
 
 // emit_rs_rule(name, idx, family, l4, port_e) — single marking rule line.
 function emit_rs_rule(name, idx, family, l4, port_e) {
-	let set_name = `rs_${name}_${idx}_${family}`;
+	let set_name = set_name_for(name, idx, family);
 	let ip_kw = (family === "v6") ? "ip6" : "ip";
 	return `\t\t${ip_kw} daddr @${set_name} ${l4}${port_e} ct state new meta mark set 0x1\n`;
 }
@@ -149,8 +160,8 @@ function build_ruleset(port, v4, v6, iface) {
 	push(buf, "table inet singbox_ui {\n");
 
 	for (let r in rules) {
-		if (length(r.v4)) push(buf, emit_set(`rs_${r.name}_${r.idx}_v4`, "v4", r.v4));
-		if (length(r.v6)) push(buf, emit_set(`rs_${r.name}_${r.idx}_v6`, "v6", r.v6));
+		if (length(r.v4)) push(buf, emit_set(set_name_for(r.name, r.idx, "v4"), "v4", r.v4));
+		if (length(r.v6)) push(buf, emit_set(set_name_for(r.name, r.idx, "v6"), "v6", r.v6));
 	}
 
 	push(buf, "\tchain prerouting_mark {\n");

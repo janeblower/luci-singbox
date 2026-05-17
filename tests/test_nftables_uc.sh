@@ -121,4 +121,23 @@ table_ln=$(printf  "%s\n" "$out" | grep -n '^table inet singbox_ui {'      | hea
 [ "$delete_ln" -lt "$table_ln"  ] || fail "delete (line $delete_ln) must precede table { (line $table_ln)"
 pass "atomic prelude present (add=$add_ln, delete=$delete_ln, table={=$table_ln)"
 
+# ---- long ruleset name → hashed set name ----
+echo "-- long ruleset name produces hashed set name ≤ 31 bytes"
+long_name="extremelyverylongnamemorethanthirtybytes"
+cat >/tmp/singbox-ui/rs_${long_name}.json <<'JSON'
+{ "rules": [ { "ip_cidr": "10.0.0.0/8" } ] }
+JSON
+out=$(emit)
+# Every emitted `set rs_...` name must fit nft's 31-byte limit.
+echo "$out" | awk '/^[[:space:]]*set rs_/ {print $2}' | while read -r nm; do
+    if [ "${#nm}" -gt 31 ]; then
+        echo "FAIL: nft set name '$nm' is ${#nm} bytes (max 31)"
+        exit 1
+    fi
+done
+echo "$out" | grep -qE '^[[:space:]]*set rs_[a-f0-9]{12}_0_v4' \
+    || { echo "FAIL: long name not hashed"; echo "$out"; exit 1; }
+rm -f /tmp/singbox-ui/rs_${long_name}.json
+pass "long name hashed"
+
 echo "OK"
