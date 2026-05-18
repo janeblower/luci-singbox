@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install host tooling
         run: |
@@ -67,7 +67,7 @@ jobs:
       SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           # Full history so `git rev-list --count HEAD` produces a
           # strictly-monotonic release number. Shallow clones report 1 on
@@ -84,7 +84,7 @@ jobs:
       # already built). On cache hit the script does no I/O work — straight to
       # assembling the package and calling apk mkpkg.
       - name: Cache OpenWrt SDK
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cache/luci-app-singbox-ui/openwrt-sdk
@@ -128,7 +128,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Upload as workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: luci-app-singbox-ui-${{ steps.version.outputs.version }}
           path: dist/*.apk
