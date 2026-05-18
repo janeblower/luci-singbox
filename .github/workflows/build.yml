@@ -36,17 +36,20 @@ jobs:
       # Everything else runs inside the OpenWrt rootfs that matches the target
       # release: ships ucode + ucode-mod-{fs,uci,...}, uci, nft, pgrep — the
       # exact toolset the .uc scripts and rpcd handler use in production.
+      # Extra apk packages inside the container:
+      #   jq             - rpcd handler test parses JSON responses
+      #   coreutils-stat - test_subscription_uc uses `stat -c %Y`; the busybox
+      #                    stat applet is not built into this rootfs.
       - name: Run tests inside OpenWrt 25.12.3 rootfs
         run: |
           docker run --rm \
             -v "$PWD:/work" -w /work \
             openwrt/rootfs:x86_64-25.12.3 \
-            sh -c 'set -e
+            sh -ec '
               apk update >/dev/null
-              # jq: rpcd handler test; coreutils-stat: test_subscription_uc uses
-              # `stat -c %Y` (busybox stat applet isn't built into this rootfs).
               apk add --no-cache jq coreutils-stat >/dev/null
-              sh tests/run.sh'
+              sh tests/run.sh
+            '
 
       - name: shellcheck
         run: |
