@@ -135,7 +135,7 @@ echo "$out" | awk '/^[[:space:]]*set rs_/ {print $2}' | while read -r nm; do
         exit 1
     fi
 done
-echo "$out" | grep -qE '^[[:space:]]*set rs_[a-f0-9]{12}_0_v4' \
+echo "$out" | grep -qE '^[[:space:]]*set rs_[a-f0-9]{8}_0_v4' \
     || { echo "FAIL: long name not hashed"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_${long_name}.json
 pass "long name hashed"

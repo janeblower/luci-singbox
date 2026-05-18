@@ -36,25 +36,26 @@ printf "%s\n" "$out" | jq -e '.refresh.what'    >/dev/null || { echo "FAIL: miss
 echo "-- call generate dispatches to generate.uc"
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
-cat >"$tmpdir/ucode" <<'EOF'
+# Stubs record argv to a sentinel file because run() redirects stdout/stderr.
+cat >"$tmpdir/ucode" <<EOF
 #!/bin/sh
-echo "called ucode with: $*" >&2
+echo "called ucode with: \$*" >> "$tmpdir/ucode.log"
 echo "OK"
 EOF
 chmod +x "$tmpdir/ucode"
-out=$(echo '{}' | PATH="$tmpdir:$PATH" run_h call generate 2>"$tmpdir/err")
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: generate did not return ok"; cat "$tmpdir/err"; exit 1; }
-grep -q "generate.uc" "$tmpdir/err" || { echo "FAIL: generate.uc not invoked"; cat "$tmpdir/err"; exit 1; }
+out=$(echo '{}' | PATH="$tmpdir:$PATH" run_h call generate)
+printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: generate did not return ok"; cat "$tmpdir/ucode.log" 2>/dev/null; exit 1; }
+grep -q "generate.uc" "$tmpdir/ucode.log" || { echo "FAIL: generate.uc not invoked"; cat "$tmpdir/ucode.log" 2>/dev/null; exit 1; }
 
 echo "-- call nftables apply dispatches to NFTABLES_CMD"
-cat >"$tmpdir/nftables.sh" <<'EOF'
+cat >"$tmpdir/nftables.sh" <<EOF
 #!/bin/sh
-echo "called nftables with: $*" >&2
+echo "called nftables with: \$*" >> "$tmpdir/nftables.log"
 EOF
 chmod +x "$tmpdir/nftables.sh"
-out=$(echo '{"action":"apply"}' | NFTABLES_CMD="$tmpdir/nftables.sh" run_h call nftables 2>"$tmpdir/err2")
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: nftables apply did not return ok"; cat "$tmpdir/err2"; exit 1; }
-grep -q "called nftables with: apply" "$tmpdir/err2" || { echo "FAIL: nftables.sh not invoked with apply"; cat "$tmpdir/err2"; exit 1; }
+out=$(echo '{"action":"apply"}' | NFTABLES_CMD="$tmpdir/nftables.sh" run_h call nftables)
+printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: nftables apply did not return ok"; cat "$tmpdir/nftables.log" 2>/dev/null; exit 1; }
+grep -q "called nftables with: apply" "$tmpdir/nftables.log" || { echo "FAIL: nftables.sh not invoked with apply"; cat "$tmpdir/nftables.log" 2>/dev/null; exit 1; }
 
 echo "-- call nftables with bad action returns error"
 out=$(echo '{"action":"haxx"}' | NFTABLES_CMD="$tmpdir/nftables.sh" run_h call nftables)
@@ -92,14 +93,56 @@ out=$(echo '{}' | SINGBOX_TMP="$tmpdir/state" run_h call status)
 printf "%s\n" "$out" | jq -e '.subscriptions[0].name == "alpha"' >/dev/null || { echo "FAIL: subscription alpha not found"; exit 1; }
 printf "%s\n" "$out" | jq -e '.rulesets[0].name == "beta"'       >/dev/null || { echo "FAIL: ruleset beta not found"; exit 1; }
 
+echo "-- call status does not leak pgrep stdout (regression: corrupted JSON)"
+# pgrep prints matching PIDs to stdout. is_singbox_running() must redirect that
+# away or ubus parses the leading noise + JSON as garbage and bails with
+# "Invalid argument". Stub pgrep to a noisy child and assert one clean line.
+cat >"$tmpdir/pgrep" <<'EOF'
+#!/bin/sh
+echo "12345"
+echo "stderr-noise" >&2
+exit 0
+EOF
+chmod +x "$tmpdir/pgrep"
+raw=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_TMP=/nonexistent/path run_h call status)
+# Command substitution strips trailing newlines; a clean response is one JSON
+# line, so $raw must contain no embedded newlines. A leaked PID would show up
+# as a line BEFORE the JSON.
+case "$raw" in
+	*"
+"*) echo "FAIL: status output has embedded newline (likely pgrep PID leak); raw=[$raw]"; exit 1 ;;
+esac
+case "$raw" in
+	"{"*) ;;
+	*) echo "FAIL: status output does not start with '{'; raw=[$raw]"; exit 1 ;;
+esac
+printf "%s\n" "$raw" | jq -e '.status == "ok" and .running == true' >/dev/null \
+	|| { echo "FAIL: status not ok or running=true; raw=[$raw]"; exit 1; }
+
+echo "-- call status reports running=false when pgrep finds nothing"
+cat >"$tmpdir/pgrep" <<'EOF'
+#!/bin/sh
+exit 1
+EOF
+chmod +x "$tmpdir/pgrep"
+raw=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_TMP=/nonexistent/path run_h call status)
+printf "%s\n" "$raw" | jq -e '.running == false' >/dev/null \
+	|| { echo "FAIL: running should be false; raw=[$raw]"; exit 1; }
+
 echo "-- call refresh with invalid what returns error"
 out=$(echo '{"what":"haxx"}' | run_h call refresh)
 printf "%s\n" "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: invalid what should return error"; exit 1; }
 
 echo "-- call refresh dispatches to subscription.uc"
-out=$(echo '{"what":"all"}' | PATH="$tmpdir:$PATH" run_h call refresh 2>"$tmpdir/err3")
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: refresh did not return ok"; cat "$tmpdir/err3"; exit 1; }
-grep -q "refresh all force" "$tmpdir/err3" || { echo "FAIL: subscription.uc not invoked with refresh all force"; cat "$tmpdir/err3"; exit 1; }
+# Replace stub from earlier in the file (which writes "OK" not invocation log).
+cat >"$tmpdir/ucode" <<EOF
+#!/bin/sh
+echo "called ucode with: \$*" >> "$tmpdir/refresh.log"
+EOF
+chmod +x "$tmpdir/ucode"
+out=$(echo '{"what":"all"}' | PATH="$tmpdir:$PATH" run_h call refresh)
+printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: refresh did not return ok"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
+grep -q "refresh all force" "$tmpdir/refresh.log" || { echo "FAIL: subscription.uc not invoked with refresh all force"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
 
 echo "-- call with unknown method returns error"
 out=$(echo '{}' | run_h call frobnicate)

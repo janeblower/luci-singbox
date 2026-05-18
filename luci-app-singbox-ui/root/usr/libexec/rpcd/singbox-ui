@@ -66,8 +66,11 @@ function run(cmd, ...extra) {
 	return system(shcmd) === 0;
 }
 
+// run() — never bypass it for child commands. The array form of system()
+// inherits this process's stdout/stderr, so a chatty child (pgrep prints
+// matching PIDs) would corrupt the JSON response that rpcd parses.
 function is_singbox_running() {
-	return system(["pgrep", "-f", "sing-box run"]) === 0;
+	return run(["pgrep", "-f", "sing-box run"]);
 }
 
 function list_files_with_mtime(dir, prefix, suffix) {
