@@ -12,7 +12,10 @@ fi
 # (#!/usr/bin/ucode) is correct for the OpenWrt target but absent on the dev
 # box, so we invoke it explicitly through $UCODE_BIN.
 if command -v ucode >/dev/null 2>&1; then
-	UCODE_BIN=ucode
+	# Resolve to an absolute path: this test stubs `ucode` in $tmpdir via PATH
+	# to spy on child invocations, and we mustn't let that stub catch the
+	# top-level interpreter that's running the rpcd handler itself.
+	UCODE_BIN=$(command -v ucode)
 	UCODE_LIB_FLAGS=""
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
 	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"

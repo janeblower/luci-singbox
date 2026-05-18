@@ -94,6 +94,9 @@ function load_rs_rules() {
 		let doc = read_json(`${TMPDIR}/${fname}`);
 		if (doc == null || type(doc.rules) !== "array") continue;
 
+		// idx mirrors the rule's position in the source array, including
+		// skipped (domain-only) entries — so set names stay stable when a
+		// user adds/removes a domain rule earlier in the list.
 		let idx = 0;
 		for (let rule in doc.rules) {
 			if (rule == null || rule.ip_cidr == null) { idx++; continue; }

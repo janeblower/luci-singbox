@@ -8,9 +8,18 @@ if [ ! -f "$JS" ]; then
   echo "FAIL: $JS not present"; exit 1
 fi
 
+# Skip cleanly inside containers (e.g. OpenWrt rootfs) that don't ship node.
+if ! command -v node >/dev/null 2>&1; then
+  echo "SKIP: node not available"
+  exit 0
+fi
+
 # LuCI views are fragments — top-level `return` is invalid in standalone JS.
-# Wrap them in a function for syntax checking.
-tmp=$(mktemp --suffix=.js)
+# Wrap them in a function for syntax checking. busybox mktemp has no --suffix,
+# so create-and-rename to attach the .js extension.
+tmp=$(mktemp)
+mv "$tmp" "$tmp.js"
+tmp="$tmp.js"
 {
   echo "(function () {"
   cat "$JS"

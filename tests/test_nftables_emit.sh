@@ -19,7 +19,8 @@ else
 fi
 
 echo "-- ucode parse check"
-"$UCODE_BIN" -p "$SCRIPT" >/dev/null
+# `-p EXPR` evaluates EXPR; use `-c -o /dev/null FILE` for a compile-only check.
+"$UCODE_BIN" -c -o /dev/null "$SCRIPT"
 
 echo "-- emit produces two chains with correct priorities"
 out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan")
@@ -164,10 +165,12 @@ cat >/tmp/singbox-ui/rs_test_mixed.json <<'JSON'
 }
 JSON
 out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+# rule idx mirrors source position (incl. skipped domain-only), so the
+# ip_cidr rule at array index 1 produces rs_..._1_v4, not _0_.
+echo "$out" | grep -q "set rs_test_mixed_1_v4" \
+	|| { echo "FAIL: mixed — ip_cidr rule (idx 1) not emitted"; echo "$out"; exit 1; }
+# domain_suffix rule (idx 0) must not create a set
 echo "$out" | grep -q "set rs_test_mixed_0_v4" \
-	|| { echo "FAIL: mixed — ip_cidr rule not emitted as first set"; echo "$out"; exit 1; }
-# domain_suffix rule must not create a set
-echo "$out" | grep -q "set rs_test_mixed_1" \
 	&& { echo "FAIL: mixed — domain-only rule produced an unexpected set"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_mixed.json
 

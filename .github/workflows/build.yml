@@ -26,25 +26,27 @@ jobs:
       - name: Install host tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            shellcheck jq nftables \
-            cmake build-essential libjson-c-dev git
+          sudo apt-get install -y --no-install-recommends shellcheck
 
-      # The OpenWrt SDK tarball ships only po2lmo prebuilt under staging_dir;
-      # ucode is package-source only, so we build it from upstream. ~30s in CI.
-      - name: Build & install ucode
+      # node + GNU mktemp on the host runner; skipped inside the container
+      # (OpenWrt rootfs has no node).
+      - name: main.js syntax check (host node)
+        run: sh tests/test_main_js_syntax.sh
+
+      # Everything else runs inside the OpenWrt rootfs that matches the target
+      # release: ships ucode + ucode-mod-{fs,uci,...}, uci, nft, pgrep — the
+      # exact toolset the .uc scripts and rpcd handler use in production.
+      - name: Run tests inside OpenWrt 25.12.3 rootfs
         run: |
-          set -euo pipefail
-          src=/tmp/ucode-src
-          git clone --depth 1 https://github.com/jow-/ucode "$src"
-          cmake -S "$src" -B "$src/build" -DCMAKE_INSTALL_PREFIX=/usr/local
-          cmake --build "$src/build" -j"$(nproc)"
-          sudo cmake --install "$src/build"
-          sudo ldconfig
-          ucode -e 'printf("ucode ok\n")'
-
-      - name: Run tests/run.sh
-        run: sh tests/run.sh
+          docker run --rm \
+            -v "$PWD:/work" -w /work \
+            openwrt/rootfs:x86_64-25.12.3 \
+            sh -c 'set -e
+              apk update >/dev/null
+              # jq: rpcd handler test; coreutils-stat: test_subscription_uc uses
+              # `stat -c %Y` (busybox stat applet isn't built into this rootfs).
+              apk add --no-cache jq coreutils-stat >/dev/null
+              sh tests/run.sh'
 
       - name: shellcheck
         run: |
