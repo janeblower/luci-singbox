@@ -94,4 +94,10 @@ if ensure_section log log; then
 	uci -q commit singbox-ui
 fi
 
+if ensure_section cache cache; then
+	uci -q set singbox-ui.cache.enabled='0'
+	uci -q set singbox-ui.cache.path='/tmp/singbox-ui-cache.db'
+	uci -q commit singbox-ui
+fi
+
 exit 0
