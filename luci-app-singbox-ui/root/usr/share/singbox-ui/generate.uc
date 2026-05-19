@@ -15,29 +15,15 @@ let outbound_mod = require("outbound");
 let route_mod   = require("route");
 let ruleset_mod = require("ruleset");
 let dns_mod     = require("dns");
-
-function get_bool(section, opt) {
-	return uci.get("singbox-ui", section, opt) === "1";
-}
-
-function get_list(section, opt) {
-	let all = uci.get_all("singbox-ui", section);
-	return (all != null) ? (all[opt] ?? []) : [];
-}
+let inbound_mod = require("inbound");
 
 let config = {};
 
 let dns_block = dns_mod.build_dns(uci);
 if (dns_block) config.dns = dns_block;
 
-if (get_bool("tproxy", "enabled")) {
-	let port = +(uci.get("singbox-ui", "tproxy", "port") ?? "7893") || 7893;
-	config.inbounds = [ {
-		type: "tproxy",
-		listen: "::",
-		listen_port: port,
-	} ];
-}
+let in_block = inbound_mod.build_inbounds(uci);
+if (length(in_block)) config.inbounds = in_block;
 
 let outbounds = outbound_mod.build_outbounds(uci);
 if (length(outbounds)) config.outbounds = outbounds;
