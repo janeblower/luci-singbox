@@ -33,7 +33,7 @@ function build_inbounds(cur) {
 		}
 
 		let type = s.expose_type ?? "socks";
-		if (type === "socks") type = "socks5";   // sing-box JSON name
+		// sing-box inbound types: "socks" (not "socks5"), "http", "mixed".
 
 		push(inbounds, {
 			type: type,

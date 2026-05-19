@@ -541,7 +541,7 @@ config outbound 'p'
 "
 SINGBOX_IFACE_br_lan='192.168.1.1' run_gen
 check "exposed tag"        '"tag": "in_p"'           "$TMPDIR/out.json"
-check "exposed type socks" '"type": "socks5"'        "$TMPDIR/out.json"
+check "exposed type socks" '"type": "socks"'          "$TMPDIR/out.json"
 check "exposed listen ip"  '"listen": "192.168.1.1"' "$TMPDIR/out.json"
 check "exposed port"       '"listen_port": 1080'     "$TMPDIR/out.json"
 # Route rule binds inbound to outbound — search for the line pairing.
