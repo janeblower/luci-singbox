@@ -308,6 +308,61 @@ function buildRouteDefaultMap() {
 	return m;
 }
 
+function buildGeneralMap() {
+	var m = new form.Map('singbox-ui', _('General'),
+		_('Global sing-box settings: outbound DNS, cache file, log.'));
+
+	var s, o;
+
+	// -- DNS Outbound --
+	s = m.section(form.NamedSection, 'dns_outbound', 'dns_outbound', _('DNS Outbound'));
+	s.anonymous = true;
+	o = s.option(form.Flag, 'enabled', _('Enable'));
+	o.rmempty = false;
+	o = s.option(form.Value, 'address', _('DNS address'));
+	o.placeholder = '8.8.8.8';
+	o.depends('enabled', '1');
+	o = s.option(form.ListValue, 'detour', _('Detour'));
+	o.depends('enabled', '1');
+	o.load = function (section_id) {
+		this.keylist = [];
+		this.vallist = [];
+		this.value('direct', _('Direct'));
+		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
+			this.value(sec['.name'], sec['.name']);
+		}.bind(this));
+		return form.ListValue.prototype.load.apply(this, arguments);
+	};
+
+	// -- Cache --
+	s = m.section(form.NamedSection, 'cache', 'cache', _('Cache file'));
+	s.anonymous = true;
+	o = s.option(form.Flag, 'enabled', _('Enable'));
+	o.rmempty = false;
+	o = s.option(form.Flag, 'store_fakeip', _('Store FakeIP mappings'));
+	o.depends('enabled', '1');
+	o = s.option(form.Value, 'path', _('Path'));
+	o.placeholder = '/tmp/singbox-ui-cache.db';
+	o.depends('enabled', '1');
+
+	// -- Log --
+	s = m.section(form.NamedSection, 'log', 'log', _('Log'));
+	s.anonymous = true;
+	o = s.option(form.Flag, 'enabled', _('Enable'));
+	o.default = '1';
+	o.rmempty = false;
+	o = s.option(form.ListValue, 'level', _('Level'));
+	['trace','debug','info','warn','error','fatal','panic'].forEach(function (lv) {
+		o.value(lv, lv);
+	});
+	o.default = 'info';
+	o.depends('enabled', '1');
+	o = s.option(form.Value, 'output', _('Output file (empty = procd stdout)'));
+	o.depends('enabled', '1');
+
+	return m;
+}
+
 function wireTabs(root, headerSelector, paneByTab, defaultTab) {
 	var headerLis = root.querySelectorAll(headerSelector + ' > li');
 	function activate(tab) {
@@ -428,8 +483,9 @@ return view.extend({
 		var mRulesets     = buildRulesetsMap();
 		var mRouteRules   = buildRouteRulesMap();
 		var mRouteDefault = buildRouteDefaultMap();
+		var mGeneral      = buildGeneralMap();
 
-		self._maps = [ mInput, mOutbounds, mRulesets, mRouteRules, mRouteDefault ];
+		self._maps = [ mInput, mOutbounds, mRulesets, mRouteRules, mRouteDefault, mGeneral ];
 
 		return Promise.all(self._maps.map(function (m) { return m.render(); }))
 		.then(function (nodes) {
@@ -438,6 +494,7 @@ return view.extend({
 			var rulesetsNode   = nodes[2];
 			var routerulesNode = nodes[3];
 			var routedefNode   = nodes[4];
+			var generalNode    = nodes[5];
 
 			var statusHolder = E('div', { 'class': 'sb-status', 'style': 'margin:.5em 0;padding:.5em;border:1px solid #ddd;border-radius:4px' });
 			var actionBar    = renderActionBar(statusHolder);
@@ -459,11 +516,13 @@ return view.extend({
 				actionBar,
 				statusHolder,
 				E('ul', { 'class': 'cbi-tabmenu sb-tab-header' }, [
-					E('li', { 'data-tab': 'input'  }, _('Input')),
-					E('li', { 'data-tab': 'output' }, _('Output'))
+					E('li', { 'data-tab': 'input'   }, _('Input')),
+					E('li', { 'data-tab': 'output'  }, _('Output')),
+					E('li', { 'data-tab': 'general' }, _('General'))
 				]),
 				inputNode,
-				outputWrap
+				outputWrap,
+				generalNode
 			]);
 
 			setTimeout(function () {
@@ -474,8 +533,9 @@ return view.extend({
 					routedef:   routedefNode
 				}, 'outbounds');
 				wireTabs(root, '.sb-tab-header', {
-					input:  inputNode,
-					output: outputWrap
+					input:   inputNode,
+					output:  outputWrap,
+					general: generalNode
 				}, 'input');
 				renderStatusPanel(statusHolder);
 			}, 0);

@@ -73,4 +73,10 @@ grep -q "handleSaveApply"  "$JS" || { echo "FAIL: no handleSaveApply"; exit 1; }
 grep -q "ui.changes.apply" "$JS" || { echo "FAIL: no ui.changes.apply call (needed for /admin/uci/apply_rollback)"; exit 1; }
 grep -q "'enabled'"        "$JS" || { echo "FAIL: no enabled flag"; exit 1; }
 
+echo "-- references General tab sections"
+grep -q "'dns_outbound'"        "$JS" || { echo "FAIL: no dns_outbound section type"; exit 1; }
+grep -q "'cache'"               "$JS" || { echo "FAIL: no cache section type"; exit 1; }
+grep -q "'log'"                 "$JS" || { echo "FAIL: no log section type"; exit 1; }
+grep -q "data-tab.*general"     "$JS" || { echo "FAIL: no general tab marker"; exit 1; }
+
 echo "OK"
