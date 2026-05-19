@@ -462,4 +462,55 @@ run_gen
 check "dns address dot"  '"address": "https://1.1.1.1/dns-query"' "$TMPDIR/out.json"
 check "dns detour out"   '"detour": "my_vless"'                   "$TMPDIR/out.json"
 
+echo "-- hijack_dns=0 → no hijack rule"
+write_cfg "
+config tproxy 'tproxy'
+	option enabled '1'
+	option hijack_dns '0'
+"
+run_gen
+grep -q '"action": "hijack-dns"' "$TMPDIR/out.json" \
+    && { echo "FAIL: hijack-dns rule emitted with flag off"; exit 1; }
+echo "  PASS: no hijack rule when flag off"
+
+echo "-- hijack_dns=1 → first route.rule is {protocol:dns, action:hijack-dns}"
+write_cfg "
+config tproxy 'tproxy'
+	option enabled '1'
+	option hijack_dns '1'
+
+config outbound 'p'
+	option proxy_type 'interface'
+	option interface 'eth0'
+
+config ruleset 'cn'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/cn.srs'
+
+config route_rule 'r1'
+	option enabled '1'
+	list ruleset 'cn'
+	option action 'direct'
+"
+run_gen
+check "hijack protocol dns"   '"protocol": "dns"'        "$TMPDIR/out.json"
+check "hijack action"         '"action": "hijack-dns"'   "$TMPDIR/out.json"
+# Hijack must be FIRST. Find both lines and compare line numbers.
+# Use the rule-level "rule_set": (indented inside a rule object) not the top-level route rule_set array.
+hijack_ln=$(grep -n '"action": "hijack-dns"' "$TMPDIR/out.json" | head -n1 | cut -d: -f1)
+other_ln=$(grep -n '"outbound": "direct"' "$TMPDIR/out.json" | head -n1 | cut -d: -f1)
+[ -n "$hijack_ln" ] && [ -n "$other_ln" ] && [ "$hijack_ln" -lt "$other_ln" ] \
+    || { echo "FAIL: hijack rule must precede rule_set rules (hijack@$hijack_ln, other@$other_ln)"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: hijack rule is first"
+
+echo "-- hijack_dns=1 even without tproxy.enabled still works"
+write_cfg "
+config tproxy 'tproxy'
+	option enabled '0'
+	option hijack_dns '1'
+"
+run_gen
+check "hijack rule still present" '"action": "hijack-dns"' "$TMPDIR/out.json"
+
 echo "OK"

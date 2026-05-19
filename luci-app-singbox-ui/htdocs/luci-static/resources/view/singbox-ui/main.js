@@ -70,6 +70,9 @@ function buildInputMap() {
 	o = s.option(form.Value, 'port', _('Port'));
 	o.datatype = 'port';
 	o.placeholder = '7893';
+	o = s.option(form.Flag, 'hijack_dns', _('Hijack DNS'));
+	o.default = '0';
+	o.rmempty = false;
 
 	return m;
 }

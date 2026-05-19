@@ -1,5 +1,7 @@
 // lib/route.uc — sing-box `route.rules` and final outbound; reports referenced rulesets.
 
+let helpers = require("helpers");
+
 // build_route_rules(cur) -> { rules, final, referenced }
 //   rules:      array of route.rule objects (rule_set / inbound / ... matched to outbound)
 //   final:      string tag of the final outbound, or null
@@ -9,6 +11,9 @@ function build_route_rules(cur) {
 	let rules = [];
 	let referenced = [];
 	let seen = {};
+
+	if (helpers.get_bool(cur, "tproxy", "hijack_dns"))
+		push(rules, { protocol: "dns", action: "hijack-dns" });
 
 	// Build a quick name→enabled lookup for rulesets. Disabled rulesets are
 	// dropped from each route_rule's `rule_set` list; if that empties the
