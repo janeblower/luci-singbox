@@ -100,4 +100,11 @@ if ensure_section cache cache; then
 	uci -q commit singbox-ui
 fi
 
+if ensure_section dns_outbound dns_outbound; then
+	uci -q set singbox-ui.dns_outbound.enabled='0'
+	uci -q set singbox-ui.dns_outbound.address='8.8.8.8'
+	uci -q set singbox-ui.dns_outbound.detour='direct'
+	uci -q commit singbox-ui
+fi
+
 exit 0

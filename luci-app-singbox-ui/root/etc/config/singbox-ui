@@ -33,3 +33,8 @@ config log 'log'
 config cache 'cache'
 	option enabled '0'
 	option path '/tmp/singbox-ui-cache.db'
+
+config dns_outbound 'dns_outbound'
+	option enabled '0'
+	option address '8.8.8.8'
+	option detour 'direct'

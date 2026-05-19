@@ -422,4 +422,44 @@ config cache 'cache'
 run_gen
 check "default cache path" '"path": "/tmp/singbox-ui-cache.db"' "$TMPDIR/out.json"
 
+echo "-- dns_outbound disabled → no dns.servers"
+write_cfg "
+config dns_outbound 'dns_outbound'
+	option enabled '0'
+"
+run_gen
+grep -q '"servers":' "$TMPDIR/out.json" \
+	&& { echo "FAIL: dns.servers emitted with dns_outbound disabled"; exit 1; }
+echo "  PASS: no servers when disabled"
+
+echo "-- dns_outbound enabled with detour=direct"
+write_cfg "
+config dns_outbound 'dns_outbound'
+	option enabled '1'
+	option address '1.1.1.1'
+	option detour 'direct'
+"
+run_gen
+check "dns servers"   '"servers":'           "$TMPDIR/out.json"
+check "dns tag"       '"tag": "out_dns"'     "$TMPDIR/out.json"
+check "dns address"   '"address": "1.1.1.1"' "$TMPDIR/out.json"
+check "dns detour"    '"detour": "direct"'   "$TMPDIR/out.json"
+check "dns final"     '"final": "out_dns"'   "$TMPDIR/out.json"
+
+echo "-- dns_outbound with detour to a named outbound"
+write_cfg "
+config outbound 'my_vless'
+	option enabled '1'
+	option proxy_type 'url'
+	option proxy_url 'vless://uuid@host:443?security=tls'
+
+config dns_outbound 'dns_outbound'
+	option enabled '1'
+	option address 'https://1.1.1.1/dns-query'
+	option detour 'my_vless'
+"
+run_gen
+check "dns address dot"  '"address": "https://1.1.1.1/dns-query"' "$TMPDIR/out.json"
+check "dns detour out"   '"detour": "my_vless"'                   "$TMPDIR/out.json"
+
 echo "OK"

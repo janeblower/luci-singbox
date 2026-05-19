@@ -1,8 +1,7 @@
-// lib/dns.uc — sing-box `dns` config: fakeip, dns rules. (Outbound DNS server added in Phase 2.)
+// lib/dns.uc — sing-box `dns` config: fakeip, outbound DNS server, DNS rules.
 
 let helpers = require("helpers");
 
-// build_dns_rules(cur) — rulesets with dns_fakeip=1 produce DNS routing entries.
 function build_dns_rules(cur) {
 	let rules = [];
 	cur.foreach("singbox-ui", "ruleset", function(section) {
@@ -29,6 +28,19 @@ function build_dns(cur) {
 		if (v4) fakeip.inet4_range = v4;
 		if (v6) fakeip.inet6_range = v6;
 		out.fakeip = fakeip;
+	}
+
+	let dout = cur.get_all("singbox-ui", "dns_outbound");
+	if (dout != null && dout.enabled === "1") {
+		let addr = dout.address;
+		if (addr != null && length(addr)) {
+			out.servers = [ {
+				tag:     "out_dns",
+				address: addr,
+				detour:  dout.detour ?? "direct",
+			} ];
+			out.final = "out_dns";
+		}
 	}
 
 	let rules = build_dns_rules(cur);
