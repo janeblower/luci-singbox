@@ -17,28 +17,10 @@ const DEFAULT_UA = "Mozilla/5.0";
 
 let fs  = require("fs");
 let uci_mod = require("uci");
+let helpers = require("helpers");
 
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn(msg + "\n"); }
-
-// sq(s) — single-quote escape for /bin/sh. Mirrors the helper in the rpcd
-// handler; duplicated locally to avoid cross-file imports.
-function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
-
-// uci_get_or_empty(cur, section, opt) — never throws, returns "".
-function uci_get_or_empty(cur, section, opt) {
-	let v = cur.get("singbox-ui", section, opt);
-	return (v == null) ? "" : (type(v) === "array" ? (length(v) ? v[0] : "") : v);
-}
-
-// sections_where(cur, opt, value) — list of section names where opt == value.
-function sections_where(cur, opt, value) {
-	let out = [];
-	cur.foreach("singbox-ui", null, function (s) {
-		if (s[opt] === value) push(out, s[".name"]);
-	});
-	return out;
-}
 
 // parallel_download(specs) — kick off multiple curls under /bin/sh and
 // wait for all of them in one transaction. Each spec: {url, outpath, opts}.
@@ -58,7 +40,7 @@ function parallel_download(specs) {
 		if (opts.interface) push(argv, "--interface", opts.interface);
 		push(argv, spec.url);
 		let quoted = [];
-		for (let a in argv) push(quoted, sq(a));
+		for (let a in argv) push(quoted, helpers.sq(a));
 		push(parts, join(" ", quoted) + " &");
 	}
 	push(parts, "wait");
@@ -79,7 +61,7 @@ function try_b64_decode(s) {
 }
 
 function cmd_fetch_subs(cur) {
-	let names = sections_where(cur, "proxy_type", "subscription");
+	let names = helpers.sections_where(cur, "proxy_type", "subscription");
 	if (!length(names)) {
 		log_err("fetch_subs: no subscription outbounds configured");
 		return 0;
@@ -92,19 +74,19 @@ function cmd_fetch_subs(cur) {
 	let specs = [];
 	let meta  = [];   // parallel array: { name, raw_path, out_path }
 	for (let name in names) {
-		if (uci_get_or_empty(cur, name, "enabled") === "0") {
+		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_subs: ${name} disabled, skipping`);
 			continue;
 		}
-		let url = uci_get_or_empty(cur, name, "sub_url");
+		let url = helpers.uci_get_or_empty(cur, name, "sub_url");
 		if (url === "") {
 			log_err(`fetch_subs: ${name} has no sub_url, skipping`);
 			continue;
 		}
-		let via = uci_get_or_empty(cur, name, "sub_update_via");
+		let via = helpers.uci_get_or_empty(cur, name, "sub_update_via");
 		let iface = null;
 		if (via !== "" && via !== "direct") {
-			iface = uci_get_or_empty(cur, via, "interface");
+			iface = helpers.uci_get_or_empty(cur, via, "interface");
 			if (iface === "") {
 				log_err(`fetch_subs: outbound '${via}' has no interface`);
 				continue;
@@ -175,7 +157,7 @@ function detect_format(target, override) {
 }
 
 function cmd_fetch_rulesets(cur) {
-	let names = sections_where(cur, "nft_rules", "1");
+	let names = helpers.sections_where(cur, "nft_rules", "1");
 	if (!length(names)) {
 		log_err("fetch_rulesets: no rule-sets configured (nft_rules=1)");
 		return 0;
@@ -187,15 +169,15 @@ function cmd_fetch_rulesets(cur) {
 	let specs = [];
 	let meta  = [];
 	for (let name in names) {
-		if (uci_get_or_empty(cur, name, "enabled") === "0") {
+		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_rulesets: ${name} disabled, skipping`);
 			continue;
 		}
-		let rs_type = uci_get_or_empty(cur, name, "type");
+		let rs_type = helpers.uci_get_or_empty(cur, name, "type");
 		let raw_path = `${TMPDIR}/rs_${name}.raw`;
 		let out_path = `${TMPDIR}/rs_${name}.json`;
-		let target = (rs_type === "remote") ? uci_get_or_empty(cur, name, "url")
-		             : (rs_type === "local")  ? uci_get_or_empty(cur, name, "path")
+		let target = (rs_type === "remote") ? helpers.uci_get_or_empty(cur, name, "url")
+		             : (rs_type === "local")  ? helpers.uci_get_or_empty(cur, name, "path")
 		             : "";
 		if (target === "") {
 			log_err(`fetch_rulesets: ${name} has no source, skipping`);
@@ -228,7 +210,7 @@ function cmd_fetch_rulesets(cur) {
 			fs.unlink(m.raw_path);
 			continue;
 		}
-		let fmt = detect_format(m.target, uci_get_or_empty(cur, m.name, "format"));
+		let fmt = detect_format(m.target, helpers.uci_get_or_empty(cur, m.name, "format"));
 		if (fmt === "binary") {
 			if (system([SINGBOX, "rule-set", "decompile", m.raw_path, "-o", m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: decompile failed for ${m.name}`);
@@ -258,9 +240,9 @@ function is_stale(path, interval_s, force) {
 }
 
 function any_subs_stale(cur, force) {
-	for (let name in sections_where(cur, "proxy_type", "subscription")) {
-		if (uci_get_or_empty(cur, name, "enabled") === "0") continue;
-		let iv = +uci_get_or_empty(cur, name, "sub_interval");
+	for (let name in helpers.sections_where(cur, "proxy_type", "subscription")) {
+		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
+		let iv = +helpers.uci_get_or_empty(cur, name, "sub_interval");
 		if (iv === 0) iv = 3600;
 		if (is_stale(`${TMPDIR}/sub_${name}.txt`, iv, force)) return true;
 	}
@@ -268,9 +250,9 @@ function any_subs_stale(cur, force) {
 }
 
 function any_rulesets_stale(cur, force) {
-	for (let name in sections_where(cur, "nft_rules", "1")) {
-		if (uci_get_or_empty(cur, name, "enabled") === "0") continue;
-		let iv = +uci_get_or_empty(cur, name, "update_interval");
+	for (let name in helpers.sections_where(cur, "nft_rules", "1")) {
+		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
+		let iv = +helpers.uci_get_or_empty(cur, name, "update_interval");
 		if (iv === 0) iv = 86400;
 		if (is_stale(`${TMPDIR}/rs_${name}.json`, iv, force)) return true;
 	}

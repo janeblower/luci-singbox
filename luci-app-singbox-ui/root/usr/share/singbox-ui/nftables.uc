@@ -15,23 +15,9 @@ const TABLE  = "singbox_ui";
 
 let fs  = require("fs");
 let uci_mod = require("uci");
+let helpers = require("helpers");
 
 function log_err(msg) { warn(msg + "\n"); }
-
-// uci_get_or_empty(cur, section, opt) — never throws, returns "".
-// Mirrors subscription.uc; kept local to avoid cross-file imports.
-function uci_get_or_empty(cur, section, opt) {
-	let v = cur.get("singbox-ui", section, opt);
-	return (v == null) ? "" : (type(v) === "array" ? (length(v) ? v[0] : "") : v);
-}
-
-// as_array(v) — normalises ucode value to an array.
-// null/undefined → []; scalar → [v]; array → v.
-function as_array(v) {
-	if (v == null) return [];
-	if (type(v) === "array") return v;
-	return [v];
-}
 
 // fnv1a32(s) — 32-bit FNV-1a hash, hex-encoded (8 chars). Used to shorten
 // long ruleset names; not a cryptographic primitive. Pure ucode so we don't
@@ -102,14 +88,14 @@ function load_rs_rules() {
 			if (rule == null || rule.ip_cidr == null) { idx++; continue; }
 			let v4 = [];
 			let v6 = [];
-			for (let c in as_array(rule.ip_cidr)) {
+			for (let c in helpers.as_array(rule.ip_cidr)) {
 				let fam = classify_cidr(c);
 				if (fam === "v4") push(v4, c);
 				else if (fam === "v6") push(v6, c);
 			}
 			let network = rule.network ?? "";
 			let ports = [];
-			for (let p in as_array(rule.port_range)) {
+			for (let p in helpers.as_array(rule.port_range)) {
 				if (p == null || p === "") continue;
 				// nft uses '-' for ranges; sing-box uses ':'.
 				push(ports, replace(`${p}`, ":", "-"));
@@ -215,13 +201,13 @@ function cmd_remove() {
 }
 
 function cmd_apply(cur) {
-	let port  = uci_get_or_empty(cur, "tproxy", "port");
+	let port  = helpers.uci_get_or_empty(cur, "tproxy", "port");
 	if (port === "") port = "7893";
-	let iface = uci_get_or_empty(cur, "tproxy", "interface");
+	let iface = helpers.uci_get_or_empty(cur, "tproxy", "interface");
 	if (iface === "") iface = "br-lan";
 
-	let v4 = uci_get_or_empty(cur, "fakeip", "inet4_range");
-	let v6 = uci_get_or_empty(cur, "fakeip", "inet6_range");
+	let v4 = helpers.uci_get_or_empty(cur, "fakeip", "inet4_range");
+	let v6 = helpers.uci_get_or_empty(cur, "fakeip", "inet6_range");
 	let rules = load_rs_rules();
 
 	if (v4 === "" && v6 === "" && !length(rules)) {
