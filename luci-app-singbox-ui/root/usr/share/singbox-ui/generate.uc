@@ -1,8 +1,10 @@
 #!/usr/bin/ucode
-// Read UCI config and write the sing-box config JSON.
+// generate.uc — read UCI and emit the sing-box config JSON. Orchestration only;
+// all section builders live in /usr/share/singbox-ui/lib/*.uc and are loaded
+// via `-L` (set by the init.d, rpcd, and cron wrappers).
 //
-// Env overrides (used by tests / init.d):
-//   SINGBOX_TMPDIR (default /tmp/singbox-ui) — source dir for sub_*.txt
+// Env overrides (tests/init.d):
+//   SINGBOX_TMPDIR (default /tmp/singbox-ui)  — consumed by lib/outbound.uc
 //   SINGBOX_CONFIG (default /tmp/singbox-ui.json) — output path
 //   UCI_CONFIG_DIR — honoured by require("uci").cursor
 
@@ -11,13 +13,14 @@ const CONFIG_OUT = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 let fs  = require("fs");
-let log_mod     = require("log");
-let cache_mod   = require("cache");
+
+let log_mod      = require("log");
+let dns_mod      = require("dns");
+let inbound_mod  = require("inbound");
 let outbound_mod = require("outbound");
-let route_mod   = require("route");
-let ruleset_mod = require("ruleset");
-let dns_mod     = require("dns");
-let inbound_mod = require("inbound");
+let route_mod    = require("route");
+let ruleset_mod  = require("ruleset");
+let cache_mod    = require("cache");
 
 let config = {};
 
@@ -30,10 +33,10 @@ if (dns_block) config.dns = dns_block;
 let in_block = inbound_mod.build_inbounds(uci);
 if (length(in_block)) config.inbounds = in_block;
 
-let outbounds = outbound_mod.build_outbounds(uci);
-if (length(outbounds)) config.outbounds = outbounds;
+let out_block = outbound_mod.build_outbounds(uci);
+if (length(out_block)) config.outbounds = out_block;
 
-let r     = route_mod.build_route_rules(uci);
+let r = route_mod.build_route_rules(uci);
 let rsets = ruleset_mod.build_rule_sets(uci, r.referenced);
 if (length(rsets) || length(r.rules) || r.final) {
 	config.route = {};
@@ -42,8 +45,8 @@ if (length(rsets) || length(r.rules) || r.final) {
 	if (r.final && r.final !== "direct") config.route.final = r.final;
 }
 
-let cache_blk = cache_mod.build_cache(uci);
-if (cache_blk) config.experimental = { cache_file: cache_blk };
+let cache_block = cache_mod.build_cache(uci);
+if (cache_block) config.experimental = { cache_file: cache_block };
 
 let f = fs.open(CONFIG_OUT, "w");
 if (!f) {
