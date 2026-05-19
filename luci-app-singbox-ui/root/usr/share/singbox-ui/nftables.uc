@@ -149,7 +149,17 @@ function emit_rs_rule(name, idx, family, l4, port_e) {
 	return `\t\t${ip_kw} daddr @${set_name} ${l4}${port_e} ct state new meta mark set 0x1\n`;
 }
 
-function build_ruleset(port, v4, v6, iface) {
+function build_ruleset(port, v4, v6, ifaces) {
+	// ifaces is an array of interface names.
+	let iface_expr;
+	if (length(ifaces) === 0)      iface_expr = null;
+	else if (length(ifaces) === 1) iface_expr = sprintf('iifname "%s"', ifaces[0]);
+	else {
+		let quoted = [];
+		for (let i in ifaces) push(quoted, sprintf('"%s"', i));
+		iface_expr = sprintf('iifname { %s }', join(", ", quoted));
+	}
+
 	let rules = load_rs_rules();
 
 	let buf = [];
@@ -167,10 +177,10 @@ function build_ruleset(port, v4, v6, iface) {
 
 	push(buf, "\tchain prerouting_mark {\n");
 	push(buf, "\t\ttype filter hook prerouting priority -150; policy accept;\n\n");
-	if (v4 != null && v4 !== "")
-		push(buf, `\t\tiifname "${iface}" ip  daddr { ${v4} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
-	if (v6 != null && v6 !== "")
-		push(buf, `\t\tiifname "${iface}" ip6 daddr { ${v6} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
+	if (v4 != null && v4 !== "" && iface_expr != null)
+		push(buf, `\t\t${iface_expr} ip  daddr { ${v4} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
+	if (v6 != null && v6 !== "" && iface_expr != null)
+		push(buf, `\t\t${iface_expr} ip6 daddr { ${v6} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
 	for (let r in rules) {
 		let l4 = l4proto_expr(r.network);
 		let pe = port_expr(r.network, r.ports);
@@ -189,8 +199,9 @@ function build_ruleset(port, v4, v6, iface) {
 	return join("", buf);
 }
 
-function cmd_emit(port, v4, v6, iface) {
-	print(build_ruleset(port, v4, v6, iface));
+function cmd_emit(port, v4, v6, iface_str) {
+	let ifaces = (iface_str && length(iface_str)) ? split(iface_str, ",") : [];
+	print(build_ruleset(port, v4, v6, ifaces));
 }
 
 // cmd_apply / cmd_remove come after build_ruleset because ucode does not
@@ -203,8 +214,8 @@ function cmd_remove() {
 function cmd_apply(cur) {
 	let port  = helpers.uci_get_or_empty(cur, "tproxy", "port");
 	if (port === "") port = "7893";
-	let iface = helpers.uci_get_or_empty(cur, "tproxy", "interface");
-	if (iface === "") iface = "br-lan";
+	let ifaces = helpers.get_list(cur, "tproxy", "interface");
+	if (!length(ifaces)) ifaces = [ "br-lan" ];
 
 	let v4 = helpers.uci_get_or_empty(cur, "fakeip", "inet4_range");
 	let v6 = helpers.uci_get_or_empty(cur, "fakeip", "inet6_range");
@@ -216,7 +227,7 @@ function cmd_apply(cur) {
 		return 0;
 	}
 
-	let ruleset = build_ruleset(port, v4, v6, iface);
+	let ruleset = build_ruleset(port, v4, v6, ifaces);
 
 	// Atomic replace handled inside the emitted ruleset (add+delete+table).
 	// Write to a temp file and `nft -f path`. Avoids fs.popen write-mode

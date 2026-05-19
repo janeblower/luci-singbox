@@ -5,7 +5,7 @@ config fakeip 'fakeip'
 
 config tproxy 'tproxy'
 	option enabled '0'
-	option interface 'br-lan'
+	list interface 'br-lan'
 	option port '7893'
 
 config ruleset 'geosite_cn'
