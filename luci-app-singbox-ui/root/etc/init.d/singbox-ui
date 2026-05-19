@@ -7,6 +7,7 @@ STOP=01
 GENERATE_UC=/usr/share/singbox-ui/generate.uc
 SUBSCRIPTION_UC=/usr/share/singbox-ui/subscription.uc
 NFTABLES_UC=/usr/share/singbox-ui/nftables.uc
+UCODE_LIB=/usr/share/singbox-ui/lib
 
 start_service() {
 	mkdir -p /tmp/singbox-ui
@@ -14,11 +15,11 @@ start_service() {
 	# Always try to refresh on (re)start, with short curl timeouts so boot
 	# stays snappy. subscription.uc keeps prior sub_*.txt / rs_*.json files
 	# untouched on failure, so generate.uc falls back to the cache.
-	SINGBOX_BOOT_FETCH=1 ucode "$SUBSCRIPTION_UC" fetch-subs &
-	SINGBOX_BOOT_FETCH=1 ucode "$SUBSCRIPTION_UC" fetch-rulesets &
+	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$SUBSCRIPTION_UC" fetch-subs &
+	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$SUBSCRIPTION_UC" fetch-rulesets &
 	wait
 
-	ucode "$GENERATE_UC"
+	ucode -L "$UCODE_LIB" "$GENERATE_UC"
 
 	# If neither a fresh download nor a cached config produced anything,
 	# refuse to start; cron will re-run subscription.uc in ≤30 min and call
@@ -29,7 +30,7 @@ start_service() {
 	fi
 
 	[ "$(uci -q get singbox-ui.tproxy.enabled)" = "1" ] && \
-		ucode "$NFTABLES_UC" apply
+		ucode -L "$UCODE_LIB" "$NFTABLES_UC" apply
 
 	procd_open_instance
 	procd_set_param command /usr/bin/sing-box run -c /tmp/singbox-ui.json
@@ -38,7 +39,7 @@ start_service() {
 }
 
 stop_service() {
-	ucode "$NFTABLES_UC" remove
+	ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove
 }
 
 reload_config() {

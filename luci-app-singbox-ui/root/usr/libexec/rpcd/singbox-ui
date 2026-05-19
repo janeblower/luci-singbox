@@ -14,10 +14,11 @@
 
 let fs = require("fs");
 
-const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode /usr/share/singbox-ui/nftables.uc";
+const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/nftables.uc";
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
 const SINGBOX_INIT = getenv("SINGBOX_INIT") || "/etc/init.d/singbox-ui";
 const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subscription.uc";
+const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
 const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 
@@ -93,7 +94,7 @@ function list_files_with_mtime(dir, prefix, suffix) {
 
 function call_generate() {
 	drain_stdin();
-	if (run(["ucode", GENERATE_UC])) emit_ok();
+	if (run(["ucode", "-L", UCODE_LIB, GENERATE_UC])) emit_ok();
 	else emit_err("generate.uc failed");
 }
 
@@ -121,7 +122,7 @@ function call_refresh() {
 		emit_err(`invalid what: ${what}`);
 		return;
 	}
-	if (run(["ucode", SUBSCRIPTION_UC, "refresh", what, "force"])) emit_ok();
+	if (run(["ucode", "-L", UCODE_LIB, SUBSCRIPTION_UC, "refresh", what, "force"])) emit_ok();
 	else emit_err(`refresh ${what} failed`);
 }
 

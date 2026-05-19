@@ -23,11 +23,13 @@ cat >"$TMPDIR/bin/ucode" <<'EOF'
 #!/bin/sh
 echo "ucode $*" >>"$UCODE_LOG"
 echo "SINGBOX_BOOT_FETCH=$SINGBOX_BOOT_FETCH" >>"$UCODE_LOG"
-# Simulate generate.uc creating the config when called without args (it's
-# called as `ucode /path/to/generate.uc`).
-case "$1" in
-    */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json ;;
-esac
+# Simulate generate.uc creating the config. The script now calls
+# `ucode -L <lib> /path/to/generate.uc`, so scan all args for generate.uc.
+for _arg in "$@"; do
+    case "$_arg" in
+        */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json; break ;;
+    esac
+done
 exit 0
 EOF
 chmod +x "$TMPDIR/bin/ucode"

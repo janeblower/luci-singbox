@@ -6,10 +6,11 @@ set -e
 # Mirror test_generate.sh: skip if ucode/uci-mod unavailable on dev box.
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS=""
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
 	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
+	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 else
 	echo "SKIP: ucode not available"
 	exit 0

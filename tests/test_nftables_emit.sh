@@ -13,6 +13,7 @@ fi
 # test_generate.sh / test_nftables_uc.sh).
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 else
 	echo "SKIP: ucode not available"
 	exit 0
@@ -23,7 +24,8 @@ echo "-- ucode parse check"
 "$UCODE_BIN" -c -o /dev/null "$SCRIPT"
 
 echo "-- emit produces two chains with correct priorities"
-out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan")
 echo "$out" | grep -q "table inet singbox_ui"     || { echo "FAIL: missing table"; exit 1; }
 echo "$out" | grep -q "chain prerouting_mark"     || { echo "FAIL: missing prerouting_mark chain"; exit 1; }
 echo "$out" | grep -q "chain prerouting_tproxy"   || { echo "FAIL: missing prerouting_tproxy chain"; exit 1; }
@@ -47,7 +49,8 @@ echo "$tproxy_section" | grep -q "iifname"                     && { echo "FAIL: 
 
 echo "-- nft -c accepts the emitted rules"
 tmp=$(mktemp)
-"$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan" > "$tmp"
+# shellcheck disable=SC2086
+"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan" > "$tmp"
 if ! nft -c -f "$tmp" 2>nft.err; then
   if grep -qiE "tproxy|cache initialization failed|operation not permitted|permission denied" nft.err; then
     echo "SKIP: nft -c unavailable in this environment ($(head -n1 nft.err))"
@@ -60,14 +63,16 @@ fi
 rm -f "$tmp" nft.err
 
 echo "-- emit with custom port and interface"
-out=$("$UCODE_BIN" "$SCRIPT" emit 1234 "10.0.0.0/8" "" "eth0")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 1234 "10.0.0.0/8" "" "eth0")
 echo "$out" | grep -q "127.0.0.1:1234"    || { echo "FAIL: wrong port"; exit 1; }
 echo "$out" | grep -q 'iifname "eth0"'    || { echo "FAIL: wrong interface"; exit 1; }
 echo "$out" | grep -q "ip6 daddr"         && { echo "FAIL: ip6 rule emitted for empty v6"; exit 1; }
 
 echo "-- empty rs_*.json cache: output is phase-2-equivalent"
 rm -f /tmp/singbox-ui/rs_*.json 2>/dev/null
-out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "fc00::/18" "br-lan")
 echo "$out" | grep -q "table inet singbox_ui"  || { echo "FAIL: missing table"; exit 1; }
 echo "$out" | grep -q "chain prerouting_mark"  || { echo "FAIL: missing mark chain"; exit 1; }
 echo "$out" | grep -q "set rs_"                && { echo "FAIL: unexpected nfset emitted with empty cache"; exit 1; }
@@ -90,7 +95,8 @@ cat >/tmp/singbox-ui/rs_test_basic.json <<'JSON'
   ]
 }
 JSON
-out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 echo "$out" | grep -q "set rs_test_basic_0_v4"           || { echo "FAIL: missing set definition"; echo "$out"; exit 1; }
 echo "$out" | grep -q "type ipv4_addr"                   || { echo "FAIL: set missing type"; exit 1; }
 echo "$out" | grep -q "flags interval"                   || { echo "FAIL: set missing flags interval"; exit 1; }
@@ -112,7 +118,8 @@ cat >/tmp/singbox-ui/rs_test_tcp.json <<'JSON'
   ]
 }
 JSON
-out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 mark_section=$(echo "$out" | awk '/chain prerouting_mark/,/^[[:space:]]*}/')
 echo "$mark_section" | grep -q "ip daddr @rs_test_tcp_0_v4 meta l4proto tcp" \
 	|| { echo "FAIL: tcp-network rule missing exact l4proto match"; echo "$mark_section"; exit 1; }
@@ -129,7 +136,8 @@ cat >/tmp/singbox-ui/rs_test_port.json <<'JSON'
   ]
 }
 JSON
-out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 echo "$out" | grep -q "ip daddr @rs_test_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new meta mark set 0x1" \
 	|| { echo "FAIL: missing tcp+port_range marking rule"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_port.json
@@ -145,7 +153,8 @@ cat >/tmp/singbox-ui/rs_test_scalar.json <<'JSON'
   ]
 }
 JSON
-out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 echo "$out" | grep -q "set rs_test_scalar_0_v4" \
 	|| { echo "FAIL: scalar ip_cidr — set not emitted"; echo "$out"; exit 1; }
 echo "$out" | grep -q "elements = { 104.16.0.0/12 }" \
@@ -164,7 +173,8 @@ cat >/tmp/singbox-ui/rs_test_mixed.json <<'JSON'
   ]
 }
 JSON
-out=$("$UCODE_BIN" "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 # rule idx mirrors source position (incl. skipped domain-only), so the
 # ip_cidr rule at array index 1 produces rs_..._1_v4, not _0_.
 echo "$out" | grep -q "set rs_test_mixed_1_v4" \

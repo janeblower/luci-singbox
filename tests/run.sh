@@ -9,6 +9,8 @@ cd "$(dirname "$0")/.."
 export UCODE_STUB_DIR
 [ -n "${UCODE_BIN:-}" ] && export UCODE_BIN
 [ -n "${UCODE_LIB_DIR:-}" ] && export UCODE_LIB_DIR
+: "${UCODE_APP_LIB_DIR:=$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+export UCODE_APP_LIB_DIR
 
 echo "==> Shell tests"
 for t in tests/test_*.sh; do
