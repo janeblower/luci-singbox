@@ -11,6 +11,8 @@ const CONFIG_OUT = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 let fs  = require("fs");
+let log_mod     = require("log");
+let cache_mod   = require("cache");
 let outbound_mod = require("outbound");
 let route_mod   = require("route");
 let ruleset_mod = require("ruleset");
@@ -18,6 +20,9 @@ let dns_mod     = require("dns");
 let inbound_mod = require("inbound");
 
 let config = {};
+
+let log_block = log_mod.build_log(uci);
+if (log_block) config.log = log_block;
 
 let dns_block = dns_mod.build_dns(uci);
 if (dns_block) config.dns = dns_block;
@@ -36,6 +41,9 @@ if (length(rsets) || length(r.rules) || r.final) {
 	if (length(r.rules)) config.route.rules    = r.rules;
 	if (r.final && r.final !== "direct") config.route.final = r.final;
 }
+
+let cache_blk = cache_mod.build_cache(uci);
+if (cache_blk) config.experimental = { cache_file: cache_blk };
 
 let f = fs.open(CONFIG_OUT, "w");
 if (!f) {
