@@ -372,4 +372,54 @@ awk '/"log":/,/}/' "$TMPDIR/out.json" | grep -q '"output":' \
     && { echo "FAIL: empty output should not be emitted"; cat "$TMPDIR/out.json"; exit 1; }
 echo "  PASS: empty output omitted"
 
+echo "-- cache.enabled=0 → no experimental block"
+write_cfg "
+config cache 'cache'
+	option enabled '0'
+"
+run_gen
+grep -q '"experimental":' "$TMPDIR/out.json" \
+    && { echo "FAIL: experimental emitted with cache disabled"; exit 1; }
+echo "  PASS: cache disabled → no experimental"
+
+echo "-- cache.enabled=1 with fakeip and store_fakeip"
+write_cfg "
+config fakeip 'fakeip'
+	option enabled '1'
+	option inet4_range '198.18.0.0/15'
+
+config cache 'cache'
+	option enabled '1'
+	option store_fakeip '1'
+	option path '/tmp/test-cache.db'
+"
+run_gen
+check "experimental block" '"experimental":'              "$TMPDIR/out.json"
+check "cache_file"         '"cache_file":'                "$TMPDIR/out.json"
+check "cache enabled"      '"enabled": true'              "$TMPDIR/out.json"
+check "cache path"         '"path": "/tmp/test-cache.db"' "$TMPDIR/out.json"
+check "store_fakeip true"  '"store_fakeip": true'         "$TMPDIR/out.json"
+
+echo "-- store_fakeip suppressed when fakeip disabled"
+write_cfg "
+config fakeip 'fakeip'
+	option enabled '0'
+
+config cache 'cache'
+	option enabled '1'
+	option store_fakeip '1'
+"
+run_gen
+awk '/"cache_file":/,/}/' "$TMPDIR/out.json" | grep -q '"store_fakeip":' \
+    && { echo "FAIL: store_fakeip emitted without fakeip"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: store_fakeip suppressed when fakeip disabled"
+
+echo "-- cache.path defaults when empty"
+write_cfg "
+config cache 'cache'
+	option enabled '1'
+"
+run_gen
+check "default cache path" '"path": "/tmp/singbox-ui-cache.db"' "$TMPDIR/out.json"
+
 echo "OK"

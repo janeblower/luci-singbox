@@ -29,3 +29,7 @@ config route_default 'route_default'
 config log 'log'
 	option enabled '1'
 	option level 'info'
+
+config cache 'cache'
+	option enabled '0'
+	option path '/tmp/singbox-ui-cache.db'
