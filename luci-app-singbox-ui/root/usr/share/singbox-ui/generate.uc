@@ -12,6 +12,8 @@ let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 let fs  = require("fs");
 let outbound_mod = require("outbound");
+let route_mod   = require("route");
+let ruleset_mod = require("ruleset");
 
 function get_bool(section, opt) {
 	return uci.get("singbox-ui", section, opt) === "1";
@@ -20,80 +22,6 @@ function get_bool(section, opt) {
 function get_list(section, opt) {
 	let all = uci.get_all("singbox-ui", section);
 	return (all != null) ? (all[opt] ?? []) : [];
-}
-
-// Pick the sing-box rule-set format. Honour UCI `format` if set (legacy
-// configs); otherwise infer from the file extension of url/path.
-function detect_format(rs) {
-	if (rs.format) return rs.format;
-	let src = (rs.type === "local") ? (rs.path ?? "") : (rs.url ?? "");
-	if (match(src, /\.srs$/i))  return "binary";
-	if (match(src, /\.json$/i)) return "source";
-	return "binary";
-}
-
-function build_route_config() {
-	let rules = [];
-	let rule_sets = [];
-	let seen = {};
-
-	let rs_by_name = {};
-	uci.foreach("singbox-ui", "ruleset", function(section) {
-		rs_by_name[section[".name"]] = section;
-	});
-
-	uci.foreach("singbox-ui", "route_rule", function(section) {
-		if (section.enabled === "0") return;
-
-		let refs = section.ruleset ?? [];
-		if (type(refs) === "string") refs = [ refs ];
-
-		let resolved = [];
-		for (let rs_name in refs) {
-			let rs = rs_by_name[rs_name];
-			if (!rs) continue;
-			if (rs.enabled === "0") continue;
-
-			if (!seen[rs_name]) {
-				let entry = {
-					tag: rs_name,
-					type: rs.type ?? "remote",
-					format: detect_format(rs),
-				};
-				if (entry.type === "remote") {
-					if (rs.url) entry.url = rs.url;
-				} else if (entry.type === "local") {
-					if (rs.path) entry.path = rs.path;
-				}
-				push(rule_sets, entry);
-				seen[rs_name] = true;
-			}
-			push(resolved, rs_name);
-		}
-
-		if (!length(resolved)) return;
-
-		let action = section.action ?? "direct";
-		let target;
-		if (action === "direct")        target = "direct";
-		else if (action === "block")    target = "block";
-		else if (action === "outbound") target = section.outbound;
-		if (!target) return;
-
-		push(rules, { rule_set: resolved, outbound: target });
-	});
-
-	// Final/default route (optional).
-	let final_target = null;
-	let rd = uci.get_all("singbox-ui", "route_default");
-	if (rd) {
-		let action = rd.action ?? "direct";
-		if (action === "direct")        final_target = "direct";
-		else if (action === "block")    final_target = "block";
-		else if (action === "outbound") final_target = rd.outbound ?? null;
-	}
-
-	return { rules, rule_sets, final: final_target };
 }
 
 function build_dns_rules() {
@@ -136,13 +64,13 @@ if (get_bool("tproxy", "enabled")) {
 let outbounds = outbound_mod.build_outbounds(uci);
 if (length(outbounds)) config.outbounds = outbounds;
 
-let route = build_route_config();
-if (length(route.rules) || route.final) {
+let r     = route_mod.build_route_rules(uci);
+let rsets = ruleset_mod.build_rule_sets(uci, r.referenced);
+if (length(rsets) || length(r.rules) || r.final) {
 	config.route = {};
-	if (length(route.rules))     config.route.rules     = route.rules;
-	if (length(route.rule_sets)) config.route.rule_set  = route.rule_sets;
-	if (route.final && route.final !== "direct")
-		config.route.final = route.final;
+	if (length(rsets))   config.route.rule_set = rsets;
+	if (length(r.rules)) config.route.rules    = r.rules;
+	if (r.final && r.final !== "direct") config.route.final = r.final;
 }
 
 let f = fs.open(CONFIG_OUT, "w");
