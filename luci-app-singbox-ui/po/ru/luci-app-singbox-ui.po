@@ -217,3 +217,52 @@ msgstr "Имя"
 
 msgid "URL-test URL"
 msgstr "URL для url-test"
+
+# General tab
+msgid "General"
+msgstr "Общее"
+
+msgid "Global sing-box settings: outbound DNS, cache file, log."
+msgstr "Глобальные настройки sing-box: outbound DNS, кэш-файл, лог."
+
+msgid "DNS Outbound"
+msgstr "DNS-аутбаунд"
+
+msgid "DNS address"
+msgstr "Адрес DNS"
+
+msgid "Detour"
+msgstr "Маршрут"
+
+msgid "Cache file"
+msgstr "Кэш-файл"
+
+msgid "Store FakeIP mappings"
+msgstr "Сохранять FakeIP-сопоставления"
+
+msgid "Log"
+msgstr "Лог"
+
+msgid "Level"
+msgstr "Уровень"
+
+msgid "Output file (empty = procd stdout)"
+msgstr "Файл вывода (пусто = stdout procd)"
+
+msgid "Hijack DNS"
+msgstr "Перехват DNS"
+
+msgid "Interfaces"
+msgstr "Интерфейсы"
+
+msgid "Expose as inbound proxy"
+msgstr "Открыть как входящий прокси"
+
+msgid "Inbound type"
+msgstr "Тип инбаунда"
+
+msgid "Inbound port"
+msgstr "Порт инбаунда"
+
+msgid "Listen on"
+msgstr "Слушать на"
