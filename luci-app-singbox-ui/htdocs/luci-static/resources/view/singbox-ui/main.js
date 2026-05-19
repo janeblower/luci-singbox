@@ -63,8 +63,10 @@ function buildInputMap() {
 	s.anonymous = true;
 	o = s.option(form.Flag, 'enabled', _('Enable'));
 	o.rmempty = false;
-	o = s.option(widgets.DeviceSelect, 'interface', _('Interface'));
+	o = s.option(widgets.DeviceSelect, 'interface', _('Interfaces'));
 	o.noaliases = true;
+	o.multiple = true;
+	o.placeholder = 'br-lan';
 	o = s.option(form.Value, 'port', _('Port'));
 	o.datatype = 'port';
 	o.placeholder = '7893';

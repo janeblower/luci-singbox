@@ -55,4 +55,22 @@ migrate_fakeip_list_to_option() {
 migrate_fakeip_list_to_option inet4_range
 migrate_fakeip_list_to_option inet6_range
 
+# ---------------------------------------------------------------------------
+# Migrate tproxy.interface from scalar `option` to `list`. nftables.uc now
+# supports multiple input interfaces; list form is required.
+# Idempotent: deleting + re-adding produces an identical state when already a list.
+# ---------------------------------------------------------------------------
+migrate_tproxy_interface_to_list() {
+	_val=$(uci -q get singbox-ui.tproxy.interface 2>/dev/null || true)
+	if [ -n "$_val" ]; then
+		uci -q delete singbox-ui.tproxy.interface
+		for w in $_val; do
+			uci -q add_list singbox-ui.tproxy.interface="$w"
+		done
+		uci -q commit singbox-ui
+	fi
+}
+
+migrate_tproxy_interface_to_list
+
 exit 0

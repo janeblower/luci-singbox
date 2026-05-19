@@ -62,4 +62,30 @@ lines=$(uci show singbox-ui.fakeip | grep -c '\.inet4_range=')
 [ "$lines" = "1" ] || { echo "FAIL: expected one inet4_range entry, got $lines"; exit 1; }
 echo "  PASS: inet4_range is scalar (one entry in show)"
 
+echo "-- tproxy.interface scalar → list migration"
+# Re-seed with scalar interface form
+cat >"$CONFIG" <<'EOF'
+config tproxy 'tproxy'
+	option enabled '1'
+	option interface 'br-lan'
+	option port '7893'
+EOF
+
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+    >"$log" 2>&1 || { echo "FAIL: migration crashed"; cat "$log"; exit 1; }
+
+shown=$(uci show singbox-ui.tproxy.interface)
+case "$shown" in
+    *"'br-lan'"*)  echo "  PASS: interface migrated to list ($shown)" ;;
+    *)             echo "FAIL: expected list, got: $shown"; exit 1 ;;
+esac
+
+# Idempotent: re-run shouldn't change state
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+    >"$log" 2>&1 || { echo "FAIL: rerun crashed"; cat "$log"; exit 1; }
+shown_again=$(uci show singbox-ui.tproxy.interface)
+[ "$shown" = "$shown_again" ] \
+    || { echo "FAIL: not idempotent: '$shown' → '$shown_again'"; exit 1; }
+echo "  PASS: migration idempotent on list form"
+
 echo "OK"

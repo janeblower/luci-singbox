@@ -14,6 +14,10 @@ fi
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
 	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
+	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
+	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 else
 	echo "SKIP: ucode not available"
 	exit 0
@@ -183,5 +187,25 @@ echo "$out" | grep -q "set rs_test_mixed_1_v4" \
 echo "$out" | grep -q "set rs_test_mixed_0_v4" \
 	&& { echo "FAIL: mixed — domain-only rule produced an unexpected set"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_mixed.json
+
+echo "-- emit with two interfaces uses iifname { ... } set form"
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan,br-guest")
+echo "$out" | grep -q 'iifname { "br-lan", "br-guest" }' \
+    || { echo "FAIL: missing iifname { } set for 2 ifaces"; echo "$out"; exit 1; }
+echo "  PASS: multi-iface emits brace set"
+
+echo "-- emit with three interfaces"
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan,br-guest,wlan0")
+echo "$out" | grep -q 'iifname { "br-lan", "br-guest", "wlan0" }' \
+    || { echo "FAIL: missing 3-iface iifname set"; echo "$out"; exit 1; }
+echo "  PASS: three-iface emits brace set"
+
+echo "-- emit with single interface still uses bare iifname"
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+echo "$out" | grep -q 'iifname "br-lan"' \
+    || { echo "FAIL: single iface should use bare iifname"; exit 1; }
+echo "$out" | grep -q 'iifname { "br-lan" }' \
+    && { echo "FAIL: single iface must NOT use brace form (back-compat)"; exit 1; }
+echo "  PASS: single-iface back-compat"
 
 echo "OK"
