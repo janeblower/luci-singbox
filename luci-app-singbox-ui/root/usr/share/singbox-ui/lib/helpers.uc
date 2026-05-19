@@ -45,6 +45,21 @@ function as_array(v) {
 // sq(s) — single-quote escape for /bin/sh.
 function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
 
+// resolve_iface_ip(iface) — returns first IPv4 of <iface> or null.
+// Test override: env SINGBOX_IFACE_<iface> (non-alphanumeric in iface name → '_').
+function resolve_iface_ip(iface) {
+	let key = "SINGBOX_IFACE_" + replace(iface, /[^A-Za-z0-9_]/g, "_");
+	let v = getenv(key);
+	if (v != null && length(v)) return v;
+	let fs_mod = require("fs");
+	let p = fs_mod.popen("ip -4 -o addr show dev " + sq(iface) + " 2>/dev/null", "r");
+	if (!p) return null;
+	let body = p.read("all") ?? "";
+	p.close();
+	let m = match(body, /inet[ \t]+([0-9.]+)\//);
+	return m ? m[1] : null;
+}
+
 return {
 	uci_get_or_empty,
 	get_bool,
@@ -52,4 +67,5 @@ return {
 	sections_where,
 	as_array,
 	sq,
+	resolve_iface_ip,
 };

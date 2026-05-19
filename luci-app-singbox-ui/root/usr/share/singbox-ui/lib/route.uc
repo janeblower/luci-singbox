@@ -15,6 +15,20 @@ function build_route_rules(cur) {
 	if (helpers.get_bool(cur, "tproxy", "hijack_dns"))
 		push(rules, { protocol: "dns", action: "hijack-dns" });
 
+	// Per-outbound exposed inbound bindings. Mirror inbound.uc's iface check so
+	// the inbound list and bindings stay consistent — no dangling tags.
+	cur.foreach("singbox-ui", "outbound", function(s) {
+		if (s.enabled === "0") return;
+		if (s.expose_proxy !== "1") return;
+		if (!+s.expose_port) return;
+		let listen_iface = s.expose_listen;
+		if (listen_iface != null && length(listen_iface)) {
+			if (helpers.resolve_iface_ip(listen_iface) == null) return;
+		}
+		let name = s[".name"];
+		push(rules, { inbound: [ "in_" + name ], outbound: name });
+	});
+
 	// Build a quick name→enabled lookup for rulesets. Disabled rulesets are
 	// dropped from each route_rule's `rule_set` list; if that empties the
 	// list, the route_rule itself is skipped (matches original behavior).

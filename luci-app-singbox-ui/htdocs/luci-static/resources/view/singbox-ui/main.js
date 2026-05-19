@@ -169,6 +169,25 @@ function buildOutboundsMap() {
 	o.placeholder = 'https://www.gstatic.com/generate_204';
 	o.depends({ proxy_type: 'subscription', sub_multi: '1', sub_selector_type: 'urltest' });
 
+	o = s.option(form.Flag, 'expose_proxy', _('Expose as inbound proxy'));
+	o.modalonly = true; o.default = '0';
+
+	o = s.option(form.ListValue, 'expose_type', _('Inbound type'));
+	o.modalonly = true;
+	o.value('socks', 'SOCKS5');
+	o.value('http',  'HTTP');
+	o.value('mixed', 'Mixed');
+	o.default = 'socks';
+	o.depends('expose_proxy', '1');
+
+	o = s.option(form.Value, 'expose_port', _('Inbound port'));
+	o.modalonly = true; o.datatype = 'port'; o.placeholder = '1080';
+	o.depends('expose_proxy', '1');
+
+	o = s.option(widgets.DeviceSelect, 'expose_listen', _('Listen on'));
+	o.modalonly = true; o.noaliases = true;
+	o.depends('expose_proxy', '1');
+
 	return m;
 }
 
