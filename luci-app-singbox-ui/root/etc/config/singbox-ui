@@ -25,3 +25,7 @@ config route_rule 'cn_to_direct'
 
 config route_default 'route_default'
 	option action 'direct'
+
+config log 'log'
+	option enabled '1'
+	option level 'info'

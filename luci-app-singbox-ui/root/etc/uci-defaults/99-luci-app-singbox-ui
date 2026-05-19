@@ -73,4 +73,25 @@ migrate_tproxy_interface_to_list() {
 
 migrate_tproxy_interface_to_list
 
+# ---------------------------------------------------------------------------
+# Create default sections for Phase 2 features if they don't exist yet.
+# These match `etc/config/singbox-ui` defaults and let users see the sections
+# in LuCI without manually editing UCI.
+# ---------------------------------------------------------------------------
+ensure_section() {
+	# $1 = section name, $2 = section type
+	# Returns 0 if newly created, 1 if it already existed (caller can branch).
+	if ! uci -q get "singbox-ui.$1" >/dev/null 2>&1; then
+		uci -q set "singbox-ui.$1=$2"
+		return 0
+	fi
+	return 1
+}
+
+if ensure_section log log; then
+	uci -q set singbox-ui.log.enabled='1'
+	uci -q set singbox-ui.log.level='info'
+	uci -q commit singbox-ui
+fi
+
 exit 0

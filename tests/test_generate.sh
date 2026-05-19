@@ -330,4 +330,46 @@ grep -q '"url":' "$TMPDIR/out.json" \
 	&& { echo "FAIL: bare urltest should NOT emit a url field"; exit 1; }
 echo "  PASS: urltest without override has no url field"
 
+echo "-- log section absent → no log key in JSON"
+write_cfg "
+config fakeip 'fakeip'
+	option enabled '0'
+"
+run_gen
+grep -q '"log":' "$TMPDIR/out.json" \
+    && { echo "FAIL: log key emitted without a log section"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: log absent when section missing"
+
+echo "-- log.enabled=0 → log:{disabled:true}"
+write_cfg "
+config log 'log'
+	option enabled '0'
+"
+run_gen
+check "log disabled" '"disabled": true' "$TMPDIR/out.json"
+
+echo "-- log.enabled=1 level=debug output=/tmp/x.log"
+write_cfg "
+config log 'log'
+	option enabled '1'
+	option level 'debug'
+	option output '/tmp/x.log'
+"
+run_gen
+check "log level debug"  '"level": "debug"'        "$TMPDIR/out.json"
+check "log output path"  '"output": "/tmp/x.log"'  "$TMPDIR/out.json"
+check "log timestamp"    '"timestamp": true'       "$TMPDIR/out.json"
+
+echo "-- log.enabled=1 without output omits the field"
+write_cfg "
+config log 'log'
+	option enabled '1'
+	option level 'info'
+"
+run_gen
+check "log level info" '"level": "info"' "$TMPDIR/out.json"
+awk '/"log":/,/}/' "$TMPDIR/out.json" | grep -q '"output":' \
+    && { echo "FAIL: empty output should not be emitted"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: empty output omitted"
+
 echo "OK"
