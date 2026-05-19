@@ -48,6 +48,10 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DATA) ./root/usr/share/singbox-ui/nftables.uc \
 	  $(1)/usr/share/singbox-ui/nftables.uc
 
+	$(INSTALL_DIR) $(1)/usr/share/singbox-ui/lib
+	$(foreach f,$(wildcard ./root/usr/share/singbox-ui/lib/*.uc), \
+	  $(INSTALL_DATA) $(f) $(1)/usr/share/singbox-ui/lib/$(notdir $(f));)
+
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
 	  $(1)/www/luci-static/resources/view/singbox-ui/main.js
