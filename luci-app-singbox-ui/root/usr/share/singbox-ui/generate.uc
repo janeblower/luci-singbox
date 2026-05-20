@@ -34,7 +34,19 @@ let in_block = inbound_mod.build_inbounds(uci);
 if (length(in_block)) config.inbounds = in_block;
 
 let out_block = outbound_mod.build_outbounds(uci);
-if (length(out_block)) config.outbounds = out_block;
+
+// route.rules / route_default / dns.detour reference outbound TAGS — "direct"
+// and "block" included. sing-box 1.11+ no longer provides implicit outbounds,
+// so inject them here unless a user outbound already claims the tag.
+let have_direct = false, have_block = false;
+for (let o in out_block) {
+	if (o.tag === "direct") have_direct = true;
+	if (o.tag === "block")  have_block  = true;
+}
+if (!have_direct) push(out_block, { tag: "direct", type: "direct" });
+if (!have_block)  push(out_block, { tag: "block",  type: "block"  });
+
+config.outbounds = out_block;
 
 let r = route_mod.build_route_rules(uci);
 let rsets = ruleset_mod.build_rule_sets(uci, r.referenced);
@@ -42,7 +54,7 @@ if (length(rsets) || length(r.rules) || r.final) {
 	config.route = {};
 	if (length(rsets))   config.route.rule_set = rsets;
 	if (length(r.rules)) config.route.rules    = r.rules;
-	if (r.final && r.final !== "direct") config.route.final = r.final;
+	if (r.final)         config.route.final    = r.final;
 }
 
 let cache_block = cache_mod.build_cache(uci);
