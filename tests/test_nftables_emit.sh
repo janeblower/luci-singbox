@@ -189,18 +189,21 @@ echo "$out" | grep -q "set rs_test_mixed_0_v4" \
 rm -f /tmp/singbox-ui/rs_test_mixed.json
 
 echo "-- emit with two interfaces uses iifname { ... } set form"
+# shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan,br-guest")
 echo "$out" | grep -q 'iifname { "br-lan", "br-guest" }' \
     || { echo "FAIL: missing iifname { } set for 2 ifaces"; echo "$out"; exit 1; }
 echo "  PASS: multi-iface emits brace set"
 
 echo "-- emit with three interfaces"
+# shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan,br-guest,wlan0")
 echo "$out" | grep -q 'iifname { "br-lan", "br-guest", "wlan0" }' \
     || { echo "FAIL: missing 3-iface iifname set"; echo "$out"; exit 1; }
 echo "  PASS: three-iface emits brace set"
 
 echo "-- emit with single interface still uses bare iifname"
+# shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 echo "$out" | grep -q 'iifname "br-lan"' \
     || { echo "FAIL: single iface should use bare iifname"; exit 1; }

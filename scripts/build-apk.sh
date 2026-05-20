@@ -92,6 +92,7 @@ install -d \
   "$APP_ROOT/usr/share/luci/menu.d" \
   "$APP_ROOT/usr/share/rpcd/acl.d" \
   "$APP_ROOT/usr/share/singbox-ui" \
+  "$APP_ROOT/usr/share/singbox-ui/lib" \
   "$APP_ROOT/www/luci-static/resources/view/singbox-ui"
 
 install -m 0644 "$PKG_SRC/root/etc/config/singbox-ui"                        "$APP_ROOT/etc/config/singbox-ui"
@@ -103,6 +104,9 @@ install -m 0644 "$PKG_SRC/root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"  "
 install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/generate.uc"             "$APP_ROOT/usr/share/singbox-ui/generate.uc"
 install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/subscription.uc"         "$APP_ROOT/usr/share/singbox-ui/subscription.uc"
 install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/nftables.uc"             "$APP_ROOT/usr/share/singbox-ui/nftables.uc"
+for lib_uc in "$PKG_SRC"/root/usr/share/singbox-ui/lib/*.uc; do
+  install -m 0644 "$lib_uc" "$APP_ROOT/usr/share/singbox-ui/lib/$(basename "$lib_uc")"
+done
 install -m 0644 "$PKG_SRC/htdocs/luci-static/resources/view/singbox-ui/main.js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/main.js"
 
 list_dir="$APP_ROOT/lib/apk/packages"

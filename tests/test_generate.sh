@@ -500,8 +500,11 @@ check "hijack action"         '"action": "hijack-dns"'   "$TMPDIR/out.json"
 # Use the rule-level "rule_set": (indented inside a rule object) not the top-level route rule_set array.
 hijack_ln=$(grep -n '"action": "hijack-dns"' "$TMPDIR/out.json" | head -n1 | cut -d: -f1)
 other_ln=$(grep -n '"outbound": "direct"' "$TMPDIR/out.json" | head -n1 | cut -d: -f1)
-[ -n "$hijack_ln" ] && [ -n "$other_ln" ] && [ "$hijack_ln" -lt "$other_ln" ] \
-    || { echo "FAIL: hijack rule must precede rule_set rules (hijack@$hijack_ln, other@$other_ln)"; cat "$TMPDIR/out.json"; exit 1; }
+if [ -z "$hijack_ln" ] || [ -z "$other_ln" ] || [ "$hijack_ln" -ge "$other_ln" ]; then
+    echo "FAIL: hijack rule must precede rule_set rules (hijack@$hijack_ln, other@$other_ln)"
+    cat "$TMPDIR/out.json"
+    exit 1
+fi
 echo "  PASS: hijack rule is first"
 
 echo "-- hijack_dns=1 even without tproxy.enabled still works"
