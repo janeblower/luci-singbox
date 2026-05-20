@@ -545,9 +545,14 @@ return view.extend({
 	},
 
 	handleSave: function (ev) {
+		// All maps share one uci.state, so calling m.save() on each in parallel
+		// fires duplicate RPC delete/set/add calls — the second copy of any
+		// delete fails with "ubus code 4: Resource not found" because the
+		// first copy already removed the target. Parse all maps to stage
+		// changes locally, then flush once via uci.save().
 		return Promise.all(this._maps.map(function (m) {
-			return m.parse().then(function () { return m.save(); });
-		}));
+			return m.parse();
+		})).then(function () { return uci.save(); });
 	},
 
 	handleSaveApply: function (ev, mode) {
