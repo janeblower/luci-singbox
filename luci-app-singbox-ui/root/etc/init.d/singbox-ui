@@ -29,8 +29,9 @@ start_service() {
 		return 1
 	fi
 
-	[ "$(uci -q get singbox-ui.tproxy.enabled)" = "1" ] && \
+	if [ "$(ucode -L "$UCODE_LIB" "$NFTABLES_UC" needed)" = "1" ]; then
 		ucode -L "$UCODE_LIB" "$NFTABLES_UC" apply
+	fi
 
 	procd_open_instance
 	procd_set_param command /usr/bin/sing-box run -c /tmp/singbox-ui.json

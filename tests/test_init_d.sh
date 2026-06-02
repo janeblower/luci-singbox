@@ -93,6 +93,12 @@ pass "boot-fetch mode signalled"
 grep -q 'procd_open_instance' "$PROCD_LOG" || fail "procd_open_instance not called when config exists"
 pass "happy path opens procd instance"
 
+# nft apply must be gated on `nftables.uc needed` (stub ucode prints nothing to
+# stdout, so the command substitution is empty → apply is skipped).
+grep -q 'nftables.uc apply' "$UCODE_LOG" \
+	&& fail "nft apply should be skipped when 'needed' returns empty"
+pass "nft apply gated by 'needed'"
+
 # ---- fail-fast branch ----
 echo "-- start_service refuses to start when config is empty"
 rm -f /tmp/singbox-ui.json
