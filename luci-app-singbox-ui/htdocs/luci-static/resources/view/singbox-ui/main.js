@@ -419,6 +419,7 @@ function buildOutboundsMap() {
 	o.modalonly = true;
 	o.noaliases = true;
 	o.depends('proxy_type', 'interface');
+	o.description = _('For a direct-via-WAN outbound, pick the real WAN device (may differ from "wan").');
 
 	o = s.option(form.Value, 'proxy_url', _('URL'));
 	o.modalonly   = true;
