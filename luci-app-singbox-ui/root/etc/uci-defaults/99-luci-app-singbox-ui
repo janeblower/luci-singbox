@@ -137,11 +137,72 @@ if ensure_section cache cache; then
 	uci -q commit singbox-ui
 fi
 
-if ensure_section dns_outbound dns_outbound; then
-	uci -q set singbox-ui.dns_outbound.enabled='0'
-	uci -q set singbox-ui.dns_outbound.address='8.8.8.8'
-	uci -q set singbox-ui.dns_outbound.detour='direct'
+# ---------------------------------------------------------------------------
+# DNS model migration to typed dns_server/dns_rule/dns (piece C).
+# fakeip list→option migration above runs first, so ranges are scalar here.
+# ---------------------------------------------------------------------------
+migrate_fakeip_to_dns_server() {
+	[ "$(uci -q get singbox-ui.fakeip 2>/dev/null)" = "fakeip" ] || return 0
+	_en=$(uci -q get singbox-ui.fakeip.enabled 2>/dev/null || echo 0)
+	_v4=$(uci -q get singbox-ui.fakeip.inet4_range 2>/dev/null || echo '198.18.0.0/15')
+	_v6=$(uci -q get singbox-ui.fakeip.inet6_range 2>/dev/null || echo 'fc00::/18')
+	uci -q delete singbox-ui.fakeip
+	uci -q set singbox-ui.fakeip='dns_server'
+	uci -q set singbox-ui.fakeip.enabled="$_en"
+	uci -q set singbox-ui.fakeip.type='fakeip'
+	uci -q set singbox-ui.fakeip.inet4_range="$_v4"
+	[ -n "$_v6" ] && uci -q set singbox-ui.fakeip.inet6_range="$_v6"
 	uci -q commit singbox-ui
-fi
+}
+migrate_fakeip_to_dns_server
+
+migrate_dns_outbound_to_server() {
+	[ "$(uci -q get singbox-ui.dns_outbound 2>/dev/null)" = "dns_outbound" ] || return 0
+	_addr=$(uci -q get singbox-ui.dns_outbound.address 2>/dev/null || echo '')
+	_det=$(uci -q get singbox-ui.dns_outbound.detour 2>/dev/null || echo 'direct')
+	uci -q set singbox-ui.out_dns='dns_server'
+	uci -q set singbox-ui.out_dns.enabled='1'
+	uci -q set singbox-ui.out_dns.detour="$_det"
+	case "$_addr" in
+		https://*) uci -q set singbox-ui.out_dns.type='https'
+		           _hp=${_addr#https://}; _host=${_hp%%/*}; _path=/${_hp#*/}
+		           uci -q set singbox-ui.out_dns.server="${_host%%:*}"
+		           uci -q set singbox-ui.out_dns.server_port='443'
+		           [ "$_path" != "/$_hp" ] && uci -q set singbox-ui.out_dns.path="$_path" ;;
+		tls://*)   uci -q set singbox-ui.out_dns.type='tls'
+		           uci -q set singbox-ui.out_dns.server="${_addr#tls://}" ;;
+		*)         uci -q set singbox-ui.out_dns.type='udp'
+		           uci -q set singbox-ui.out_dns.server="$_addr" ;;
+	esac
+	uci -q set singbox-ui.dns='dns' 2>/dev/null || true
+	uci -q set singbox-ui.dns.final='out_dns'
+	uci -q delete singbox-ui.dns_outbound
+	uci -q commit singbox-ui
+}
+migrate_dns_outbound_to_server
+
+migrate_ruleset_dns_fakeip() {
+	_changed=0
+	for _sec in $(uci -q show singbox-ui 2>/dev/null | sed -n 's/^singbox-ui\.\([^.]*\)=ruleset$/\1/p'); do
+		if [ "$(uci -q get "singbox-ui.$_sec.dns_fakeip" 2>/dev/null)" = "1" ]; then
+			_tag=$(uci -q get "singbox-ui.$_sec.dns_fakeip_tag" 2>/dev/null || echo 'fakeip')
+			_rule="dnsrule_$_sec"
+			uci -q set "singbox-ui.$_rule=dns_rule"
+			uci -q set "singbox-ui.$_rule.enabled=1"
+			uci -q delete "singbox-ui.$_rule.ruleset" 2>/dev/null || true
+			uci -q add_list "singbox-ui.$_rule.ruleset=$_sec"
+			uci -q set "singbox-ui.$_rule.server=$_tag"
+			_changed=1
+		fi
+		for _o in dns_fakeip dns_fakeip_tag; do
+			if uci -q get "singbox-ui.$_sec.$_o" >/dev/null 2>&1; then
+				uci -q delete "singbox-ui.$_sec.$_o"; _changed=1
+			fi
+		done
+	done
+	[ "$_changed" = "1" ] && uci -q commit singbox-ui
+	return 0
+}
+migrate_ruleset_dns_fakeip
 
 exit 0
