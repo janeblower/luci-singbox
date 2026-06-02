@@ -211,10 +211,35 @@ function cmd_remove() {
 	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc; idempotent
 }
 
+// first_nft_tproxy(cur) — first enabled inbound with protocol=tproxy and
+// nft_rules not explicitly "0". Returns the section object or null.
+function first_nft_tproxy(cur) {
+	let found = null;
+	cur.foreach("singbox-ui", "inbound", function(s) {
+		if (found) return;
+		if (s.enabled === "0") return;
+		if (s.protocol !== "tproxy") return;
+		if (s.nft_rules === "0") return;
+		found = s;
+	});
+	return found;
+}
+
+// any_nft_transparent(cur) — true if a tproxy or tun inbound requests nft rules.
+function any_nft_transparent(cur) {
+	let yes = false;
+	cur.foreach("singbox-ui", "inbound", function(s) {
+		if (s.enabled === "0") return;
+		if (s.protocol === "tproxy" && s.nft_rules !== "0") yes = true;
+		if (s.protocol === "tun"    && s.nft_rules === "1") yes = true;
+	});
+	return yes;
+}
+
 function cmd_apply(cur) {
-	let port  = helpers.uci_get_or_empty(cur, "tproxy", "port");
-	if (port === "") port = "7893";
-	let ifaces = helpers.get_list(cur, "tproxy", "interface");
+	let tp = first_nft_tproxy(cur);
+	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : "7893";
+	let ifaces = tp ? helpers.as_array(tp.interface) : [];
 	if (!length(ifaces)) ifaces = [ "br-lan" ];
 
 	let v4 = helpers.uci_get_or_empty(cur, "fakeip", "inet4_range");
@@ -272,6 +297,9 @@ let argv = ARGV;
 switch (argv[0]) {
 case "apply":  cmd_apply(cur); break;
 case "remove": cmd_remove();   break;
+case "needed":
+	print(any_nft_transparent(cur) ? "1\n" : "0\n");
+	break;
 case "emit":
 	if (length(argv) !== 5) {
 		log_err("Usage: nftables.uc emit PORT V4 V6 IFACE");
@@ -280,6 +308,6 @@ case "emit":
 	cmd_emit(argv[1], argv[2], argv[3], argv[4]);
 	break;
 default:
-	log_err("Usage: nftables.uc {apply|remove|emit PORT V4 V6 IFACE}");
+	log_err("Usage: nftables.uc {apply|remove|needed|emit PORT V4 V6 IFACE}");
 	exit(2);
 }
