@@ -114,4 +114,56 @@ uci -q get singbox-ui.tproxy >/dev/null 2>&1 \
 	&& { echo "FAIL: rerun resurrected tproxy section"; exit 1; }
 echo "  PASS: migration idempotent"
 
+echo "-- DNS model migration (fakeip / dns_outbound / ruleset.dns_fakeip)"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config fakeip 'fakeip'
+	option enabled '1'
+	option inet4_range '198.18.0.0/15'
+	option inet6_range 'fc00::/18'
+
+config dns_outbound 'dns_outbound'
+	option enabled '1'
+	option address 'https://dns.google/dns-query'
+	option detour 'direct'
+
+config ruleset 'ru'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/ru.srs'
+	option dns_fakeip '1'
+	option dns_fakeip_tag 'fakeip'
+EOF
+
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: DNS migration crashed"; cat "$log"; exit 1; }
+
+[ "$(uci get singbox-ui.fakeip 2>/dev/null)" = "dns_server" ] \
+	|| { echo "FAIL: fakeip section type != dns_server"; uci show singbox-ui | grep fakeip; exit 1; }
+[ "$(uci get singbox-ui.fakeip.type 2>/dev/null)" = "fakeip" ] \
+	|| { echo "FAIL: fakeip.type != fakeip"; exit 1; }
+echo "  PASS: fakeip → dns_server"
+
+[ "$(uci get singbox-ui.out_dns.type 2>/dev/null)" = "https" ] \
+	|| { echo "FAIL: dns_outbound not converted (type)"; exit 1; }
+[ "$(uci get singbox-ui.out_dns.server 2>/dev/null)" = "dns.google" ] \
+	|| { echo "FAIL: out_dns.server wrong"; exit 1; }
+[ "$(uci get singbox-ui.out_dns.path 2>/dev/null)" = "/dns-query" ] \
+	|| { echo "FAIL: out_dns.path != /dns-query"; exit 1; }
+[ "$(uci get singbox-ui.dns.final 2>/dev/null)" = "out_dns" ] \
+	|| { echo "FAIL: dns.final != out_dns"; exit 1; }
+uci -q get singbox-ui.dns_outbound >/dev/null 2>&1 && { echo "FAIL: dns_outbound not deleted"; exit 1; }
+echo "  PASS: dns_outbound → dns_server + final"
+
+uci -q get singbox-ui.ru.dns_fakeip >/dev/null 2>&1 && { echo "FAIL: ruleset.dns_fakeip not removed"; exit 1; }
+rule=$(uci -q show singbox-ui | sed -n 's/^singbox-ui\.\([^.]*\)=dns_rule$/\1/p' | head -n1)
+[ -n "$rule" ] || { echo "FAIL: no dns_rule created"; exit 1; }
+[ "$(uci get singbox-ui.$rule.server)" = "fakeip" ] || { echo "FAIL: dns_rule.server != fakeip"; exit 1; }
+echo "  PASS: ruleset.dns_fakeip → dns_rule"
+
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: DNS migration rerun crashed"; cat "$log"; exit 1; }
+uci -q get singbox-ui.dns_outbound >/dev/null 2>&1 && { echo "FAIL: rerun resurrected dns_outbound"; exit 1; }
+echo "  PASS: DNS migration idempotent"
+
 echo "OK"
