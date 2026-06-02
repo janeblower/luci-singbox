@@ -1,7 +1,5 @@
 // lib/route.uc — sing-box `route.rules` and final outbound; reports referenced rulesets.
 
-let helpers = require("helpers");
-
 // build_route_rules(cur) -> { rules, final, referenced }
 //   rules:      array of route.rule objects (rule_set / inbound / ... matched to outbound)
 //   final:      string tag of the final outbound, or null
@@ -12,22 +10,14 @@ function build_route_rules(cur) {
 	let referenced = [];
 	let seen = {};
 
-	if (helpers.get_bool(cur, "tproxy", "hijack_dns"))
-		push(rules, { protocol: "dns", action: "hijack-dns" });
-
-	// Per-outbound exposed inbound bindings. Mirror inbound.uc's iface check so
-	// the inbound list and bindings stay consistent — no dangling tags.
-	cur.foreach("singbox-ui", "outbound", function(s) {
+	// hijack-dns is requested by any enabled tproxy inbound with hijack_dns=1.
+	let hijack = false;
+	cur.foreach("singbox-ui", "inbound", function(s) {
 		if (s.enabled === "0") return;
-		if (s.expose_proxy !== "1") return;
-		if (!+s.expose_port) return;
-		let listen_iface = s.expose_listen;
-		if (listen_iface != null && length(listen_iface)) {
-			if (helpers.resolve_iface_ip(listen_iface) == null) return;
-		}
-		let name = s[".name"];
-		push(rules, { inbound: [ "in_" + name ], outbound: name });
+		if (s.protocol === "tproxy" && s.hijack_dns === "1") hijack = true;
 	});
+	if (hijack)
+		push(rules, { protocol: "dns", action: "hijack-dns" });
 
 	// Build a quick name→enabled lookup for rulesets. Disabled rulesets are
 	// dropped from each route_rule's `rule_set` list; if that empties the
