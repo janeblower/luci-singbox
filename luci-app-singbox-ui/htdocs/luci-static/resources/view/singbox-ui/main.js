@@ -518,15 +518,6 @@ function buildRulesetsMap() {
 	// Format is auto-detected from the file extension by subscription.uc
 	// and generate.uc (.srs → binary, .json → source). No UI field.
 
-	o = s.option(form.Flag, 'dns_fakeip', _('Route DNS to FakeIP'));
-	o.modalonly = true;
-	o.default   = '0';
-
-	o = s.option(form.Value, 'dns_fakeip_tag', _('FakeIP DNS tag'));
-	o.modalonly   = true;
-	o.placeholder = 'fakeip';
-	o.depends('dns_fakeip', '1');
-
 	o = s.option(form.Flag, 'nft_rules', _('Create nftables rules'));
 	o.modalonly = true;
 	o.default   = '0';
@@ -601,41 +592,92 @@ function buildRouteDefaultMap() {
 	return m;
 }
 
-function buildGeneralMap() {
-	var m = new form.Map('singbox-ui', _('General'),
-		_('Global sing-box settings: outbound DNS, cache file, log.'));
-
-	var s, o;
-
-	// -- FakeIP (temporary home until the dedicated DNS tab lands) --
-	s = m.section(form.NamedSection, 'fakeip', 'fakeip', _('FakeIP'));
-	s.anonymous = true;
-	o = s.option(form.Flag, 'enabled', _('Enable'));
-	o.rmempty = false;
-	o = s.option(form.Value, 'inet4_range', _('IPv4 range'));
-	o.datatype = 'cidr4'; o.placeholder = '198.18.0.0/15';
-	o = s.option(form.Value, 'inet6_range', _('IPv6 range'));
-	o.datatype = 'cidr6'; o.placeholder = 'fc00::/18';
-
-	// -- DNS Outbound --
-	s = m.section(form.NamedSection, 'dns_outbound', 'dns_outbound', _('DNS Outbound'));
-	s.anonymous = true;
-	o = s.option(form.Flag, 'enabled', _('Enable'));
-	o.rmempty = false;
-	o = s.option(form.Value, 'address', _('DNS address'));
-	o.placeholder = '8.8.8.8';
-	o.depends('enabled', '1');
-	o = s.option(form.ListValue, 'detour', _('Detour'));
-	o.depends('enabled', '1');
+function loadDnsServerList(o, includeNone) {
 	o.load = function (section_id) {
 		this.keylist = [];
 		this.vallist = [];
-		this.value('direct', _('Direct'));
-		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
-			this.value(sec['.name'], sec['.name']);
+		if (includeNone) this.value('', _('(none)'));
+		uci.sections('singbox-ui', 'dns_server').forEach(function (sec) {
+			this.value(sec['.name'], sec['.name'] + ' (' + (sec.type || '?') + ')');
 		}.bind(this));
 		return form.ListValue.prototype.load.apply(this, arguments);
 	};
+}
+
+function buildDnsMap() {
+	var m = new form.Map('singbox-ui', _('DNS'),
+		_('DNS servers (udp/tls/https/fakeip), rules, and global settings.'));
+	var s, o;
+
+	// -- Servers --
+	s = m.section(form.GridSection, 'dns_server', _('DNS Servers'));
+	s.anonymous = false; s.addremove = true; s.sortable = true;
+	s.modaltitle = function (id) {
+		var t = uci.get('singbox-ui', id, 'type') || '';
+		return _('DNS Server') + ': ' + id + (t ? ' (' + t + ')' : '');
+	};
+	addRenameField(s);
+	o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+	o = s.option(form.ListValue, 'type', _('Type'));
+	['udp','tls','https','fakeip'].forEach(function (v) { o.value(v, v); });
+	o.default = 'https'; o.rmempty = false;
+	o = s.option(form.Value, 'server', _('Server')); o.modalonly = true;
+	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
+	o = s.option(form.Value, 'server_port', _('Server port')); o.modalonly = true; o.datatype = 'port';
+	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
+	o = s.option(form.Value, 'path', _('HTTPS path')); o.modalonly = true; o.placeholder = '/dns-query';
+	o.depends('type','https');
+	o = s.option(form.Value, 'detour', _('Detour (outbound or direct)')); o.modalonly = true; o.placeholder = 'direct';
+	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
+	o = s.option(form.Value, 'domain_resolver', _('Domain resolver (dns_server tag)')); o.modalonly = true;
+	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
+	o = s.option(form.Value, 'inet4_range', _('FakeIP IPv4 range')); o.modalonly = true;
+	o.datatype = 'cidr4'; o.placeholder = '198.18.0.0/15'; o.depends('type','fakeip');
+	o = s.option(form.Value, 'inet6_range', _('FakeIP IPv6 range')); o.modalonly = true;
+	o.datatype = 'cidr6'; o.placeholder = 'fc00::/18'; o.depends('type','fakeip');
+
+	// -- Rules --
+	s = m.section(form.GridSection, 'dns_rule', _('DNS Rules'));
+	s.anonymous = false; s.addremove = true; s.sortable = true;
+	s.modaltitle = function (id) { return _('DNS Rule') + ': ' + id; };
+	addRenameField(s);
+	o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+	o = s.option(form.MultiValue, 'ruleset', _('Rule-Sets'));
+	o.load = function (section_id) {
+		this.keylist = []; this.vallist = [];
+		uci.sections('singbox-ui', 'ruleset').forEach(function (sec) {
+			this.value(sec['.name'], sec['.name']);
+		}.bind(this));
+		return form.MultiValue.prototype.load.apply(this, arguments);
+	};
+	o = s.option(form.Value, 'domain_suffix', _('Domain suffix (comma-separated)')); o.modalonly = true;
+	o = s.option(form.Value, 'domain_keyword', _('Domain keyword (comma-separated)')); o.modalonly = true;
+	o = s.option(form.ListValue, 'clash_mode', _('Clash mode'));
+	[['','any'],['global','global'],['direct','direct'],['rule','rule']].forEach(function (p) {
+		o.value(p[0], p[1] === 'any' ? _('Any') : p[1]);
+	});
+	o.modalonly = true;
+	o = s.option(form.ListValue, 'server', _('Target server')); loadDnsServerList(o);
+
+	// -- Settings --
+	s = m.section(form.NamedSection, 'dns', 'dns', _('DNS Settings'));
+	s.anonymous = true;
+	o = s.option(form.ListValue, 'final', _('Final server')); loadDnsServerList(o, true);
+	o = s.option(form.ListValue, 'strategy', _('Strategy'));
+	[['','default'],['prefer_ipv4','prefer_ipv4'],['prefer_ipv6','prefer_ipv6'],
+	 ['ipv4_only','ipv4_only'],['ipv6_only','ipv6_only']].forEach(function (p) {
+		o.value(p[0], p[1] === 'default' ? _('Default') : p[1]);
+	});
+	o = s.option(form.Flag, 'independent_cache', _('Independent cache')); o.default = '0';
+
+	return m;
+}
+
+function buildGeneralMap() {
+	var m = new form.Map('singbox-ui', _('General'),
+		_('Global sing-box settings: cache file, log.'));
+
+	var s, o;
 
 	// -- Cache --
 	s = m.section(form.NamedSection, 'cache', 'cache', _('Cache file'));
@@ -786,9 +828,10 @@ return view.extend({
 		var mRulesets     = buildRulesetsMap();
 		var mRouteRules   = buildRouteRulesMap();
 		var mRouteDefault = buildRouteDefaultMap();
+		var mDns          = buildDnsMap();
 		var mGeneral      = buildGeneralMap();
 
-		self._maps = [ mInbounds, mOutbounds, mRulesets, mRouteRules, mRouteDefault, mGeneral ];
+		self._maps = [ mInbounds, mOutbounds, mRulesets, mRouteRules, mRouteDefault, mDns, mGeneral ];
 
 		return Promise.all(self._maps.map(function (m) { return m.render(); }))
 		.then(function (nodes) {
@@ -797,7 +840,8 @@ return view.extend({
 			var rulesetsNode   = nodes[2];
 			var routerulesNode = nodes[3];
 			var routedefNode   = nodes[4];
-			var generalNode    = nodes[5];
+			var dnsNode        = nodes[5];
+			var generalNode    = nodes[6];
 
 			var statusHolder = E('div', { 'class': 'sb-status', 'style': 'margin:.5em 0;padding:.5em;border:1px solid #ddd;border-radius:4px' });
 			var actionBar    = renderActionBar(statusHolder);
@@ -821,10 +865,12 @@ return view.extend({
 				E('ul', { 'class': 'cbi-tabmenu sb-tab-header' }, [
 					E('li', { 'data-tab': 'inbounds' }, _('Inbounds')),
 					E('li', { 'data-tab': 'output'  }, _('Output')),
+					E('li', { 'data-tab': 'dns'     }, _('DNS')),
 					E('li', { 'data-tab': 'general' }, _('General'))
 				]),
 				inboundsNode,
 				outputWrap,
+				dnsNode,
 				generalNode
 			]);
 
@@ -838,6 +884,7 @@ return view.extend({
 				wireTabs(root, '.sb-tab-header', {
 					inbounds: inboundsNode,
 					output:   outputWrap,
+					dns:      dnsNode,
 					general:  generalNode
 				}, 'inbounds');
 				renderStatusPanel(statusHolder);

@@ -59,9 +59,13 @@ grep -q "sub_interval"           "$JS" || { echo "FAIL: no sub_interval field"; 
 grep -q "form.TextValue"         "$JS" || { echo "FAIL: no form.TextValue widget"; exit 1; }
 
 echo "-- references ruleset fields"
-grep -q "dns_fakeip"             "$JS" || { echo "FAIL: no dns_fakeip field"; exit 1; }
 grep -q "nft_rules"              "$JS" || { echo "FAIL: no nft_rules field"; exit 1; }
 grep -q "update_interval"        "$JS" || { echo "FAIL: no update_interval field"; exit 1; }
+
+echo "-- references DNS tab sections"
+grep -q "'dns_server'"          "$JS" || { echo "FAIL: no dns_server section type"; exit 1; }
+grep -q "'dns_rule'"            "$JS" || { echo "FAIL: no dns_rule section type"; exit 1; }
+grep -q "data-tab.*dns"         "$JS" || { echo "FAIL: no dns tab marker"; exit 1; }
 
 echo "-- has sub-tab data-tab markers"
 grep -q "data-tab.*outbounds"    "$JS" || { echo "FAIL: no outbounds sub-tab marker"; exit 1; }
@@ -74,7 +78,6 @@ grep -q "ui.changes.apply" "$JS" || { echo "FAIL: no ui.changes.apply call (need
 grep -q "'enabled'"        "$JS" || { echo "FAIL: no enabled flag"; exit 1; }
 
 echo "-- references General tab sections"
-grep -q "'dns_outbound'"        "$JS" || { echo "FAIL: no dns_outbound section type"; exit 1; }
 grep -q "'cache'"               "$JS" || { echo "FAIL: no cache section type"; exit 1; }
 grep -q "'log'"                 "$JS" || { echo "FAIL: no log section type"; exit 1; }
 grep -q "data-tab.*general"     "$JS" || { echo "FAIL: no general tab marker"; exit 1; }
