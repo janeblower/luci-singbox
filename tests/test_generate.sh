@@ -46,11 +46,12 @@ run_gen() {
 		&& cp "$SANDBOX_CONFIG" "$TMPDIR/out.json"
 }
 
-# ---- fakeip + tproxy ----
-echo "-- fakeip and tproxy inbound"
+# ---- fakeip (dns_server) + tproxy inbound ----
+echo "-- fakeip dns_server + tproxy inbound"
 write_cfg "
-config fakeip 'fakeip'
+config dns_server 'fakeip'
 	option enabled '1'
+	option type 'fakeip'
 	option inet4_range '198.18.0.0/15'
 	option inet6_range 'fc00::/18'
 
@@ -60,7 +61,7 @@ config inbound 'tproxy_in'
 	option listen_port '7893'
 "
 run_gen
-check "fakeip enabled"    '"enabled": true'              "$TMPDIR/out.json"
+check "fakeip type"       '"type": "fakeip"'              "$TMPDIR/out.json"
 check "inet4_range str"   '"inet4_range": "198.18.0.0/15"' "$TMPDIR/out.json"
 check "inet6_range str"   '"inet6_range": "fc00::/18"'     "$TMPDIR/out.json"
 check "tproxy inbound"    '"type": "tproxy"'              "$TMPDIR/out.json"
@@ -249,56 +250,29 @@ echo "  PASS: duplicate rule_set deduplicated"
 check "rule_a -> direct" '"outbound": "direct"' "$TMPDIR/out.json"
 check "rule_b -> block"  '"outbound": "block"'  "$TMPDIR/out.json"
 
-# ---- dns.rules from ruleset.dns_fakeip ----
-echo "-- dns_fakeip emits dns.rules entry"
+# ---- dns.rules from dns_rule referencing ruleset ----
+echo "-- dns_rule emits dns.rules entry"
 write_cfg "
-config fakeip 'fakeip'
+config dns_server 'fakeip'
 	option enabled '1'
+	option type 'fakeip'
 	option inet4_range '198.18.0.0/15'
-	option inet6_range 'fc00::/18'
 
 config ruleset 'geosite_cn'
 	option enabled '1'
 	option type 'remote'
 	option url 'https://example.com/geosite-cn.srs'
-	option format 'binary'
-	option dns_fakeip '1'
-	option dns_fakeip_tag 'fakeip'
 
-config route_rule 'cn_direct'
+config dns_rule 'cn_fakeip'
 	option enabled '1'
 	list ruleset 'geosite_cn'
-	option action 'direct'
+	option server 'fakeip'
 "
 run_gen
 check "dns block present" '\"dns\":'           "$TMPDIR/out.json"
 check "dns.rules present" '\"rules\":'         "$TMPDIR/out.json"
 check "dns rule_set cn"   '\"rule_set\":'      "$TMPDIR/out.json"
 check "dns server fakeip" '"server": "fakeip"' "$TMPDIR/out.json"
-
-# ---- dns.rules omitted when no dns_fakeip ruleset ----
-echo "-- no dns.rules without dns_fakeip"
-write_cfg "
-config fakeip 'fakeip'
-	option enabled '1'
-	option inet4_range '198.18.0.0/15'
-
-config ruleset 'plain'
-	option enabled '1'
-	option type 'remote'
-	option url 'https://example.com/plain.srs'
-	option format 'binary'
-
-config route_rule 'plain_rule'
-	option enabled '1'
-	list ruleset 'plain'
-	option action 'direct'
-"
-run_gen
-# The dns object should exist but have no rules array inside it
-awk '/"dns":/,/^    }/' "$TMPDIR/out.json" | grep -q '"rules":' \
-	&& { echo "FAIL: dns.rules emitted without any dns_fakeip=1 ruleset"; cat "$TMPDIR/out.json"; exit 1; }
-echo "  PASS: dns.rules omitted when no dns_fakeip ruleset"
 
 echo "-- subscription urltest emits sub_urltest_url verbatim"
 write_cfg "
@@ -332,10 +306,7 @@ grep -q '"url":' "$TMPDIR/out.json" \
 echo "  PASS: urltest without override has no url field"
 
 echo "-- log section absent → no log key in JSON"
-write_cfg "
-config fakeip 'fakeip'
-	option enabled '0'
-"
+write_cfg ""
 run_gen
 grep -q '"log":' "$TMPDIR/out.json" \
     && { echo "FAIL: log key emitted without a log section"; cat "$TMPDIR/out.json"; exit 1; }
@@ -383,10 +354,11 @@ grep -q '"experimental":' "$TMPDIR/out.json" \
     && { echo "FAIL: experimental emitted with cache disabled"; exit 1; }
 echo "  PASS: cache disabled → no experimental"
 
-echo "-- cache.enabled=1 with fakeip and store_fakeip"
+echo "-- cache.enabled=1 with fakeip dns_server and store_fakeip"
 write_cfg "
-config fakeip 'fakeip'
+config dns_server 'fakeip'
 	option enabled '1'
+	option type 'fakeip'
 	option inet4_range '198.18.0.0/15'
 
 config cache 'cache'
@@ -401,10 +373,11 @@ check "cache enabled"      '"enabled": true'              "$TMPDIR/out.json"
 check "cache path"         '"path": "/tmp/test-cache.db"' "$TMPDIR/out.json"
 check "store_fakeip true"  '"store_fakeip": true'         "$TMPDIR/out.json"
 
-echo "-- store_fakeip suppressed when fakeip disabled"
+echo "-- store_fakeip suppressed when fakeip dns_server disabled"
 write_cfg "
-config fakeip 'fakeip'
+config dns_server 'fakeip'
 	option enabled '0'
+	option type 'fakeip'
 
 config cache 'cache'
 	option enabled '1'
@@ -423,45 +396,45 @@ config cache 'cache'
 run_gen
 check "default cache path" '"path": "/tmp/singbox-ui-cache.db"' "$TMPDIR/out.json"
 
-echo "-- dns_outbound disabled → no dns.servers"
+echo "-- dns_server https with detour=direct"
 write_cfg "
-config dns_outbound 'dns_outbound'
-	option enabled '0'
-"
-run_gen
-grep -q '"servers":' "$TMPDIR/out.json" \
-	&& { echo "FAIL: dns.servers emitted with dns_outbound disabled"; exit 1; }
-echo "  PASS: no servers when disabled"
-
-echo "-- dns_outbound enabled with detour=direct"
-write_cfg "
-config dns_outbound 'dns_outbound'
+config dns_server 'out_dns'
 	option enabled '1'
-	option address '1.1.1.1'
+	option type 'https'
+	option server 'dns.google'
+	option server_port '443'
+	option path '/dns-query'
 	option detour 'direct'
+
+config dns 'dns'
+	option final 'out_dns'
 "
 run_gen
-check "dns servers"   '"servers":'           "$TMPDIR/out.json"
-check "dns tag"       '"tag": "out_dns"'     "$TMPDIR/out.json"
-check "dns address"   '"address": "1.1.1.1"' "$TMPDIR/out.json"
-check "dns detour"    '"detour": "direct"'   "$TMPDIR/out.json"
-check "dns final"     '"final": "out_dns"'   "$TMPDIR/out.json"
+check "dns servers"  '"servers":'           "$TMPDIR/out.json"
+check "dns tag"      '"tag": "out_dns"'     "$TMPDIR/out.json"
+check "dns server"   '"server": "dns.google"' "$TMPDIR/out.json"
+check "dns path"     '"path": "/dns-query"' "$TMPDIR/out.json"
+check "dns detour"   '"detour": "direct"'   "$TMPDIR/out.json"
+check "dns final"    '"final": "out_dns"'   "$TMPDIR/out.json"
 
-echo "-- dns_outbound with detour to a named outbound"
+echo "-- dns_server with detour to a named outbound"
 write_cfg "
 config outbound 'my_vless'
 	option enabled '1'
 	option proxy_type 'url'
 	option proxy_url 'vless://uuid@host:443?security=tls'
 
-config dns_outbound 'dns_outbound'
+config dns_server 'out_dns'
 	option enabled '1'
-	option address 'https://1.1.1.1/dns-query'
+	option type 'https'
+	option server '1.1.1.1'
+	option server_port '443'
+	option path '/dns-query'
 	option detour 'my_vless'
 "
 run_gen
-check "dns address dot"  '"address": "https://1.1.1.1/dns-query"' "$TMPDIR/out.json"
-check "dns detour out"   '"detour": "my_vless"'                   "$TMPDIR/out.json"
+check "dns https server" '"server": "1.1.1.1"'  "$TMPDIR/out.json"
+check "dns detour out"   '"detour": "my_vless"' "$TMPDIR/out.json"
 
 echo "-- hijack_dns=0 → no hijack rule"
 write_cfg "
