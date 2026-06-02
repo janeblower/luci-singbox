@@ -236,14 +236,30 @@ function any_nft_transparent(cur) {
 	return yes;
 }
 
+// first_fakeip(cur) — ranges of the first enabled dns_server with type=fakeip.
+function first_fakeip(cur) {
+	let r = { v4: "", v6: "" };
+	let found = false;
+	cur.foreach("singbox-ui", "dns_server", function(s) {
+		if (found) return;
+		if (s.enabled === "0") return;
+		if (s.type !== "fakeip") return;
+		found = true;
+		r.v4 = s.inet4_range ?? "";
+		r.v6 = s.inet6_range ?? "";
+	});
+	return r;
+}
+
 function cmd_apply(cur) {
 	let tp = first_nft_tproxy(cur);
 	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : "7893";
 	let ifaces = tp ? helpers.as_array(tp.interface) : [];
 	if (!length(ifaces)) ifaces = [ "br-lan" ];
 
-	let v4 = helpers.uci_get_or_empty(cur, "fakeip", "inet4_range");
-	let v6 = helpers.uci_get_or_empty(cur, "fakeip", "inet6_range");
+	let fip = first_fakeip(cur);
+	let v4 = fip.v4;
+	let v6 = fip.v6;
 	let rules = load_rs_rules();
 
 	if (v4 === "" && v6 === "" && !length(rules)) {
