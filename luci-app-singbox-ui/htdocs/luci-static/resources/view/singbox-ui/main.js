@@ -289,10 +289,131 @@ function buildOutboundsMap() {
 
 	o = s.option(form.ListValue, 'proxy_type', _('Type'));
 	o.value('interface',    _('Interface'));
+	o.value('constructor',  _('Constructor'));
 	o.value('url',          _('URL (share link)'));
 	o.value('json',         _('Raw JSON'));
 	o.value('subscription', _('Subscription URL'));
 	o.rmempty = false;
+
+	o = s.option(form.ListValue, 'protocol', _('Protocol'));
+	[['vless','VLESS'],['vmess','VMess'],['trojan','Trojan'],
+	 ['hysteria2','Hysteria2'],['shadowsocks','Shadowsocks']].forEach(function (p) { o.value(p[0], p[1]); });
+	o.modalonly = true; o.default = 'vless';
+	o.depends('proxy_type', 'constructor');
+
+	o = s.option(form.Value, 'server', _('Server'));
+	o.modalonly = true; o.placeholder = 'example.com';
+	o.depends('proxy_type', 'constructor');
+	o = s.option(form.Value, 'server_port', _('Server port'));
+	o.modalonly = true; o.datatype = 'port'; o.placeholder = '443';
+	o.depends('proxy_type', 'constructor');
+
+	o = s.option(form.Value, 'server_uuid', _('UUID'));
+	o.modalonly = true; o.password = true;
+	o.depends({ proxy_type: 'constructor', protocol: 'vless' });
+	o.depends({ proxy_type: 'constructor', protocol: 'vmess' });
+	o = s.option(form.Value, 'server_password', _('Password'));
+	o.modalonly = true; o.password = true;
+	o.depends({ proxy_type: 'constructor', protocol: 'trojan' });
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2' });
+	o.depends({ proxy_type: 'constructor', protocol: 'shadowsocks' });
+
+	o = s.option(form.ListValue, 'vless_flow', _('Flow'));
+	o.value('none', _('None')); o.value('xtls-rprx-vision', 'xtls-rprx-vision');
+	o.modalonly = true; o.default = 'none';
+	o.depends({ proxy_type: 'constructor', protocol: 'vless' });
+	o = s.option(form.Value, 'vmess_alter_id', _('Alter ID'));
+	o.modalonly = true; o.datatype = 'uinteger'; o.placeholder = '0';
+	o.depends({ proxy_type: 'constructor', protocol: 'vmess' });
+	o = s.option(form.ListValue, 'vmess_security', _('Cipher'));
+	['auto','none','aes-128-gcm','chacha20-poly1305'].forEach(function (v) { o.value(v, v); });
+	o.modalonly = true; o.default = 'auto';
+	o.depends({ proxy_type: 'constructor', protocol: 'vmess' });
+	o = s.option(form.ListValue, 'shadowsocks_method', _('Method'));
+	['aes-128-gcm','aes-256-gcm','chacha20-ietf-poly1305',
+	 '2022-blake3-aes-128-gcm','2022-blake3-aes-256-gcm'].forEach(function (v) { o.value(v, v); });
+	o.modalonly = true; o.default = 'aes-128-gcm';
+	o.depends({ proxy_type: 'constructor', protocol: 'shadowsocks' });
+
+	o = s.option(form.ListValue, 'hysteria2_obfs_type', _('Obfuscation'));
+	o.value('none', _('None')); o.value('salamander', 'salamander');
+	o.modalonly = true; o.default = 'none';
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2' });
+	o = s.option(form.Value, 'hysteria2_obfs_password', _('Obfs password'));
+	o.modalonly = true; o.password = true;
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2', hysteria2_obfs_type: 'salamander' });
+	o = s.option(form.Value, 'up_mbps', _('Up Mbps'));
+	o.modalonly = true; o.datatype = 'uinteger';
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2' });
+	o = s.option(form.Value, 'down_mbps', _('Down Mbps'));
+	o.modalonly = true; o.datatype = 'uinteger';
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2' });
+
+	// TLS (vless/vmess/trojan; hysteria2 is always TLS)
+	o = s.option(form.ListValue, 'security', _('Security'));
+	o.value('none', _('None')); o.value('tls', 'TLS'); o.value('reality', 'Reality');
+	o.modalonly = true; o.default = 'none';
+	o.depends({ proxy_type: 'constructor', protocol: 'vless' });
+	o.depends({ proxy_type: 'constructor', protocol: 'vmess' });
+	o.depends({ proxy_type: 'constructor', protocol: 'trojan' });
+	o = s.option(form.Value, 'tls_server_name', _('TLS server name'));
+	o.modalonly = true;
+	o.depends({ protocol: 'vless', security: 'tls' });
+	o.depends({ protocol: 'vless', security: 'reality' });
+	o.depends({ protocol: 'vmess', security: 'tls' });
+	o.depends({ protocol: 'trojan', security: 'tls' });
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2' });
+	o = s.option(form.Flag, 'tls_insecure', _('Allow insecure'));
+	o.modalonly = true; o.default = '0';
+	o.depends({ protocol: 'vless', security: 'tls' });
+	o.depends({ protocol: 'vless', security: 'reality' });
+	o.depends({ protocol: 'vmess', security: 'tls' });
+	o.depends({ protocol: 'trojan', security: 'tls' });
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2' });
+	o = s.option(form.Value, 'tls_alpn', _('ALPN (comma-separated)'));
+	o.modalonly = true; o.placeholder = 'h2,http/1.1';
+	o.depends({ protocol: 'vless', security: 'tls' });
+	o.depends({ protocol: 'vmess', security: 'tls' });
+	o.depends({ protocol: 'trojan', security: 'tls' });
+	o.depends({ proxy_type: 'constructor', protocol: 'hysteria2' });
+	o = s.option(form.ListValue, 'utls_fingerprint', _('uTLS fingerprint'));
+	['','chrome','firefox','safari','edge','random'].forEach(function (v) { o.value(v, v || _('None')); });
+	o.modalonly = true;
+	o.depends({ protocol: 'vless', security: 'tls' });
+	o.depends({ protocol: 'vless', security: 'reality' });
+	o.depends({ protocol: 'vmess', security: 'tls' });
+	o.depends({ protocol: 'trojan', security: 'tls' });
+	o = s.option(form.Value, 'reality_public_key', _('Reality public key'));
+	o.modalonly = true;
+	o.depends({ protocol: 'vless', security: 'reality' });
+	o = s.option(form.Value, 'reality_short_id', _('Reality short ID'));
+	o.modalonly = true;
+	o.depends({ protocol: 'vless', security: 'reality' });
+
+	// transport (vless/vmess/trojan)
+	o = s.option(form.ListValue, 'transport', _('Transport'));
+	['none','ws','grpc','httpupgrade'].forEach(function (v) { o.value(v, v); });
+	o.modalonly = true; o.default = 'none';
+	o.depends({ proxy_type: 'constructor', protocol: 'vless' });
+	o.depends({ proxy_type: 'constructor', protocol: 'vmess' });
+	o.depends({ proxy_type: 'constructor', protocol: 'trojan' });
+	o = s.option(form.Value, 'transport_path', _('Transport path'));
+	o.modalonly = true; o.placeholder = '/';
+	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
+	o = s.option(form.Value, 'transport_host', _('Transport host'));
+	o.modalonly = true;
+	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
+	o = s.option(form.Value, 'transport_service_name', _('gRPC service name'));
+	o.modalonly = true;
+	o.depends({ transport: 'grpc' });
+
+	o = s.option(form.TextValue, 'extra_json', _('Advanced JSON (merged)'));
+	o.modalonly = true; o.rows = 4; o.monospace = true; o.placeholder = '{"multiplex":{"enabled":true}}';
+	o.depends('proxy_type', 'constructor');
+	o.validate = function (section_id, value) {
+		if (value == null || value === '') return true;
+		try { JSON.parse(value); return true; } catch (e) { return _('Invalid JSON: ') + e.message; }
+	};
 
 	o = s.option(widgets.DeviceSelect, 'interface', _('Interface'));
 	o.modalonly = true;
