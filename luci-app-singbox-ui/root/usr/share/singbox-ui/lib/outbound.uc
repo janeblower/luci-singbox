@@ -4,6 +4,98 @@ const TMPDIR = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 
 let fs = require("fs");
 
+function s_opt(s, k) { let v = s[k]; return (v == null) ? "" : v; }
+function s_bool(s, k) { return s[k] === "1"; }
+function s_num(v) { let n = +v; return n || 0; }
+function csv_list(v) {
+	if (v == null || v === "") return [];
+	let out = [];
+	for (let p in split(v, ",")) { let t = trim(p); if (length(t)) push(out, t); }
+	return out;
+}
+function merge_extra(obj, json_str) {
+	if (json_str == null || json_str === "") return;
+	let extra;
+	try { extra = json(json_str); } catch (e) { extra = null; }
+	if (type(extra) !== "object") { warn("outbound.uc: invalid extra_json; ignored\n"); return; }
+	for (let k in extra) obj[k] = extra[k];
+}
+
+// Client-side TLS. null when security=none. hysteria2 forces tls.
+function build_tls_client(s) {
+	let sec = s_opt(s, "security") || "none";
+	if (s.protocol === "hysteria2") sec = "tls";
+	if (sec === "none") return null;
+	let tls = { enabled: true };
+	if (length(s_opt(s, "tls_server_name"))) tls.server_name = s.tls_server_name;
+	if (s_bool(s, "tls_insecure")) tls.insecure = true;
+	let alpn = csv_list(s_opt(s, "tls_alpn"));
+	if (length(alpn)) tls.alpn = alpn;
+	if (length(s_opt(s, "utls_fingerprint")))
+		tls.utls = { enabled: true, fingerprint: s.utls_fingerprint };
+	if (sec === "reality") {
+		let r = { enabled: true };
+		if (length(s_opt(s, "reality_public_key"))) r.public_key = s.reality_public_key;
+		if (length(s_opt(s, "reality_short_id")))   r.short_id   = s.reality_short_id;
+		tls.reality = r;
+	}
+	return tls;
+}
+
+function build_transport(s) {
+	let t = s_opt(s, "transport") || "none";
+	if (t === "none") return null;
+	let tr = { type: t };
+	if (t === "ws") {
+		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
+		if (length(s_opt(s, "transport_host"))) tr.headers = { Host: s.transport_host };
+	} else if (t === "httpupgrade") {
+		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
+		if (length(s_opt(s, "transport_host"))) tr.host = s.transport_host;
+	} else if (t === "grpc") {
+		if (length(s_opt(s, "transport_service_name"))) tr.service_name = s.transport_service_name;
+	}
+	return tr;
+}
+
+function build_constructor(s) {
+	let proto = s_opt(s, "protocol");
+	if (!length(proto)) { warn("outbound.uc: constructor without protocol; skipping\n"); return null; }
+	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
+
+	if (proto === "vless" || proto === "vmess") {
+		if (length(s_opt(s, "server_uuid"))) ob.uuid = s.server_uuid;
+	}
+	if (proto === "trojan" || proto === "hysteria2" || proto === "shadowsocks") {
+		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
+	}
+	if (proto === "vless" && length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
+		ob.flow = s.vless_flow;
+	if (proto === "vmess") {
+		ob.alter_id = s_num(s.vmess_alter_id);
+		if (length(s_opt(s, "vmess_security"))) ob.security = s.vmess_security;
+	}
+	if (proto === "shadowsocks")
+		ob.method = s_opt(s, "shadowsocks_method") || "aes-128-gcm";
+	if (proto === "hysteria2") {
+		let ot = s_opt(s, "hysteria2_obfs_type") || "none";
+		if (ot !== "none" && length(s_opt(s, "hysteria2_obfs_password")))
+			ob.obfs = { type: ot, password: s.hysteria2_obfs_password };
+		if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
+		if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
+	}
+	if (proto !== "shadowsocks") {
+		let tls = build_tls_client(s);
+		if (tls) ob.tls = tls;
+	}
+	if (proto === "vless" || proto === "vmess" || proto === "trojan") {
+		let tr = build_transport(s);
+		if (tr) ob.transport = tr;
+	}
+	merge_extra(ob, s_opt(s, "extra_json"));
+	return ob;
+}
+
 function url_decode(s) {
 	if (s == null) return s;
 	// Replace + with space, then percent-decode.
@@ -112,6 +204,8 @@ function build_outbounds(cur) {
 			if (parsed) { parsed.tag = name; outbound = parsed; }
 		} else if (proxy_type === "json") {
 			outbound = parse_json_outbound(section.proxy_json, name);
+		} else if (proxy_type === "constructor") {
+			outbound = build_constructor(section);
 		} else if (proxy_type === "subscription") {
 			let urls = read_subscription_urls(name);
 			if (!length(urls)) return;
