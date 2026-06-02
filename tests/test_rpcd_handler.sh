@@ -28,13 +28,35 @@ fi
 # shellcheck disable=SC2086
 run_h() { "$UCODE_BIN" $UCODE_LIB_FLAGS "$H" "$@"; }
 
+# je EXPR — read JSON from stdin, eval ucode boolean EXPR (parsed object bound
+# as `d`); exit 0 if truthy, 1 otherwise. Replaces `jq -e`.
+je() {
+	ucode -e '
+		let fs = require("fs");
+		let raw = fs.stdin.read("all") || "";
+		let d;
+		try { d = json(raw); } catch (e) { warn("je: invalid json\n"); exit(2); }
+		exit(('"$1"') ? 0 : 1);
+	'
+}
+# jval EXPR — print the value of ucode EXPR from stdin JSON (empty if null).
+# Replaces `jq -re`.
+jval() {
+	ucode -e '
+		let fs = require("fs");
+		let d = json(fs.stdin.read("all") || "");
+		let v = ('"$1"');
+		print(v == null ? "" : v);
+	'
+}
+
 echo "-- list emits valid JSON with all methods"
 out=$(run_h list)
 for m in generate nftables restart refresh status read_config; do
-	printf "%s\n" "$out" | jq -e ".$m" >/dev/null || { echo "FAIL: missing $m"; exit 1; }
+	printf "%s\n" "$out" | je "d.$m != null" || { echo "FAIL: missing $m"; exit 1; }
 done
-printf "%s\n" "$out" | jq -e '.nftables.action' >/dev/null || { echo "FAIL: missing nftables.action"; exit 1; }
-printf "%s\n" "$out" | jq -e '.refresh.what'    >/dev/null || { echo "FAIL: missing refresh.what"; exit 1; }
+printf "%s\n" "$out" | je 'd.nftables.action != null' || { echo "FAIL: missing nftables.action"; exit 1; }
+printf "%s\n" "$out" | je 'd.refresh.what != null'    || { echo "FAIL: missing refresh.what"; exit 1; }
 
 echo "-- call generate dispatches to generate.uc"
 tmpdir=$(mktemp -d)
@@ -47,7 +69,7 @@ echo "OK"
 EOF
 chmod +x "$tmpdir/ucode"
 out=$(echo '{}' | PATH="$tmpdir:$PATH" run_h call generate)
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: generate did not return ok"; cat "$tmpdir/ucode.log" 2>/dev/null; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: generate did not return ok"; cat "$tmpdir/ucode.log" 2>/dev/null; exit 1; }
 grep -q "generate.uc" "$tmpdir/ucode.log" || { echo "FAIL: generate.uc not invoked"; cat "$tmpdir/ucode.log" 2>/dev/null; exit 1; }
 
 echo "-- call nftables apply dispatches to NFTABLES_CMD"
@@ -57,44 +79,44 @@ echo "called nftables with: \$*" >> "$tmpdir/nftables.log"
 EOF
 chmod +x "$tmpdir/nftables.sh"
 out=$(echo '{"action":"apply"}' | NFTABLES_CMD="$tmpdir/nftables.sh" run_h call nftables)
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: nftables apply did not return ok"; cat "$tmpdir/nftables.log" 2>/dev/null; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: nftables apply did not return ok"; cat "$tmpdir/nftables.log" 2>/dev/null; exit 1; }
 grep -q "called nftables with: apply" "$tmpdir/nftables.log" || { echo "FAIL: nftables.sh not invoked with apply"; cat "$tmpdir/nftables.log" 2>/dev/null; exit 1; }
 
 echo "-- call nftables with bad action returns error"
 out=$(echo '{"action":"haxx"}' | NFTABLES_CMD="$tmpdir/nftables.sh" run_h call nftables)
-printf "%s\n" "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: bad action should return error"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad action should return error"; exit 1; }
 
 echo "-- call restart with stubbed init.d returns ok"
 out=$(echo '{}' | SINGBOX_INIT=true run_h call restart)
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: restart with stub did not return ok"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: restart with stub did not return ok"; exit 1; }
 
 echo "-- call restart with failing init.d returns error"
 out=$(echo '{}' | SINGBOX_INIT=false run_h call restart)
-printf "%s\n" "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: failing restart should return error"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: failing restart should return error"; exit 1; }
 
 echo "-- call read_config with missing file returns error"
 out=$(echo '{}' | SINGBOX_CONFIG=/nonexistent/path run_h call read_config)
-printf "%s\n" "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: missing config should return error"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: missing config should return error"; exit 1; }
 
 echo "-- call read_config returns file contents"
 echo '{"hello":"world"}' >"$tmpdir/config.json"
 out=$(echo '{}' | SINGBOX_CONFIG="$tmpdir/config.json" run_h call read_config)
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: read_config should return ok"; exit 1; }
-printf "%s\n" "$out" | jq -re '.content' | grep -q '"hello":"world"' || { echo "FAIL: read_config content mismatch"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: read_config should return ok"; exit 1; }
+printf "%s\n" "$out" | jval 'd.content' | grep -q '"hello":"world"' || { echo "FAIL: read_config content mismatch"; exit 1; }
 
 echo "-- call status returns ok with empty lists when tmpdir missing"
 out=$(echo '{}' | SINGBOX_TMP=/nonexistent/path run_h call status)
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: status should return ok"; exit 1; }
-printf "%s\n" "$out" | jq -e '.subscriptions | length == 0' >/dev/null || { echo "FAIL: subscriptions should be empty"; exit 1; }
-printf "%s\n" "$out" | jq -e '.rulesets      | length == 0' >/dev/null || { echo "FAIL: rulesets should be empty"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: status should return ok"; exit 1; }
+printf "%s\n" "$out" | je 'length(d.subscriptions) == 0' || { echo "FAIL: subscriptions should be empty"; exit 1; }
+printf "%s\n" "$out" | je 'length(d.rulesets) == 0'      || { echo "FAIL: rulesets should be empty"; exit 1; }
 
 echo "-- call status picks up sub_*.txt and rs_*.json"
 mkdir -p "$tmpdir/state"
 : >"$tmpdir/state/sub_alpha.txt"
 : >"$tmpdir/state/rs_beta.json"
 out=$(echo '{}' | SINGBOX_TMP="$tmpdir/state" run_h call status)
-printf "%s\n" "$out" | jq -e '.subscriptions[0].name == "alpha"' >/dev/null || { echo "FAIL: subscription alpha not found"; exit 1; }
-printf "%s\n" "$out" | jq -e '.rulesets[0].name == "beta"'       >/dev/null || { echo "FAIL: ruleset beta not found"; exit 1; }
+printf "%s\n" "$out" | je 'd.subscriptions[0].name == "alpha"' || { echo "FAIL: subscription alpha not found"; exit 1; }
+printf "%s\n" "$out" | je 'd.rulesets[0].name == "beta"'       || { echo "FAIL: ruleset beta not found"; exit 1; }
 
 echo "-- call status does not leak pgrep stdout (regression: corrupted JSON)"
 # pgrep prints matching PIDs to stdout. is_singbox_running() must redirect that
@@ -119,7 +141,7 @@ case "$raw" in
 	"{"*) ;;
 	*) echo "FAIL: status output does not start with '{'; raw=[$raw]"; exit 1 ;;
 esac
-printf "%s\n" "$raw" | jq -e '.status == "ok" and .running == true' >/dev/null \
+printf "%s\n" "$raw" | je 'd.status == "ok" && d.running == true' \
 	|| { echo "FAIL: status not ok or running=true; raw=[$raw]"; exit 1; }
 
 echo "-- call status reports running=false when pgrep finds nothing"
@@ -129,12 +151,12 @@ exit 1
 EOF
 chmod +x "$tmpdir/pgrep"
 raw=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_TMP=/nonexistent/path run_h call status)
-printf "%s\n" "$raw" | jq -e '.running == false' >/dev/null \
+printf "%s\n" "$raw" | je 'd.running == false' \
 	|| { echo "FAIL: running should be false; raw=[$raw]"; exit 1; }
 
 echo "-- call refresh with invalid what returns error"
 out=$(echo '{"what":"haxx"}' | run_h call refresh)
-printf "%s\n" "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: invalid what should return error"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: invalid what should return error"; exit 1; }
 
 echo "-- call refresh dispatches to subscription.uc"
 # Replace stub from earlier in the file (which writes "OK" not invocation log).
@@ -144,12 +166,12 @@ echo "called ucode with: \$*" >> "$tmpdir/refresh.log"
 EOF
 chmod +x "$tmpdir/ucode"
 out=$(echo '{"what":"all"}' | PATH="$tmpdir:$PATH" run_h call refresh)
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: refresh did not return ok"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: refresh did not return ok"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
 grep -q "refresh all force" "$tmpdir/refresh.log" || { echo "FAIL: subscription.uc not invoked with refresh all force"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
 
 echo "-- call with unknown method returns error"
 out=$(echo '{}' | run_h call frobnicate)
-printf "%s\n" "$out" | jq -e '.status == "error"' >/dev/null || { echo "FAIL: unknown method should return error"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: unknown method should return error"; exit 1; }
 
 echo "-- run() redirects both stdout and stderr"
 # Use a stub ucode that writes to stderr; that text must NOT appear in the
@@ -164,7 +186,7 @@ chmod +x "$tmpdir/ucode"
 out=$(echo '{}' | PATH="$tmpdir:$PATH" run_h call generate 2>/dev/null)
 echo "$out" | grep -q 'stderr-noise' && { echo "FAIL: stderr leaked into response"; exit 1; }
 echo "$out" | grep -q 'stdout-noise' && { echo "FAIL: stdout leaked into response"; exit 1; }
-printf "%s\n" "$out" | jq -e '.status == "ok"' >/dev/null || { echo "FAIL: status not ok"; exit 1; }
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: status not ok"; exit 1; }
 echo "  PASS: stderr+stdout suppressed"
 
 echo "OK"
