@@ -56,22 +56,59 @@ migrate_fakeip_list_to_option inet4_range
 migrate_fakeip_list_to_option inet6_range
 
 # ---------------------------------------------------------------------------
-# Migrate tproxy.interface from scalar `option` to `list`. nftables.uc now
-# supports multiple input interfaces; list form is required.
-# Idempotent: deleting + re-adding produces an identical state when already a list.
+# Migrate the legacy single `tproxy` section into an `inbound` section
+# (protocol=tproxy). The Inbounds tab replaces the old derived model.
+# Idempotent: only runs while a `tproxy` section still exists, and removes it.
 # ---------------------------------------------------------------------------
-migrate_tproxy_interface_to_list() {
-	_val=$(uci -q get singbox-ui.tproxy.interface 2>/dev/null || true)
-	if [ -n "$_val" ]; then
-		uci -q delete singbox-ui.tproxy.interface
-		for w in $_val; do
-			uci -q add_list singbox-ui.tproxy.interface="$w"
-		done
-		uci -q commit singbox-ui
-	fi
+migrate_tproxy_to_inbound() {
+	# Section type check: `uci get singbox-ui.tproxy` returns the type name.
+	_t=$(uci -q get singbox-ui.tproxy 2>/dev/null || true)
+	[ "$_t" = "tproxy" ] || return 0
+
+	_en=$(uci -q get singbox-ui.tproxy.enabled 2>/dev/null || echo 0)
+	_port=$(uci -q get singbox-ui.tproxy.port 2>/dev/null || echo 7893)
+	_hj=$(uci -q get singbox-ui.tproxy.hijack_dns 2>/dev/null || echo 0)
+	_ifaces=$(uci -q get singbox-ui.tproxy.interface 2>/dev/null || echo br-lan)
+
+	# Create (or overwrite) the named inbound section.
+	uci -q set singbox-ui.tproxy_in='inbound'
+	uci -q set singbox-ui.tproxy_in.enabled="$_en"
+	uci -q set singbox-ui.tproxy_in.mode='constructor'
+	uci -q set singbox-ui.tproxy_in.protocol='tproxy'
+	uci -q set singbox-ui.tproxy_in.listen='::'
+	uci -q set singbox-ui.tproxy_in.listen_port="$_port"
+	uci -q set singbox-ui.tproxy_in.hijack_dns="$_hj"
+	uci -q set singbox-ui.tproxy_in.nft_rules='1'
+	uci -q delete singbox-ui.tproxy_in.interface 2>/dev/null || true
+	for w in $_ifaces; do
+		uci -q add_list singbox-ui.tproxy_in.interface="$w"
+	done
+
+	uci -q delete singbox-ui.tproxy
+	uci -q commit singbox-ui
 }
 
-migrate_tproxy_interface_to_list
+migrate_tproxy_to_inbound
+
+# ---------------------------------------------------------------------------
+# Drop the removed per-outbound `expose_*` options from all outbound sections.
+# ---------------------------------------------------------------------------
+migrate_drop_expose() {
+	_changed=0
+	for _sec in $(uci -q show singbox-ui 2>/dev/null \
+		| sed -n 's/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
+		for _o in expose_proxy expose_type expose_port expose_listen; do
+			if uci -q get "singbox-ui.$_sec.$_o" >/dev/null 2>&1; then
+				uci -q delete "singbox-ui.$_sec.$_o"
+				_changed=1
+			fi
+		done
+	done
+	[ "$_changed" = "1" ] && uci -q commit singbox-ui
+	return 0
+}
+
+migrate_drop_expose
 
 # ---------------------------------------------------------------------------
 # Create default sections for Phase 2 features if they don't exist yet.

@@ -62,30 +62,56 @@ lines=$(uci show singbox-ui.fakeip | grep -c '\.inet4_range=')
 [ "$lines" = "1" ] || { echo "FAIL: expected one inet4_range entry, got $lines"; exit 1; }
 echo "  PASS: inet4_range is scalar (one entry in show)"
 
-echo "-- tproxy.interface scalar → list migration"
-# Re-seed with scalar interface form
+echo "-- tproxy section → inbound migration + drop expose"
 cat >"$CONFIG" <<'EOF'
 config tproxy 'tproxy'
 	option enabled '1'
-	option interface 'br-lan'
 	option port '7893'
+	option hijack_dns '1'
+	list interface 'br-lan'
+	list interface 'br-guest'
+
+config outbound 'p'
+	option proxy_type 'interface'
+	option interface 'eth0'
+	option expose_proxy '1'
+	option expose_type 'socks'
+	option expose_port '1080'
 EOF
 
 IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
-    >"$log" 2>&1 || { echo "FAIL: migration crashed"; cat "$log"; exit 1; }
+	>"$log" 2>&1 || { echo "FAIL: migration crashed"; cat "$log"; exit 1; }
 
-shown=$(uci show singbox-ui.tproxy.interface)
-case "$shown" in
-    *"'br-lan'"*)  echo "  PASS: interface migrated to list ($shown)" ;;
-    *)             echo "FAIL: expected list, got: $shown"; exit 1 ;;
-esac
+# tproxy section removed
+uci -q get singbox-ui.tproxy >/dev/null 2>&1 \
+	&& { echo "FAIL: tproxy section should be deleted"; exit 1; }
+echo "  PASS: tproxy section removed"
 
-# Idempotent: re-run shouldn't change state
+# inbound 'tproxy_in' created with mapped values
+[ "$(uci get singbox-ui.tproxy_in.protocol)" = "tproxy" ] \
+	|| { echo "FAIL: tproxy_in.protocol != tproxy"; exit 1; }
+[ "$(uci get singbox-ui.tproxy_in.listen_port)" = "7893" ] \
+	|| { echo "FAIL: tproxy_in.listen_port != 7893"; exit 1; }
+[ "$(uci get singbox-ui.tproxy_in.hijack_dns)" = "1" ] \
+	|| { echo "FAIL: tproxy_in.hijack_dns != 1"; exit 1; }
+[ "$(uci get singbox-ui.tproxy_in.nft_rules)" = "1" ] \
+	|| { echo "FAIL: tproxy_in.nft_rules != 1"; exit 1; }
+ifaces=$(uci -q show singbox-ui.tproxy_in.interface | grep -c '\.interface=')
+[ "$ifaces" = "1" ] || { echo "FAIL: interface should be a single list option line"; uci show singbox-ui.tproxy_in; exit 1; }
+uci get singbox-ui.tproxy_in.interface | grep -q 'br-lan' \
+	|| { echo "FAIL: interface list missing br-lan"; exit 1; }
+echo "  PASS: tproxy_in inbound created from tproxy section"
+
+# expose_* options dropped from outbound
+uci -q get singbox-ui.p.expose_proxy >/dev/null 2>&1 \
+	&& { echo "FAIL: expose_proxy should be dropped"; exit 1; }
+echo "  PASS: expose_* dropped from outbound"
+
+# Idempotent: re-run must not crash or recreate the tproxy section
 IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
-    >"$log" 2>&1 || { echo "FAIL: rerun crashed"; cat "$log"; exit 1; }
-shown_again=$(uci show singbox-ui.tproxy.interface)
-[ "$shown" = "$shown_again" ] \
-    || { echo "FAIL: not idempotent: '$shown' → '$shown_again'"; exit 1; }
-echo "  PASS: migration idempotent on list form"
+	>"$log" 2>&1 || { echo "FAIL: rerun crashed"; cat "$log"; exit 1; }
+uci -q get singbox-ui.tproxy >/dev/null 2>&1 \
+	&& { echo "FAIL: rerun resurrected tproxy section"; exit 1; }
+echo "  PASS: migration idempotent"
 
 echo "OK"
