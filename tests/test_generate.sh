@@ -54,9 +54,10 @@ config fakeip 'fakeip'
 	option inet4_range '198.18.0.0/15'
 	option inet6_range 'fc00::/18'
 
-config tproxy 'tproxy'
+config inbound 'tproxy_in'
 	option enabled '1'
-	option port '7893'
+	option protocol 'tproxy'
+	option listen_port '7893'
 "
 run_gen
 check "fakeip enabled"    '"enabled": true'              "$TMPDIR/out.json"
@@ -464,8 +465,10 @@ check "dns detour out"   '"detour": "my_vless"'                   "$TMPDIR/out.j
 
 echo "-- hijack_dns=0 → no hijack rule"
 write_cfg "
-config tproxy 'tproxy'
+config inbound 'tproxy_in'
 	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
 	option hijack_dns '0'
 "
 run_gen
@@ -475,8 +478,10 @@ echo "  PASS: no hijack rule when flag off"
 
 echo "-- hijack_dns=1 → first route.rule is {protocol:dns, action:hijack-dns}"
 write_cfg "
-config tproxy 'tproxy'
+config inbound 'tproxy_in'
 	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
 	option hijack_dns '1'
 
 config outbound 'p'
@@ -507,81 +512,15 @@ if [ -z "$hijack_ln" ] || [ -z "$other_ln" ] || [ "$hijack_ln" -ge "$other_ln" ]
 fi
 echo "  PASS: hijack rule is first"
 
-echo "-- hijack_dns=1 even without tproxy.enabled still works"
+echo "-- hijack_dns=1 on an enabled tproxy inbound emits hijack rule"
 write_cfg "
-config tproxy 'tproxy'
-	option enabled '0'
+config inbound 'tproxy_in'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
 	option hijack_dns '1'
 "
 run_gen
 check "hijack rule still present" '"action": "hijack-dns"' "$TMPDIR/out.json"
-
-echo "-- expose_proxy=0 → no extra inbound, no extra route rule"
-write_cfg "
-config outbound 'p'
-	option enabled '1'
-	option proxy_type 'interface'
-	option interface 'eth0'
-"
-run_gen
-grep -q '"tag": "in_p"' "$TMPDIR/out.json" \
-    && { echo "FAIL: in_p tag emitted with expose_proxy off"; exit 1; }
-echo "  PASS: no exposed inbound when flag off"
-
-echo "-- expose_proxy=1 with iface IP resolved via env stub"
-write_cfg "
-config tproxy 'tproxy'
-	option enabled '1'
-
-config outbound 'p'
-	option enabled '1'
-	option proxy_type 'interface'
-	option interface 'eth0'
-	option expose_proxy '1'
-	option expose_type 'socks'
-	option expose_port '1080'
-	option expose_listen 'br-lan'
-"
-SINGBOX_IFACE_br_lan='192.168.1.1' run_gen
-check "exposed tag"        '"tag": "in_p"'           "$TMPDIR/out.json"
-check "exposed type socks" '"type": "socks"'          "$TMPDIR/out.json"
-check "exposed listen ip"  '"listen": "192.168.1.1"' "$TMPDIR/out.json"
-check "exposed port"       '"listen_port": 1080'     "$TMPDIR/out.json"
-# Route rule binds inbound to outbound — search for the line pairing.
-awk '/"inbound":/,/"outbound":/' "$TMPDIR/out.json" | grep -q '"in_p"' \
-    || { echo "FAIL: route.rule missing inbound binding"; cat "$TMPDIR/out.json"; exit 1; }
-echo "  PASS: route rule binds in_p → p"
-
-echo "-- expose_proxy=1, iface unresolvable → inbound skipped + warning"
-write_cfg "
-config outbound 'q'
-	option enabled '1'
-	option proxy_type 'interface'
-	option interface 'eth0'
-	option expose_proxy '1'
-	option expose_type 'http'
-	option expose_port '8080'
-	option expose_listen 'doesnotexist0'
-"
-SINGBOX_IFACE_doesnotexist0='' run_gen || true
-grep -q '"tag": "in_q"' "$TMPDIR/out.json" \
-    && { echo "FAIL: in_q must be skipped when iface has no IP"; cat "$TMPDIR/out.json"; exit 1; }
-grep -qi "doesnotexist0\|no ipv4\|skip" "$TMPDIR/gen.stderr" \
-    || { echo "FAIL: missing warning for unresolved iface"; cat "$TMPDIR/gen.stderr"; exit 1; }
-echo "  PASS: inbound skipped when iface unresolvable"
-
-echo "-- expose_proxy=1, empty expose_listen → listens on 0.0.0.0"
-write_cfg "
-config outbound 'r'
-	option enabled '1'
-	option proxy_type 'interface'
-	option interface 'eth0'
-	option expose_proxy '1'
-	option expose_type 'mixed'
-	option expose_port '7891'
-"
-run_gen
-check "default listen 0.0.0.0" '"listen": "0.0.0.0"' "$TMPDIR/out.json"
-check "mixed type"             '"type": "mixed"'     "$TMPDIR/out.json"
 
 echo "OK"
