@@ -232,11 +232,11 @@ config outbound 'subA'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
 run_uc fetch-subs                                  # warm cache
-old_mt=$(stat -c %Y "$SINGBOX_TMPDIR/sub_subA.txt")
+old_mt=$(F="$SINGBOX_TMPDIR/sub_subA.txt" "$UCODE_BIN" -e 'let s=require("fs").stat(getenv("F")); print(s ? s.mtime : 0)')
 sleep 1
 : >"$FAKE_CURL_LOG"
 SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions   # fresh → no-op
-new_mt=$(stat -c %Y "$SINGBOX_TMPDIR/sub_subA.txt")
+new_mt=$(F="$SINGBOX_TMPDIR/sub_subA.txt" "$UCODE_BIN" -e 'let s=require("fs").stat(getenv("F")); print(s ? s.mtime : 0)')
 [ "$old_mt" = "$new_mt" ] || fail "fresh refresh re-downloaded"
 [ ! -s "$FAKE_CURL_LOG" ] || fail "fresh refresh called curl"
 pass "fresh refresh is no-op"

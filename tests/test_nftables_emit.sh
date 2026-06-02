@@ -82,8 +82,6 @@ echo "$out" | grep -q "chain prerouting_mark"  || { echo "FAIL: missing mark cha
 echo "$out" | grep -q "set rs_"                && { echo "FAIL: unexpected nfset emitted with empty cache"; exit 1; }
 echo "$out" | grep -q "@rs_"                   && { echo "FAIL: unexpected nfset rule emitted"; exit 1; }
 
-command -v jq >/dev/null 2>&1 || { echo "SKIP: jq not available for ruleset emit tests"; echo "OK"; exit 0; }
-
 # Clean any leftover ruleset caches from earlier failed runs so each scenario
 # starts from a known state.
 rm -f /tmp/singbox-ui/rs_test_*.json 2>/dev/null
