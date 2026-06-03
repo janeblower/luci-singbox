@@ -49,14 +49,15 @@ grep -q "'ruleset'"             "$JS" || { echo "FAIL: no ruleset section type";
 grep -q "'route_rule'"          "$JS" || { echo "FAIL: no route_rule section type"; exit 1; }
 grep -q "modaltitle"            "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
 
-echo "-- references new outbound proxy types"
-grep -q "'json'"                 "$JS" || { echo "FAIL: no proxy_type=json"; exit 1; }
-grep -q "'subscription'"         "$JS" || { echo "FAIL: no proxy_type=subscription"; exit 1; }
-grep -q "proxy_json"             "$JS" || { echo "FAIL: no proxy_json field"; exit 1; }
+echo "-- references new outbound types (merged type field)"
+grep -q "'vless'"                "$JS" || { echo "FAIL: no type=vless"; exit 1; }
+grep -q "'subscription'"         "$JS" || { echo "FAIL: no type=subscription"; exit 1; }
+grep -q "proxy_url"              "$JS" || { echo "FAIL: no proxy_url field"; exit 1; }
 grep -q "sub_url"                "$JS" || { echo "FAIL: no sub_url field"; exit 1; }
 grep -q "sub_update_via"         "$JS" || { echo "FAIL: no sub_update_via field"; exit 1; }
 grep -q "sub_interval"           "$JS" || { echo "FAIL: no sub_interval field"; exit 1; }
-grep -q "form.TextValue"         "$JS" || { echo "FAIL: no form.TextValue widget"; exit 1; }
+! grep -q "proxy_type"           "$JS" || { echo "FAIL: legacy proxy_type still present"; exit 1; }
+! grep -q "'json'"               "$JS" || { echo "FAIL: legacy json outbound type still present"; exit 1; }
 
 echo "-- references ruleset fields"
 grep -q "nft_rules"              "$JS" || { echo "FAIL: no nft_rules field"; exit 1; }

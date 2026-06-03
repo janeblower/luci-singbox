@@ -15,9 +15,9 @@ function csv_list(v) {
 	return out;
 }
 // Client-side TLS. null when security=none. hysteria2 forces tls.
-function build_tls_client(s) {
+function build_tls_client(s, proto) {
 	let sec = s_opt(s, "security") || "none";
-	if (s.protocol === "hysteria2") sec = "tls";
+	if (proto === "hysteria2") sec = "tls";
 	if (sec === "none") return null;
 	let tls = { enabled: true };
 	if (length(s_opt(s, "tls_server_name"))) tls.server_name = s.tls_server_name;
@@ -51,9 +51,7 @@ function build_transport(s) {
 	return tr;
 }
 
-function build_constructor(s) {
-	let proto = s_opt(s, "protocol");
-	if (!length(proto)) { warn("outbound.uc: constructor without protocol; skipping\n"); return null; }
+function build_constructor_for(s, proto) {
 	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
 
 	if (proto === "vless" || proto === "vmess") {
@@ -78,7 +76,7 @@ function build_constructor(s) {
 		if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
 	}
 	if (proto !== "shadowsocks") {
-		let tls = build_tls_client(s);
+		let tls = build_tls_client(s, proto);
 		if (tls) ob.tls = tls;
 	}
 	if (proto === "vless" || proto === "vmess" || proto === "trojan") {
@@ -152,16 +150,6 @@ function parse_proxy_url(url) {
 	return null;
 }
 
-function parse_json_outbound(json_str, name) {
-	let parsed = json(json_str ?? "");
-	if (!parsed || type(parsed) !== "object") {
-		warn("outbound.uc: invalid JSON outbound for " + name + "\n");
-		return null;
-	}
-	parsed.tag = name;
-	return parsed;
-}
-
 function read_subscription_urls(name) {
 	let path = `${TMPDIR}/sub_${name}.txt`;
 	let f = fs.open(path, "r");
@@ -186,24 +174,24 @@ function build_outbounds(cur) {
 		if (section.enabled === "0") return;
 
 		let name = section[".name"];
-		let proxy_type = section.proxy_type;
+		let kind = s_opt(section, "type");
+		if (kind === "") return;          // unmigrated/empty section — skip
 		let outbound = null;
 
-		if (proxy_type === "interface") {
+		if (kind === "interface") {
 			// UCI logical name (e.g. "wan") → Linux netdev (e.g. "eth0").
 			// sing-box bind_interface expects a real device name. Falls
 			// back to the input verbatim if resolution fails (so a user
 			// who already typed a real device name keeps working).
 			let dev = helpers.resolve_iface_device(section.interface);
 			outbound = { tag: name, type: "direct", bind_interface: dev };
-		} else if (proxy_type === "url") {
+		} else if (kind === "url") {
 			let parsed = parse_proxy_url(section.proxy_url ?? "");
 			if (parsed) { parsed.tag = name; outbound = parsed; }
-		} else if (proxy_type === "json") {
-			outbound = parse_json_outbound(section.proxy_json, name);
-		} else if (proxy_type === "constructor") {
-			outbound = build_constructor(section);
-		} else if (proxy_type === "subscription") {
+		} else if (kind === "vless" || kind === "vmess" || kind === "trojan"
+		           || kind === "hysteria2" || kind === "shadowsocks") {
+			outbound = build_constructor_for(section, kind);
+		} else if (kind === "subscription") {
 			let urls = read_subscription_urls(name);
 			if (!length(urls)) return;
 
@@ -234,6 +222,9 @@ function build_outbounds(cur) {
 				let parsed = parse_proxy_url(u);
 				if (parsed) { parsed.tag = name; outbound = parsed; break; }
 			}
+		} else {
+			warn(sprintf("outbound.uc: unknown type '%s' for '%s'; skipping\n", kind, name));
+			return;
 		}
 
 		if (!outbound) return;
