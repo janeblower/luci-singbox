@@ -55,9 +55,9 @@ run_uc() {
 echo "-- stub foreach(null) returns all sections"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'a'
-	option proxy_type 'subscription'
+	option type 'subscription'
 config outbound 'b'
-	option proxy_type 'interface'
+	option type 'interface'
 EOF
 # Drive a tiny ucode probe through the same loader to verify foreach(null).
 cat >"$TMPDIR/probe.uc" <<'EOF'
@@ -75,7 +75,7 @@ pass "foreach(null) yields all sections"
 echo "-- fetch-subs decodes base64 body and writes sub_<name>.txt"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subA'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'https://example.test/sub'
 EOF
 # base64("vless://uuid@host:443?security=tls#A\n")
@@ -123,7 +123,7 @@ pass "local source ruleset"
 echo "-- SINGBOX_BOOT_FETCH=1 uses --max-time 5 for subs"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subA'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'https://example.test/sub'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
@@ -154,10 +154,10 @@ EOF
 chmod +x "$TMPDIR/bin/curl"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subA'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'https://example.test/a'
 config outbound 'subB'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'https://example.test/b'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
@@ -190,7 +190,7 @@ chmod +x "$TMPDIR/bin/curl"
 echo "-- failed curl does not clobber existing sub_<name>.txt"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subA'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'https://example.test/sub'
 EOF
 # Seed an existing sub_subA.txt
@@ -226,7 +226,7 @@ chmod +x "$TMPDIR/bin/curl"
 echo "-- refresh respects mtime"
 cat >"$TMPDIR/singbox-ui" <<EOF
 config outbound 'subA'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'https://example.test/sub'
 	option sub_interval '3600'
 EOF
