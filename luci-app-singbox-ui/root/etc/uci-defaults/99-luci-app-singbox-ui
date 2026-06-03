@@ -226,4 +226,45 @@ ensure_clash_api_secret() {
 }
 ensure_clash_api_secret
 
+# ---------------------------------------------------------------------------
+# Cache file migration: convert legacy `cache` (often disabled + explicit
+# /tmp path) into the new storage-mode model. Idempotent.
+# ---------------------------------------------------------------------------
+migrate_cache_storage() {
+	[ "$(uci -q get singbox-ui.cache 2>/dev/null)" = "cache" ] || {
+		uci -q set singbox-ui.cache='cache'
+		uci -q set singbox-ui.cache.enabled='1'
+	}
+
+	# If storage is already set, the user (or this script) has migrated.
+	[ -n "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" ] && return 0
+
+	_was_legacy=0
+	_path=$(uci -q get singbox-ui.cache.path 2>/dev/null || true)
+	case "$_path" in
+		""|"/tmp/singbox-ui-cache.db")
+			uci -q set singbox-ui.cache.storage='ram'
+			uci -q delete singbox-ui.cache.path 2>/dev/null || true
+			_was_legacy=1 ;;
+		"/etc/sing-box/cache.db")
+			uci -q set singbox-ui.cache.storage='flash'
+			uci -q delete singbox-ui.cache.path 2>/dev/null || true ;;
+		*)
+			uci -q set singbox-ui.cache.storage='custom' ;;
+	esac
+
+	# Only flip the shipped-default disabled state. A user who explicitly
+	# disabled cache after customising path keeps their setting.
+	if [ "$_was_legacy" = "1" ]; then
+		uci -q set singbox-ui.cache.enabled='1'
+	fi
+
+	# store_fakeip default: only set if absent.
+	_sf=$(uci -q get singbox-ui.cache.store_fakeip 2>/dev/null || echo '')
+	[ "$_sf" = "" ] && uci -q set singbox-ui.cache.store_fakeip='1'
+
+	uci -q commit singbox-ui
+}
+migrate_cache_storage
+
 exit 0

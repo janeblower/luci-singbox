@@ -185,4 +185,42 @@ sec2=$(uci -q get singbox-ui.clash_api.secret)
 [ "$sec1" = "$sec2" ] || { echo "FAIL: secret changed on rerun ($sec1 → $sec2)"; exit 1; }
 echo "  PASS: secret stable across reruns"
 
+echo "-- cache migrates legacy enabled=0 + explicit /tmp path → storage=ram"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config cache 'cache'
+	option enabled '0'
+	option path '/tmp/singbox-ui-cache.db'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: cache migration crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.cache.enabled 2>/dev/null)" = "1" ] \
+	|| { echo "FAIL: cache enabled not flipped to 1"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: cache enabled flipped"
+[ "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" = "ram" ] \
+	|| { echo "FAIL: cache storage != ram"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: cache storage=ram"
+uci -q get singbox-ui.cache.path >/dev/null 2>&1 \
+	&& { echo "FAIL: cache path should be absent after migration"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: cache no path scalar"
+[ "$(uci -q get singbox-ui.cache.store_fakeip 2>/dev/null)" = "1" ] \
+	|| { echo "FAIL: cache store_fakeip != 1"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: cache store_fakeip=1"
+
+echo "-- cache leaves user-customised path alone (storage=custom)"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config cache 'cache'
+	option enabled '1'
+	option path '/srv/my.db'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: cache custom migration crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" = "custom" ] \
+	|| { echo "FAIL: custom storage != custom"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: custom storage"
+[ "$(uci -q get singbox-ui.cache.path 2>/dev/null)" = "/srv/my.db" ] \
+	|| { echo "FAIL: custom path not preserved"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: custom path preserved"
+
 echo "OK"
