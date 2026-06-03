@@ -242,4 +242,46 @@ echo "  PASS: path preserved"
 	|| { echo "FAIL: explicit-disable enabled was flipped (should stay 0)"; uci show singbox-ui.cache; exit 1; }
 echo "  PASS: enabled stays 0 (user-explicit-disable respected)"
 
+echo "-- dns_in is created for upgrades that don't have it"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config inbound 'tproxy_in'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: dns_in creation crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.dns_in 2>/dev/null)" = "inbound" ] \
+	|| { echo "FAIL: dns_in section type != inbound"; uci show singbox-ui; exit 1; }
+[ "$(uci get singbox-ui.dns_in.protocol)" = "direct" ] \
+	|| { echo "FAIL: dns_in.protocol != direct"; exit 1; }
+[ "$(uci get singbox-ui.dns_in.listen)" = "127.0.0.53" ] \
+	|| { echo "FAIL: dns_in.listen != 127.0.0.53"; exit 1; }
+[ "$(uci get singbox-ui.dns_in.listen_port)" = "53" ] \
+	|| { echo "FAIL: dns_in.listen_port != 53"; exit 1; }
+[ "$(uci get singbox-ui.dns_in.dns_listener)" = "1" ] \
+	|| { echo "FAIL: dns_in.dns_listener != 1"; exit 1; }
+[ "$(uci get singbox-ui.dns_in.network)" = "udp" ] \
+	|| { echo "FAIL: dns_in.network != udp"; exit 1; }
+[ "$(uci get singbox-ui.dns_in.enabled)" = "1" ] \
+	|| { echo "FAIL: dns_in.enabled != 1"; exit 1; }
+echo "  PASS: dns_in created with defaults"
+
+echo "-- dns_in already present is left untouched"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config inbound 'dns_in'
+	option enabled '1'
+	option protocol 'direct'
+	option listen '127.0.0.99'
+	option listen_port '53'
+	option dns_listener '1'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: dns_in preserve crashed"; cat "$log"; exit 1; }
+[ "$(uci get singbox-ui.dns_in.listen)" = "127.0.0.99" ] \
+	|| { echo "FAIL: dns_in.listen was overwritten (expected 127.0.0.99)"; exit 1; }
+echo "  PASS: dns_in preserved (not overwritten)"
+
 echo "OK"
