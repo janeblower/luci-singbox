@@ -46,10 +46,14 @@ config dns_server 'fakeip'
 config dns_server 'google'
 	option enabled '1'
 	option type 'https'
-	option server 'dns.google'
+	# Numeric server avoids a chicken-and-egg bootstrap (no DNS-to-resolve-DNS).
+	# Detour intentionally unset: pointing at the auto-injected `direct`
+	# outbound is rejected by sing-box 1.12 ("detour to an empty direct
+	# outbound makes no sense"). Users who want this query pinned to a
+	# specific WAN should set `detour` to a user-defined outbound.
+	option server '8.8.8.8'
 	option server_port '443'
 	option path '/dns-query'
-	option detour 'direct'
 
 config dns_rule 'defaults_fakeip'
 	option enabled '1'

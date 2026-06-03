@@ -38,9 +38,21 @@ check "route to wan"      '"outbound": "direct_wan"'
 
 echo "-- dns: fakeip + google + rule + final"
 check "fakeip server"  '"type": "fakeip"'
-check "google server"  '"server": "dns.google"'
+check "google server"  '"server": "8.8.8.8"'
+grep -q '"detour":' "$TMPDIR/out.json" && { echo "FAIL: default DNS must not detour to implicit direct"; exit 1; }
+echo "  PASS: no DNS detour to implicit outbound"
 check "dns rule"       '"action": "route"'
 check "dns final"      '"final": "google"'
 check "dns strategy"   '"strategy": "prefer_ipv4"'
+
+# Final, strongest gate: hand the generated config to the actual daemon's
+# config validator. Catches any new "fatal at startup" footgun the assertions
+# above would miss (this is exactly how the default-DNS-detour crash slipped
+# through). Skipped if sing-box isn't installed (e.g. plain host runs).
+if command -v sing-box >/dev/null 2>&1; then
+	sing-box check -c "$TMPDIR/out.json" >"$TMPDIR/sb.err" 2>&1 || {
+		echo "FAIL: sing-box check rejected default config"; cat "$TMPDIR/sb.err"; exit 1; }
+	echo "  PASS: sing-box check accepts default config"
+fi
 
 echo "OK"
