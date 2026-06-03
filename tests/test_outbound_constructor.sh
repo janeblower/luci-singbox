@@ -147,4 +147,55 @@ config outbound 'notype'
 run_gen || true
 nocheck "notype skipped" '"tag": "notype"'
 
+echo "-- vless outbound with multiplex + utls"
+write_cfg "
+config outbound 'vl'
+	option enabled '1'
+	option type 'vless'
+	option server 'a.b'
+	option server_port '443'
+	option server_uuid 'uu'
+	option security 'tls'
+	option tls_server_name 'a.b'
+	option utls_fingerprint 'chrome'
+	option multiplex_enabled '1'
+	option multiplex_protocol 'smux'
+	option multiplex_max_connections '4'
+"
+run_gen
+check "outbound utls"         '"fingerprint": "chrome"'
+check "outbound mux smux"     '"protocol": "smux"'
+check "outbound mux max"      '"max_connections": 4'
+
+echo "-- hysteria2 outbound with masquerade"
+write_cfg "
+config outbound 'hy'
+	option enabled '1'
+	option type 'hysteria2'
+	option server 'h.b'
+	option server_port '8443'
+	option server_password 'p'
+	option up_mbps '100'
+	option down_mbps '50'
+	option hysteria2_masquerade 'https://www.example.com'
+"
+run_gen
+check "outbound hy2 masquerade" '"masquerade": "https://www.example.com"'
+
+echo "-- vless outbound with xhttp transport"
+write_cfg "
+config outbound 'vx'
+	option enabled '1'
+	option type 'vless'
+	option server 'a.b'
+	option server_port '443'
+	option server_uuid 'uu'
+	option transport 'xhttp'
+	option transport_path '/x'
+	option transport_xhttp_mode 'stream-up'
+"
+run_gen
+check "outbound vless xhttp"      '"type": "xhttp"'
+check "outbound vless xhttp mode" '"mode": "stream-up"'
+
 echo "OK"

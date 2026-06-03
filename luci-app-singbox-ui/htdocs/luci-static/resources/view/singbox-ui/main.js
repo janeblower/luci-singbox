@@ -712,7 +712,7 @@ function buildOutboundsMap() {
 
 	// transport (vless/vmess/trojan)
 	o = s.option(form.ListValue, 'transport', _('Transport'));
-	['none','ws','grpc','httpupgrade'].forEach(function (v) { o.value(v, v); });
+	['none','ws','grpc','httpupgrade','xhttp','http'].forEach(function (v) { o.value(v, v); });
 	o.modalonly = true; o.default = 'none';
 	o.depends('type', 'vless');
 	o.depends('type', 'vmess');
@@ -720,12 +720,63 @@ function buildOutboundsMap() {
 	o = s.option(form.Value, 'transport_path', _('Transport path'));
 	o.modalonly = true; o.placeholder = '/';
 	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
+	o.depends({ transport: 'xhttp' }); o.depends({ transport: 'http' });
 	o = s.option(form.Value, 'transport_host', _('Transport host'));
 	o.modalonly = true;
 	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
 	o = s.option(form.Value, 'transport_service_name', _('gRPC service name'));
 	o.modalonly = true;
 	o.depends({ transport: 'grpc' });
+
+	o = s.option(form.ListValue, 'transport_xhttp_mode', _('XHTTP mode'));
+	o.modalonly = true;
+	o.value('auto', 'auto'); o.value('packet-up', 'packet-up');
+	o.value('stream-up', 'stream-up'); o.value('stream-one', 'stream-one');
+	o.default = 'auto';
+	o.depends({ type: 'vless', transport: 'xhttp' });
+	o.depends({ type: 'vmess', transport: 'xhttp' });
+	o.depends({ type: 'trojan', transport: 'xhttp' });
+
+	o = s.option(form.DynamicList, 'transport_hosts', _('HTTP hosts'));
+	o.modalonly = true;
+	o.depends({ type: 'vless', transport: 'http' });
+	o.depends({ type: 'vmess', transport: 'http' });
+	o.depends({ type: 'trojan', transport: 'http' });
+
+	// Multiplex
+	o = s.option(form.Flag, 'multiplex_enabled', _('Multiplex'));
+	o.modalonly = true;
+	o.depends('type', 'vless');
+	o.depends('type', 'vmess');
+	o.depends('type', 'trojan');
+
+	o = s.option(form.ListValue, 'multiplex_protocol', _('Multiplex protocol'));
+	o.modalonly = true;
+	['smux','yamux','h2mux'].forEach(function (v) { o.value(v, v); });
+	o.default = 'smux';
+	o.depends('multiplex_enabled', '1');
+
+	o = s.option(form.Value, 'multiplex_max_connections', _('Multiplex max connections'));
+	o.modalonly = true; o.datatype = 'uinteger';
+	o.depends('multiplex_enabled', '1');
+
+	o = s.option(form.Value, 'multiplex_min_streams', _('Multiplex min streams'));
+	o.modalonly = true; o.datatype = 'uinteger';
+	o.depends('multiplex_enabled', '1');
+
+	o = s.option(form.Value, 'multiplex_max_streams', _('Multiplex max streams'));
+	o.modalonly = true; o.datatype = 'uinteger';
+	o.depends('multiplex_enabled', '1');
+
+	o = s.option(form.Flag, 'multiplex_padding', _('Multiplex padding'));
+	o.modalonly = true;
+	o.depends('multiplex_enabled', '1');
+
+	// Hysteria2 masquerade
+	o = s.option(form.Value, 'hysteria2_masquerade', _('Masquerade URL'));
+	o.modalonly = true;
+	o.placeholder = 'https://www.example.com';
+	o.depends('type', 'hysteria2');
 
 	o = s.option(widgets.DeviceSelect, 'interface', _('Interface'));
 	o.modalonly = true;

@@ -47,8 +47,29 @@ function build_transport(s) {
 		if (length(s_opt(s, "transport_host"))) tr.host = s.transport_host;
 	} else if (t === "grpc") {
 		if (length(s_opt(s, "transport_service_name"))) tr.service_name = s.transport_service_name;
+	} else if (t === "xhttp") {
+		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
+		if (length(s_opt(s, "transport_xhttp_mode"))) tr.mode = s.transport_xhttp_mode;
+	} else if (t === "http") {
+		let hosts = csv_list(s_opt(s, "transport_hosts"));
+		if (length(hosts)) tr.host = hosts;
+		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
 	}
 	return tr;
+}
+
+function build_multiplex(s) {
+	if (!s_bool(s, "multiplex_enabled")) return null;
+	let m = { enabled: true };
+	if (length(s_opt(s, "multiplex_protocol"))) m.protocol = s.multiplex_protocol;
+	if (length(s_opt(s, "multiplex_max_connections")))
+		m.max_connections = s_num(s.multiplex_max_connections);
+	if (length(s_opt(s, "multiplex_min_streams")))
+		m.min_streams = s_num(s.multiplex_min_streams);
+	if (length(s_opt(s, "multiplex_max_streams")))
+		m.max_streams = s_num(s.multiplex_max_streams);
+	if (s_bool(s, "multiplex_padding")) m.padding = true;
+	return m;
 }
 
 function build_constructor_for(s, proto) {
@@ -74,6 +95,8 @@ function build_constructor_for(s, proto) {
 			ob.obfs = { type: ot, password: s.hysteria2_obfs_password };
 		if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
 		if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
+		if (length(s_opt(s, "hysteria2_masquerade")))
+			ob.masquerade = s.hysteria2_masquerade;
 	}
 	if (proto !== "shadowsocks") {
 		let tls = build_tls_client(s, proto);
@@ -82,6 +105,8 @@ function build_constructor_for(s, proto) {
 	if (proto === "vless" || proto === "vmess" || proto === "trojan") {
 		let tr = build_transport(s);
 		if (tr) ob.transport = tr;
+		let mux = build_multiplex(s);
+		if (mux) ob.multiplex = mux;
 	}
 	return ob;
 }
