@@ -99,6 +99,45 @@ expect('vless with reality TLS',
 		reality_handshake_server_port: '443',
 	}});
 
+const fnOut = ctx.__sb_jsonImportOutbound;
+if (typeof fnOut !== 'function') {
+	console.error('FAIL: __sb_jsonImportOutbound not defined');
+	process.exit(1);
+}
+
+expect('vless outbound',
+	fnOut({ type: 'vless', server: 'a.b', server_port: 443, uuid: 'uu',
+	        tls: { enabled: true, server_name: 'a.b' } }),
+	{ ok: true, errors: [], fields: {
+		type: 'vless', server: 'a.b', server_port: 443, server_uuid: 'uu',
+		security: 'tls', tls_server_name: 'a.b',
+	}});
+
+expect('inbound rejected as outbound',
+	fnOut({ type: 'shadowsocks', listen: '::', listen_port: 8388,
+	        method: 'aes-256-gcm', password: 'p' }),
+	{ ok: false,
+	  errors: ['Looks like an inbound (has "listen"). Use the inbound importer.'],
+	  fields: {} });
+
+expect('outbound missing type rejected',
+	fnOut({ server: 'a.b', server_port: 443 }),
+	{ ok: false, errors: ['Missing "type" field'], fields: {} });
+
+expect('outbound unknown type rejected',
+	fnOut({ type: 'wireguard' }),
+	{ ok: false, errors: ['Unknown outbound type: wireguard'], fields: {} });
+
+expect('hysteria2 outbound with obfs',
+	fnOut({ type: 'hysteria2', server: 'h.b', server_port: 8443,
+	        password: 'pw', up_mbps: 100, down_mbps: 50,
+	        obfs: { type: 'salamander', password: 'op' } }),
+	{ ok: true, errors: [], fields: {
+		type: 'hysteria2', server: 'h.b', server_port: 8443,
+		server_password: 'pw', up_mbps: '100', down_mbps: '50',
+		hysteria2_obfs_type: 'salamander', hysteria2_obfs_password: 'op',
+	}});
+
 console.log('OK');
 NODE
 
