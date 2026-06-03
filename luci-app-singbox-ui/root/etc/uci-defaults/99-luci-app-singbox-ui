@@ -282,4 +282,19 @@ ensure_dns_inbound() {
 }
 ensure_dns_inbound
 
+# ---------------------------------------------------------------------------
+# Drop deprecated `extra_json` option from inbound/outbound sections.
+# The constructor now covers all needed fields; raw-JSON merging is gone.
+# ---------------------------------------------------------------------------
+purge_extra_json() {
+	for _t in inbound outbound; do
+		for _sec in $(uci -q show singbox-ui 2>/dev/null \
+			| sed -n "s/^singbox-ui\\.\\([^.]*\\)=$_t\$/\\1/p"); do
+			uci -q delete "singbox-ui.$_sec.extra_json" 2>/dev/null || true
+		done
+	done
+	uci -q commit singbox-ui
+}
+purge_extra_json
+
 exit 0

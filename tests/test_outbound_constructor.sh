@@ -131,7 +131,7 @@ check "ss type"     '"type": "shadowsocks"'
 check "ss method"   '"method": "aes-256-gcm"'
 check "ss password" '"password": "ss-pw"'
 
-echo "-- extra_json merges; protocol-less constructor skipped"
+echo "-- extra_json is no longer honoured (field deprecated)"
 write_cfg "
 config outbound 'ex'
 	option enabled '1'
@@ -141,13 +141,17 @@ config outbound 'ex'
 	option server_port '443'
 	option server_password 'p'
 	option extra_json '{\"multiplex\":{\"enabled\":true}}'
+"
+run_gen
+nocheck "extra not merged" '"multiplex":'
 
+echo "-- protocol-less constructor is skipped"
+write_cfg "
 config outbound 'noproto'
 	option enabled '1'
 	option proxy_type 'constructor'
 "
 run_gen || true
-check "extra merged" '"multiplex":'
 nocheck "noproto skipped" '"tag": "noproto"'
 
 echo "OK"

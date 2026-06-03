@@ -14,14 +14,6 @@ function csv_list(v) {
 	for (let p in split(v, ",")) { let t = trim(p); if (length(t)) push(out, t); }
 	return out;
 }
-function merge_extra(obj, json_str) {
-	if (json_str == null || json_str === "") return;
-	let extra;
-	try { extra = json(json_str); } catch (e) { extra = null; }
-	if (type(extra) !== "object") { warn("outbound.uc: invalid extra_json; ignored\n"); return; }
-	for (let k in extra) obj[k] = extra[k];
-}
-
 // Client-side TLS. null when security=none. hysteria2 forces tls.
 function build_tls_client(s) {
 	let sec = s_opt(s, "security") || "none";
@@ -93,7 +85,6 @@ function build_constructor(s) {
 		let tr = build_transport(s);
 		if (tr) ob.transport = tr;
 	}
-	merge_extra(ob, s_opt(s, "extra_json"));
 	return ob;
 }
 

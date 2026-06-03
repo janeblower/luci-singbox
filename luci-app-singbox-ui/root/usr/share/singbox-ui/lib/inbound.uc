@@ -14,18 +14,6 @@ function csv_list(v) {
 	return out;
 }
 
-// merge_extra(obj, json_str) — shallow-merge a raw JSON object over obj.
-function merge_extra(obj, json_str) {
-	if (json_str == null || json_str === "") return;
-	let extra;
-	try { extra = json(json_str); } catch (e) { extra = null; }
-	if (type(extra) !== "object") {
-		warn("inbound.uc: invalid extra_json; ignored\n");
-		return;
-	}
-	for (let k in extra) obj[k] = extra[k];
-}
-
 // build_user(s) — single-user object for vless/vmess/trojan/hysteria2.
 function build_user(s) {
 	let proto = s.protocol;
@@ -160,7 +148,6 @@ function build_one(s) {
 		return null;
 	}
 
-	merge_extra(ob, s_opt(s, "extra_json"));
 	return ob;
 }
 

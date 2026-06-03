@@ -284,4 +284,25 @@ IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbo
 	|| { echo "FAIL: dns_in.listen was overwritten (expected 127.0.0.99)"; exit 1; }
 echo "  PASS: dns_in preserved (not overwritten)"
 
+echo "-- extra_json is stripped from inbound/outbound sections"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config inbound 'a'
+	option protocol 'tproxy'
+	option extra_json '{"sniff":true}'
+
+config outbound 'b'
+	option proxy_type 'constructor'
+	option protocol 'vless'
+	option extra_json '{"x":1}'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: purge_extra_json crashed"; cat "$log"; exit 1; }
+uci -q get singbox-ui.a.extra_json >/dev/null 2>&1 \
+	&& { echo "FAIL: extra_json should be absent from inbound 'a'"; uci show singbox-ui.a; exit 1; }
+echo "  PASS: extra_json removed from inbound"
+uci -q get singbox-ui.b.extra_json >/dev/null 2>&1 \
+	&& { echo "FAIL: extra_json should be absent from outbound 'b'"; uci show singbox-ui.b; exit 1; }
+echo "  PASS: extra_json removed from outbound"
+
 echo "OK"

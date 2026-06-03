@@ -223,7 +223,7 @@ grep -qi 'invalid inbound_json' "$TMPDIR/gen.stderr" \
 	|| { echo "FAIL: missing warning for invalid inbound_json"; cat "$TMPDIR/gen.stderr"; exit 1; }
 echo "  PASS: invalid inbound_json warned + skipped"
 
-echo "-- extra_json merges over constructed object"
+echo "-- extra_json is no longer honoured for inbounds (field deprecated)"
 write_cfg "
 config inbound 'tp'
 	option enabled '1'
@@ -232,8 +232,7 @@ config inbound 'tp'
 	option extra_json '{\"sniff\":true,\"sniff_override_destination\":true}'
 "
 run_gen
-check "extra sniff"          '"sniff": true'
-check "extra sniff_override" '"sniff_override_destination": true'
+nocheck "extra not merged inbound" '"sniff": true'
 
 echo "-- direct (DNS) inbound on 127.0.0.53:53"
 write_cfg "

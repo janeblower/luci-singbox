@@ -278,17 +278,6 @@ function buildInboundsMap() {
 	o.modalonly = true;
 	o.depends({ transport: 'grpc' });
 
-	// advanced merge
-	o = s.option(form.TextValue, 'extra_json', _('Advanced JSON (merged)'));
-	o.modalonly = true; o.rows = 4; o.monospace = true;
-	o.placeholder = '{"sniff":true}';
-	o.depends('mode', 'constructor');
-	o.validate = function (section_id, value) {
-		if (value == null || value === '') return true;
-		try { JSON.parse(value); return true; }
-		catch (e) { return _('Invalid JSON: ') + e.message; }
-	};
-
 	return m;
 }
 
@@ -430,14 +419,6 @@ function buildOutboundsMap() {
 	o = s.option(form.Value, 'transport_service_name', _('gRPC service name'));
 	o.modalonly = true;
 	o.depends({ transport: 'grpc' });
-
-	o = s.option(form.TextValue, 'extra_json', _('Advanced JSON (merged)'));
-	o.modalonly = true; o.rows = 4; o.monospace = true; o.placeholder = '{"multiplex":{"enabled":true}}';
-	o.depends('proxy_type', 'constructor');
-	o.validate = function (section_id, value) {
-		if (value == null || value === '') return true;
-		try { JSON.parse(value); return true; } catch (e) { return _('Invalid JSON: ') + e.message; }
-	};
 
 	o = s.option(widgets.DeviceSelect, 'interface', _('Interface'));
 	o.modalonly = true;
