@@ -616,6 +616,20 @@ config inbound 'tproxy_in'
 run_gen
 check "hijack rule still present" '"action": "hijack-dns"' "$TMPDIR/out.json"
 
+echo "-- direct inbound with dns_listener=1 auto-adds hijack-dns route rule"
+write_cfg "
+config inbound 'dns_in'
+	option enabled '1'
+	option protocol 'direct'
+	option listen '127.0.0.53'
+	option listen_port '53'
+	option network 'udp'
+	option dns_listener '1'
+"
+run_gen
+check "hijack-dns rule action"   '"action": "hijack-dns"'  "$TMPDIR/out.json"
+check "hijack-dns rule inbound"  '"inbound": "dns_in"'     "$TMPDIR/out.json"
+
 echo "-- clash_api.enabled=1 emits experimental.clash_api alongside cache_file"
 write_cfg "
 config clash_api 'clash_api'

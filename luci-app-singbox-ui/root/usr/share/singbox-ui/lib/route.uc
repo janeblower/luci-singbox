@@ -19,6 +19,16 @@ function build_route_rules(cur) {
 	if (hijack)
 		push(rules, { protocol: "dns", action: "hijack-dns" });
 
+	// Auto-emit hijack-dns rules for direct inbounds flagged as DNS listeners.
+	// Must precede user-defined rules so DNS gets dispatched before any
+	// other matching logic sees the connection.
+	cur.foreach("singbox-ui", "inbound", function(s) {
+		if (s.enabled === "0") return;
+		if (s.protocol !== "direct") return;
+		if (s.dns_listener !== "1") return;
+		push(rules, { inbound: s[".name"], action: "hijack-dns" });
+	});
+
 	// Build a quick name→enabled lookup for rulesets. Disabled rulesets are
 	// dropped from each route_rule's `rule_set` list; if that empties the
 	// list, the route_rule itself is skipped (matches original behavior).
