@@ -60,6 +60,29 @@ function resolve_iface_ip(iface) {
 	return m ? m[1] : null;
 }
 
+// resolve_iface_device(iface) — translate a UCI logical interface name
+// (e.g. "wan", "lan") into the actual Linux netdev (e.g. "eth0", "pppoe-wan").
+// Falls back to the input verbatim when resolution fails or the daemon is
+// reached outside an OpenWrt environment (tests, dev containers); the latter
+// behaviour is what lets a user type a real device name directly.
+//
+// Test override: env SINGBOX_DEV_<iface> (non-alphanumeric → '_').
+function resolve_iface_device(iface) {
+	if (iface == null || iface === "") return iface;
+	let key = "SINGBOX_DEV_" + replace(iface, /[^A-Za-z0-9_]/g, "_");
+	let v = getenv(key);
+	if (v != null && length(v)) return v;
+	let fs_mod = require("fs");
+	let p = fs_mod.popen(
+		". /lib/functions/network.sh 2>/dev/null; " +
+		"network_get_device DEV " + sq(iface) + " 2>/dev/null && printf %s \"$DEV\"",
+		"r");
+	if (!p) return iface;
+	let body = trim(p.read("all") ?? "");
+	p.close();
+	return length(body) ? body : iface;
+}
+
 return {
 	uci_get_or_empty,
 	get_bool,
@@ -68,4 +91,5 @@ return {
 	as_array,
 	sq,
 	resolve_iface_ip,
+	resolve_iface_device,
 };

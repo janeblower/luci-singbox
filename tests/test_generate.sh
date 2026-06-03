@@ -80,7 +80,18 @@ config outbound 'via_wg0'
 "
 run_gen
 check "interface proxy tag"  '"tag": "via_wg0"'         "$TMPDIR/out.json"
+# Outside an OpenWrt netifd/ubus environment the resolver falls back to the
+# input verbatim, so a literal "wg0" still flows through unchanged.
 check "bind_interface"       '"bind_interface": "wg0"'  "$TMPDIR/out.json"
+
+echo "-- bind_interface honours SINGBOX_DEV_<iface> resolver override"
+write_cfg "
+config outbound 'wan_out'
+	option proxy_type 'interface'
+	option interface 'wan'
+"
+SINGBOX_DEV_wan=eth0 run_gen
+check "wan→eth0 via env" '"bind_interface": "eth0"' "$TMPDIR/out.json"
 
 # ---- vless URL ----
 echo "-- vless:// URL"

@@ -3,6 +3,7 @@
 const TMPDIR = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 
 let fs = require("fs");
+let helpers = require("helpers");
 
 function s_opt(s, k) { let v = s[k]; return (v == null) ? "" : v; }
 function s_bool(s, k) { return s[k] === "1"; }
@@ -198,7 +199,12 @@ function build_outbounds(cur) {
 		let outbound = null;
 
 		if (proxy_type === "interface") {
-			outbound = { tag: name, type: "direct", bind_interface: section.interface };
+			// UCI logical name (e.g. "wan") → Linux netdev (e.g. "eth0").
+			// sing-box bind_interface expects a real device name. Falls
+			// back to the input verbatim if resolution fails (so a user
+			// who already typed a real device name keeps working).
+			let dev = helpers.resolve_iface_device(section.interface);
+			outbound = { tag: name, type: "direct", bind_interface: dev };
 		} else if (proxy_type === "url") {
 			let parsed = parse_proxy_url(section.proxy_url ?? "");
 			if (parsed) { parsed.tag = name; outbound = parsed; }
