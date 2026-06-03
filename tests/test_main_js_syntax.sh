@@ -67,6 +67,12 @@ grep -q "'dns_server'"          "$JS" || { echo "FAIL: no dns_server section typ
 grep -q "'dns_rule'"            "$JS" || { echo "FAIL: no dns_rule section type"; exit 1; }
 grep -q "data-tab.*dns"         "$JS" || { echo "FAIL: no dns tab marker"; exit 1; }
 
+echo "-- references Monitoring tab"
+grep -q "buildMonitoring"        "$JS" || { echo "FAIL: no buildMonitoring"; exit 1; }
+grep -q "callClash"              "$JS" || { echo "FAIL: no callClash wrapper"; exit 1; }
+grep -q "clash_request"          "$JS" || { echo "FAIL: no clash_request method"; exit 1; }
+grep -q "data-tab.*monitoring"   "$JS" || { echo "FAIL: no monitoring tab marker"; exit 1; }
+
 echo "-- has sub-tab data-tab markers"
 grep -q "data-tab.*outbounds"    "$JS" || { echo "FAIL: no outbounds sub-tab marker"; exit 1; }
 grep -q "data-tab.*rulesets"     "$JS" || { echo "FAIL: no rulesets sub-tab marker"; exit 1; }
