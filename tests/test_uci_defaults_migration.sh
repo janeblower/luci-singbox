@@ -166,4 +166,23 @@ IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbo
 uci -q get singbox-ui.dns_outbound >/dev/null 2>&1 && { echo "FAIL: rerun resurrected dns_outbound"; exit 1; }
 echo "  PASS: DNS migration idempotent"
 
+echo "-- clash_api secret generated + idempotent"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config clash_api 'clash_api'
+	option enabled '0'
+	option listen '127.0.0.1'
+	option port '9090'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: secret gen crashed"; cat "$log"; exit 1; }
+sec1=$(uci -q get singbox-ui.clash_api.secret 2>/dev/null || true)
+[ -n "$sec1" ] || { echo "FAIL: secret not generated"; exit 1; }
+echo "  PASS: secret generated ($sec1)"
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: secret rerun crashed"; cat "$log"; exit 1; }
+sec2=$(uci -q get singbox-ui.clash_api.secret)
+[ "$sec1" = "$sec2" ] || { echo "FAIL: secret changed on rerun ($sec1 → $sec2)"; exit 1; }
+echo "  PASS: secret stable across reruns"
+
 echo "OK"

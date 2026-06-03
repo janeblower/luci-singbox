@@ -205,4 +205,25 @@ migrate_ruleset_dns_fakeip() {
 }
 migrate_ruleset_dns_fakeip
 
+# ---------------------------------------------------------------------------
+# Ensure a clash_api section exists and has a stable random secret.
+# ---------------------------------------------------------------------------
+if ensure_section clash_api clash_api; then
+	uci -q set singbox-ui.clash_api.enabled='0'
+	uci -q set singbox-ui.clash_api.listen='127.0.0.1'
+	uci -q set singbox-ui.clash_api.port='9090'
+	uci -q commit singbox-ui
+fi
+
+ensure_clash_api_secret() {
+	[ "$(uci -q get singbox-ui.clash_api 2>/dev/null)" = "clash_api" ] || return 0
+	_sec=$(uci -q get singbox-ui.clash_api.secret 2>/dev/null || true)
+	[ -n "$_sec" ] && return 0
+	_new=$(head -c16 /dev/urandom 2>/dev/null | hexdump -v -e '/1 "%02x"' 2>/dev/null)
+	[ -n "$_new" ] || _new=$(date +%s)$$
+	uci -q set singbox-ui.clash_api.secret="$_new"
+	uci -q commit singbox-ui
+}
+ensure_clash_api_secret
+
 exit 0
