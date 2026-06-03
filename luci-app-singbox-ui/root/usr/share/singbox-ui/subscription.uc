@@ -61,7 +61,7 @@ function try_b64_decode(s) {
 }
 
 function cmd_fetch_subs(cur) {
-	let names = helpers.sections_where(cur, "proxy_type", "subscription");
+	let names = helpers.sections_where(cur, "type", "subscription");
 	if (!length(names)) {
 		log_err("fetch_subs: no subscription outbounds configured");
 		return 0;
@@ -240,7 +240,7 @@ function is_stale(path, interval_s, force) {
 }
 
 function any_subs_stale(cur, force) {
-	for (let name in helpers.sections_where(cur, "proxy_type", "subscription")) {
+	for (let name in helpers.sections_where(cur, "type", "subscription")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "sub_interval");
 		if (iv === 0) iv = 3600;
