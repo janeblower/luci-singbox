@@ -344,4 +344,65 @@ uci -q get singbox-ui.ib_ctor.mode >/dev/null 2>&1 \
 	&& { echo "FAIL: mode option should be absent after migration"; uci show singbox-ui.ib_ctor; exit 1; }
 echo "  PASS: mode absent"
 
+echo "-- migrate_outbound_type: proxy_type=constructor + protocol=vless → type=vless"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config outbound 'ob_ctor'
+	option enabled '1'
+	option proxy_type 'constructor'
+	option protocol 'vless'
+	option server 'v.example.com'
+	option server_port '443'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: migrate_outbound_type (constructor+vless) crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.ob_ctor.type 2>/dev/null)" = "vless" ] \
+	|| { echo "FAIL: expected type=vless after migration"; uci show singbox-ui.ob_ctor; exit 1; }
+echo "  PASS: type=vless"
+uci -q get singbox-ui.ob_ctor.proxy_type >/dev/null 2>&1 \
+	&& { echo "FAIL: proxy_type should be absent after migration"; uci show singbox-ui.ob_ctor; exit 1; }
+echo "  PASS: proxy_type absent"
+uci -q get singbox-ui.ob_ctor.protocol >/dev/null 2>&1 \
+	&& { echo "FAIL: protocol should be absent after migration"; uci show singbox-ui.ob_ctor; exit 1; }
+echo "  PASS: protocol absent"
+
+echo "-- migrate_outbound_type: proxy_type=interface/url/subscription → type=<same>"
+for _pt in interface url subscription; do
+	rm -f "$CONFIG"
+	cat >"$CONFIG" <<EOF
+config outbound 'ob_${_pt}'
+	option enabled '1'
+	option proxy_type '${_pt}'
+EOF
+	IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+		>"$log" 2>&1 || { echo "FAIL: migrate_outbound_type (${_pt}) crashed"; cat "$log"; exit 1; }
+	_got=$(uci -q get "singbox-ui.ob_${_pt}.type" 2>/dev/null)
+	[ "$_got" = "$_pt" ] \
+		|| { echo "FAIL: expected type=${_pt}, got '${_got}'"; uci show "singbox-ui.ob_${_pt}"; exit 1; }
+	echo "  PASS: type=${_pt}"
+	uci -q get "singbox-ui.ob_${_pt}.proxy_type" >/dev/null 2>&1 \
+		&& { echo "FAIL: proxy_type should be absent (${_pt})"; uci show "singbox-ui.ob_${_pt}"; exit 1; }
+	echo "  PASS: proxy_type absent (${_pt})"
+done
+
+echo "-- migrate_outbound_type: proxy_type=json → enabled=0, proxy_type absent, proxy_json absent"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config outbound 'ob_json'
+	option enabled '1'
+	option proxy_type 'json'
+	option proxy_json '{"type":"vless","tag":"x"}'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: migrate_outbound_type (json) crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.ob_json.enabled 2>/dev/null)" = "0" ] \
+	|| { echo "FAIL: proxy_type=json outbound should be disabled after migration"; uci show singbox-ui.ob_json; exit 1; }
+echo "  PASS: enabled=0 (json outbound disabled)"
+uci -q get singbox-ui.ob_json.proxy_type >/dev/null 2>&1 \
+	&& { echo "FAIL: proxy_type should be absent after migration"; uci show singbox-ui.ob_json; exit 1; }
+echo "  PASS: proxy_type absent"
+uci -q get singbox-ui.ob_json.proxy_json >/dev/null 2>&1 \
+	&& { echo "FAIL: proxy_json should be absent after migration"; uci show singbox-ui.ob_json; exit 1; }
+echo "  PASS: proxy_json absent"
+
 echo "OK"

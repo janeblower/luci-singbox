@@ -319,4 +319,50 @@ purge_inbound_mode_json() {
 }
 purge_inbound_mode_json
 
+# ---------------------------------------------------------------------------
+# Outbound: rename proxy_type → type, collapse constructor+protocol into one
+# field, drop legacy proxy_type=json (disable + strip).
+# ---------------------------------------------------------------------------
+migrate_outbound_type() {
+	for _sec in $(uci -q show singbox-ui 2>/dev/null \
+		| sed -n 's/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
+		_pt=$(uci -q get "singbox-ui.$_sec.proxy_type" 2>/dev/null || echo '')
+		_proto=$(uci -q get "singbox-ui.$_sec.protocol" 2>/dev/null || echo '')
+		_have_type=$(uci -q get "singbox-ui.$_sec.type" 2>/dev/null || echo '')
+
+		# Already migrated.
+		[ -n "$_have_type" ] && {
+			uci -q delete "singbox-ui.$_sec.proxy_type" 2>/dev/null || true
+			uci -q delete "singbox-ui.$_sec.protocol"   2>/dev/null || true
+			uci -q delete "singbox-ui.$_sec.proxy_json" 2>/dev/null || true
+			continue
+		}
+
+		case "$_pt" in
+			constructor)
+				if [ -n "$_proto" ]; then
+					uci -q set "singbox-ui.$_sec.type"="$_proto"
+				else
+					uci -q set "singbox-ui.$_sec.enabled"='0'
+					logger -t singbox-ui "outbound '$_sec' constructor without protocol; disabled."
+				fi ;;
+			interface|url|subscription)
+				uci -q set "singbox-ui.$_sec.type"="$_pt" ;;
+			json)
+				uci -q set "singbox-ui.$_sec.enabled"='0'
+				logger -t singbox-ui "outbound '$_sec' was proxy_type=json; disabled. Re-import via UI." ;;
+			"")
+				: ;;  # untouched — likely a fresh section
+			*)
+				uci -q set "singbox-ui.$_sec.type"="$_pt" ;;
+		esac
+
+		uci -q delete "singbox-ui.$_sec.proxy_type" 2>/dev/null || true
+		uci -q delete "singbox-ui.$_sec.protocol"   2>/dev/null || true
+		uci -q delete "singbox-ui.$_sec.proxy_json" 2>/dev/null || true
+	done
+	uci -q commit singbox-ui
+}
+migrate_outbound_type
+
 exit 0

@@ -1,6 +1,6 @@
 #!/bin/sh
 # tests/test_outbound_constructor.sh
-# Drives generate.uc with proxy_type=constructor outbounds and asserts the
+# Drives generate.uc with typed outbounds (type=vless/vmess/etc.) and asserts the
 # emitted outbounds[]. Mirrors test_generate.sh's harness.
 set -e
 
@@ -27,12 +27,11 @@ run_gen() {
 	"$UCODE_BIN" $UCODE_LIB_FLAGS "$GENERATE_UC" >"$TMPDIR/gen.stderr" 2>&1 && cp "$SANDBOX_CONFIG" "$TMPDIR/out.json"
 }
 
-echo "-- vless constructor with reality + grpc"
+echo "-- vless with reality + grpc"
 write_cfg "
 config outbound 'vl'
 	option enabled '1'
-	option proxy_type 'constructor'
-	option protocol 'vless'
+	option type 'vless'
 	option server 'vless.example.com'
 	option server_port '443'
 	option server_uuid 'uuid-aaaa'
@@ -56,12 +55,11 @@ check "vless reality pub" '"public_key": "PUBKEY"'
 check "vless utls"        '"fingerprint": "chrome"'
 check "vless grpc"        '"service_name": "gun"'
 
-echo "-- vmess constructor with tls + alterId + cipher"
+echo "-- vmess with tls + alterId + cipher"
 write_cfg "
 config outbound 'vm'
 	option enabled '1'
-	option proxy_type 'constructor'
-	option protocol 'vmess'
+	option type 'vmess'
 	option server 'vm.example.com'
 	option server_port '8443'
 	option server_uuid 'uuid-bbbb'
@@ -78,12 +76,11 @@ check "vmess alter"    '"alter_id": 0'
 check "vmess cipher"   '"security": "auto"'
 check "vmess insecure" '"insecure": true'
 
-echo "-- trojan constructor"
+echo "-- trojan"
 write_cfg "
 config outbound 'tj'
 	option enabled '1'
-	option proxy_type 'constructor'
-	option protocol 'trojan'
+	option type 'trojan'
 	option server 't.example.com'
 	option server_port '443'
 	option server_password 'tj-pw'
@@ -94,12 +91,11 @@ check "trojan type"     '"type": "trojan"'
 check "trojan password" '"password": "tj-pw"'
 check "trojan tls"      '"enabled": true'
 
-echo "-- hysteria2 constructor forces tls + obfs"
+echo "-- hysteria2 forces tls + obfs"
 write_cfg "
 config outbound 'hy'
 	option enabled '1'
-	option proxy_type 'constructor'
-	option protocol 'hysteria2'
+	option type 'hysteria2'
 	option server 'h.example.com'
 	option server_port '8443'
 	option server_password 'hy-pw'
@@ -115,12 +111,11 @@ check "hy2 obfs"     '"type": "salamander"'
 check "hy2 up"       '"up_mbps": 50'
 check "hy2 tls"      '"enabled": true'
 
-echo "-- shadowsocks constructor"
+echo "-- shadowsocks"
 write_cfg "
 config outbound 'ss'
 	option enabled '1'
-	option proxy_type 'constructor'
-	option protocol 'shadowsocks'
+	option type 'shadowsocks'
 	option server 's.example.com'
 	option server_port '8388'
 	option shadowsocks_method 'aes-256-gcm'
@@ -135,8 +130,7 @@ echo "-- extra_json is no longer honoured (field deprecated)"
 write_cfg "
 config outbound 'ex'
 	option enabled '1'
-	option proxy_type 'constructor'
-	option protocol 'trojan'
+	option type 'trojan'
 	option server 'e.example.com'
 	option server_port '443'
 	option server_password 'p'
@@ -145,13 +139,12 @@ config outbound 'ex'
 run_gen
 nocheck "extra not merged" '"multiplex":'
 
-echo "-- protocol-less constructor is skipped"
+echo "-- section with empty type is skipped (unmigrated)"
 write_cfg "
-config outbound 'noproto'
+config outbound 'notype'
 	option enabled '1'
-	option proxy_type 'constructor'
 "
 run_gen || true
-nocheck "noproto skipped" '"tag": "noproto"'
+nocheck "notype skipped" '"tag": "notype"'
 
 echo "OK"
