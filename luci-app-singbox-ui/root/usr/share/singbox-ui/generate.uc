@@ -36,20 +36,19 @@ if (length(in_block)) config.inbounds = in_block;
 
 let out_block = outbound_mod.build_outbounds(uci);
 
-// route.rules / route_default / dns.detour reference outbound TAGS — "direct"
-// and "block" included. sing-box 1.11+ no longer provides implicit outbounds,
-// so inject them here unless a user outbound already claims the tag.
-let have_direct = false, have_block = false;
+// route.rules / route_default / dns.detour reference outbound TAGS — sing-box
+// 1.11+ no longer provides an implicit `direct` outbound, so inject one when
+// the user hasn't defined their own. The `block` outbound was removed in 1.11;
+// route.uc emits `action: "reject"` rules instead, so nothing to inject here.
+let have_direct = false;
 for (let o in out_block) {
 	if (o.tag === "direct") have_direct = true;
-	if (o.tag === "block")  have_block  = true;
 }
-// Tags that resolve to an auto-injected, field-less outbound. sing-box 1.12
-// fatally rejects a dns_server `detour` pointing at these ("detour to an
-// empty direct outbound makes no sense"), so we scrub such references below.
+// The auto-injected direct is field-less. sing-box 1.12 fatally rejects a
+// dns_server `detour` pointing at it ("detour to an empty direct outbound
+// makes no sense"); the scrub below drops such references.
 let implicit_empty = {};
 if (!have_direct) { implicit_empty["direct"] = true; push(out_block, { tag: "direct", type: "direct" }); }
-if (!have_block)  { implicit_empty["block"]  = true; push(out_block, { tag: "block",  type: "block"  }); }
 
 config.outbounds = out_block;
 
@@ -70,6 +69,22 @@ if (length(rsets) || length(r.rules) || r.final) {
 	if (length(rsets))   config.route.rule_set = rsets;
 	if (length(r.rules)) config.route.rules    = r.rules;
 	if (r.final)         config.route.final    = r.final;
+}
+
+// sing-box 1.12 warns "missing route.default_domain_resolver ... will be
+// removed in sing-box 1.14". Resolve here: honour an explicit UCI
+// `dns.default_resolver` tag if present; otherwise auto-pick the first
+// enabled non-fakeip dns_server. Skipped if no resolver candidate exists.
+if (config.route && type(config.dns) === "object" && type(config.dns.servers) === "array") {
+	let dns_section = uci.get_all("singbox-ui", "dns");
+	let resolver_tag = dns_section ? dns_section.default_resolver : null;
+	if (resolver_tag == null || resolver_tag === "") {
+		for (let s in config.dns.servers) {
+			if (s.type !== "fakeip" && length(s.tag)) { resolver_tag = s.tag; break; }
+		}
+	}
+	if (resolver_tag != null && length(resolver_tag))
+		config.route.default_domain_resolver = { server: resolver_tag };
 }
 
 let experimental = {};
