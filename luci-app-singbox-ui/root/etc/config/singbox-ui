@@ -70,8 +70,9 @@ config log 'log'
 	option level 'info'
 
 config cache 'cache'
-	option enabled '0'
-	option path '/tmp/singbox-ui-cache.db'
+	option enabled '1'
+	option storage 'ram'
+	option store_fakeip '1'
 
 config clash_api 'clash_api'
 	option enabled '0'

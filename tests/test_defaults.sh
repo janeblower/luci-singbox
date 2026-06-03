@@ -45,6 +45,11 @@ check "dns rule"       '"action": "route"'
 check "dns final"      '"final": "google"'
 check "dns strategy"   '"strategy": "prefer_ipv4"'
 
+echo "-- cache: enabled with fakeip storage"
+check "cache enabled"       '"cache_file":'
+check "cache path /tmp"     '"path": "/tmp/singbox-ui-cache.db"'
+check "cache store_fakeip"  '"store_fakeip": true'
+
 # Final, strongest gate: hand the generated config to the actual daemon's
 # config validator. Catches any new "fatal at startup" footgun the assertions
 # above would miss (this is exactly how the default-DNS-detour crash slipped
