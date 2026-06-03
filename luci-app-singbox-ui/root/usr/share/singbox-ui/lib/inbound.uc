@@ -27,6 +27,8 @@ function build_user(s) {
 		u.flow = s.vless_flow;
 	if (proto === "vmess")
 		u.alterId = s_num(s.vmess_alter_id);
+	if (proto === "vmess" && length(s_opt(s, "vmess_security")))
+		u.security = s.vmess_security;
 	return u;
 }
 
@@ -42,6 +44,9 @@ function build_tls(s) {
 		if (length(s_opt(s, "tls_key_path")))         tls.key_path         = s.tls_key_path;
 		let alpn = csv_list(s_opt(s, "tls_alpn"));
 		if (length(alpn)) tls.alpn = alpn;
+		if (s_bool(s, "tls_insecure")) tls.insecure = true;
+		if (length(s_opt(s, "utls_fingerprint")))
+			tls.utls = { enabled: true, fingerprint: s.utls_fingerprint };
 	} else if (sec === "reality") {
 		let r = { enabled: true };
 		if (length(s_opt(s, "reality_private_key"))) r.private_key = s.reality_private_key;
@@ -70,8 +75,29 @@ function build_transport(s) {
 		if (length(s_opt(s, "transport_host"))) tr.host = s.transport_host;
 	} else if (t === "grpc") {
 		if (length(s_opt(s, "transport_service_name"))) tr.service_name = s.transport_service_name;
+	} else if (t === "xhttp") {
+		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
+		if (length(s_opt(s, "transport_xhttp_mode"))) tr.mode = s.transport_xhttp_mode;
+	} else if (t === "http") {
+		let hosts = csv_list(s_opt(s, "transport_hosts"));
+		if (length(hosts)) tr.host = hosts;
+		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
 	}
 	return tr;
+}
+
+function build_multiplex(s) {
+	if (!s_bool(s, "multiplex_enabled")) return null;
+	let m = { enabled: true };
+	if (length(s_opt(s, "multiplex_protocol"))) m.protocol = s.multiplex_protocol;
+	if (length(s_opt(s, "multiplex_max_connections")))
+		m.max_connections = s_num(s.multiplex_max_connections);
+	if (length(s_opt(s, "multiplex_min_streams")))
+		m.min_streams = s_num(s.multiplex_min_streams);
+	if (length(s_opt(s, "multiplex_max_streams")))
+		m.max_streams = s_num(s.multiplex_max_streams);
+	if (s_bool(s, "multiplex_padding")) m.padding = true;
+	return m;
 }
 
 function build_one(s) {
@@ -118,12 +144,16 @@ function build_one(s) {
 				ob.obfs = { type: ob_type, password: s.hysteria2_obfs_password };
 			if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
 			if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
+			if (length(s_opt(s, "hysteria2_masquerade")))
+				ob.masquerade = s.hysteria2_masquerade;
 		}
 		let tls = build_tls(s);
 		if (tls) ob.tls = tls;
 		if (proto !== "hysteria2") {
 			let tr = build_transport(s);
 			if (tr) ob.transport = tr;
+			let mux = build_multiplex(s);
+			if (mux) ob.multiplex = mux;
 		}
 	} else if (proto === "direct") {
 		ob = { type: "direct", tag: tag, listen: listen, listen_port: port };

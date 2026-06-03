@@ -271,4 +271,54 @@ config inbound 'tin'
 run_gen
 check "constructor still works" '"tag": "tin"'
 
+echo "-- vless inbound with multiplex + xhttp transport"
+write_cfg "
+config inbound 'vl2'
+	option enabled '1'
+	option protocol 'vless'
+	option listen_port '443'
+	option server_uuid 'uuid-3'
+	option transport 'xhttp'
+	option transport_path '/x'
+	option transport_xhttp_mode 'stream-up'
+	option multiplex_enabled '1'
+	option multiplex_protocol 'smux'
+	option multiplex_max_connections '4'
+"
+run_gen
+check "vless mux"          '"multiplex":'
+check "vless mux smux"     '"protocol": "smux"'
+check "vless mux max"      '"max_connections": 4'
+check "vless xhttp"        '"type": "xhttp"'
+check "vless xhttp mode"   '"mode": "stream-up"'
+
+echo "-- hysteria2 inbound with masquerade + utls"
+write_cfg "
+config inbound 'hy'
+	option enabled '1'
+	option protocol 'hysteria2'
+	option listen_port '8443'
+	option server_password 'p'
+	option up_mbps '100'
+	option down_mbps '50'
+	option hysteria2_masquerade 'https://www.example.com'
+	option tls_server_name 'hy.example.com'
+	option tls_certificate_path '/etc/ssl/cert.pem'
+	option tls_key_path '/etc/ssl/key.pem'
+"
+run_gen
+check "hy2 masquerade" '"masquerade": "https://www.example.com"'
+
+echo "-- vmess inbound with cipher"
+write_cfg "
+config inbound 'vm2'
+	option enabled '1'
+	option protocol 'vmess'
+	option listen_port '8443'
+	option server_uuid 'uuid-vm2'
+	option vmess_security 'chacha20-poly1305'
+"
+run_gen
+check "vmess cipher" '"security": "chacha20-poly1305"'
+
 echo "OK"
