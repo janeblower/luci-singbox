@@ -496,4 +496,31 @@ config inbound 'tproxy_in'
 run_gen
 check "hijack rule still present" '"action": "hijack-dns"' "$TMPDIR/out.json"
 
+echo "-- clash_api.enabled=1 emits experimental.clash_api alongside cache_file"
+write_cfg "
+config clash_api 'clash_api'
+	option enabled '1'
+	option listen '127.0.0.1'
+	option port '9090'
+	option secret 'sekret'
+
+config cache 'cache'
+	option enabled '1'
+"
+run_gen
+check "experimental block"   '"experimental":'                          "$TMPDIR/out.json"
+check "clash_api controller" '"external_controller": "127.0.0.1:9090"' "$TMPDIR/out.json"
+check "clash_api secret"     '"secret": "sekret"'                       "$TMPDIR/out.json"
+check "cache_file kept"      '"cache_file":'                            "$TMPDIR/out.json"
+
+echo "-- clash_api disabled → no clash_api key"
+write_cfg "
+config clash_api 'clash_api'
+	option enabled '0'
+"
+run_gen
+grep -q '"clash_api":' "$TMPDIR/out.json" \
+	&& { echo "FAIL: clash_api emitted while disabled"; exit 1; }
+echo "  PASS: clash_api absent when disabled"
+
 echo "OK"
