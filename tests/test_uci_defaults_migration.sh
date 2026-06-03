@@ -305,4 +305,43 @@ uci -q get singbox-ui.b.extra_json >/dev/null 2>&1 \
 	&& { echo "FAIL: extra_json should be absent from outbound 'b'"; uci show singbox-ui.b; exit 1; }
 echo "  PASS: extra_json removed from outbound"
 
+echo "-- purge_inbound_mode_json: mode=json + inbound_json populated → disabled, options absent"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config inbound 'ib_json'
+	option enabled '1'
+	option protocol 'vless'
+	option mode 'json'
+	option inbound_json '{"type":"vless","tag":"vless-in","listen":"::","listen_port":1080}'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: purge_inbound_mode_json (json) crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.ib_json.enabled 2>/dev/null)" = "0" ] \
+	|| { echo "FAIL: mode=json inbound should be disabled after migration"; uci show singbox-ui.ib_json; exit 1; }
+echo "  PASS: enabled='0' (mode=json section disabled)"
+uci -q get singbox-ui.ib_json.mode >/dev/null 2>&1 \
+	&& { echo "FAIL: mode option should be absent after migration"; uci show singbox-ui.ib_json; exit 1; }
+echo "  PASS: mode absent"
+uci -q get singbox-ui.ib_json.inbound_json >/dev/null 2>&1 \
+	&& { echo "FAIL: inbound_json option should be absent after migration"; uci show singbox-ui.ib_json; exit 1; }
+echo "  PASS: inbound_json absent"
+
+echo "-- purge_inbound_mode_json: mode=constructor only → enabled unchanged, mode absent"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config inbound 'ib_ctor'
+	option enabled '1'
+	option protocol 'tproxy'
+	option mode 'constructor'
+	option listen_port '7893'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: purge_inbound_mode_json (constructor) crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.ib_ctor.enabled 2>/dev/null)" = "1" ] \
+	|| { echo "FAIL: mode=constructor inbound enabled should stay 1"; uci show singbox-ui.ib_ctor; exit 1; }
+echo "  PASS: enabled='1' (unchanged)"
+uci -q get singbox-ui.ib_ctor.mode >/dev/null 2>&1 \
+	&& { echo "FAIL: mode option should be absent after migration"; uci show singbox-ui.ib_ctor; exit 1; }
+echo "  PASS: mode absent"
+
 echo "OK"

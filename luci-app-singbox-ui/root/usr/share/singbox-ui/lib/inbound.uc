@@ -1,6 +1,5 @@
 // lib/inbound.uc — sing-box `inbounds` array, built from `inbound` UCI sections.
-// Each section is either mode=json (raw object, tag injected) or
-// mode=constructor (protocol-dispatched builder). Pure: no I/O.
+// Protocol IS the kind; mode/inbound_json are legacy and silently ignored. Pure: no I/O.
 
 function s_opt(s, k) { let v = s[k]; return (v == null) ? "" : v; }
 function s_bool(s, k) { return s[k] === "1"; }
@@ -77,19 +76,7 @@ function build_transport(s) {
 
 function build_one(s) {
 	let tag = s[".name"];
-	let mode = s_opt(s, "mode") || "constructor";
-
-	if (mode === "json") {
-		let parsed;
-		try { parsed = json(s_opt(s, "inbound_json")); } catch (e) { parsed = null; }
-		if (type(parsed) !== "object") {
-			warn(sprintf("inbound.uc: invalid inbound_json for '%s'; skipping\n", tag));
-			return null;
-		}
-		parsed.tag = tag;
-		return parsed;
-	}
-
+	// mode/inbound_json are legacy; protocol IS the kind (mode is ignored).
 	let proto = s_opt(s, "protocol") || "tproxy";
 	let listen = length(s_opt(s, "listen")) ? s.listen : "::";
 	let port = s_num(s.listen_port);
