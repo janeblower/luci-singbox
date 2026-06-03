@@ -267,6 +267,15 @@ rm -f "$APP_OUT" "$I18N_OUT"
 
 echo ">>> Building apk packages"
 
+# Why no fakeroot fallback: the SDK ships `apk` as a bash wrapper that sets
+# its own LD_PRELOAD=runas.so and exec's a private ld-linux. That shape
+# overwrites fakeroot's LD_PRELOAD and the libfakeroot interposer never
+# loads — apk-mkpkg then stat()'s the staging tree and embeds the *real*
+# owner UID of whoever ran the script (e.g. "runner" on a GH Actions
+# runner). At install time apk has no such user and falls back to
+# nobody:nogroup. The only ways to get owner=root in the package are to
+# either (a) run as actual root, or (b) chown inside an unshare -r user
+# namespace where UID 0 is mapped to us.
 if [ "$(id -u)" -eq 0 ]; then
   chown -R 0:0 "$APP_ROOT" "$APP_SCRIPTS" "$I18N_ROOT" "$I18N_SCRIPTS"
   mkpkg_app
@@ -296,30 +305,36 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
       -s "post-install:$I18N_SCRIPTS/post-install.sh"
   '
 else
-  export APP_ROOT APP_SCRIPTS APP_OUT APP_NAME APP_DESC APP_DEPENDS \
-         I18N_ROOT I18N_SCRIPTS I18N_OUT I18N_NAME I18N_DESC I18N_DEPENDS \
-         APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER
-  # shellcheck disable=SC2016
-  fakeroot sh -c '
-    chown -R 0:0 "$APP_ROOT" "$APP_SCRIPTS" "$I18N_ROOT" "$I18N_SCRIPTS"
-    "$APK_BIN" mkpkg \
-      --files "$APP_ROOT" --output "$APP_OUT" \
-      -I "name:$APP_NAME" -I "version:$VERSION" -I "description:$APP_DESC" \
-      -I "arch:noarch" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
-      -I "maintainer:$PKG_MAINTAINER" -I "url:$PKG_URL" -I "depends:$APP_DEPENDS" \
-      -I "provides:${APP_NAME}-any" \
-      -s "post-install:$APP_SCRIPTS/post-install.sh" \
-      -s "pre-deinstall:$APP_SCRIPTS/pre-deinstall.sh" \
-      -s "post-upgrade:$APP_SCRIPTS/post-upgrade.sh"
-    "$APK_BIN" mkpkg \
-      --files "$I18N_ROOT" --output "$I18N_OUT" \
-      -I "name:$I18N_NAME" -I "version:$VERSION" -I "description:$I18N_DESC" \
-      -I "arch:noarch" -I "license:$PKG_LICENSE" -I "origin:$APP_NAME" \
-      -I "maintainer:$PKG_MAINTAINER" -I "url:$PKG_URL" -I "depends:$I18N_DEPENDS" \
-      -I "provides:${I18N_NAME}-any" \
-      -s "post-install:$I18N_SCRIPTS/post-install.sh"
-  '
+  cat >&2 <<EOF
+ERROR: cannot build a package whose files will install as root:root.
+       Need either:
+         - sudo: rerun as 'sudo -E bash $0 ...'
+         - unprivileged user namespaces ('unshare -r' must succeed)
+       Falling back to fakeroot used to silently produce packages whose
+       files install as nobody:nogroup because the OpenWrt SDK's apk
+       wrapper hijacks LD_PRELOAD before libfakeroot can interpose.
+EOF
+  exit 1
 fi
+
+# Belt-and-suspenders: read the metadata back out of every produced .apk and
+# ensure every owner/group string is literally "root". This catches the next
+# time the toolchain shifts under us (e.g. apk-mkpkg flag rename, wrapper
+# changes) instead of letting silent corruption ride to the next release.
+verify_root_owner() {
+  out="$1"; bad=""
+  if dump=$("$APK_BIN" adbdump "$out" 2>/dev/null); then
+    bad=$(printf '%s\n' "$dump" | grep -E '^[[:space:]]*(user|group):' \
+                                | grep -vE '^[[:space:]]*(user|group): root$' || true)
+  fi
+  if [ -n "$bad" ]; then
+    echo "ERROR: $out contains non-root owner/group entries:" >&2
+    printf '%s\n' "$bad" | sort -u >&2
+    exit 1
+  fi
+}
+verify_root_owner "$APP_OUT"
+verify_root_owner "$I18N_OUT"
 
 echo ">>> Verifying package metadata"
 for out in "$APP_OUT" "$I18N_OUT"; do

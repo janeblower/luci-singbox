@@ -32,4 +32,15 @@ grep -q '/etc/init.d/singbox-ui disable' "$S" \
     || { echo "FAIL: pre-deinstall must call '/etc/init.d/singbox-ui disable'"; exit 1; }
 echo "  PASS"
 
+echo "-- no silent fakeroot fallback (SDK apk wrapper hijacks LD_PRELOAD)"
+# A bare 'fakeroot ' command in the run-builder branch would silently
+# produce nobody:nogroup packages because the SDK's apk wrapper resets
+# LD_PRELOAD. The only acceptable forms are 'as root' or 'unshare -r'.
+if grep -qE '^[[:space:]]*fakeroot[[:space:]]+sh' "$S"; then
+    echo "FAIL: build-apk.sh must not fall back to fakeroot (produces nobody:nogroup)"; exit 1
+fi
+grep -q 'verify_root_owner' "$S" \
+    || { echo "FAIL: build-apk.sh must call verify_root_owner on produced .apk"; exit 1; }
+echo "  PASS"
+
 echo "OK"
