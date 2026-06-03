@@ -60,7 +60,7 @@ var SB_INBOUND_PROTOCOLS = [
 
 function buildInboundsMap() {
 	var m = new form.Map('singbox-ui', _('Inbounds'),
-		_('Define inbounds: raw JSON or a per-protocol constructor. ' +
+		_('Define inbounds: protocol-first constructor. ' +
 		  'nftables rules are applied for tproxy/tun inbounds that request them.'));
 
 	var s = m.section(form.GridSection, 'inbound', null);
@@ -77,44 +77,29 @@ function buildInboundsMap() {
 	o = s.option(form.Flag, 'enabled', _('Enable'));
 	o.default = '1'; o.editable = true;
 
-	o = s.option(form.ListValue, 'mode', _('Mode'));
-	o.value('constructor', _('Constructor'));
-	o.value('json',        _('Raw JSON'));
-	o.default = 'constructor'; o.rmempty = false;
-
-	o = s.option(form.TextValue, 'inbound_json', _('Inbound JSON'));
-	o.modalonly = true; o.rows = 6; o.monospace = true;
-	o.placeholder = '{"type":"mixed","listen":"127.0.0.1","listen_port":2080}';
-	o.depends('mode', 'json');
-	o.validate = function (section_id, value) {
-		if (value == null || value === '') return true;
-		try { JSON.parse(value); return true; }
-		catch (e) { return _('Invalid JSON: ') + e.message; }
-	};
-
 	o = s.option(form.ListValue, 'protocol', _('Protocol'));
 	SB_INBOUND_PROTOCOLS.forEach(function (p) { o.value(p[0], _(p[1])); });
-	o.default = 'tproxy'; o.depends('mode', 'constructor');
+	o.default = 'tproxy'; o.rmempty = false;
 
 	o = s.option(form.Value, 'listen', _('Listen address'));
 	o.modalonly = true; o.placeholder = '::';
-	o.depends({ mode: 'constructor', protocol: 'direct' });
-	o.depends({ mode: 'constructor', protocol: 'tproxy' });
-	o.depends({ mode: 'constructor', protocol: 'shadowsocks' });
-	o.depends({ mode: 'constructor', protocol: 'vless' });
-	o.depends({ mode: 'constructor', protocol: 'vmess' });
-	o.depends({ mode: 'constructor', protocol: 'trojan' });
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'direct');
+	o.depends('protocol', 'tproxy');
+	o.depends('protocol', 'shadowsocks');
+	o.depends('protocol', 'vless');
+	o.depends('protocol', 'vmess');
+	o.depends('protocol', 'trojan');
+	o.depends('protocol', 'hysteria2');
 
 	o = s.option(form.Value, 'listen_port', _('Listen port'));
 	o.modalonly = true; o.datatype = 'port'; o.placeholder = '7893';
-	o.depends({ mode: 'constructor', protocol: 'direct' });
-	o.depends({ mode: 'constructor', protocol: 'tproxy' });
-	o.depends({ mode: 'constructor', protocol: 'shadowsocks' });
-	o.depends({ mode: 'constructor', protocol: 'vless' });
-	o.depends({ mode: 'constructor', protocol: 'vmess' });
-	o.depends({ mode: 'constructor', protocol: 'trojan' });
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'direct');
+	o.depends('protocol', 'tproxy');
+	o.depends('protocol', 'shadowsocks');
+	o.depends('protocol', 'vless');
+	o.depends('protocol', 'vmess');
+	o.depends('protocol', 'trojan');
+	o.depends('protocol', 'hysteria2');
 
 	// direct
 	o = s.option(form.ListValue, 'network', _('Network'));
@@ -122,130 +107,130 @@ function buildInboundsMap() {
 	o.value('', _('Both (tcp+udp)'));
 	o.value('tcp', 'tcp');
 	o.value('udp', 'udp');
-	o.depends({ mode: 'constructor', protocol: 'direct' });
+	o.depends('protocol', 'direct');
 
 	o = s.option(form.Flag, 'dns_listener', _('Hijack DNS'));
 	o.modalonly = true;
 	o.default = '1';
-	o.depends({ mode: 'constructor', protocol: 'direct' });
+	o.depends('protocol', 'direct');
 	o.description = _('Auto-emits a hijack-dns route rule for this inbound.');
 
 	// tproxy
 	o = s.option(widgets.DeviceSelect, 'interface', _('Interfaces (nft)'));
 	o.modalonly = true; o.noaliases = true; o.multiple = true; o.placeholder = 'br-lan';
-	o.depends({ mode: 'constructor', protocol: 'tproxy' });
+	o.depends('protocol', 'tproxy');
 	o = s.option(form.Flag, 'hijack_dns', _('Hijack DNS'));
 	o.modalonly = true; o.default = '0';
-	o.depends({ mode: 'constructor', protocol: 'tproxy' });
+	o.depends('protocol', 'tproxy');
 	o = s.option(form.Flag, 'tcp_fast_open', _('TCP Fast Open'));
 	o.modalonly = true; o.default = '0';
-	o.depends({ mode: 'constructor', protocol: 'tproxy' });
+	o.depends('protocol', 'tproxy');
 	o = s.option(form.Flag, 'udp_fragment', _('UDP fragment'));
 	o.modalonly = true; o.default = '0';
-	o.depends({ mode: 'constructor', protocol: 'tproxy' });
+	o.depends('protocol', 'tproxy');
 
 	// tproxy + tun: nft rules
 	o = s.option(form.Flag, 'nft_rules', _('Create nftables rules'));
 	o.modalonly = true;
-	o.depends({ mode: 'constructor', protocol: 'tproxy' });
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tproxy');
+	o.depends('protocol', 'tun');
 
 	// tun
 	o = s.option(form.Value, 'interface_name', _('TUN interface name'));
 	o.modalonly = true; o.placeholder = 'singbox-tun';
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tun');
 	o = s.option(form.Value, 'inet4_address', _('IPv4 address'));
 	o.modalonly = true; o.datatype = 'cidr4'; o.placeholder = '172.19.0.1/30';
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tun');
 	o = s.option(form.Value, 'inet6_address', _('IPv6 address'));
 	o.modalonly = true; o.datatype = 'cidr6';
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tun');
 	o = s.option(form.Value, 'mtu', _('MTU'));
 	o.modalonly = true; o.datatype = 'uinteger'; o.placeholder = '9000';
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tun');
 	o = s.option(form.ListValue, 'stack', _('Stack'));
 	['system', 'gvisor', 'mixed'].forEach(function (v) { o.value(v, v); });
 	o.modalonly = true; o.default = 'mixed';
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tun');
 	o = s.option(form.Flag, 'auto_route', _('Auto route'));
 	o.modalonly = true; o.default = '1';
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tun');
 	o = s.option(form.Flag, 'strict_route', _('Strict route'));
 	o.modalonly = true; o.default = '0';
-	o.depends({ mode: 'constructor', protocol: 'tun' });
+	o.depends('protocol', 'tun');
 
 	// shadowsocks
 	o = s.option(form.ListValue, 'shadowsocks_method', _('Method'));
 	['aes-128-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305',
 	 '2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm'].forEach(function (v) { o.value(v, v); });
 	o.modalonly = true; o.default = 'aes-128-gcm';
-	o.depends({ mode: 'constructor', protocol: 'shadowsocks' });
+	o.depends('protocol', 'shadowsocks');
 
 	// users (vless/vmess/trojan/hysteria2)
 	o = s.option(form.Value, 'server_uuid', _('UUID'));
 	o.modalonly = true; o.password = true;
-	o.depends({ mode: 'constructor', protocol: 'vless' });
-	o.depends({ mode: 'constructor', protocol: 'vmess' });
+	o.depends('protocol', 'vless');
+	o.depends('protocol', 'vmess');
 	o = s.option(form.Value, 'server_password', _('Password'));
 	o.modalonly = true; o.password = true;
-	o.depends({ mode: 'constructor', protocol: 'shadowsocks' });
-	o.depends({ mode: 'constructor', protocol: 'trojan' });
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'shadowsocks');
+	o.depends('protocol', 'trojan');
+	o.depends('protocol', 'hysteria2');
 	o = s.option(form.ListValue, 'vless_flow', _('Flow'));
 	o.value('none', _('None')); o.value('xtls-rprx-vision', 'xtls-rprx-vision');
 	o.modalonly = true; o.default = 'none';
-	o.depends({ mode: 'constructor', protocol: 'vless' });
+	o.depends('protocol', 'vless');
 	o = s.option(form.Value, 'vmess_alter_id', _('Alter ID'));
 	o.modalonly = true; o.datatype = 'uinteger'; o.placeholder = '0';
-	o.depends({ mode: 'constructor', protocol: 'vmess' });
+	o.depends('protocol', 'vmess');
 
 	// hysteria2 specifics
 	o = s.option(form.ListValue, 'hysteria2_obfs_type', _('Obfuscation'));
 	o.value('none', _('None')); o.value('salamander', 'salamander');
 	o.modalonly = true; o.default = 'none';
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'hysteria2');
 	o = s.option(form.Value, 'hysteria2_obfs_password', _('Obfs password'));
 	o.modalonly = true; o.password = true;
-	o.depends({ mode: 'constructor', protocol: 'hysteria2', hysteria2_obfs_type: 'salamander' });
+	o.depends({ protocol: 'hysteria2', hysteria2_obfs_type: 'salamander' });
 	o = s.option(form.Value, 'up_mbps', _('Up Mbps'));
 	o.modalonly = true; o.datatype = 'uinteger';
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'hysteria2');
 	o = s.option(form.Value, 'down_mbps', _('Down Mbps'));
 	o.modalonly = true; o.datatype = 'uinteger';
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'hysteria2');
 
 	// TLS (vless/vmess/trojan/hysteria2)
 	o = s.option(form.ListValue, 'security', _('Security'));
 	o.value('none', _('None')); o.value('tls', 'TLS'); o.value('reality', 'Reality');
 	o.modalonly = true; o.default = 'none';
-	o.depends({ mode: 'constructor', protocol: 'vless' });
-	o.depends({ mode: 'constructor', protocol: 'vmess' });
-	o.depends({ mode: 'constructor', protocol: 'trojan' });
+	o.depends('protocol', 'vless');
+	o.depends('protocol', 'vmess');
+	o.depends('protocol', 'trojan');
 	o = s.option(form.Value, 'tls_server_name', _('TLS server name'));
 	o.modalonly = true;
 	o.depends({ protocol: 'vless', security: 'tls' });
 	o.depends({ protocol: 'vless', security: 'reality' });
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'hysteria2');
 	o = s.option(form.Value, 'tls_certificate_path', _('Certificate path'));
 	o.modalonly = true; o.placeholder = '/etc/ssl/cert.pem';
 	o.depends({ protocol: 'vless', security: 'tls' });
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'hysteria2');
 	o = s.option(form.Value, 'tls_key_path', _('Key path'));
 	o.modalonly = true; o.placeholder = '/etc/ssl/key.pem';
 	o.depends({ protocol: 'vless', security: 'tls' });
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'hysteria2');
 	o = s.option(form.Value, 'tls_alpn', _('ALPN (comma-separated)'));
 	o.modalonly = true; o.placeholder = 'h2,http/1.1';
 	o.depends({ protocol: 'vless', security: 'tls' });
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+	o.depends('protocol', 'hysteria2');
 
 	// Reality specifics (vless)
 	o = s.option(form.Value, 'reality_private_key', _('Reality private key'));
@@ -265,9 +250,9 @@ function buildInboundsMap() {
 	o = s.option(form.ListValue, 'transport', _('Transport'));
 	['none', 'ws', 'grpc', 'httpupgrade'].forEach(function (v) { o.value(v, v); });
 	o.modalonly = true; o.default = 'none';
-	o.depends({ mode: 'constructor', protocol: 'vless' });
-	o.depends({ mode: 'constructor', protocol: 'vmess' });
-	o.depends({ mode: 'constructor', protocol: 'trojan' });
+	o.depends('protocol', 'vless');
+	o.depends('protocol', 'vmess');
+	o.depends('protocol', 'trojan');
 	o = s.option(form.Value, 'transport_path', _('Transport path'));
 	o.modalonly = true; o.placeholder = '/';
 	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });

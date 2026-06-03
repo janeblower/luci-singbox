@@ -250,4 +250,25 @@ check "direct listen"    '"listen": "127.0.0.53"'
 check "direct port"      '"listen_port": 53'
 check "direct network"   '"network": "udp"'
 
+echo "-- mode='json' is no longer recognised; section skipped"
+write_cfg "
+config inbound 'raw'
+	option enabled '1'
+	option mode 'json'
+	option inbound_json '{\"type\":\"mixed\",\"listen\":\"127.0.0.1\",\"listen_port\":2080}'
+"
+run_gen
+nocheck "raw mode skipped" '"tag": "raw"'
+
+echo "-- mode='constructor' is treated as no-op (protocol-first works)"
+write_cfg "
+config inbound 'tin'
+	option enabled '1'
+	option mode 'constructor'
+	option protocol 'tproxy'
+	option listen_port '7893'
+"
+run_gen
+check "constructor still works" '"tag": "tin"'
+
 echo "OK"

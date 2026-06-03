@@ -297,4 +297,26 @@ purge_extra_json() {
 }
 purge_extra_json
 
+# ---------------------------------------------------------------------------
+# Drop legacy `mode` and `inbound_json` from inbound sections.
+# mode='json' sections lose their raw JSON (can't safely parse arbitrary JSON
+# in /bin/sh); the section is disabled so the daemon doesn't get fed stale
+# config. Users re-import via the new UI button.
+# ---------------------------------------------------------------------------
+purge_inbound_mode_json() {
+	for _sec in $(uci -q show singbox-ui 2>/dev/null \
+		| sed -n 's/^singbox-ui\.\([^.]*\)=inbound$/\1/p'); do
+		_mode=$(uci -q get "singbox-ui.$_sec.mode" 2>/dev/null || echo '')
+		_raw=$(uci -q get "singbox-ui.$_sec.inbound_json" 2>/dev/null || echo '')
+		if [ "$_mode" = "json" ] && [ -n "$_raw" ]; then
+			uci -q set "singbox-ui.$_sec.enabled"='0'
+			logger -t singbox-ui "inbound '$_sec' was mode=json; disabled on upgrade. Re-import via UI."
+		fi
+		uci -q delete "singbox-ui.$_sec.mode" 2>/dev/null || true
+		uci -q delete "singbox-ui.$_sec.inbound_json" 2>/dev/null || true
+	done
+	uci -q commit singbox-ui
+}
+purge_inbound_mode_json
+
 exit 0
