@@ -231,10 +231,8 @@ ensure_clash_api_secret
 # /tmp path) into the new storage-mode model. Idempotent.
 # ---------------------------------------------------------------------------
 migrate_cache_storage() {
-	[ "$(uci -q get singbox-ui.cache 2>/dev/null)" = "cache" ] || {
+	[ "$(uci -q get singbox-ui.cache 2>/dev/null)" = "cache" ] || \
 		uci -q set singbox-ui.cache='cache'
-		uci -q set singbox-ui.cache.enabled='1'
-	}
 
 	# If storage is already set, the user (or this script) has migrated.
 	[ -n "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" ] && return 0

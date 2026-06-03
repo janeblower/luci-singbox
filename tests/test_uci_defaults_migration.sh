@@ -223,4 +223,23 @@ echo "  PASS: custom storage"
 	|| { echo "FAIL: custom path not preserved"; uci show singbox-ui.cache; exit 1; }
 echo "  PASS: custom path preserved"
 
+echo "-- cache: user-explicit-disable + custom path preserved (enabled stays 0)"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config cache 'cache'
+	option enabled '0'
+	option path '/srv/explicit.db'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: explicit-disable migration crashed"; cat "$log"; exit 1; }
+[ "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" = "custom" ] \
+	|| { echo "FAIL: explicit-disable storage != custom"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: storage=custom"
+[ "$(uci -q get singbox-ui.cache.path 2>/dev/null)" = "/srv/explicit.db" ] \
+	|| { echo "FAIL: explicit-disable path not preserved"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: path preserved"
+[ "$(uci -q get singbox-ui.cache.enabled 2>/dev/null)" = "0" ] \
+	|| { echo "FAIL: explicit-disable enabled was flipped (should stay 0)"; uci show singbox-ui.cache; exit 1; }
+echo "  PASS: enabled stays 0 (user-explicit-disable respected)"
+
 echo "OK"
