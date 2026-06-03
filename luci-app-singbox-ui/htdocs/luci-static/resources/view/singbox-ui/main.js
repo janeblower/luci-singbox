@@ -48,6 +48,7 @@ function addRenameField(s) {
 }
 
 var SB_INBOUND_PROTOCOLS = [
+	['direct',      'Direct (DNS / port-forward)'],
 	['tproxy',      'TProxy (transparent)'],
 	['tun',         'TUN'],
 	['shadowsocks', 'Shadowsocks'],
@@ -97,6 +98,7 @@ function buildInboundsMap() {
 
 	o = s.option(form.Value, 'listen', _('Listen address'));
 	o.modalonly = true; o.placeholder = '::';
+	o.depends({ mode: 'constructor', protocol: 'direct' });
 	o.depends({ mode: 'constructor', protocol: 'tproxy' });
 	o.depends({ mode: 'constructor', protocol: 'shadowsocks' });
 	o.depends({ mode: 'constructor', protocol: 'vless' });
@@ -106,12 +108,27 @@ function buildInboundsMap() {
 
 	o = s.option(form.Value, 'listen_port', _('Listen port'));
 	o.modalonly = true; o.datatype = 'port'; o.placeholder = '7893';
+	o.depends({ mode: 'constructor', protocol: 'direct' });
 	o.depends({ mode: 'constructor', protocol: 'tproxy' });
 	o.depends({ mode: 'constructor', protocol: 'shadowsocks' });
 	o.depends({ mode: 'constructor', protocol: 'vless' });
 	o.depends({ mode: 'constructor', protocol: 'vmess' });
 	o.depends({ mode: 'constructor', protocol: 'trojan' });
 	o.depends({ mode: 'constructor', protocol: 'hysteria2' });
+
+	// direct
+	o = s.option(form.ListValue, 'network', _('Network'));
+	o.modalonly = true;
+	o.value('', _('Both (tcp+udp)'));
+	o.value('tcp', 'tcp');
+	o.value('udp', 'udp');
+	o.depends({ mode: 'constructor', protocol: 'direct' });
+
+	o = s.option(form.Flag, 'dns_listener', _('Hijack DNS'));
+	o.modalonly = true;
+	o.default = '1';
+	o.depends({ mode: 'constructor', protocol: 'direct' });
+	o.description = _('Auto-emits a hijack-dns route rule for this inbound.');
 
 	// tproxy
 	o = s.option(widgets.DeviceSelect, 'interface', _('Interfaces (nft)'));
