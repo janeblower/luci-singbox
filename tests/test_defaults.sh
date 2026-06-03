@@ -51,6 +51,13 @@ check "cache enabled"       '"cache_file":'
 check "cache path /tmp"     '"path": "/tmp/singbox-ui-cache.db"'
 check "cache store_fakeip"  '"store_fakeip": true'
 
+echo "-- dns inbound: dns_in direct listener"
+check "dns inbound type"        '"type": "direct"'
+check "dns inbound tag"         '"tag": "dns_in"'
+check "dns inbound listen"      '"listen": "127.0.0.53"'
+check "dns inbound port"        '"listen_port": 53'
+check "default hijack-dns rule" '"action": "hijack-dns"'
+
 # Final, strongest gate: hand the generated config to the actual daemon's
 # config validator. Catches any new "fatal at startup" footgun the assertions
 # above would miss (this is exactly how the default-DNS-detour crash slipped
