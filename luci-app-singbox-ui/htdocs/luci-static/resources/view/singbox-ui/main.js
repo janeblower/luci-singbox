@@ -672,6 +672,13 @@ function buildDnsMap() {
 	});
 	o.modalonly = true;
 	o = s.option(form.ListValue, 'server', _('Target server')); loadDnsServerList(o);
+	o = s.option(form.Value, 'rewrite_ttl', _('Rewrite TTL (s)'));
+	o.modalonly  = true;
+	o.datatype   = 'uinteger';
+	o.placeholder = '60';
+	o.default    = '60';
+	o.description = _('Forces this TTL on responses matched by the rule. ' +
+	                  '0 disables rewriting. Default is 60.');
 
 	// -- Settings --
 	s = m.section(form.NamedSection, 'dns', 'dns', _('DNS Settings'));
