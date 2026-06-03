@@ -21,6 +21,7 @@ let outbound_mod = require("outbound");
 let route_mod    = require("route");
 let ruleset_mod  = require("ruleset");
 let cache_mod    = require("cache");
+let clash_mod    = require("clash");
 
 let config = {};
 
@@ -57,8 +58,12 @@ if (length(rsets) || length(r.rules) || r.final) {
 	if (r.final)         config.route.final    = r.final;
 }
 
+let experimental = {};
 let cache_block = cache_mod.build_cache(uci);
-if (cache_block) config.experimental = { cache_file: cache_block };
+if (cache_block) experimental.cache_file = cache_block;
+let clash_block = clash_mod.build_clash_api(uci);
+if (clash_block) experimental.clash_api = clash_block;
+if (length(keys(experimental))) config.experimental = experimental;
 
 let f = fs.open(CONFIG_OUT, "w");
 if (!f) {
