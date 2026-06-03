@@ -265,4 +265,21 @@ migrate_cache_storage() {
 }
 migrate_cache_storage
 
+# ---------------------------------------------------------------------------
+# Create the default DNS inbound for upgrades. Idempotent: skip if a
+# section with that name already exists (user may have customised it).
+# ---------------------------------------------------------------------------
+ensure_dns_inbound() {
+	[ -n "$(uci -q get singbox-ui.dns_in 2>/dev/null)" ] && return 0
+	uci -q set singbox-ui.dns_in='inbound'
+	uci -q set singbox-ui.dns_in.enabled='1'
+	uci -q set singbox-ui.dns_in.protocol='direct'
+	uci -q set singbox-ui.dns_in.listen='127.0.0.53'
+	uci -q set singbox-ui.dns_in.listen_port='53'
+	uci -q set singbox-ui.dns_in.network='udp'
+	uci -q set singbox-ui.dns_in.dns_listener='1'
+	uci -q commit singbox-ui
+}
+ensure_dns_inbound
+
 exit 0
