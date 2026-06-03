@@ -66,6 +66,11 @@ echo "-- references DNS tab sections"
 grep -q "'dns_server'"          "$JS" || { echo "FAIL: no dns_server section type"; exit 1; }
 grep -q "'dns_rule'"            "$JS" || { echo "FAIL: no dns_rule section type"; exit 1; }
 grep -q "data-tab.*dns"         "$JS" || { echo "FAIL: no dns tab marker"; exit 1; }
+# detour must be a dropdown of existing outbounds, not a freeform Value that
+# tempts users to type "direct" (which sing-box rejects when direct is the
+# auto-injected empty outbound).
+grep -q "loadOutboundList(o, true)" "$JS" || { echo "FAIL: detour dropdown must reuse loadOutboundList with includeNone"; exit 1; }
+grep -q "'default_resolver'"    "$JS" || { echo "FAIL: dns.default_resolver UI option missing"; exit 1; }
 
 echo "-- references Monitoring tab"
 grep -q "buildMonitoring"        "$JS" || { echo "FAIL: no buildMonitoring"; exit 1; }
