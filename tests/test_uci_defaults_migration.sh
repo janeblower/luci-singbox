@@ -158,7 +158,7 @@ echo "  PASS: dns_outbound → dns_server + final"
 uci -q get singbox-ui.ru.dns_fakeip >/dev/null 2>&1 && { echo "FAIL: ruleset.dns_fakeip not removed"; exit 1; }
 rule=$(uci -q show singbox-ui | sed -n 's/^singbox-ui\.\([^.]*\)=dns_rule$/\1/p' | head -n1)
 [ -n "$rule" ] || { echo "FAIL: no dns_rule created"; exit 1; }
-[ "$(uci get singbox-ui.$rule.server)" = "fakeip" ] || { echo "FAIL: dns_rule.server != fakeip"; exit 1; }
+[ "$(uci get "singbox-ui.$rule.server")" = "fakeip" ] || { echo "FAIL: dns_rule.server != fakeip"; exit 1; }
 echo "  PASS: ruleset.dns_fakeip → dns_rule"
 
 IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \

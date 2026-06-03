@@ -18,7 +18,14 @@ run_gen(){ # shellcheck disable=SC2086
 	"$UCODE_BIN" $UCODE_LIB_FLAGS "$GENERATE_UC" >"$TMPDIR/gen.stderr" 2>&1 && cp "$SANDBOX_CONFIG" "$TMPDIR/out.json"; }
 
 echo "-- typed servers (https/udp/fakeip) + final/strategy"
+# A user-defined 'direct' outbound keeps the dns_server detour intact;
+# without it generate.uc would scrub the reference (see test_generate.sh).
 write_cfg "
+config outbound 'direct'
+	option enabled '1'
+	option proxy_type 'interface'
+	option interface 'eth0'
+
 config dns_server 'google'
 	option enabled '1'
 	option type 'https'

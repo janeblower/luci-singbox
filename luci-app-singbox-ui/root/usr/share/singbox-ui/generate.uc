@@ -44,10 +44,24 @@ for (let o in out_block) {
 	if (o.tag === "direct") have_direct = true;
 	if (o.tag === "block")  have_block  = true;
 }
-if (!have_direct) push(out_block, { tag: "direct", type: "direct" });
-if (!have_block)  push(out_block, { tag: "block",  type: "block"  });
+// Tags that resolve to an auto-injected, field-less outbound. sing-box 1.12
+// fatally rejects a dns_server `detour` pointing at these ("detour to an
+// empty direct outbound makes no sense"), so we scrub such references below.
+let implicit_empty = {};
+if (!have_direct) { implicit_empty["direct"] = true; push(out_block, { tag: "direct", type: "direct" }); }
+if (!have_block)  { implicit_empty["block"]  = true; push(out_block, { tag: "block",  type: "block"  }); }
 
 config.outbounds = out_block;
+
+if (config.dns && type(config.dns.servers) === "array") {
+	for (let s in config.dns.servers) {
+		if (s.detour != null && implicit_empty[s.detour]) {
+			warn(sprintf("generate.uc: dropping dns_server[%s].detour='%s' (would reference an empty implicit outbound)\n",
+				s.tag ?? "?", s.detour));
+			delete s.detour;
+		}
+	}
+}
 
 let r = route_mod.build_route_rules(uci);
 let rsets = ruleset_mod.build_rule_sets(uci, r.referenced);

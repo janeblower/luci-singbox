@@ -396,7 +396,9 @@ config cache 'cache'
 run_gen
 check "default cache path" '"path": "/tmp/singbox-ui-cache.db"' "$TMPDIR/out.json"
 
-echo "-- dns_server https with detour=direct"
+echo "-- dns_server detour='direct' is scrubbed when 'direct' is auto-injected (empty)"
+# sing-box 1.12 fatally rejects a DNS detour pointing at an auto-injected empty
+# direct outbound. generate.uc must strip that detour so the daemon comes up.
 write_cfg "
 config dns_server 'out_dns'
 	option enabled '1'
@@ -414,8 +416,26 @@ check "dns servers"  '"servers":'           "$TMPDIR/out.json"
 check "dns tag"      '"tag": "out_dns"'     "$TMPDIR/out.json"
 check "dns server"   '"server": "dns.google"' "$TMPDIR/out.json"
 check "dns path"     '"path": "/dns-query"' "$TMPDIR/out.json"
-check "dns detour"   '"detour": "direct"'   "$TMPDIR/out.json"
+grep -q '"detour":' "$TMPDIR/out.json" \
+    && { echo "FAIL: dns detour to implicit direct must be scrubbed"; exit 1; }
+echo "  PASS: detour to implicit empty direct dropped"
 check "dns final"    '"final": "out_dns"'   "$TMPDIR/out.json"
+
+echo "-- dns_server detour='direct' preserved when a real 'direct' outbound exists"
+write_cfg "
+config outbound 'direct'
+	option enabled '1'
+	option proxy_type 'interface'
+	option interface 'eth0'
+
+config dns_server 'out_dns'
+	option enabled '1'
+	option type 'https'
+	option server '1.1.1.1'
+	option detour 'direct'
+"
+run_gen
+check "dns detour kept" '"detour": "direct"' "$TMPDIR/out.json"
 
 echo "-- dns_server with detour to a named outbound"
 write_cfg "
