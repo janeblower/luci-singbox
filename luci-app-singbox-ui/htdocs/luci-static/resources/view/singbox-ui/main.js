@@ -18,12 +18,15 @@ var callDhcpLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases',
 // Insert a synthetic "Name" field as the first option of a GridSection's
 // edit modal. cfgvalue returns the section id, write triggers uci.rename.
 // We don't write a real UCI option; remove() is a no-op for the same reason.
-// loadOutboundList(o) — populate an `outbound` ListValue with the current
-// UCI outbound section names. Shared between route_rule and route_default.
-function loadOutboundList(o) {
+// loadOutboundList(o, includeNone) — populate an `outbound` ListValue with
+// the current UCI outbound section names. Shared between route_rule,
+// route_default, and dns_server detour. `includeNone` adds an empty entry
+// labelled "(none)" so the field can be left unset.
+function loadOutboundList(o, includeNone) {
 	o.load = function (section_id) {
 		this.keylist = [];
 		this.vallist = [];
+		if (includeNone) this.value('', _('(none)'));
 		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
 			this.value(sec['.name'], sec['.name']);
 		}.bind(this));
@@ -632,7 +635,13 @@ function buildDnsMap() {
 	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
 	o = s.option(form.Value, 'path', _('HTTPS path')); o.modalonly = true; o.placeholder = '/dns-query';
 	o.depends('type','https');
-	o = s.option(form.Value, 'detour', _('Detour (outbound or direct)')); o.modalonly = true; o.placeholder = 'direct';
+	// Pinning a DNS query to a specific outbound. Dropdown of user-defined
+	// outbound tags only — the auto-injected implicit `direct` is intentionally
+	// not selectable because sing-box 1.12 rejects detour to a field-less
+	// direct outbound at startup. Leave empty to let route rules decide.
+	o = s.option(form.ListValue, 'detour', _('Detour (outbound)'));
+	o.modalonly = true;
+	loadOutboundList(o, true);
 	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
 	o = s.option(form.Value, 'domain_resolver', _('Domain resolver (dns_server tag)')); o.modalonly = true;
 	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
@@ -668,6 +677,13 @@ function buildDnsMap() {
 	s = m.section(form.NamedSection, 'dns', 'dns', _('DNS Settings'));
 	s.anonymous = true;
 	o = s.option(form.ListValue, 'final', _('Final server')); loadDnsServerList(o, true);
+	// Picked up by generate.uc as route.default_domain_resolver. If left
+	// empty, the first non-fakeip dns_server is auto-selected. Without it,
+	// sing-box 1.12 emits a deprecation warning and 1.14 will refuse the
+	// config.
+	o = s.option(form.ListValue, 'default_resolver',
+		_('Default domain resolver (bootstrap)'));
+	loadDnsServerList(o, true);
 	o = s.option(form.ListValue, 'strategy', _('Strategy'));
 	[['','default'],['prefer_ipv4','prefer_ipv4'],['prefer_ipv6','prefer_ipv6'],
 	 ['ipv4_only','ipv4_only'],['ipv6_only','ipv6_only']].forEach(function (p) {
