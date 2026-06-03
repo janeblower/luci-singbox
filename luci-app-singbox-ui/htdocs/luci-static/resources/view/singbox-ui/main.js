@@ -47,6 +47,101 @@ function addRenameField(s) {
 	o.remove = function () {};
 }
 
+var SB_INBOUND_KNOWN = {
+	'tproxy': true, 'tun': true, 'direct': true, 'mixed': true,
+	'shadowsocks': true, 'vless': true, 'vmess': true, 'trojan': true,
+	'hysteria2': true, 'http': true, 'socks': true,
+};
+
+function __sb_jsonImportInbound(o) {
+	var out = { ok: false, errors: [], fields: {} };
+	if (!o || typeof o !== 'object' || Array.isArray(o)) {
+		out.errors.push(_('Not a JSON object'));
+		return out;
+	}
+	if (!o.type) { out.errors.push(_('Missing "type" field')); return out; }
+	if (!SB_INBOUND_KNOWN[o.type]) {
+		out.errors.push(_('Unknown inbound type: ') + o.type);
+		return out;
+	}
+	if (o.server && o.server_port && !o.listen) {
+		out.errors.push(_('Looks like an outbound (has "server" without "listen"). Use the outbound importer.'));
+		return out;
+	}
+	var f = out.fields;
+	f.protocol = o.type;
+	if (o.listen      != null) f.listen      = String(o.listen);
+	if (o.listen_port != null) f.listen_port = +o.listen_port;
+	if (o.network     != null) f.network     = String(o.network);
+
+	if (o.type === 'shadowsocks') {
+		if (o.method)   f.shadowsocks_method = o.method;
+		if (o.password) f.server_password    = o.password;
+	}
+	if (o.type === 'vless' || o.type === 'vmess'
+	    || o.type === 'trojan' || o.type === 'hysteria2') {
+		var u = (o.users && o.users[0]) || {};
+		if (u.uuid)     f.server_uuid     = u.uuid;
+		if (u.password) f.server_password = u.password;
+		if (u.flow)     f.vless_flow      = u.flow;
+		if (u.alterId != null) f.vmess_alter_id = String(u.alterId);
+	}
+	if (o.type === 'tun') {
+		if (o.interface_name) f.interface_name = o.interface_name;
+		if (o.mtu) f.mtu = String(o.mtu);
+		if (o.stack) f.stack = o.stack;
+		if (Array.isArray(o.address)) {
+			for (var i = 0; i < o.address.length; i++) {
+				var a = o.address[i];
+				if (a.indexOf(':') < 0) f.inet4_address = a;
+				else f.inet6_address = a;
+			}
+		}
+		if (o.auto_route)   f.auto_route   = '1';
+		if (o.strict_route) f.strict_route = '1';
+	}
+	if (o.tls) {
+		f.security = (o.tls.reality && o.tls.reality.enabled) ? 'reality' : 'tls';
+		if (o.tls.server_name)      f.tls_server_name      = o.tls.server_name;
+		if (o.tls.certificate_path) f.tls_certificate_path = o.tls.certificate_path;
+		if (o.tls.key_path)         f.tls_key_path         = o.tls.key_path;
+		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn.join(',');
+		if (o.tls.reality) {
+			if (o.tls.reality.private_key) f.reality_private_key = o.tls.reality.private_key;
+			if (Array.isArray(o.tls.reality.short_id))
+				f.reality_short_id = o.tls.reality.short_id[0];
+			if (o.tls.reality.handshake) {
+				if (o.tls.reality.handshake.server)
+					f.reality_handshake_server      = o.tls.reality.handshake.server;
+				if (o.tls.reality.handshake.server_port)
+					f.reality_handshake_server_port = String(o.tls.reality.handshake.server_port);
+			}
+		}
+	}
+	if (o.transport && o.transport.type) {
+		f.transport = o.transport.type;
+		if (o.transport.path)         f.transport_path         = o.transport.path;
+		if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
+		if (o.transport.headers && o.transport.headers.Host)
+			f.transport_host = o.transport.headers.Host;
+		if (o.transport.host)         f.transport_host         = o.transport.host;
+	}
+	if (o.type === 'hysteria2') {
+		if (o.obfs && o.obfs.type) {
+			f.hysteria2_obfs_type     = o.obfs.type;
+			f.hysteria2_obfs_password = o.obfs.password || '';
+		}
+		if (o.up_mbps   != null) f.up_mbps   = String(o.up_mbps);
+		if (o.down_mbps != null) f.down_mbps = String(o.down_mbps);
+	}
+	out.ok = true;
+	return out;
+}
+
+// Expose as a window-level global so the Node test harness can pick it up
+// after the LuCI fragment is evaluated. LuCI itself doesn't need this.
+window.__sb_jsonImportInbound = __sb_jsonImportInbound;
+
 var SB_INBOUND_PROTOCOLS = [
 	['direct',      'Direct (DNS / port-forward)'],
 	['tproxy',      'TProxy (transparent)'],
@@ -57,6 +152,52 @@ var SB_INBOUND_PROTOCOLS = [
 	['trojan',      'Trojan'],
 	['hysteria2',   'Hysteria2']
 ];
+
+function openJsonImportModal(kind, m) {
+	var ta = E('textarea', {
+		'rows': 12,
+		'class': 'cbi-input-textarea',
+		'style': 'width:100%;font-family:monospace;',
+		'placeholder': kind === 'inbound'
+			? '{"type":"shadowsocks","listen":"::","listen_port":8388,"method":"aes-256-gcm","password":"p"}'
+			: '{"type":"vless","server":"a.b","server_port":443,"uuid":"…"}'
+	});
+	var err = E('div', { 'style': 'color:#c33;margin-top:8px;' });
+
+	function onImport() {
+		err.textContent = '';
+		var parsed;
+		try { parsed = JSON.parse(ta.value); }
+		catch (e) { err.textContent = _('Invalid JSON: ') + e.message; return; }
+
+		var res = (kind === 'inbound')
+			? __sb_jsonImportInbound(parsed)
+			: __sb_jsonImportOutbound(parsed);
+		if (!res.ok) { err.textContent = res.errors.join('; '); return; }
+
+		var base = (res.fields.protocol || res.fields.type || 'import') + '_in';
+		var sid = base, i = 1;
+		while (uci.get('singbox-ui', sid)) { sid = base + '_' + (i++); }
+		uci.add('singbox-ui', kind, sid);
+		uci.set('singbox-ui', sid, 'enabled', '1');
+		Object.keys(res.fields).forEach(function (k) {
+			uci.set('singbox-ui', sid, k, String(res.fields[k]));
+		});
+		ui.hideModal();
+		// Map re-render is handled by the form save/redirect lifecycle —
+		// users will see the new section after the next save or page reload.
+	}
+
+	ui.showModal(_('Import JSON'), [
+		E('p', {}, _('Paste a sing-box ') + kind + _(' object. Fields will be parsed and a new section created.')),
+		ta, err,
+		E('div', { 'class': 'right', 'style': 'margin-top:12px;' }, [
+			E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, _('Cancel')),
+			' ',
+			E('button', { 'class': 'cbi-button cbi-button-positive', 'click': onImport }, _('Import'))
+		])
+	]);
+}
 
 function buildInboundsMap() {
 	var m = new form.Map('singbox-ui', _('Inbounds'),
@@ -72,6 +213,21 @@ function buildInboundsMap() {
 		return _('Inbound') + ': ' + section_id + (p ? ' (' + p + ')' : '');
 	};
 	addRenameField(s);
+
+	var origRenderSectionAdd = s.renderSectionAdd;
+	s.renderSectionAdd = function () {
+		var node = origRenderSectionAdd.apply(this, arguments);
+		var btn = E('button', {
+			'class': 'cbi-button cbi-button-action',
+			'style': 'margin-left:8px;',
+			'click': ui.createHandlerFn(this, function () {
+				openJsonImportModal('inbound', m);
+				return false;
+			})
+		}, _('Import JSON'));
+		if (node && node.appendChild) node.appendChild(btn);
+		return node;
+	};
 
 	var o;
 	o = s.option(form.Flag, 'enabled', _('Enable'));
