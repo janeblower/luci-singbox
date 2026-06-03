@@ -142,6 +142,77 @@ function __sb_jsonImportInbound(o) {
 // after the LuCI fragment is evaluated. LuCI itself doesn't need this.
 window.__sb_jsonImportInbound = __sb_jsonImportInbound;
 
+var SB_OUTBOUND_KNOWN = {
+	'vless': true, 'vmess': true, 'trojan': true, 'hysteria2': true,
+	'shadowsocks': true, 'direct': true, 'socks': true, 'http': true,
+};
+
+function __sb_jsonImportOutbound(o) {
+	var out = { ok: false, errors: [], fields: {} };
+	if (!o || typeof o !== 'object' || Array.isArray(o)) {
+		out.errors.push(_('Not a JSON object'));
+		return out;
+	}
+	if (!o.type) { out.errors.push(_('Missing "type" field')); return out; }
+	if (!SB_OUTBOUND_KNOWN[o.type]) {
+		out.errors.push(_('Unknown outbound type: ') + o.type);
+		return out;
+	}
+	if (o.listen != null) {
+		out.errors.push(_('Looks like an inbound (has "listen"). Use the inbound importer.'));
+		return out;
+	}
+	var f = out.fields;
+	f.type = o.type;
+	if (o.server)      f.server      = o.server;
+	if (o.server_port) f.server_port = +o.server_port;
+
+	if (o.type === 'shadowsocks') {
+		if (o.method)   f.shadowsocks_method = o.method;
+		if (o.password) f.server_password    = o.password;
+	}
+	if (o.type === 'vless' || o.type === 'vmess') {
+		if (o.uuid) f.server_uuid = o.uuid;
+		if (o.flow) f.vless_flow  = o.flow;
+		if (o.alter_id != null) f.vmess_alter_id = String(o.alter_id);
+		if (o.security)         f.vmess_security = o.security;
+	}
+	if (o.type === 'trojan' || o.type === 'hysteria2') {
+		if (o.password) f.server_password = o.password;
+	}
+	if (o.type === 'hysteria2') {
+		if (o.up_mbps   != null) f.up_mbps   = String(o.up_mbps);
+		if (o.down_mbps != null) f.down_mbps = String(o.down_mbps);
+		if (o.obfs && o.obfs.type) {
+			f.hysteria2_obfs_type     = o.obfs.type;
+			f.hysteria2_obfs_password = o.obfs.password || '';
+		}
+	}
+	if (o.tls) {
+		f.security = (o.tls.reality && o.tls.reality.enabled) ? 'reality' : 'tls';
+		if (o.tls.server_name) f.tls_server_name = o.tls.server_name;
+		if (o.tls.insecure)    f.tls_insecure    = '1';
+		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn.join(',');
+		if (o.tls.utls && o.tls.utls.fingerprint) f.utls_fingerprint = o.tls.utls.fingerprint;
+		if (o.tls.reality) {
+			if (o.tls.reality.public_key) f.reality_public_key = o.tls.reality.public_key;
+			if (o.tls.reality.short_id)   f.reality_short_id   = o.tls.reality.short_id;
+		}
+	}
+	if (o.transport && o.transport.type) {
+		f.transport = o.transport.type;
+		if (o.transport.path)         f.transport_path         = o.transport.path;
+		if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
+		if (o.transport.host)         f.transport_host         = o.transport.host;
+		if (o.transport.headers && o.transport.headers.Host)
+			f.transport_host = o.transport.headers.Host;
+	}
+	out.ok = true;
+	return out;
+}
+
+window.__sb_jsonImportOutbound = __sb_jsonImportOutbound;
+
 var SB_INBOUND_PROTOCOLS = [
 	['direct',      'Direct (DNS / port-forward)'],
 	['tproxy',      'TProxy (transparent)'],
@@ -435,6 +506,21 @@ function buildOutboundsMap() {
 		return _('Outbound') + ': ' + section_id + (t ? ' (' + _(t) + ')' : '');
 	};
 	addRenameField(s);
+
+	var origRenderSectionAddOut = s.renderSectionAdd;
+	s.renderSectionAdd = function () {
+		var node = origRenderSectionAddOut.apply(this, arguments);
+		var btn = E('button', {
+			'class': 'cbi-button cbi-button-action',
+			'style': 'margin-left:8px;',
+			'click': ui.createHandlerFn(this, function () {
+				openJsonImportModal('outbound', m);
+				return false;
+			})
+		}, _('Import JSON'));
+		if (node && node.appendChild) node.appendChild(btn);
+		return node;
+	};
 
 	var o;
 	o = s.option(form.Flag, 'enabled', _('Enable'));
