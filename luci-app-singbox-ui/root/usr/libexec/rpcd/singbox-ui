@@ -21,6 +21,7 @@ const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subs
 const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
 const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
+const CLASH_CURL   = getenv("CLASH_CURL")   || "curl";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }
@@ -42,12 +43,13 @@ function parse_args() {
 
 function emit_list() {
 	emit({
-		generate:    {},
-		nftables:    { action: "string" },
-		restart:     {},
-		refresh:     { what: "string" },
-		status:      {},
-		read_config: {}
+		generate:      {},
+		nftables:      { action: "string" },
+		restart:       {},
+		refresh:       { what: "string" },
+		status:        {},
+		read_config:   {},
+		clash_request: { method: "string", path: "string", body: "string" }
 	});
 }
 
@@ -148,6 +150,51 @@ function call_read_config() {
 	emit({ status: "ok", content: content });
 }
 
+// run_capture(argv) — like run() but returns child stdout (string) or null.
+// stderr is discarded so it can't corrupt the captured body.
+function run_capture(argv) {
+	let quoted = [];
+	for (let a in argv) push(quoted, sq(a));
+	let p = fs.popen(join(" ", quoted) + " 2>/dev/null", "r");
+	if (!p) return null;
+	let out = p.read("all") ?? "";
+	p.close();
+	return out;
+}
+
+// clash_params() — env overrides (tests) win, else read the clash_api UCI section.
+function clash_params() {
+	let listen = getenv("CLASH_LISTEN");
+	let port   = getenv("CLASH_PORT");
+	let secret = getenv("CLASH_SECRET");
+	if (listen == null || port == null || secret == null) {
+		let s = {};
+		try { s = require("uci").cursor().get_all("singbox-ui", "clash_api") ?? {}; } catch (e) {}
+		if (listen == null) listen = (s.listen != null && length(s.listen)) ? s.listen : "127.0.0.1";
+		if (port   == null) port   = (s.port   != null && length(s.port))   ? s.port   : "9090";
+		if (secret == null) secret = s.secret ?? "";
+	}
+	return { listen: listen, port: port, secret: secret };
+}
+
+function call_clash_request() {
+	let args = parse_args();
+	let method = args.method || "GET";
+	let path   = args.path || "";
+	if (method !== "GET" && method !== "DELETE" && method !== "POST") {
+		emit_err("invalid method"); return;
+	}
+	if (substr(path, 0, 1) !== "/") { emit_err("invalid path"); return; }
+	let p = clash_params();
+	let url = `http://${p.listen}:${p.port}${path}`;
+	let argv = [ CLASH_CURL, "-s", "-m", "5", "-X", method,
+	             "-H", `Authorization: Bearer ${p.secret}`, url ];
+	if (args.body != null && length(args.body)) { push(argv, "--data"); push(argv, args.body); }
+	let body = run_capture(argv);
+	if (body == null) { emit_err("clash request failed"); return; }
+	emit({ status: "ok", body: body });
+}
+
 let argv   = ARGV;
 let cmd    = argv[0] || "";
 let method = argv[1] || "";
@@ -165,6 +212,7 @@ if (cmd === "call") {
 	case "refresh":     call_refresh();      break;
 	case "status":      call_status();       break;
 	case "read_config": call_read_config();  break;
+	case "clash_request": call_clash_request(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);

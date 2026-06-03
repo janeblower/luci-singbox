@@ -52,7 +52,7 @@ jval() {
 
 echo "-- list emits valid JSON with all methods"
 out=$(run_h list)
-for m in generate nftables restart refresh status read_config; do
+for m in generate nftables restart refresh status read_config clash_request; do
 	printf "%s\n" "$out" | je "d.$m != null" || { echo "FAIL: missing $m"; exit 1; }
 done
 printf "%s\n" "$out" | je 'd.nftables.action != null' || { echo "FAIL: missing nftables.action"; exit 1; }
@@ -188,5 +188,29 @@ echo "$out" | grep -q 'stderr-noise' && { echo "FAIL: stderr leaked into respons
 echo "$out" | grep -q 'stdout-noise' && { echo "FAIL: stdout leaked into response"; exit 1; }
 printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: status not ok"; exit 1; }
 echo "  PASS: stderr+stdout suppressed"
+
+echo "-- call clash_request proxies to curl with Bearer + method + path"
+cat >"$tmpdir/curl" <<EOF
+#!/bin/sh
+echo "curl args: \$*" >> "$tmpdir/curl.log"
+echo '{"connections":[],"downloadTotal":10,"uploadTotal":20}'
+EOF
+chmod +x "$tmpdir/curl"
+out=$(echo '{"method":"GET","path":"/connections"}' | \
+	CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok \
+	run_h call clash_request)
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: clash_request not ok"; echo "$out"; exit 1; }
+body=$(printf "%s\n" "$out" | jval 'd.body')
+printf "%s\n" "$body" | je 'd.downloadTotal == 10' || { echo "FAIL: body not passed through"; echo "$out"; exit 1; }
+grep -q 'Authorization: Bearer tok' "$tmpdir/curl.log" || { echo "FAIL: Bearer secret not sent"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q '/connections' "$tmpdir/curl.log" || { echo "FAIL: path not in URL"; cat "$tmpdir/curl.log"; exit 1; }
+echo "  PASS: clash_request proxies correctly"
+
+echo "-- call clash_request rejects bad method / path"
+out=$(echo '{"method":"FOO","path":"/x"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_request)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad method should error"; exit 1; }
+out=$(echo '{"method":"GET","path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_request)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error"; exit 1; }
+echo "  PASS: clash_request validates inputs"
 
 echo "OK"
