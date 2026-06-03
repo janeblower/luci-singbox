@@ -235,4 +235,20 @@ run_gen
 check "extra sniff"          '"sniff": true'
 check "extra sniff_override" '"sniff_override_destination": true'
 
+echo "-- direct (DNS) inbound on 127.0.0.53:53"
+write_cfg "
+config inbound 'dns_in'
+	option enabled '1'
+	option protocol 'direct'
+	option listen '127.0.0.53'
+	option listen_port '53'
+	option network 'udp'
+"
+run_gen
+check "direct type"      '"type": "direct"'
+check "direct tag"       '"tag": "dns_in"'
+check "direct listen"    '"listen": "127.0.0.53"'
+check "direct port"      '"listen_port": 53'
+check "direct network"   '"network": "udp"'
+
 echo "OK"

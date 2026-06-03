@@ -150,6 +150,11 @@ function build_one(s) {
 			let tr = build_transport(s);
 			if (tr) ob.transport = tr;
 		}
+	} else if (proto === "direct") {
+		ob = { type: "direct", tag: tag, listen: listen, listen_port: port };
+		let net = s_opt(s, "network");
+		if (net === "udp" || net === "tcp") ob.network = net;
+		// "" or other values omit `network` (sing-box treats absence as tcp+udp).
 	} else {
 		warn(sprintf("inbound.uc: unknown protocol '%s' for '%s'; skipping\n", proto, tag));
 		return null;
