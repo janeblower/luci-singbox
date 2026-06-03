@@ -62,6 +62,9 @@ function build_rules(cur) {
 		let has_match = rule.rule_set || rule.domain_suffix || rule.domain_keyword || rule.clash_mode;
 		if (!has_match || !length(server)) return;
 		rule.server = server;
+		// rewrite_ttl default = 60. Empty/absent → 60. "0" → 0 (explicit disable).
+		let rtt_raw = s_opt(s, "rewrite_ttl");
+		rule.rewrite_ttl = (rtt_raw === "") ? 60 : (+rtt_raw);
 		push(rules, rule);
 	});
 	return rules;

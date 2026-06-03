@@ -89,6 +89,7 @@ check "rule server"        '"server": "fakeip"'
 check "rule rule_set"      '"rule_set":'
 check "rule domain_suffix" '"example.com"'
 check "rule clash_mode"    '"clash_mode": "global"'
+check "default rewrite_ttl 60" '"rewrite_ttl": 60'
 
 echo "-- empty dns_rule (no matchers, no server) is dropped"
 write_cfg "
@@ -131,5 +132,45 @@ config dns 'dns'
 "
 run_gen
 check "independent_cache true" '"independent_cache": true'
+
+echo "-- dns_rule custom rewrite_ttl is preserved"
+write_cfg "
+config ruleset 'rs'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://x/y.srs'
+
+config dns_rule 'rttl'
+	option enabled '1'
+	list   ruleset 'rs'
+	option server 'fakeip'
+	option rewrite_ttl '300'
+
+config dns_server 'fakeip'
+	option enabled '1'
+	option type 'fakeip'
+"
+run_gen
+check "custom rewrite_ttl 300" '"rewrite_ttl": 300'
+
+echo "-- dns_rule rewrite_ttl=0 emits 0 (disables TTL rewrite)"
+write_cfg "
+config ruleset 'rs'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://x/y.srs'
+
+config dns_rule 'rttl0'
+	option enabled '1'
+	list   ruleset 'rs'
+	option server 'fakeip'
+	option rewrite_ttl '0'
+
+config dns_server 'fakeip'
+	option enabled '1'
+	option type 'fakeip'
+"
+run_gen
+check "rewrite_ttl 0 honoured" '"rewrite_ttl": 0'
 
 echo "OK"
