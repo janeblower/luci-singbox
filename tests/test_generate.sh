@@ -248,7 +248,38 @@ count=$(grep -c '"tag": "dup_rs"' "$TMPDIR/out.json" || true)
 	|| { echo "FAIL: dup_rs should appear once, got $count"; cat "$TMPDIR/out.json"; exit 1; }
 echo "  PASS: duplicate rule_set deduplicated"
 check "rule_a -> direct" '"outbound": "direct"' "$TMPDIR/out.json"
-check "rule_b -> block"  '"outbound": "block"'  "$TMPDIR/out.json"
+check "rule_a action"    '"action": "route"'    "$TMPDIR/out.json"
+# action=block must NOT produce a `block` outbound reference; sing-box 1.11+
+# expresses block via a rule with `action: "reject"` (no outbound).
+check "rule_b -> reject" '"action": "reject"'   "$TMPDIR/out.json"
+grep -q '"outbound": "block"' "$TMPDIR/out.json" \
+    && { echo "FAIL: rule_b must not reference removed 'block' outbound"; exit 1; }
+echo "  PASS: no 'block' outbound reference"
+# And no auto-injected `block` outbound entry should be in the outbounds array.
+grep -q '"type": "block"' "$TMPDIR/out.json" \
+    && { echo "FAIL: 'block' outbound type must not be auto-injected"; exit 1; }
+echo "  PASS: no auto-injected 'block' outbound"
+
+echo "-- route_default action=block emits trailing {action:reject} catch-all"
+write_cfg "
+config inbound 'tproxy_in'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
+	option hijack_dns '0'
+
+config route_default 'route_default'
+	option action 'block'
+"
+run_gen
+grep -q '\"final\":' "$TMPDIR/out.json" \
+    && { echo "FAIL: route_default action=block must not emit a 'final' key"; exit 1; }
+check "catch-all reject" '\"action\": \"reject\"' "$TMPDIR/out.json"
+# Catch-all must be the LAST rule (jq-free check: last occurrence of action
+# in the rules array). A trailing reject without rule_set/protocol qualifies.
+grep -q '"type": "block"' "$TMPDIR/out.json" \
+    && { echo "FAIL: action=block must not resurrect a 'block' outbound"; exit 1; }
+echo "  PASS: no 'block' outbound auto-injected"
 
 # ---- dns.rules from dns_rule referencing ruleset ----
 echo "-- dns_rule emits dns.rules entry"
@@ -395,6 +426,64 @@ config cache 'cache'
 "
 run_gen
 check "default cache path" '"path": "/tmp/singbox-ui-cache.db"' "$TMPDIR/out.json"
+
+echo "-- route.default_domain_resolver auto-picks first non-fakeip dns_server"
+write_cfg "
+config dns_server 'fakeip'
+	option enabled '1'
+	option type 'fakeip'
+	option inet4_range '198.18.0.0/15'
+
+config dns_server 'upstream'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+
+config route_default 'route_default'
+	option action 'direct'
+"
+run_gen
+check "route block"          '\"route\":'                              "$TMPDIR/out.json"
+check "default resolver key" '\"default_domain_resolver\":'            "$TMPDIR/out.json"
+check "auto-picked server"   '\"server\": \"upstream\"'                "$TMPDIR/out.json"
+
+echo "-- dns.default_resolver UCI override wins over auto-pick"
+write_cfg "
+config dns_server 'fakeip'
+	option enabled '1'
+	option type 'fakeip'
+	option inet4_range '198.18.0.0/15'
+
+config dns_server 'upstream'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+
+config dns_server 'override_me'
+	option enabled '1'
+	option type 'udp'
+	option server '9.9.9.9'
+
+config dns 'dns'
+	option default_resolver 'override_me'
+
+config route_default 'route_default'
+	option action 'direct'
+"
+run_gen
+check "override resolver"    '\"server\": \"override_me\"'             "$TMPDIR/out.json"
+
+echo "-- no route block → no default_domain_resolver"
+write_cfg "
+config dns_server 'upstream'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+"
+run_gen
+grep -q '"default_domain_resolver"' "$TMPDIR/out.json" \
+    && { echo "FAIL: default_domain_resolver must not appear without a route block"; exit 1; }
+echo "  PASS: no default_domain_resolver when route block absent"
 
 echo "-- dns_server detour='direct' is scrubbed when 'direct' is auto-injected (empty)"
 # sing-box 1.12 fatally rejects a DNS detour pointing at an auto-injected empty

@@ -42,13 +42,20 @@ function build_route_rules(cur) {
 		if (!length(resolved)) return;
 
 		let action = section.action ?? "direct";
+		// sing-box 1.11+ removed the `block` outbound; the replacement is a
+		// rule with `action: "reject"` (no outbound). Direct/outbound rules
+		// get the explicit `action: "route"` that sing-box 1.14 will require
+		// (1.12 already warns when it's missing on dial fields).
+		if (action === "block") {
+			push(rules, { action: "reject", rule_set: resolved });
+			return;
+		}
 		let target;
 		if (action === "direct")        target = "direct";
-		else if (action === "block")    target = "block";
 		else if (action === "outbound") target = section.outbound;
 		if (!target) return;
 
-		push(rules, { rule_set: resolved, outbound: target });
+		push(rules, { action: "route", rule_set: resolved, outbound: target });
 	});
 
 	let final = null;
@@ -56,8 +63,15 @@ function build_route_rules(cur) {
 	if (rd) {
 		let action = rd.action ?? "direct";
 		if (action === "direct")        final = "direct";
-		else if (action === "block")    final = "block";
 		else if (action === "outbound") final = rd.outbound ?? null;
+		else if (action === "block") {
+			// No "block" outbound exists in sing-box 1.11+. Express
+			// "block by default" as a trailing catch-all reject rule and
+			// leave `final` unset (sing-box defaults the final to direct
+			// when omitted; this catch-all fires first for any flow that
+			// reached the end of the chain unmatched).
+			push(rules, { action: "reject" });
+		}
 	}
 
 	return { rules, final, referenced };
