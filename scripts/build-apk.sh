@@ -118,6 +118,13 @@ printf '%s\n' "$APP_CONFFILE" > "$list_dir/${APP_NAME}.conffiles"
 printf '%s %s\n' "$APP_CONFFILE" "$conffile_hash" > "$list_dir/${APP_NAME}.conffiles_static"
 
 mkdir -p "$APP_SCRIPTS"
+# NOTE: default_postinst derives the package name from `basename "${1%.*}"`,
+# i.e. the post-install script's filename minus its extension. With apk-mkpkg
+# we name the script "post-install.sh", so it resolves to "post-install" and
+# the package's file list at /lib/apk/packages/luci-app-singbox-ui.list is
+# never found — which silently skips the init.d enable+start block. We call
+# default_postinst for any side-effects (uci-defaults runner) and then enable
+# /start /etc/init.d/singbox-ui explicitly. Both ops are idempotent.
 cat > "$APP_SCRIPTS/post-install.sh" <<'EOF'
 #!/bin/sh
 [ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
@@ -125,6 +132,10 @@ cat > "$APP_SCRIPTS/post-install.sh" <<'EOF'
 . ${IPKG_INSTROOT}/lib/functions.sh
 default_postinst $0 $@
 [ -n "${IPKG_INSTROOT}" ] || {
+  if [ -x /etc/init.d/singbox-ui ]; then
+    /etc/init.d/singbox-ui enable
+    /etc/init.d/singbox-ui start
+  fi
   rm -f /tmp/luci-indexcache.*
   rm -rf /tmp/luci-modulecache/
   killall -HUP rpcd 2>/dev/null
@@ -136,6 +147,12 @@ cat > "$APP_SCRIPTS/pre-deinstall.sh" <<'EOF'
 [ -s ${IPKG_INSTROOT}/lib/functions.sh ] || exit 0
 . ${IPKG_INSTROOT}/lib/functions.sh
 default_prerm $0 $@
+[ -n "${IPKG_INSTROOT}" ] || {
+  if [ -x /etc/init.d/singbox-ui ]; then
+    /etc/init.d/singbox-ui stop 2>/dev/null
+    /etc/init.d/singbox-ui disable 2>/dev/null
+  fi
+}
 exit 0
 EOF
 cat > "$APP_SCRIPTS/post-upgrade.sh" <<'EOF'
@@ -146,6 +163,12 @@ export PKG_UPGRADE=1
 . ${IPKG_INSTROOT}/lib/functions.sh
 default_postinst $0 $@
 [ -n "${IPKG_INSTROOT}" ] || {
+  if [ -x /etc/init.d/singbox-ui ]; then
+    /etc/init.d/singbox-ui enable
+    # restart picks up the new generate.uc / lib code without leaving the
+    # daemon down between stop and start.
+    /etc/init.d/singbox-ui restart
+  fi
   rm -f /tmp/luci-indexcache.*
   rm -rf /tmp/luci-modulecache/
   killall -HUP rpcd 2>/dev/null
