@@ -5,15 +5,11 @@ const TMPDIR = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 let fs = require("fs");
 let helpers = require("helpers");
 
-function s_opt(s, k) { let v = s[k]; return (v == null) ? "" : v; }
-function s_bool(s, k) { return s[k] === "1"; }
-function s_num(v) { let n = +v; return n || 0; }
-function csv_list(v) {
-	if (v == null || v === "") return [];
-	let out = [];
-	for (let p in split(v, ",")) { let t = trim(p); if (length(t)) push(out, t); }
-	return out;
-}
+const s_opt    = helpers.s_opt;
+const s_bool   = helpers.s_bool;
+const s_num    = helpers.s_num;
+const csv_list = helpers.csv_list;
+const as_array = helpers.as_array;
 // Client-side TLS. null when security=none. hysteria2 forces tls.
 function build_tls_client(s, proto) {
 	let sec = s_opt(s, "security") || "none";
@@ -22,7 +18,7 @@ function build_tls_client(s, proto) {
 	let tls = { enabled: true };
 	if (length(s_opt(s, "tls_server_name"))) tls.server_name = s.tls_server_name;
 	if (s_bool(s, "tls_insecure")) tls.insecure = true;
-	let alpn = csv_list(s_opt(s, "tls_alpn"));
+	let alpn = as_array(s.tls_alpn);
 	if (length(alpn)) tls.alpn = alpn;
 	if (length(s_opt(s, "utls_fingerprint")))
 		tls.utls = { enabled: true, fingerprint: s.utls_fingerprint };
@@ -51,7 +47,7 @@ function build_transport(s) {
 		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
 		if (length(s_opt(s, "transport_xhttp_mode"))) tr.mode = s.transport_xhttp_mode;
 	} else if (t === "http") {
-		let hosts = csv_list(s_opt(s, "transport_hosts"));
+		let hosts = as_array(s.transport_hosts);
 		if (length(hosts)) tr.host = hosts;
 		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
 	}
@@ -84,7 +80,7 @@ function build_constructor_for(s, proto) {
 	if (proto === "vless" && length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
 		ob.flow = s.vless_flow;
 	if (proto === "vmess") {
-		ob.alter_id = s_num(s.vmess_alter_id);
+		if (length(s_opt(s, "vmess_alter_id"))) ob.alter_id = s_num(s.vmess_alter_id);
 		if (length(s_opt(s, "vmess_security"))) ob.security = s.vmess_security;
 	}
 	if (proto === "shadowsocks")

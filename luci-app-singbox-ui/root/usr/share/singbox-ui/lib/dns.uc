@@ -1,14 +1,10 @@
 // lib/dns.uc — sing-box typed DNS (1.12+): servers, rules, settings.
 // Built from dns_server / dns_rule / dns UCI sections. Pure: no I/O.
 
-function s_opt(s, k) { let v = s[k]; return (v == null) ? "" : v; }
-function s_num(v) { let n = +v; return n || 0; }
-function csv_list(v) {
-	if (v == null || v === "") return [];
-	let out = [];
-	for (let p in split(v, ",")) { let t = trim(p); if (length(t)) push(out, t); }
-	return out;
-}
+let helpers = require("helpers");
+const s_opt    = helpers.s_opt;
+const s_num    = helpers.s_num;
+const csv_list = helpers.csv_list;
 
 function build_servers(cur) {
 	let servers = [];

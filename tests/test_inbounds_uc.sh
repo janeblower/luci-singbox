@@ -142,24 +142,37 @@ check "vless handshake"   '"server": "www.example.com"'
 check "vless transport"   '"type": "ws"'
 check "vless ws path"     '"path": "/ray"'
 
-echo "-- vmess inbound with alterId + tls"
+echo "-- vmess inbound with alter_id + tls"
 write_cfg "
 config inbound 'vm'
 	option enabled '1'
 	option protocol 'vmess'
 	option listen_port '8443'
 	option server_uuid 'uuid-2222'
-	option vmess_alter_id '0'
+	option vmess_alter_id '7'
 	option security 'tls'
 	option tls_server_name 'vm.example.com'
 	option tls_certificate_path '/etc/ssl/cert.pem'
 	option tls_key_path '/etc/ssl/key.pem'
 "
 run_gen
-check "vmess type"     '"type": "vmess"'
-check "vmess uuid"     '"uuid": "uuid-2222"'
-check "vmess alterId"  '"alterId": 0'
-check "vmess tls cert" '"certificate_path": "/etc/ssl/cert.pem"'
+check "vmess type"      '"type": "vmess"'
+check "vmess uuid"      '"uuid": "uuid-2222"'
+check "vmess alter_id"  '"alter_id": 7'
+nocheck "no legacy key" '"alterId"'
+check "vmess tls cert"  '"certificate_path": "/etc/ssl/cert.pem"'
+
+echo "-- vmess inbound without alter_id omits the field"
+write_cfg "
+config inbound 'vm2'
+	option enabled '1'
+	option protocol 'vmess'
+	option listen_port '8444'
+	option server_uuid 'uuid-3333'
+"
+run_gen
+nocheck "no alter_id when unset" '"alter_id"'
+nocheck "no per-user security on inbound" '"security"'
 
 echo "-- trojan inbound"
 write_cfg "
@@ -208,6 +221,30 @@ config inbound 'tp'
 "
 run_gen
 nocheck "extra not merged inbound" '"sniff": true'
+
+echo "-- vless inbound with http transport (multi-host list + tls alpn list)"
+write_cfg "
+config inbound 'http_in'
+	option enabled '1'
+	option protocol 'vless'
+	option listen_port '8445'
+	option server_uuid 'uuid-9999'
+	option transport 'http'
+	option transport_path '/api'
+	list   transport_hosts 'a.example.com'
+	list   transport_hosts 'b.example.com'
+	option security 'tls'
+	option tls_certificate_path '/c.pem'
+	option tls_key_path '/k.pem'
+	list   tls_alpn 'h2'
+	list   tls_alpn 'http/1.1'
+"
+run_gen
+check "http transport"     '"type": "http"'
+check "host a kept"        '"a.example.com"'
+check "host b kept"        '"b.example.com"'
+check "alpn h2 kept"       '"h2"'
+check "alpn http1 kept"    '"http/1.1"'
 
 echo "-- direct (DNS) inbound on 127.0.0.53:53"
 write_cfg "
@@ -284,7 +321,7 @@ config inbound 'hy'
 run_gen
 check "hy2 masquerade" '"masquerade": "https://www.example.com"'
 
-echo "-- vmess inbound with cipher"
+echo "-- vmess_security on inbound is ignored (per-user cipher is client-side)"
 write_cfg "
 config inbound 'vm2'
 	option enabled '1'
@@ -294,6 +331,6 @@ config inbound 'vm2'
 	option vmess_security 'chacha20-poly1305'
 "
 run_gen
-check "vmess cipher" '"security": "chacha20-poly1305"'
+nocheck "no per-user security key" '"security":'
 
 echo "OK"

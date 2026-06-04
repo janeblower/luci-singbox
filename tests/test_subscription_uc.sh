@@ -245,4 +245,41 @@ SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions force
 [ -s "$FAKE_CURL_LOG" ] || fail "forced refresh did not call curl"
 pass "forced refresh re-downloads"
 
+# ---- regression: tproxy inbound with nft_rules='1' must NOT trigger a
+# ruleset refresh. Pre-fix any_rulesets_stale() walked every section that had
+# `nft_rules='1'`, including tproxy inbounds, whose rs_<name>.json never
+# exists — so the cron loop reloaded sing-box every 30 minutes for nothing.
+echo "-- inbound nft_rules='1' is not treated as a ruleset"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config inbound 'tproxy_in'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
+	option nft_rules '1'
+EOF
+: >"$FAKE_CURL_LOG"
+SINGBOX_NO_RELOAD=1 run_uc refresh rulesets force
+[ ! -s "$FAKE_CURL_LOG" ] || { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "ruleset refresh fired on inbound"; }
+pass "inbound nft_rules='1' ignored by ruleset refresh"
+
+# ---- sub_update_via outbound: curl --interface receives the resolved netdev,
+# not the UCI logical name. helpers.resolve_iface_device honours
+# SINGBOX_DEV_<iface> so this test can pin the translation.
+echo "-- sub_update_via outbound resolves UCI iface to real netdev"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'via_wan'
+	option type 'interface'
+	option interface 'wan'
+config outbound 'subA'
+	option type 'subscription'
+	option sub_url 'https://example.test/sub'
+	option sub_update_via 'via_wan'
+EOF
+printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
+: >"$FAKE_CURL_LOG"
+SINGBOX_DEV_wan='pppoe-wan' run_uc fetch-subs
+grep -q -- '--interface pppoe-wan' "$FAKE_CURL_LOG" \
+	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "expected --interface pppoe-wan"; }
+pass "sub_update_via resolves to pppoe-wan"
+
 echo "OK"

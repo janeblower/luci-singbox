@@ -1,17 +1,12 @@
 // lib/inbound.uc — sing-box `inbounds` array, built from `inbound` UCI sections.
 // Protocol IS the kind; mode/inbound_json are legacy and silently ignored. Pure: no I/O.
 
-function s_opt(s, k) { let v = s[k]; return (v == null) ? "" : v; }
-function s_bool(s, k) { return s[k] === "1"; }
-function s_num(v) { let n = +v; return n || 0; }
-
-// csv_list("a, b ,c") -> ["a","b","c"]; "" -> []
-function csv_list(v) {
-	if (v == null || v === "") return [];
-	let out = [];
-	for (let p in split(v, ",")) { let t = trim(p); if (length(t)) push(out, t); }
-	return out;
-}
+let helpers = require("helpers");
+const s_opt    = helpers.s_opt;
+const s_bool   = helpers.s_bool;
+const s_num    = helpers.s_num;
+const csv_list = helpers.csv_list;
+const as_array = helpers.as_array;
 
 // build_user(s) — single-user object for vless/vmess/trojan/hysteria2.
 function build_user(s) {
@@ -25,10 +20,10 @@ function build_user(s) {
 	}
 	if (proto === "vless" && length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
 		u.flow = s.vless_flow;
-	if (proto === "vmess")
-		u.alterId = s_num(s.vmess_alter_id);
-	if (proto === "vmess" && length(s_opt(s, "vmess_security")))
-		u.security = s.vmess_security;
+	if (proto === "vmess" && length(s_opt(s, "vmess_alter_id")))
+		u.alter_id = s_num(s.vmess_alter_id);
+	// vmess inbound users do not accept a per-user `security`; the cipher
+	// is selected by the client per connection. Field omitted.
 	return u;
 }
 
@@ -42,7 +37,7 @@ function build_tls(s) {
 	if (sec === "tls") {
 		if (length(s_opt(s, "tls_certificate_path"))) tls.certificate_path = s.tls_certificate_path;
 		if (length(s_opt(s, "tls_key_path")))         tls.key_path         = s.tls_key_path;
-		let alpn = csv_list(s_opt(s, "tls_alpn"));
+		let alpn = as_array(s.tls_alpn);
 		if (length(alpn)) tls.alpn = alpn;
 		if (s_bool(s, "tls_insecure")) tls.insecure = true;
 		if (length(s_opt(s, "utls_fingerprint")))
@@ -79,7 +74,7 @@ function build_transport(s) {
 		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
 		if (length(s_opt(s, "transport_xhttp_mode"))) tr.mode = s.transport_xhttp_mode;
 	} else if (t === "http") {
-		let hosts = csv_list(s_opt(s, "transport_hosts"));
+		let hosts = as_array(s.transport_hosts);
 		if (length(hosts)) tr.host = hosts;
 		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
 	}

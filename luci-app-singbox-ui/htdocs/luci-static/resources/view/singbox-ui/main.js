@@ -21,15 +21,18 @@ var callDhcpLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases',
 // loadOutboundList(o, includeNone) — populate an `outbound` ListValue with
 // the current UCI outbound section names. Shared between route_rule,
 // route_default, and dns_server detour. `includeNone` adds an empty entry
-// labelled "(none)" so the field can be left unset.
+// labelled "(none)" so the field can be left unset. Names are sorted so the
+// dropdown stays readable as the list grows.
 function loadOutboundList(o, includeNone) {
 	o.load = function (section_id) {
 		this.keylist = [];
 		this.vallist = [];
 		if (includeNone) this.value('', _('(none)'));
-		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
-			this.value(sec['.name'], sec['.name']);
-		}.bind(this));
+		var self = this;
+		uci.sections('singbox-ui', 'outbound')
+			.map(function (sec) { return sec['.name']; })
+			.sort()
+			.forEach(function (n) { self.value(n, n); });
 		return form.ListValue.prototype.load.apply(this, arguments);
 	};
 }
@@ -47,10 +50,12 @@ function addRenameField(s) {
 	o.remove = function () {};
 }
 
+// Constrained to the protocols inbound.uc actually builds — importing
+// anything else would create a UCI section that generate.uc silently drops.
 var SB_INBOUND_KNOWN = {
-	'tproxy': true, 'tun': true, 'direct': true, 'mixed': true,
+	'tproxy': true, 'tun': true, 'direct': true,
 	'shadowsocks': true, 'vless': true, 'vmess': true, 'trojan': true,
-	'hysteria2': true, 'http': true, 'socks': true,
+	'hysteria2': true,
 };
 
 function __sb_jsonImportInbound(o) {
@@ -84,7 +89,10 @@ function __sb_jsonImportInbound(o) {
 		if (u.uuid)     f.server_uuid     = u.uuid;
 		if (u.password) f.server_password = u.password;
 		if (u.flow)     f.vless_flow      = u.flow;
-		if (u.alterId != null) f.vmess_alter_id = String(u.alterId);
+		// sing-box uses snake_case `alter_id`; accept legacy camelCase too
+		// in case the user pasted a v2ray-ng-style config.
+		var aid = (u.alter_id != null) ? u.alter_id : u.alterId;
+		if (aid != null) f.vmess_alter_id = String(aid);
 	}
 	if (o.type === 'tun') {
 		if (o.interface_name) f.interface_name = o.interface_name;
@@ -105,7 +113,7 @@ function __sb_jsonImportInbound(o) {
 		if (o.tls.server_name)      f.tls_server_name      = o.tls.server_name;
 		if (o.tls.certificate_path) f.tls_certificate_path = o.tls.certificate_path;
 		if (o.tls.key_path)         f.tls_key_path         = o.tls.key_path;
-		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn.join(',');
+		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn;
 		if (o.tls.reality) {
 			if (o.tls.reality.private_key) f.reality_private_key = o.tls.reality.private_key;
 			if (Array.isArray(o.tls.reality.short_id))
@@ -124,7 +132,18 @@ function __sb_jsonImportInbound(o) {
 		if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
 		if (o.transport.headers && o.transport.headers.Host)
 			f.transport_host = o.transport.headers.Host;
-		if (o.transport.host)         f.transport_host         = o.transport.host;
+		if (o.transport.host != null) {
+			// `http` transport carries an array of vhosts; ws/httpupgrade
+			// stays a single scalar. Route each into its own UCI field.
+			if (o.transport.type === 'http')
+				f.transport_hosts = Array.isArray(o.transport.host)
+					? o.transport.host : [ o.transport.host ];
+			else
+				f.transport_host = Array.isArray(o.transport.host)
+					? o.transport.host[0] : o.transport.host;
+		}
+		if (o.transport.type === 'xhttp' && o.transport.mode)
+			f.transport_xhttp_mode = o.transport.mode;
 	}
 	if (o.type === 'hysteria2') {
 		if (o.obfs && o.obfs.type) {
@@ -142,9 +161,12 @@ function __sb_jsonImportInbound(o) {
 // after the LuCI fragment is evaluated. LuCI itself doesn't need this.
 window.__sb_jsonImportInbound = __sb_jsonImportInbound;
 
+// Constrained to the proxy protocols outbound.uc build_constructor_for()
+// actually emits. `direct`/`interface`/`url`/`subscription` are UI-only
+// shapes managed via dedicated fields, not by the JSON importer.
 var SB_OUTBOUND_KNOWN = {
 	'vless': true, 'vmess': true, 'trojan': true, 'hysteria2': true,
-	'shadowsocks': true, 'direct': true, 'socks': true, 'http': true,
+	'shadowsocks': true,
 };
 
 function __sb_jsonImportOutbound(o) {
@@ -192,7 +214,7 @@ function __sb_jsonImportOutbound(o) {
 		f.security = (o.tls.reality && o.tls.reality.enabled) ? 'reality' : 'tls';
 		if (o.tls.server_name) f.tls_server_name = o.tls.server_name;
 		if (o.tls.insecure)    f.tls_insecure    = '1';
-		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn.join(',');
+		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn;
 		if (o.tls.utls && o.tls.utls.fingerprint) f.utls_fingerprint = o.tls.utls.fingerprint;
 		if (o.tls.reality) {
 			if (o.tls.reality.public_key) f.reality_public_key = o.tls.reality.public_key;
@@ -203,9 +225,18 @@ function __sb_jsonImportOutbound(o) {
 		f.transport = o.transport.type;
 		if (o.transport.path)         f.transport_path         = o.transport.path;
 		if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
-		if (o.transport.host)         f.transport_host         = o.transport.host;
 		if (o.transport.headers && o.transport.headers.Host)
 			f.transport_host = o.transport.headers.Host;
+		if (o.transport.host != null) {
+			if (o.transport.type === 'http')
+				f.transport_hosts = Array.isArray(o.transport.host)
+					? o.transport.host : [ o.transport.host ];
+			else
+				f.transport_host = Array.isArray(o.transport.host)
+					? o.transport.host[0] : o.transport.host;
+		}
+		if (o.transport.type === 'xhttp' && o.transport.mode)
+			f.transport_xhttp_mode = o.transport.mode;
 	}
 	out.ok = true;
 	return out;
@@ -246,17 +277,30 @@ function openJsonImportModal(kind, m) {
 			: __sb_jsonImportOutbound(parsed);
 		if (!res.ok) { err.textContent = res.errors.join('; '); return; }
 
-		var base = (res.fields.protocol || res.fields.type || 'import') + '_in';
+		// Distinguish inbound vs outbound by suffix so user-facing names stay
+		// scannable (vless_in vs vless_out instead of two `vless_in`s).
+		var suffix = (kind === 'outbound') ? '_out' : '_in';
+		var base = (res.fields.protocol || res.fields.type || 'import') + suffix;
 		var sid = base, i = 1;
 		while (uci.get('singbox-ui', sid)) { sid = base + '_' + (i++); }
 		uci.add('singbox-ui', kind, sid);
 		uci.set('singbox-ui', sid, 'enabled', '1');
 		Object.keys(res.fields).forEach(function (k) {
-			uci.set('singbox-ui', sid, k, String(res.fields[k]));
+			var v = res.fields[k];
+			// LuCI uci.set accepts arrays for list options; importer keeps
+			// arrays (tls_alpn, transport_hosts) intact so the form renders
+			// them as multi-value lists instead of one comma-joined scalar.
+			if (Array.isArray(v))
+				uci.set('singbox-ui', sid, k, v.map(String));
+			else
+				uci.set('singbox-ui', sid, k, String(v));
 		});
 		ui.hideModal();
-		// Map re-render is handled by the form save/redirect lifecycle —
-		// users will see the new section after the next save or page reload.
+		// Re-render the page so the newly-added section shows in the grid.
+		// Map.parse/render is non-trivial to splice in mid-lifecycle —
+		// uci.save() inside the page wrapper would also clobber other
+		// pending edits — so we save what we just imported and reload.
+		uci.save().then(function () { window.location.reload(); });
 	}
 
 	ui.showModal(_('Import JSON'), [
@@ -452,8 +496,8 @@ function buildInboundsMap() {
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
 	o.depends('protocol', 'hysteria2');
-	o = s.option(form.Value, 'tls_alpn', _('ALPN (comma-separated)'));
-	o.modalonly = true; o.placeholder = 'h2,http/1.1';
+	o = s.option(form.DynamicList, 'tls_alpn', _('ALPN'));
+	o.modalonly = true; o.placeholder = 'h2';
 	o.depends({ protocol: 'vless', security: 'tls' });
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
@@ -570,7 +614,7 @@ function buildInboundsMap() {
 
 function buildOutboundsMap() {
 	var m = new form.Map('singbox-ui', _('Outbounds'),
-		_('Define outbounds: direct, block, or proxy via interface / URL / subscription.'));
+		_('Define outbounds: direct via interface, share-link URL, subscription, or proxy constructor.'));
 
 	var s = m.section(form.GridSection, 'outbound', null);
 	s.anonymous  = false;
@@ -690,8 +734,8 @@ function buildOutboundsMap() {
 	o.depends({ type: 'vmess', security: 'tls' });
 	o.depends({ type: 'trojan', security: 'tls' });
 	o.depends('type', 'hysteria2');
-	o = s.option(form.Value, 'tls_alpn', _('ALPN (comma-separated)'));
-	o.modalonly = true; o.placeholder = 'h2,http/1.1';
+	o = s.option(form.DynamicList, 'tls_alpn', _('ALPN'));
+	o.modalonly = true; o.placeholder = 'h2';
 	o.depends({ type: 'vless', security: 'tls' });
 	o.depends({ type: 'vmess', security: 'tls' });
 	o.depends({ type: 'trojan', security: 'tls' });

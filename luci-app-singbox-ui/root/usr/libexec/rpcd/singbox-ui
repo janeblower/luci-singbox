@@ -181,7 +181,10 @@ function call_clash_request() {
 	let args = parse_args();
 	let method = args.method || "GET";
 	let path   = args.path || "";
-	if (method !== "GET" && method !== "DELETE" && method !== "POST") {
+	// Clash uses PATCH (e.g. /configs to switch mode) and PUT (/proxies/<g>);
+	// the rest of the verbs are write-side actions covered by the ACL.
+	if (method !== "GET" && method !== "DELETE" && method !== "POST"
+	    && method !== "PATCH" && method !== "PUT") {
 		emit_err("invalid method"); return;
 	}
 	if (substr(path, 0, 1) !== "/") { emit_err("invalid path"); return; }

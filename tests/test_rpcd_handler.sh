@@ -213,4 +213,14 @@ out=$(echo '{"method":"GET","path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h
 printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error"; exit 1; }
 echo "  PASS: clash_request validates inputs"
 
+echo "-- call clash_request accepts PATCH (clash uses PATCH /configs)"
+for verb in PATCH PUT; do
+	out=$(echo "{\"method\":\"$verb\",\"path\":\"/configs\",\"body\":\"{}\"}" | \
+		CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok \
+		run_h call clash_request)
+	printf "%s\n" "$out" | je 'd.status == "ok"' \
+		|| { echo "FAIL: $verb should be accepted"; echo "$out"; exit 1; }
+done
+echo "  PASS: PATCH/PUT accepted"
+
 echo "OK"

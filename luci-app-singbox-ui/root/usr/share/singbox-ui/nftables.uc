@@ -207,9 +207,14 @@ function cmd_emit(port, v4, v6, iface_str) {
 // cmd_apply / cmd_remove come after build_ruleset because ucode does not
 // hoist function declarations (unlike JavaScript) — forward references
 // fail at call time with "left-hand side is not a function".
-function cmd_remove() {
-	system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc; idempotent
+// nft_delete_table_quiet() — drops the table if present; redirects stderr to
+// /dev/null so the "No such file or directory" noise from a missing table
+// doesn't reach procd logs / rpcd JSON output.
+function nft_delete_table_quiet() {
+	system(`nft delete table inet ${TABLE} 2>/dev/null`);
 }
+
+function cmd_remove() { nft_delete_table_quiet(); }
 
 // first_nft_tproxy(cur) — first enabled inbound with protocol=tproxy and
 // nft_rules not explicitly "0". Returns the section object or null.
@@ -263,7 +268,7 @@ function cmd_apply(cur) {
 	let rules = load_rs_rules();
 
 	if (v4 === "" && v6 === "" && !length(rules)) {
-		system(["nft", "delete", "table", "inet", TABLE]);  // ignore rc
+		nft_delete_table_quiet();
 		log_err("nftables: no fakeip ranges and no ruleset rules; table removed");
 		return 0;
 	}
