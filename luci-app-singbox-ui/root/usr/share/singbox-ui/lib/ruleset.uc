@@ -1,11 +1,10 @@
 // lib/ruleset.uc — sing-box `route.rule_set` definitions for referenced rule-sets.
 
+let helpers = require("helpers");
+
 function detect_format(rs) {
-	if (rs.format) return rs.format;
 	let src = (rs.type === "local") ? (rs.path ?? "") : (rs.url ?? "");
-	if (match(src, /\.srs$/i))  return "binary";
-	if (match(src, /\.json$/i)) return "source";
-	return "binary";
+	return helpers.detect_rs_format(src, rs.format);
 }
 
 // build_rule_sets(cur, referenced_names) — returns [{tag, type, format, url|path}, ...].

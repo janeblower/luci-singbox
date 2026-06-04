@@ -1,6 +1,5 @@
 config inbound 'tproxy_in'
 	option enabled '1'
-	option mode 'constructor'
 	option protocol 'tproxy'
 	option listen '::'
 	option listen_port '7893'

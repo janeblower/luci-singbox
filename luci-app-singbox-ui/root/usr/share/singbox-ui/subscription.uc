@@ -61,7 +61,7 @@ function try_b64_decode(s) {
 }
 
 function cmd_fetch_subs(cur) {
-	let names = helpers.sections_where(cur, "type", "subscription");
+	let names = helpers.sections_of_kind(cur, "outbound", "type", "subscription");
 	if (!length(names)) {
 		log_err("fetch_subs: no subscription outbounds configured");
 		return 0;
@@ -86,11 +86,15 @@ function cmd_fetch_subs(cur) {
 		let via = helpers.uci_get_or_empty(cur, name, "sub_update_via");
 		let iface = null;
 		if (via !== "" && via !== "direct") {
-			iface = helpers.uci_get_or_empty(cur, via, "interface");
-			if (iface === "") {
+			let logical = helpers.uci_get_or_empty(cur, via, "interface");
+			if (logical === "") {
 				log_err(`fetch_subs: outbound '${via}' has no interface`);
 				continue;
 			}
+			// `curl --interface` needs a real netdev (e.g. pppoe-wan); the
+			// outbound stores a UCI logical name (e.g. wan). Translate so
+			// the request leaves through the requested uplink.
+			iface = helpers.resolve_iface_device(logical);
 		}
 		let raw_path = `${TMPDIR}/sub_${name}.raw`;
 		let out_path = `${TMPDIR}/sub_${name}.txt`;
@@ -147,17 +151,12 @@ function cmd_fetch_subs(cur) {
 	}
 	return 0;
 }
-// detect_format(target, override) — auto-detect from extension; override wins.
-function detect_format(target, override) {
-	if (override === "binary" || override === "source") return override;
-	let lower = lc(target);
-	if (substr(lower, -4) === ".srs")   return "binary";
-	if (substr(lower, -5) === ".json")  return "source";
-	return "binary";
-}
-
 function cmd_fetch_rulesets(cur) {
-	let names = helpers.sections_where(cur, "nft_rules", "1");
+	// Only matches `ruleset` sections — earlier this iterated all sections
+	// with nft_rules='1' and picked up tproxy inbounds, causing
+	// any_rulesets_stale() to fire on cron forever (the inbound rs_*.json
+	// never exists) and to needlessly reload sing-box every 30 minutes.
+	let names = helpers.sections_of_kind(cur, "ruleset", "nft_rules", "1");
 	if (!length(names)) {
 		log_err("fetch_rulesets: no rule-sets configured (nft_rules=1)");
 		return 0;
@@ -210,7 +209,7 @@ function cmd_fetch_rulesets(cur) {
 			fs.unlink(m.raw_path);
 			continue;
 		}
-		let fmt = detect_format(m.target, helpers.uci_get_or_empty(cur, m.name, "format"));
+		let fmt = helpers.detect_rs_format(m.target, helpers.uci_get_or_empty(cur, m.name, "format"));
 		if (fmt === "binary") {
 			if (system([SINGBOX, "rule-set", "decompile", m.raw_path, "-o", m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: decompile failed for ${m.name}`);
@@ -240,7 +239,7 @@ function is_stale(path, interval_s, force) {
 }
 
 function any_subs_stale(cur, force) {
-	for (let name in helpers.sections_where(cur, "type", "subscription")) {
+	for (let name in helpers.sections_of_kind(cur, "outbound", "type", "subscription")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "sub_interval");
 		if (iv === 0) iv = 3600;
@@ -250,7 +249,7 @@ function any_subs_stale(cur, force) {
 }
 
 function any_rulesets_stale(cur, force) {
-	for (let name in helpers.sections_where(cur, "nft_rules", "1")) {
+	for (let name in helpers.sections_of_kind(cur, "ruleset", "nft_rules", "1")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "update_interval");
 		if (iv === 0) iv = 86400;

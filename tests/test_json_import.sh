@@ -138,6 +138,57 @@ expect('hysteria2 outbound with obfs',
 		hysteria2_obfs_type: 'salamander', hysteria2_obfs_password: 'op',
 	}});
 
+// vmess alter_id: snake_case is canonical sing-box; legacy alterId accepted.
+expect('vmess inbound alter_id snake_case',
+	fn({ type: 'vmess', listen: '::', listen_port: 8443,
+	     users: [{ uuid: 'u1', alter_id: 7 }] }),
+	{ ok: true, errors: [], fields: {
+		protocol: 'vmess', listen: '::', listen_port: 8443,
+		server_uuid: 'u1', vmess_alter_id: '7',
+	}});
+expect('vmess inbound legacy alterId still accepted',
+	fn({ type: 'vmess', listen: '::', listen_port: 8443,
+	     users: [{ uuid: 'u1', alterId: 4 }] }),
+	{ ok: true, errors: [], fields: {
+		protocol: 'vmess', listen: '::', listen_port: 8443,
+		server_uuid: 'u1', vmess_alter_id: '4',
+	}});
+
+// Multi-host http transport must land in transport_hosts (list); ws/etc.
+// keep transport_host scalar.
+expect('http transport multi-host routes to transport_hosts list',
+	fnOut({ type: 'vless', server: 'a.b', server_port: 443, uuid: 'u',
+	        transport: { type: 'http', host: ['a.example', 'b.example'], path: '/api' } }),
+	{ ok: true, errors: [], fields: {
+		type: 'vless', server: 'a.b', server_port: 443, server_uuid: 'u',
+		transport: 'http', transport_path: '/api',
+		transport_hosts: ['a.example', 'b.example'],
+	}});
+expect('ws transport host stays scalar',
+	fnOut({ type: 'vless', server: 'a.b', server_port: 443, uuid: 'u',
+	        transport: { type: 'ws', host: 'cdn.example', path: '/ws' } }),
+	{ ok: true, errors: [], fields: {
+		type: 'vless', server: 'a.b', server_port: 443, server_uuid: 'u',
+		transport: 'ws', transport_path: '/ws', transport_host: 'cdn.example',
+	}});
+
+// tls.alpn must stay an array (UI now uses DynamicList).
+expect('outbound tls alpn stays array',
+	fnOut({ type: 'vless', server: 'a.b', server_port: 443, uuid: 'u',
+	        tls: { enabled: true, alpn: ['h2', 'http/1.1'] } }),
+	{ ok: true, errors: [], fields: {
+		type: 'vless', server: 'a.b', server_port: 443, server_uuid: 'u',
+		security: 'tls', tls_alpn: ['h2', 'http/1.1'],
+	}});
+
+// Builders don't implement these — importer must reject now.
+expect('inbound rejects mixed (builder lacks support)',
+	fn({ type: 'mixed', listen: '::', listen_port: 8080 }),
+	{ ok: false, errors: ['Unknown inbound type: mixed'], fields: {} });
+expect('outbound rejects direct (use type=interface)',
+	fnOut({ type: 'direct', server: 'x.y', server_port: 1 }),
+	{ ok: false, errors: ['Unknown outbound type: direct'], fields: {} });
+
 console.log('OK');
 NODE
 
