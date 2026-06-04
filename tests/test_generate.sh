@@ -127,7 +127,7 @@ config outbound 'my_json_out'
 	option type 'vmess'
 	option server 'json.example.com'
 	option server_port '8443'
-	option uuid 'abc-123'
+	option server_uuid 'abc-123'
 "
 run_gen
 check "vmess tag"    '"tag": "my_json_out"'         "$TMPDIR/out.json"
@@ -408,6 +408,7 @@ config dns_server 'fakeip'
 config cache 'cache'
 	option enabled '1'
 	option store_fakeip '1'
+	option storage 'custom'
 	option path '/tmp/test-cache.db'
 "
 run_gen

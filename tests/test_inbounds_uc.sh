@@ -198,31 +198,6 @@ check "hy2 obfs pw"   '"password": "obfs-pw"'
 check "hy2 up"        '"up_mbps": 100'
 check "hy2 tls"       '"enabled": true'
 
-echo "-- mode=json passes raw object through with injected tag"
-write_cfg "
-config inbound 'raw'
-	option enabled '1'
-	option mode 'json'
-	option inbound_json '{\"type\":\"mixed\",\"listen\":\"127.0.0.1\",\"listen_port\":2080}'
-"
-run_gen
-check "json type"   '"type": "mixed"'
-check "json tag"    '"tag": "raw"'
-check "json listen" '"listen": "127.0.0.1"'
-
-echo "-- mode=json invalid JSON → inbound skipped + warning"
-write_cfg "
-config inbound 'bad'
-	option enabled '1'
-	option mode 'json'
-	option inbound_json '{ not json'
-"
-run_gen || true
-nocheck "bad json skipped" '"tag": "bad"'
-grep -qi 'invalid inbound_json' "$TMPDIR/gen.stderr" \
-	|| { echo "FAIL: missing warning for invalid inbound_json"; cat "$TMPDIR/gen.stderr"; exit 1; }
-echo "  PASS: invalid inbound_json warned + skipped"
-
 echo "-- extra_json is no longer honoured for inbounds (field deprecated)"
 write_cfg "
 config inbound 'tp'

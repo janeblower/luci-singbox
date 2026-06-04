@@ -38,20 +38,17 @@ jobs:
       # exact toolset the .uc scripts and rpcd handler use in production. The
       # suite is dependency-lean: assertions use ucode's json()/fs (no jq, no
       # coreutils stat), so nothing extra is installed in the container.
-      - name: Run tests inside OpenWrt 25.12.3 rootfs
-        run: |
-          # sing-box is fetched once via apk so test_defaults.sh can hand the
-          # generated default config to `sing-box check` — that's the gate
-          # that catches "config validates structurally but the daemon refuses
-          # to start" regressions (e.g. dns_server detour to an empty direct
-          # outbound, which sing-box 1.12 rejects fatally).
-          docker run --rm \
-            -v "$PWD:/work" -w /work \
-            openwrt/rootfs:x86_64-25.12.3 \
-            sh -ec '
-              apk update >/dev/null 2>&1 && apk add sing-box >/dev/null 2>&1
-              sh tests/run.sh
-            '
+      #
+      # sing-box is fetched once via apk inside the wrapper so test_defaults.sh
+      # can hand the generated default config to `sing-box check` — that's the
+      # gate that catches "config validates structurally but the daemon
+      # refuses to start" regressions (e.g. dns_server detour to an empty
+      # direct outbound, which sing-box 1.12 rejects fatally).
+      #
+      # tests/run-docker.sh is the same entrypoint developers run locally, so
+      # CI and local prods stay in lockstep.
+      - name: Run tests inside OpenWrt rootfs
+        run: sh tests/run-docker.sh
 
       - name: shellcheck
         run: |
