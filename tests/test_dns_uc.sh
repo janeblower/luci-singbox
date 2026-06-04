@@ -23,7 +23,7 @@ echo "-- typed servers (https/udp/fakeip) + final/strategy"
 write_cfg "
 config outbound 'direct'
 	option enabled '1'
-	option proxy_type 'interface'
+	option type 'interface'
 	option interface 'eth0'
 
 config dns_server 'google'

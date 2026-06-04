@@ -75,7 +75,7 @@ echo "  PASS: inet4_range is not an array"
 echo "-- proxy via interface"
 write_cfg "
 config outbound 'via_wg0'
-	option proxy_type 'interface'
+	option type 'interface'
 	option interface 'wg0'
 "
 run_gen
@@ -87,7 +87,7 @@ check "bind_interface"       '"bind_interface": "wg0"'  "$TMPDIR/out.json"
 echo "-- bind_interface honours SINGBOX_DEV_<iface> resolver override"
 write_cfg "
 config outbound 'wan_out'
-	option proxy_type 'interface'
+	option type 'interface'
 	option interface 'wan'
 "
 SINGBOX_DEV_wan=eth0 run_gen
@@ -97,7 +97,7 @@ check "wan→eth0 via env" '"bind_interface": "eth0"' "$TMPDIR/out.json"
 echo "-- vless:// URL"
 write_cfg "
 config outbound 'my_vless'
-	option proxy_type 'url'
+	option type 'url'
 	option proxy_url 'vless://test-uuid-1234@example.com:443?security=tls&sni=example.com&type=tcp'
 "
 run_gen
@@ -111,7 +111,7 @@ check "vless tls"    '"enabled": true'           "$TMPDIR/out.json"
 echo "-- hy2:// URL"
 write_cfg "
 config outbound 'my_hy2'
-	option proxy_type 'url'
+	option type 'url'
 	option proxy_url 'hy2://mypassword@vpn.example.com:8443?sni=vpn.example.com'
 "
 run_gen
@@ -119,40 +119,42 @@ check "hy2 type"     '"type": "hysteria2"'         "$TMPDIR/out.json"
 check "hy2 password" '"password": "mypassword"'    "$TMPDIR/out.json"
 check "hy2 server"   '"server": "vpn.example.com"' "$TMPDIR/out.json"
 
-# ---- json outbound ----
-echo "-- proxy_type=json"
+# ---- vmess constructor outbound ----
+echo "-- type=vmess constructor"
 write_cfg "
 config outbound 'my_json_out'
 	option enabled '1'
-	option proxy_type 'json'
-	option proxy_json '{\"type\":\"vmess\",\"server\":\"json.example.com\",\"server_port\":8443,\"uuid\":\"abc-123\"}'
+	option type 'vmess'
+	option server 'json.example.com'
+	option server_port '8443'
+	option uuid 'abc-123'
 "
 run_gen
-check "json tag"    '"tag": "my_json_out"'         "$TMPDIR/out.json"
-check "json type"   '"type": "vmess"'              "$TMPDIR/out.json"
-check "json server" '"server": "json.example.com"' "$TMPDIR/out.json"
-check "json port"   '"server_port": 8443'          "$TMPDIR/out.json"
-check "json uuid"   '"uuid": "abc-123"'            "$TMPDIR/out.json"
+check "vmess tag"    '"tag": "my_json_out"'         "$TMPDIR/out.json"
+check "vmess type"   '"type": "vmess"'              "$TMPDIR/out.json"
+check "vmess server" '"server": "json.example.com"' "$TMPDIR/out.json"
+check "vmess port"   '"server_port": 8443'          "$TMPDIR/out.json"
+check "vmess uuid"   '"uuid": "abc-123"'            "$TMPDIR/out.json"
 
-# ---- outbound without proxy_type is skipped (no longer a valid outbound) ----
-echo "-- outbound without proxy_type is skipped"
+# ---- outbound without type is skipped (no longer a valid outbound) ----
+echo "-- outbound without type is skipped"
 write_cfg "
 config outbound 'leftover_direct_out'
 	option action 'direct'
 "
 run_gen
 grep -q '"tag": "leftover_direct_out"' "$TMPDIR/out.json" \
-	&& { echo "FAIL: outbound without proxy_type must be skipped"; cat "$TMPDIR/out.json"; exit 1; }
-echo "  PASS: outbound without proxy_type is skipped"
+	&& { echo "FAIL: outbound without type must be skipped"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: outbound without type is skipped"
 
 # ---- subscription outbound ----
-echo "-- proxy_type=subscription"
+echo "-- type=subscription"
 printf 'vless://sub-uuid-9999@sub.example.com:443?security=tls&sni=sub.example.com\n' \
 	> "$SANDBOX_DIR/subs/sub_my_sub_out.txt"
 write_cfg "
 config outbound 'my_sub_out'
 	option enabled '1'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'https://sub.example.com/config'
 	option sub_update_via 'direct'
 	option sub_interval '3600'
@@ -168,7 +170,7 @@ echo "-- ruleset + route_rule basic"
 write_cfg "
 config outbound 'my_vless'
 	option enabled '1'
-	option proxy_type 'url'
+	option type 'url'
 	option proxy_url 'vless://uuid-aaaa@vless.example.com:443?security=tls&sni=vless.example.com'
 
 config ruleset 'geosite_cn'
@@ -319,7 +321,7 @@ check "dns server fakeip" '"server": "fakeip"' "$TMPDIR/out.json"
 echo "-- subscription urltest emits sub_urltest_url verbatim"
 write_cfg "
 config outbound 'subUT'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'http://example.test/x'
 	option sub_multi '1'
 	option sub_selector_type 'urltest'
@@ -334,7 +336,7 @@ check "urltest probe url emitted" '"url": "https://probe.example/204"'         "
 echo "-- subscription urltest without sub_urltest_url omits url"
 write_cfg "
 config outbound 'subUT2'
-	option proxy_type 'subscription'
+	option type 'subscription'
 	option sub_url 'http://example.test/x'
 	option sub_multi '1'
 	option sub_selector_type 'urltest'
@@ -525,7 +527,7 @@ echo "-- dns_server detour='direct' preserved when a real 'direct' outbound exis
 write_cfg "
 config outbound 'direct'
 	option enabled '1'
-	option proxy_type 'interface'
+	option type 'interface'
 	option interface 'eth0'
 
 config dns_server 'out_dns'
@@ -541,7 +543,7 @@ echo "-- dns_server with detour to a named outbound"
 write_cfg "
 config outbound 'my_vless'
 	option enabled '1'
-	option proxy_type 'url'
+	option type 'url'
 	option proxy_url 'vless://uuid@host:443?security=tls'
 
 config dns_server 'out_dns'
@@ -578,7 +580,7 @@ config inbound 'tproxy_in'
 	option hijack_dns '1'
 
 config outbound 'p'
-	option proxy_type 'interface'
+	option type 'interface'
 	option interface 'eth0'
 
 config ruleset 'cn'
