@@ -1,0 +1,49 @@
+#!/bin/sh
+# tests/test_view_modules_layout.sh
+# Verifies the modularized view layout under htdocs/luci-static/resources/view/singbox-ui/.
+set -e
+ROOT="luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui"
+
+REQUIRED="
+$ROOT/main.js
+$ROOT/lib/rpc.js
+$ROOT/lib/common.js
+$ROOT/importers/inbound.js
+$ROOT/importers/outbound.js
+$ROOT/tabs/inbounds.js
+$ROOT/tabs/outbounds.js
+$ROOT/tabs/rulesets.js
+$ROOT/tabs/routing.js
+$ROOT/tabs/dns.js
+$ROOT/tabs/general.js
+$ROOT/tabs/monitoring.js
+$ROOT/widgets/action-bar.js
+$ROOT/widgets/status-panel.js
+"
+
+fail=0
+for f in $REQUIRED; do
+  if [ ! -f "$f" ]; then
+    echo "MISSING: $f"
+    fail=1
+  fi
+done
+
+# main.js must be small after the refactor.
+lines=$(wc -l < "$ROOT/main.js")
+if [ "$lines" -gt 220 ]; then
+  echo "main.js too large: $lines lines (limit 220)"
+  fail=1
+fi
+
+# No window.__sb_* globals after the refactor.
+if grep -RHn "window\.__sb" "$ROOT" >/dev/null 2>&1; then
+  echo "leftover window.__sb_* globals found"
+  grep -RHn "window\.__sb" "$ROOT"
+  fail=1
+fi
+
+if [ "$fail" -eq 0 ]; then
+  echo "PASS: view layout"
+fi
+exit $fail
