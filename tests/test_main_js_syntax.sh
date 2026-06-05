@@ -52,12 +52,14 @@ grep -q "'route_rule'"          "$JS" || { echo "FAIL: no route_rule section typ
 grep -q "modaltitle"            "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
 
 echo "-- references new outbound types (merged type field)"
-grep -q "'vless'"                "$JS" || { echo "FAIL: no type=vless"; exit 1; }
-grep -q "'subscription'"         "$JS" || { echo "FAIL: no type=subscription"; exit 1; }
-grep -q "proxy_url"              "$JS" || { echo "FAIL: no proxy_url field"; exit 1; }
-grep -q "sub_url"                "$JS" || { echo "FAIL: no sub_url field"; exit 1; }
-grep -q "sub_update_via"         "$JS" || { echo "FAIL: no sub_update_via field"; exit 1; }
-grep -q "sub_interval"           "$JS" || { echo "FAIL: no sub_interval field"; exit 1; }
+# These fields live in tabs/outbounds.js after modularization (Task 8)
+OUTBOUNDS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
+grep -q "'vless'"                "$OUTBOUNDS_TAB" || { echo "FAIL: no type=vless (checked tabs/outbounds.js)"; exit 1; }
+grep -q "'subscription'"         "$OUTBOUNDS_TAB" || { echo "FAIL: no type=subscription (checked tabs/outbounds.js)"; exit 1; }
+grep -q "proxy_url"              "$OUTBOUNDS_TAB" || { echo "FAIL: no proxy_url field (checked tabs/outbounds.js)"; exit 1; }
+grep -q "sub_url"                "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_url field (checked tabs/outbounds.js)"; exit 1; }
+grep -q "sub_update_via"         "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_update_via field (checked tabs/outbounds.js)"; exit 1; }
+grep -q "sub_interval"           "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_interval field (checked tabs/outbounds.js)"; exit 1; }
 ! grep -q "proxy_type"           "$JS" || { echo "FAIL: legacy proxy_type still present"; exit 1; }
 ! grep -q "'json'"               "$JS" || { echo "FAIL: legacy json outbound type still present"; exit 1; }
 
