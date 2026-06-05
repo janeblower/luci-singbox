@@ -40,7 +40,9 @@ grep -q "'require tools.widgets as widgets'" "$JS" || { echo "FAIL: missing 'req
 
 echo "-- references input UCI sections"
 grep -q "fakeip"   "$JS" || { echo "FAIL: no fakeip section"; exit 1; }
-grep -q "tproxy"   "$JS" || { echo "FAIL: no tproxy section"; exit 1; }
+# tproxy lives in tabs/inbounds.js after modularization (Task 7)
+INBOUNDS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js
+grep -q "tproxy"   "$INBOUNDS_TAB" || { echo "FAIL: no tproxy section (checked tabs/inbounds.js)"; exit 1; }
 
 echo "-- references all three output GridSections"
 grep -q "GridSection"           "$JS" || { echo "FAIL: no GridSection"; exit 1; }
