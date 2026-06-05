@@ -3,17 +3,15 @@
 'require form';
 'require uci';
 'require ui';
-'require rpc';
+'require view.singbox-ui.lib.rpc as SbRpc';
 'require tools.widgets as widgets';
 
-var callRefresh    = rpc.declare({ object: 'singbox-ui', method: 'refresh',     params: [ 'what' ] });
-var callRestart    = rpc.declare({ object: 'singbox-ui', method: 'restart' });
-var callStatus     = rpc.declare({ object: 'singbox-ui', method: 'status' });
-var callReadConfig = rpc.declare({ object: 'singbox-ui', method: 'read_config' });
-var callClash      = rpc.declare({ object: 'singbox-ui', method: 'clash_request',
-                                   params: [ 'method', 'path', 'body' ] });
-var callDhcpLeases = rpc.declare({ object: 'luci-rpc', method: 'getDHCPLeases',
-                                   expect: { '': {} } });
+var callRefresh    = SbRpc.callRefresh;
+var callRestart    = SbRpc.callRestart;
+var callStatus     = SbRpc.callStatus;
+var callReadConfig = SbRpc.callReadConfig;
+var callClash      = SbRpc.callClash;
+var callDhcpLeases = SbRpc.callDhcpLeases;
 
 // Insert a synthetic "Name" field as the first option of a GridSection's
 // edit modal. cfgvalue returns the section id, write triggers uci.rename.

@@ -76,7 +76,10 @@ grep -q "'default_resolver'"    "$JS" || { echo "FAIL: dns.default_resolver UI o
 echo "-- references Monitoring tab"
 grep -q "buildMonitoring"        "$JS" || { echo "FAIL: no buildMonitoring"; exit 1; }
 grep -q "callClash"              "$JS" || { echo "FAIL: no callClash wrapper"; exit 1; }
-grep -q "clash_request"          "$JS" || { echo "FAIL: no clash_request method"; exit 1; }
+# clash_request may live in lib/rpc.js after modularization
+LIB_RPC=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/rpc.js
+( grep -q "clash_request" "$JS" || ( [ -f "$LIB_RPC" ] && grep -q "clash_request" "$LIB_RPC" ) ) \
+  || { echo "FAIL: no clash_request method"; exit 1; }
 grep -q "data-tab.*monitoring"   "$JS" || { echo "FAIL: no monitoring tab marker"; exit 1; }
 
 echo "-- has sub-tab data-tab markers"
