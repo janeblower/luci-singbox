@@ -4,6 +4,7 @@
 'require uci';
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
+'require view.singbox-ui.lib.common as SbCommon';
 'require tools.widgets as widgets';
 
 var callRefresh    = SbRpc.callRefresh;
@@ -13,40 +14,10 @@ var callReadConfig = SbRpc.callReadConfig;
 var callClash      = SbRpc.callClash;
 var callDhcpLeases = SbRpc.callDhcpLeases;
 
-// Insert a synthetic "Name" field as the first option of a GridSection's
-// edit modal. cfgvalue returns the section id, write triggers uci.rename.
-// We don't write a real UCI option; remove() is a no-op for the same reason.
-// loadOutboundList(o, includeNone) — populate an `outbound` ListValue with
-// the current UCI outbound section names. Shared between route_rule,
-// route_default, and dns_server detour. `includeNone` adds an empty entry
-// labelled "(none)" so the field can be left unset. Names are sorted so the
-// dropdown stays readable as the list grows.
-function loadOutboundList(o, includeNone) {
-	o.load = function (section_id) {
-		this.keylist = [];
-		this.vallist = [];
-		if (includeNone) this.value('', _('(none)'));
-		var self = this;
-		uci.sections('singbox-ui', 'outbound')
-			.map(function (sec) { return sec['.name']; })
-			.sort()
-			.forEach(function (n) { self.value(n, n); });
-		return form.ListValue.prototype.load.apply(this, arguments);
-	};
-}
-
-function addRenameField(s) {
-	var o = s.option(form.Value, '__rename', _('Name'));
-	o.modalonly = true;
-	o.rmempty   = false;
-	o.datatype  = 'and(minlength(1), uciname)';
-	o.cfgvalue  = function (section_id) { return section_id; };
-	o.write     = function (section_id, value) {
-		if (value && value !== section_id)
-			uci.rename('singbox-ui', section_id, value);
-	};
-	o.remove = function () {};
-}
+var loadOutboundList = SbCommon.loadOutboundList;
+var addRenameField   = SbCommon.addRenameField;
+var wireTabs         = SbCommon.wireTabs;
+var notify           = SbCommon.notify;
 
 // Constrained to the protocols inbound.uc actually builds — importing
 // anything else would create a UCI section that generate.uc silently drops.
@@ -1137,37 +1108,6 @@ function buildGeneralMap() {
 	o.depends('enabled', '1');
 
 	return m;
-}
-
-function wireTabs(root, headerSelector, paneByTab, defaultTab) {
-	var headerLis = root.querySelectorAll(headerSelector + ' > li');
-	function activate(tab) {
-		headerLis.forEach(function (el) {
-			el.classList.remove('cbi-tab', 'cbi-tab-disabled');
-			el.classList.add(el.getAttribute('data-tab') === tab ? 'cbi-tab' : 'cbi-tab-disabled');
-		});
-		Object.keys(paneByTab).forEach(function (k) {
-			paneByTab[k].style.display = (k === tab) ? '' : 'none';
-		});
-	}
-	headerLis.forEach(function (el) {
-		el.addEventListener('click', function () { activate(el.getAttribute('data-tab')); });
-	});
-	activate(defaultTab);
-}
-
-function notify(promise, okLabel, errPrefix) {
-	return promise.then(function (res) {
-		if (res && res.status === 'ok') {
-			ui.addNotification(null, E('p', _(okLabel)), 'info');
-		} else {
-			var msg = (res && res.message) || _('unknown error');
-			ui.addNotification(null, E('p', errPrefix + ': ' + msg), 'danger');
-		}
-		return res;
-	}, function (err) {
-		ui.addNotification(null, E('p', errPrefix + ': ' + (err.message || err)), 'danger');
-	});
 }
 
 function renderActionBar(statusHolder) {
