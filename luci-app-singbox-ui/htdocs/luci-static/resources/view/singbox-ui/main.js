@@ -5,6 +5,7 @@
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.common as SbCommon';
+'require view.singbox-ui.importers.inbound as SbImpInbound';
 'require tools.widgets as widgets';
 
 var callRefresh    = SbRpc.callRefresh;
@@ -19,116 +20,8 @@ var addRenameField   = SbCommon.addRenameField;
 var wireTabs         = SbCommon.wireTabs;
 var notify           = SbCommon.notify;
 
-// Constrained to the protocols inbound.uc actually builds — importing
-// anything else would create a UCI section that generate.uc silently drops.
-var SB_INBOUND_KNOWN = {
-	'tproxy': true, 'tun': true, 'direct': true,
-	'shadowsocks': true, 'vless': true, 'vmess': true, 'trojan': true,
-	'hysteria2': true,
-};
-
-function __sb_jsonImportInbound(o) {
-	var out = { ok: false, errors: [], fields: {} };
-	if (!o || typeof o !== 'object' || Array.isArray(o)) {
-		out.errors.push(_('Not a JSON object'));
-		return out;
-	}
-	if (!o.type) { out.errors.push(_('Missing "type" field')); return out; }
-	if (!SB_INBOUND_KNOWN[o.type]) {
-		out.errors.push(_('Unknown inbound type: ') + o.type);
-		return out;
-	}
-	if (o.server && o.server_port && !o.listen) {
-		out.errors.push(_('Looks like an outbound (has "server" without "listen"). Use the outbound importer.'));
-		return out;
-	}
-	var f = out.fields;
-	f.protocol = o.type;
-	if (o.listen      != null) f.listen      = String(o.listen);
-	if (o.listen_port != null) f.listen_port = +o.listen_port;
-	if (o.network     != null) f.network     = String(o.network);
-
-	if (o.type === 'shadowsocks') {
-		if (o.method)   f.shadowsocks_method = o.method;
-		if (o.password) f.server_password    = o.password;
-	}
-	if (o.type === 'vless' || o.type === 'vmess'
-	    || o.type === 'trojan' || o.type === 'hysteria2') {
-		var u = (o.users && o.users[0]) || {};
-		if (u.uuid)     f.server_uuid     = u.uuid;
-		if (u.password) f.server_password = u.password;
-		if (u.flow)     f.vless_flow      = u.flow;
-		// sing-box uses snake_case `alter_id`; accept legacy camelCase too
-		// in case the user pasted a v2ray-ng-style config.
-		var aid = (u.alter_id != null) ? u.alter_id : u.alterId;
-		if (aid != null) f.vmess_alter_id = String(aid);
-	}
-	if (o.type === 'tun') {
-		if (o.interface_name) f.interface_name = o.interface_name;
-		if (o.mtu) f.mtu = String(o.mtu);
-		if (o.stack) f.stack = o.stack;
-		if (Array.isArray(o.address)) {
-			for (var i = 0; i < o.address.length; i++) {
-				var a = o.address[i];
-				if (a.indexOf(':') < 0) f.inet4_address = a;
-				else f.inet6_address = a;
-			}
-		}
-		if (o.auto_route)   f.auto_route   = '1';
-		if (o.strict_route) f.strict_route = '1';
-	}
-	if (o.tls) {
-		f.security = (o.tls.reality && o.tls.reality.enabled) ? 'reality' : 'tls';
-		if (o.tls.server_name)      f.tls_server_name      = o.tls.server_name;
-		if (o.tls.certificate_path) f.tls_certificate_path = o.tls.certificate_path;
-		if (o.tls.key_path)         f.tls_key_path         = o.tls.key_path;
-		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn;
-		if (o.tls.reality) {
-			if (o.tls.reality.private_key) f.reality_private_key = o.tls.reality.private_key;
-			if (Array.isArray(o.tls.reality.short_id))
-				f.reality_short_id = o.tls.reality.short_id[0];
-			if (o.tls.reality.handshake) {
-				if (o.tls.reality.handshake.server)
-					f.reality_handshake_server      = o.tls.reality.handshake.server;
-				if (o.tls.reality.handshake.server_port)
-					f.reality_handshake_server_port = String(o.tls.reality.handshake.server_port);
-			}
-		}
-	}
-	if (o.transport && o.transport.type) {
-		f.transport = o.transport.type;
-		if (o.transport.path)         f.transport_path         = o.transport.path;
-		if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
-		if (o.transport.headers && o.transport.headers.Host)
-			f.transport_host = o.transport.headers.Host;
-		if (o.transport.host != null) {
-			// `http` transport carries an array of vhosts; ws/httpupgrade
-			// stays a single scalar. Route each into its own UCI field.
-			if (o.transport.type === 'http')
-				f.transport_hosts = Array.isArray(o.transport.host)
-					? o.transport.host : [ o.transport.host ];
-			else
-				f.transport_host = Array.isArray(o.transport.host)
-					? o.transport.host[0] : o.transport.host;
-		}
-		if (o.transport.type === 'xhttp' && o.transport.mode)
-			f.transport_xhttp_mode = o.transport.mode;
-	}
-	if (o.type === 'hysteria2') {
-		if (o.obfs && o.obfs.type) {
-			f.hysteria2_obfs_type     = o.obfs.type;
-			f.hysteria2_obfs_password = o.obfs.password || '';
-		}
-		if (o.up_mbps   != null) f.up_mbps   = String(o.up_mbps);
-		if (o.down_mbps != null) f.down_mbps = String(o.down_mbps);
-	}
-	out.ok = true;
-	return out;
-}
-
-// Expose as a window-level global so the Node test harness can pick it up
-// after the LuCI fragment is evaluated. LuCI itself doesn't need this.
-window.__sb_jsonImportInbound = __sb_jsonImportInbound;
+var SB_INBOUND_KNOWN       = SbImpInbound.SB_INBOUND_KNOWN;
+var __sb_jsonImportInbound = SbImpInbound.jsonImportInbound;
 
 // Constrained to the proxy protocols outbound.uc build_constructor_for()
 // actually emits. `direct`/`interface`/`url`/`subscription` are UI-only
