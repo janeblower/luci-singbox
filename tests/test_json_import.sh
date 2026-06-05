@@ -18,6 +18,7 @@ trap 'rm -rf "$TMP"' EXIT
 cat >"$TMP/run.js" <<'NODE'
 const fs = require('fs');
 const vm = require('vm');
+const path = require('path');
 const src = fs.readFileSync(process.argv[2], 'utf8');
 
 // Strip the LuCI fragment 'use strict' + requires + the view.extend wrapper.
@@ -43,12 +44,40 @@ const sandbox = {
 };
 // window must alias the sandbox so that `window.foo = bar` lands on the ctx.
 sandbox.window = sandbox;
+
+// Helper: evaluate a LuCI module file and return its exported object.
+// Strips 'use strict' + 'require ...' lines, replaces `return L.Class.extend({...})`
+// with an assignment so we can capture the exports.
+function loadModule(filePath) {
+	const msrc = fs.readFileSync(filePath, 'utf8');
+	const mbody = msrc
+		.replace(/^'use strict';\s*/, '')
+		.replace(/^'require [^']+';\s*/gm, '')
+		.replace(/return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/, '__moduleExports = $1;');
+	const mctx = vm.createContext(Object.assign({}, sandbox, { __moduleExports: null }));
+	vm.runInContext('(function() {' + mbody + '})();', mctx, { filename: path.basename(filePath) });
+	return mctx.__moduleExports;
+}
+
+// Resolve module paths relative to main.js location.
+const viewDir = path.dirname(process.argv[2]);
+
+// Stub module variables that main.js references via var X = SbFoo.x aliases.
+sandbox.SbRpc = {
+	callRefresh: () => Promise.resolve(), callRestart: () => Promise.resolve(),
+	callStatus: () => Promise.resolve(), callReadConfig: () => Promise.resolve(),
+	callClash: () => Promise.resolve(), callDhcpLeases: () => Promise.resolve(),
+};
+sandbox.SbCommon = loadModule(path.join(viewDir, 'lib/common.js'));
+sandbox.SbImpInbound  = loadModule(path.join(viewDir, 'importers/inbound.js'));
+sandbox.SbImpOutbound = loadModule(path.join(viewDir, 'importers/outbound.js'));
+
 const ctx = vm.createContext(sandbox);
 vm.runInContext('(function() {' + body + '})();', ctx, { filename: 'main.js' });
 
-const fn = ctx.__sb_jsonImportInbound;
+const fn = ctx.SbImpInbound && ctx.SbImpInbound.jsonImportInbound;
 if (typeof fn !== 'function') {
-	console.error('FAIL: __sb_jsonImportInbound not defined');
+	console.error('FAIL: SbImpInbound.jsonImportInbound not defined');
 	process.exit(1);
 }
 
@@ -99,9 +128,9 @@ expect('vless with reality TLS',
 		reality_handshake_server_port: '443',
 	}});
 
-const fnOut = ctx.__sb_jsonImportOutbound;
+const fnOut = ctx.SbImpOutbound && ctx.SbImpOutbound.jsonImportOutbound;
 if (typeof fnOut !== 'function') {
-	console.error('FAIL: __sb_jsonImportOutbound not defined');
+	console.error('FAIL: SbImpOutbound.jsonImportOutbound not defined');
 	process.exit(1);
 }
 
