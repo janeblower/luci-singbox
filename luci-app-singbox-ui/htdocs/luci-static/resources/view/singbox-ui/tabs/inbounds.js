@@ -4,6 +4,7 @@
 'require ui';
 'require tools.widgets as widgets';
 'require view.singbox-ui.lib.common as SbCommon';
+'require view.singbox-ui.lib.validators as SbValidators';
 'require view.singbox-ui.importers.inbound as SbImpInbound';
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 
@@ -137,6 +138,10 @@ function buildInboundsMap() {
 	o.depends('protocol', 'vmess');
 	o.depends('protocol', 'trojan');
 	o.depends('protocol', 'hysteria2');
+	o.validate = function (sid, value) {
+		if (value === null || value === undefined || value === '') return true;
+		return SbValidators.isPort(value);
+	};
 
 	// direct / shadowsocks
 	o = s.option(form.ListValue, 'network', _('Network'));
@@ -219,6 +224,10 @@ function buildInboundsMap() {
 	o.modalonly = true; o.password = true;
 	o.depends('protocol', 'vless');
 	o.depends('protocol', 'vmess');
+	o.validate = function (sid, value) {
+		if (value === null || value === undefined || value === '') return true;
+		return SbValidators.isUuid(value);
+	};
 	o = s.option(form.Value, 'server_password', _('Password'));
 	o.modalonly = true; o.password = true;
 	o.depends('protocol', 'shadowsocks');
@@ -276,6 +285,10 @@ function buildInboundsMap() {
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
 	o.depends('protocol', 'hysteria2');
+	o.validate = function (sid, value) {
+		if (value === null || value === undefined || value === '') return true;
+		return SbValidators.isHost(value);
+	};
 	o = s.option(form.Value, 'tls_certificate_path', _('Certificate path'));
 	o.modalonly = true; o.placeholder = '/etc/ssl/cert.pem';
 	o.depends({ protocol: 'vless', security: 'tls' });
@@ -294,6 +307,18 @@ function buildInboundsMap() {
 	o.depends({ protocol: 'vmess', security: 'tls' });
 	o.depends({ protocol: 'trojan', security: 'tls' });
 	o.depends('protocol', 'hysteria2');
+	o.validate = function (sid, value) {
+		// LuCI DynamicList passes either the current scalar input or, when
+		// the user has typed nothing, an empty string. Treat empty input as
+		// pending edit (allow) — only block when there are committed values
+		// and *all* are blank. The list value array lives on this.formvalue.
+		var fv;
+		try { fv = this.formvalue(sid); } catch (e) { fv = value; }
+		if (fv === null || fv === undefined) return true;
+		if (Array.isArray(fv) && fv.length === 0) return true;
+		if (typeof fv === 'string' && fv === '') return true;
+		return SbValidators.isAlpnNonEmpty(fv);
+	};
 
 	// Reality specifics (vless)
 	o = s.option(form.Value, 'reality_private_key', _('Reality private key'));
@@ -320,6 +345,15 @@ function buildInboundsMap() {
 	o.modalonly = true; o.placeholder = '/';
 	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
 	o.depends({ transport: 'xhttp' }); o.depends({ transport: 'http' });
+	o.validate = function (sid, value) {
+		// Only ws transport mandates a non-empty path; the validator returns
+		// true for every other transport. Read the live transport selection
+		// off the section so the check follows the form state.
+		var transport;
+		try { transport = this.section.formvalue(sid, 'transport'); }
+		catch (e) { transport = null; }
+		return SbValidators.requiresWsPath(transport, value || '');
+	};
 	o = s.option(form.Value, 'transport_host', _('Transport host'));
 	o.modalonly = true;
 	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });

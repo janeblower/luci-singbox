@@ -259,12 +259,12 @@ Same status as selector: implemented via subscriptions, no standalone UCI form. 
 
 | Validator | Status | Phase |
 |---|---|---|
-| `isPort` (1-65535) | нет (no `lib/validators.js` exists) | Phase 8 (B6) |
-| `isUuid` | нет | Phase 8 |
-| `isHost` (IP or domain) | нет | Phase 8 |
-| `isAlpnNonEmpty` | нет | Phase 8 |
-| `requiresWsPath` (transport=ws ⇒ path required) | нет | Phase 8 |
-| `softWarnCongestion` (warn-not-block for unknown congestion_control) | нет | Phase 8 |
+| `isPort` (1-65535) | есть (`lib/validators.js`, wired on `listen_port` / `server_port`) | Phase 8 (B6) |
+| `isUuid` | есть (wired on `server_uuid` in inbounds/outbounds) | Phase 8 |
+| `isHost` (IP or domain) | есть (wired on `server`, `tls_server_name`) | Phase 8 |
+| `isAlpnNonEmpty` | есть (wired on `tls_alpn` DynamicList) | Phase 8 |
+| `requiresWsPath` (transport=ws ⇒ path required) | есть (wired on `transport_path`) | Phase 8 |
+| `softWarnCongestion` (warn-not-block for unknown congestion_control) | есть (wired on `tuic_congestion`) | Phase 8 |
 
 ---
 

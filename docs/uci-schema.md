@@ -592,3 +592,18 @@ UI write: **none** — there is no UI tab or form for `clash_api`. The section a
 This is **not a distinct UCI section type**. Subscription configuration lives on `outbound` sections of type `subscription` (see the [`outbound` Subscription subsection](#subscription-outbound-typesubscription) above). The `subscription.uc` script reads `sub_url`, `sub_update_via`, and `sub_interval` from those outbound sections.
 
 There is no separate UCI section named or typed `subscription`.
+
+---
+
+## UI form validation (`lib/validators.js`)
+
+Pure-function validators consumed by LuCI form `.validate` callbacks. Each returns `true` on valid input or a non-empty error string that blocks "Save & Apply". Wired into `tabs/inbounds.js` and `tabs/outbounds.js`:
+
+| Validator | Wired on |
+|---|---|
+| `isPort` | `listen_port` (inbound), `server_port` (outbound) |
+| `isUuid` | `server_uuid` (inbound vless/vmess, outbound vless/vmess/tuic) |
+| `isHost` | `server` (outbound), `tls_server_name` (inbound + outbound) |
+| `isAlpnNonEmpty` | `tls_alpn` DynamicList (inbound + outbound) |
+| `requiresWsPath` | `transport_path` (inbound + outbound), reads `transport` formvalue |
+| `softWarnCongestion` | `tuic_congestion` — non-blocking: emits `console.warn` for unknown values, never blocks save |

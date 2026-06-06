@@ -4,6 +4,7 @@
 'require ui';
 'require tools.widgets as widgets';
 'require view.singbox-ui.lib.common as SbCommon';
+'require view.singbox-ui.lib.validators as SbValidators';
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
 
@@ -67,6 +68,10 @@ function buildOutboundsMap() {
 	o.depends('type', 'shadowsocks');
 	o.depends('type', 'tuic');
 	o.depends('type', 'anytls');
+	o.validate = function (sid, value) {
+		if (value === null || value === undefined || value === '') return true;
+		return SbValidators.isHost(value);
+	};
 	o = s.option(form.Value, 'server_port', _('Server port'));
 	o.modalonly = true; o.datatype = 'port'; o.placeholder = '443';
 	o.depends('type', 'vless');
@@ -76,12 +81,20 @@ function buildOutboundsMap() {
 	o.depends('type', 'shadowsocks');
 	o.depends('type', 'tuic');
 	o.depends('type', 'anytls');
+	o.validate = function (sid, value) {
+		if (value === null || value === undefined || value === '') return true;
+		return SbValidators.isPort(value);
+	};
 
 	o = s.option(form.Value, 'server_uuid', _('UUID'));
 	o.modalonly = true; o.password = true;
 	o.depends('type', 'vless');
 	o.depends('type', 'vmess');
 	o.depends('type', 'tuic');
+	o.validate = function (sid, value) {
+		if (value === null || value === undefined || value === '') return true;
+		return SbValidators.isUuid(value);
+	};
 	o = s.option(form.Value, 'server_password', _('Password'));
 	o.modalonly = true; o.password = true;
 	o.depends('type', 'trojan');
@@ -139,6 +152,10 @@ function buildOutboundsMap() {
 	o.depends('type', 'hysteria2');
 	o.depends({ type: 'tuic', security: 'tls' });
 	o.depends({ type: 'anytls', security: 'tls' });
+	o.validate = function (sid, value) {
+		if (value === null || value === undefined || value === '') return true;
+		return SbValidators.isHost(value);
+	};
 	o = s.option(form.Flag, 'tls_insecure', _('Allow insecure'));
 	o.modalonly = true; o.default = '0';
 	o.depends({ type: 'vless', security: 'tls' });
@@ -152,6 +169,14 @@ function buildOutboundsMap() {
 	o.depends({ type: 'vmess', security: 'tls' });
 	o.depends({ type: 'trojan', security: 'tls' });
 	o.depends('type', 'hysteria2');
+	o.validate = function (sid, value) {
+		var fv;
+		try { fv = this.formvalue(sid); } catch (e) { fv = value; }
+		if (fv === null || fv === undefined) return true;
+		if (Array.isArray(fv) && fv.length === 0) return true;
+		if (typeof fv === 'string' && fv === '') return true;
+		return SbValidators.isAlpnNonEmpty(fv);
+	};
 	o = s.option(form.ListValue, 'utls_fingerprint', _('uTLS fingerprint'));
 	['','chrome','firefox','safari','edge','random'].forEach(function (v) { o.value(v, v || _('None')); });
 	o.modalonly = true;
@@ -177,6 +202,12 @@ function buildOutboundsMap() {
 	o.modalonly = true; o.placeholder = '/';
 	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
 	o.depends({ transport: 'xhttp' }); o.depends({ transport: 'http' });
+	o.validate = function (sid, value) {
+		var transport;
+		try { transport = this.section.formvalue(sid, 'transport'); }
+		catch (e) { transport = null; }
+		return SbValidators.requiresWsPath(transport, value || '');
+	};
 	o = s.option(form.Value, 'transport_host', _('Transport host'));
 	o.modalonly = true;
 	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
@@ -242,6 +273,12 @@ function buildOutboundsMap() {
 	o.value('new_reno', 'new_reno');
 	o.value('bbr',      'bbr');
 	o.depends('type', 'tuic');
+	// Non-blocking: softWarnCongestion always returns true; the call exists
+	// so an unknown UCI-side value (e.g. paste from a future sing-box release)
+	// surfaces a console.warn for debug visibility without breaking saves.
+	o.validate = function (sid, value) {
+		return SbValidators.softWarnCongestion(value || '');
+	};
 	o = s.option(form.ListValue, 'tuic_udp_relay_mode', _('UDP relay mode'));
 	o.modalonly = true;
 	o.value('', _('Default (native)'));
