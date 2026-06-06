@@ -64,11 +64,15 @@ function openJsonImportModal(kind, m) {
 				uci.set('singbox-ui', sid, k, String(v));
 		});
 		ui.hideModal();
-		// Re-render the page so the newly-added section shows in the grid.
-		// Map.parse/render is non-trivial to splice in mid-lifecycle —
-		// uci.save() inside the page wrapper would also clobber other
-		// pending edits — so we save what we just imported and reload.
-		uci.save().then(function () { window.location.reload(); });
+		// Phase C1: stage the imported section into uci.state only. Do NOT
+		// uci.save() and do NOT reload the page — that previously raced with
+		// main.js's handleSave/handleSaveApply and discarded user edits in
+		// other sections. The user must press Save & Apply (or Save) to commit.
+		ui.addNotification(
+			null,
+			E('p', {}, _('Импорт добавлен в черновик. Нажмите «Save & Apply» чтобы применить изменения.')),
+			'info'
+		);
 	}
 
 	ui.showModal(_('Import JSON'), [

@@ -43,6 +43,16 @@ if grep -RHn "window\.__sb" "$ROOT" >/dev/null 2>&1; then
   fail=1
 fi
 
+# Phase C1: JSON import must not reload the page (it would discard
+# the user's unsaved edits across other sections). Importer stages the
+# new section into uci.state and shows ui.addNotification asking the
+# user to press Save & Apply.
+if grep -RnE 'window\.location\.reload\b|[^a-zA-Z_$]location\.reload\b' "$ROOT" >/dev/null 2>&1; then
+  echo "FAIL: location.reload() found - Phase C1 forbids page reload from importer"
+  grep -RnE 'window\.location\.reload\b|[^a-zA-Z_$]location\.reload\b' "$ROOT"
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi
