@@ -7,7 +7,9 @@
 var callRefresh    = SbRpc.callRefresh;
 var callRestart    = SbRpc.callRestart;
 var callReadConfig = SbRpc.callReadConfig;
+var callPreviewConfig = SbRpc.callPreviewConfig;
 var notify         = SbCommon.notify;
+var showJsonModal  = SbCommon.showJsonModal;
 var renderStatusPanel = SbStatusPanel.renderStatusPanel;
 
 function renderActionBar(statusHolder) {
@@ -43,6 +45,19 @@ function renderActionBar(statusHolder) {
 					])
 				]);
 			});
+		}),
+		// Dry-run preview — calls preview_config which regenerates the JSON
+		// from the CURRENT UCI state into a tmpfile without touching
+		// /etc/sing-box, nftables, or the running service. Useful for
+		// reviewing a draft before pressing "Save & Apply".
+		btn(_('Preview config'), function () {
+			var p = callPreviewConfig().then(function (res) {
+				if (!res || res.status !== 'ok') {
+					return { error: (res && res.message) || _('preview failed') };
+				}
+				return res.content;
+			});
+			showJsonModal(_('Preview config (dry-run)'), p);
 		})
 	]);
 }

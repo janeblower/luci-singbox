@@ -8,6 +8,7 @@
 //   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
 //   clash_request       proxy HTTP request to Clash API (read+write methods)
 //   export_section      return sing-box JSON for ONE inbound/outbound section
+//   preview_config      dry-run: generate full config to a tmpfile, return body
 //
 // Env overrides (used by tests):
 //   NFTABLES_CMD GENERATE_UC SINGBOX_INIT SUBSCRIPTION_UC SINGBOX_TMP SINGBOX_CONFIG
@@ -54,7 +55,8 @@ function emit_list() {
 		status:         {},
 		read_config:    {},
 		clash_request:  { method: "string", path: "string", body: "string" },
-		export_section: { kind: "string", name: "string" }
+		export_section: { kind: "string", name: "string" },
+		preview_config: {}
 	});
 }
 
@@ -69,6 +71,23 @@ function run(cmd, ...extra) {
 	let argv = (type(cmd) === "array") ? [...cmd] : split(cmd, " ");
 	for (let a in extra) push(argv, a);
 	let quoted = [];
+	for (let a in argv) push(quoted, sq(a));
+	let shcmd = join(" ", quoted) + " >/dev/null 2>&1";
+	return system(shcmd) === 0;
+}
+
+// run_env(argv, env_map) — like run() but prefixes the shell line with one
+// or more `VAR=VALUE` assignments. Both keys and values are single-quoted via
+// sq() so callers may pass arbitrary paths (with spaces / quotes) as values.
+// The shell parses leading assignments as the env for the next command; we
+// keep the same stdout/stderr redirection as run() so a chatty child can't
+// corrupt our JSON response.
+function run_env(cmd, env_map) {
+	let argv = (type(cmd) === "array") ? [...cmd] : split(cmd, " ");
+	let quoted = [];
+	if (type(env_map) === "object") {
+		for (let k, v in env_map) push(quoted, k + "=" + sq(v));
+	}
 	for (let a in argv) push(quoted, sq(a));
 	let shcmd = join(" ", quoted) + " >/dev/null 2>&1";
 	return system(shcmd) === 0;
@@ -206,6 +225,53 @@ function call_export_section() {
 	print(trimmed + "\n");
 }
 
+// preview_tmp() — build a tmpfile path that won't collide across concurrent
+// callers. ucode has no getpid() and no rand() builtin, so we mix time()
+// with 4 bytes from /dev/urandom (always present on OpenWrt). The urandom
+// open is best-effort: on the off chance it fails we fall back to time()
+// alone — collisions there are harmless because fs.open(..., "w") truncates.
+function preview_tmp() {
+	let n = 0;
+	let f;
+	try { f = fs.open("/dev/urandom", "r"); } catch (_) { f = null; }
+	if (f) {
+		let b = f.read(4) ?? "";
+		f.close();
+		for (let i = 0; i < length(b); i++) n = n * 256 + ord(b, i);
+	}
+	return sprintf("/tmp/singbox-ui-preview.%d.%d.json", time(), n);
+}
+
+// preview_config — dry-run flavour of `generate`. Runs generate.uc with
+// SINGBOX_CONFIG pointed at a per-time/per-random tmpfile (so concurrent
+// calls don't collide), reads the emitted JSON, removes the tmpfile, and
+// returns the body. No writes outside the tmpfile, no nftables, no service
+// restart.
+//
+// Cleanup is unconditional: if generate.uc fails we still try to remove the
+// tmpfile before returning the error, so a partial write never lingers on
+// disk.
+function call_preview_config() {
+	drain_stdin();
+	let tmp = preview_tmp();
+	let ok = run_env(["ucode", "-L", UCODE_LIB, GENERATE_UC],
+	                 { SINGBOX_CONFIG: tmp });
+	if (!ok) {
+		try { fs.unlink(tmp); } catch (_) {}
+		emit_err("preview generation failed");
+		return;
+	}
+	let f = fs.open(tmp, "r");
+	if (!f) {
+		emit_err("preview tmp missing after generate");
+		return;
+	}
+	let body = f.read("all") ?? "";
+	f.close();
+	try { fs.unlink(tmp); } catch (_) {}
+	emit({ status: "ok", content: body });
+}
+
 function call_clash_request() {
 	let args = parse_args();
 	let method = args.method || "GET";
@@ -246,6 +312,7 @@ if (cmd === "call") {
 	case "read_config": call_read_config();  break;
 	case "clash_request": call_clash_request(); break;
 	case "export_section": call_export_section(); break;
+	case "preview_config": call_preview_config(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);

@@ -246,12 +246,12 @@ Same status as selector: implemented via subscriptions, no standalone UCI form. 
 
 ## RPC methods
 
-`root/usr/libexec/rpcd/singbox-ui`, current set: `generate`, `nftables`, `restart`, `refresh`, `status`, `read_config`, `clash_request`, `export_section`.
+`root/usr/libexec/rpcd/singbox-ui`, current set: `generate`, `nftables`, `restart`, `refresh`, `status`, `read_config`, `clash_request`, `export_section`, `preview_config`.
 
 | Method | Status | Phase |
 |---|---|---|
 | `export_section(kind, name)` | есть (rpcd handler + `export_section.uc` helper; UI "Export JSON" button per row, modal with Copy) | Phase 9 (B5) |
-| `preview_config` (dry-run) | нет | Phase 11 (B8) |
+| `preview_config` (dry-run) | есть (rpcd handler runs `generate.uc` with `SINGBOX_CONFIG` pointed at a per-call tmpfile; UI "Preview config" button in the action bar, modal with Copy) | Phase 11 (B8) |
 
 ---
 
