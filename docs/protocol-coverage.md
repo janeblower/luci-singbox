@@ -116,8 +116,8 @@ Implemented by `build_tls` (inbound, `lib/inbound.uc:31`) and `build_tls_client`
 | `obfs.password` | есть |
 | `up_mbps`, `down_mbps` | есть |
 | `masquerade` | есть |
-| `brutal_debug` | **нет** | Phase 3 |
-| `ignore_client_bandwidth` | нет | Phase 3 |
+| `brutal_debug` | есть | — |
+| `ignore_client_bandwidth` | есть | — |
 | `users[]` multi-user | нет (Phase 7 optional, low priority — hy2 typically single auth) |
 
 ### tuic inbound
@@ -166,8 +166,8 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 | `obfs.type`, `obfs.password` | есть |
 | `up_mbps`, `down_mbps` | есть |
 | `masquerade` (server-side concept; ignored in outbound) | есть as field, but no-op |
-| `brutal_debug` | нет | Phase 3 |
-| `network` (`tcp`/`udp`) | нет | Phase 3 |
+| `brutal_debug` | есть | — |
+| `network` (`tcp`/`udp`) | есть | — |
 | `server_ports[]`, `hop_interval`, `hop_interval_max` | out-of-scope (multi-port hop is 1.14+ feature) |
 
 ### shadowsocks outbound (`lib/outbound.uc:77,86`)

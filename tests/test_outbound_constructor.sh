@@ -198,6 +198,34 @@ run_gen
 check "outbound vless xhttp"      '"type": "xhttp"'
 check "outbound vless xhttp mode" '"mode": "stream-up"'
 
+echo "-- hysteria2 outbound with brutal_debug + network restriction"
+write_cfg "
+config outbound 'hyb'
+	option enabled '1'
+	option type 'hysteria2'
+	option server 'h.b'
+	option server_port '8443'
+	option server_password 'p'
+	option brutal_debug '1'
+	option network 'udp'
+"
+run_gen
+check "outbound hy2 brutal_debug" '"brutal_debug": true'
+check "outbound hy2 network=udp"  '"network": "udp"'
+
+echo "-- hysteria2 outbound rejects unknown network values"
+write_cfg "
+config outbound 'hybad'
+	option enabled '1'
+	option type 'hysteria2'
+	option server 'h.b'
+	option server_port '8443'
+	option server_password 'p'
+	option network 'sctp'
+"
+run_gen
+nocheck "no bogus network" '"network": "sctp"'
+
 echo "-- vless outbound with ECH (client-side: config + config_path) + fragment"
 write_cfg "
 config outbound 'vech'

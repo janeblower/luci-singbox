@@ -226,6 +226,8 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 | `hysteria2_obfs_type` | enum | `none`, `salamander` | no | `protocol=hysteria2` | Obfuscation type. Omitted when `none`. |
 | `hysteria2_obfs_password` | string | — | no | `hysteria2_obfs_type=salamander` | Obfuscation password. |
 | `hysteria2_masquerade` | string | URL | no | `protocol=hysteria2` | Masquerade URL served to non-Hysteria2 clients. |
+| `brutal_debug` | bool | `0`/`1` | no | `protocol=hysteria2` | Emit `brutal_debug` for the Brutal congestion-control debug output. |
+| `ignore_client_bandwidth` | bool | `0`/`1` | no | `protocol=hysteria2` | Inbound-only flag — server ignores client-reported bandwidth (uses its own `up_mbps`/`down_mbps`). |
 
 ### TLS fields
 
@@ -325,7 +327,9 @@ Applies to `type=vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`.
 | `hysteria2_obfs_password` | string | — | no | `hysteria2_obfs_type=salamander` | Obfuscation password. |
 | `up_mbps` | integer | Mbps | no | `type=hysteria2` | Upload bandwidth limit. |
 | `down_mbps` | integer | Mbps | no | `type=hysteria2` | Download bandwidth limit. |
-| `hysteria2_masquerade` | string | URL | no | `type=hysteria2` | Masquerade URL served to non-Hysteria2 peers. |
+| `hysteria2_masquerade` | string | URL | no | `type=hysteria2` | Masquerade URL served to non-Hysteria2 peers. Server-side concept — emitted as a passthrough field. |
+| `brutal_debug` | bool | `0`/`1` | no | `type=hysteria2` | Emit `brutal_debug` for Brutal CC debug output. |
+| `network` | enum | `""`, `tcp`, `udp` | no | `type=hysteria2/tuic` | Restricts the dialed network. Empty or any other value omits the field. |
 
 ### TLS fields
 

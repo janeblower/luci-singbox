@@ -101,12 +101,16 @@ function build_constructor_for(s, proto) {
 		ob.method = s_opt(s, "shadowsocks_method") || "aes-128-gcm";
 	if (proto === "hysteria2") {
 		let ot = s_opt(s, "hysteria2_obfs_type") || "none";
+		// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
 		if (ot !== "none" && length(s_opt(s, "hysteria2_obfs_password")))
 			ob.obfs = { type: ot, password: s.hysteria2_obfs_password };
 		if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
 		if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
 		if (length(s_opt(s, "hysteria2_masquerade")))
 			ob.masquerade = s.hysteria2_masquerade;
+		if (s_bool(s, "brutal_debug")) ob.brutal_debug = true;
+		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
+			ob.network = s.network;
 	}
 	if (proto !== "shadowsocks") {
 		let tls = build_tls_client(s, proto);

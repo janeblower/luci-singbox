@@ -335,6 +335,36 @@ config inbound 'vm2'
 run_gen
 nocheck "no per-user security key" '"security":'
 
+echo "-- hysteria2 inbound with brutal_debug + ignore_client_bandwidth + limits"
+write_cfg "
+config inbound 'hy2lim'
+	option enabled '1'
+	option protocol 'hysteria2'
+	option listen_port '8443'
+	option server_password 'pw'
+	option up_mbps '500'
+	option down_mbps '500'
+	option brutal_debug '1'
+	option ignore_client_bandwidth '1'
+"
+run_gen
+check "hy2 up_mbps"                '"up_mbps": 500'
+check "hy2 down_mbps"              '"down_mbps": 500'
+check "hy2 brutal_debug"           '"brutal_debug": true'
+check "hy2 ignore_client_bandwidth" '"ignore_client_bandwidth": true'
+
+echo "-- hysteria2 inbound without debug/ignore flags omits both"
+write_cfg "
+config inbound 'hy2def'
+	option enabled '1'
+	option protocol 'hysteria2'
+	option listen_port '8443'
+	option server_password 'pw'
+"
+run_gen
+nocheck "no brutal_debug when unset" '"brutal_debug":'
+nocheck "no ignore_client_bandwidth when unset" '"ignore_client_bandwidth":'
+
 echo "-- vless inbound with ECH (server-side: key + key_path)"
 write_cfg "
 config inbound 'vech'
