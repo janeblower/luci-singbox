@@ -70,7 +70,7 @@ function openJsonImportModal(kind, m) {
 		// other sections. The user must press Save & Apply (or Save) to commit.
 		ui.addNotification(
 			null,
-			E('p', {}, _('Импорт добавлен в черновик. Нажмите «Save & Apply» чтобы применить изменения.')),
+			E('p', {}, _('Import staged as draft. Press "Save & Apply" to commit the changes.')),
 			'info'
 		);
 	}

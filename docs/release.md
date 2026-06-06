@@ -1,5 +1,13 @@
 # Release Procedure
 
+## i18n freshness check
+Before tagging, regenerate translation templates from JS sources:
+1. `bash scripts/regen-po.sh`
+2. Open `luci-app-singbox-ui/po/ru/luci-app-singbox-ui.po`, translate any new untranslated entries.
+3. `bash tests/test_po_coverage.sh` must PASS (max 5 untranslated, max 5 drift).
+
+## Tag & build
+
 1. Ensure `main` is green: `bash tests/run-docker.sh` returns PASS.
 2. Move `## [Unreleased]` entries in `CHANGELOG.md` into `## [vX.Y.Z] — YYYY-MM-DD`.
    Then re-add an empty `## [Unreleased]` block at the top of the changelog.
