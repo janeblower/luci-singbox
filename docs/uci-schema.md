@@ -310,15 +310,65 @@ UI write: `tabs/routing.js` — `buildRouteDefaultMap()`.
 
 ## `dns`
 
-TBD — populated in Task 21.
+UCI section type: `dns`. **Singleton named section** (UCI name is literally `dns`). Controls global DNS settings.
+
+Backend: `lib/dns.uc` — `build_dns(cur)` reads via `cur.get_all("singbox-ui", "dns")`. Absent section → global DNS options are omitted (sing-box defaults apply).
+
+UI write: `tabs/dns.js` — `buildDnsMap()`, `form.NamedSection('dns', 'dns', …)`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `final` | string | dns_server section name | no | — | Tag of the DNS server used when no rule matches. Emitted as `dns.final`. |
+| `strategy` | enum | `""` (default), `prefer_ipv4`, `prefer_ipv6`, `ipv4_only`, `ipv6_only` | no | — | Global address resolution strategy. Empty/absent omits the field (sing-box default). |
+| `independent_cache` | bool | `0`/`1` | no | — | Enables per-server DNS cache isolation. Default `0`. |
+
+> Note: `disable_cache`, `disable_expire`, `reverse_mapping`, `client_subnet`, and `default_resolver` fields anticipated in the task plan are **not present** in either `dns.uc` or `dns.js`. The backend only reads `final`, `strategy`, and `independent_cache`.
+
+---
 
 ## `dns_server`
 
-TBD — populated in Task 21.
+UCI section type: `dns_server`. Named, sortable. Each section defines one DNS upstream server.
+
+Backend: `lib/dns.uc` — `build_servers(cur)`. Sections with `enabled=0` are skipped. Supported types are `udp`, `tls`, `https`, and `fakeip`; any other type is warned and skipped.
+
+UI write: `tabs/dns.js` — `buildDnsMap()`, `form.GridSection('dns_server', …)`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | Disabled sections are skipped by `build_servers`. |
+| `type` | enum | `udp`, `tls`, `https`, `fakeip` | yes | — | DNS transport / server kind. Defaults to `https` in UI. |
+| `server` | string | hostname or IP | yes | `type=udp/tls/https` | DNS server address (without scheme or port). |
+| `server_port` | integer | port | no | `type=udp/tls/https` | Overrides the default port for the transport. Parsed via `s_num()`. |
+| `path` | string | URL path | no | `type=https` | HTTP path for DoH queries (e.g. `/dns-query`). |
+| `detour` | string | outbound section name | no | `type=udp/tls/https` | Routes DNS queries through this outbound. Note: `generate.uc` scrubs references to the implicit empty `direct` outbound at startup to avoid a sing-box 1.12 fatal error. |
+| `domain_resolver` | string | dns_server section name | no | `type=udp/tls/https` | Tag of another DNS server used to resolve the server's own address (sing-box `domain_resolver` field). Stored as `domain_resolver` in UCI; emitted as `domain_resolver`. |
+| `inet4_range` | string | IPv4 CIDR | yes | `type=fakeip` | IPv4 range for fakeip responses (e.g. `198.18.0.0/15`). |
+| `inet6_range` | string | IPv6 CIDR | no | `type=fakeip` | IPv6 range for fakeip responses (e.g. `fc00::/18`). |
+
+> UI/backend note: the UI field label uses `domain_resolver`; the backend reads it as `s_opt(s, "domain_resolver")` and emits `domain_resolver` — consistent naming throughout.
+
+---
 
 ## `dns_rule`
 
-TBD — populated in Task 21.
+UCI section type: `dns_rule`. Named, sortable. Each section defines a DNS routing rule — matching criteria plus a target server.
+
+Backend: `lib/dns.uc` — `build_rules(cur)`. Sections with `enabled=0` are skipped. A rule that has no matching criteria (no `rule_set`, `domain_suffix`, `domain_keyword`, or `clash_mode`) is silently dropped. Matching criteria are OR-combined; `server` must be non-empty for the rule to be emitted.
+
+UI write: `tabs/dns.js` — `buildDnsMap()`, `form.GridSection('dns_rule', …)`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | Disabled sections are skipped by `build_rules`. |
+| `ruleset` | list | ruleset section names | no | — | One or more `ruleset` section names. Disabled or missing rulesets are filtered; the surviving names become `rule_set` in the emitted rule. |
+| `domain_suffix` | string | comma-separated suffixes | no | — | Domain suffixes to match. Parsed via `csv_list()` into a list; emitted as `domain_suffix`. |
+| `domain_keyword` | string | comma-separated keywords | no | — | Domain keywords to match. Parsed via `csv_list()` into a list; emitted as `domain_keyword`. |
+| `clash_mode` | enum | `""` (any), `global`, `direct`, `rule` | no | — | Clash operating mode filter. Empty/absent omits the field. |
+| `server` | string | dns_server section name | yes (effectively) | — | Target DNS server tag. Rule is dropped if this is empty. |
+| `rewrite_ttl` | integer | seconds (`0` = disable) | no | — | Forces this TTL on matched responses. Empty/absent → backend defaults to `60`. `"0"` → explicitly sets `rewrite_ttl: 0` (disables TTL rewriting). Default in UI is `60`. |
+
+> UI/backend note: the backend (`dns.uc`) does **not** read a `disable_cache` field on `dns_rule` sections — despite being listed in the task plan. Only the 6 fields above are actually consumed.
 
 ## `cache`
 
