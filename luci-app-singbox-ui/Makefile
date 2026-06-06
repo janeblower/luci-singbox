@@ -47,6 +47,8 @@ define Package/$(PKG_NAME)/install
 	  $(1)/usr/share/singbox-ui/subscription.uc
 	$(INSTALL_DATA) ./root/usr/share/singbox-ui/nftables.uc \
 	  $(1)/usr/share/singbox-ui/nftables.uc
+	$(INSTALL_DATA) ./root/usr/share/singbox-ui/export_section.uc \
+	  $(1)/usr/share/singbox-ui/export_section.uc
 
 	$(INSTALL_DIR) $(1)/usr/share/singbox-ui/lib
 	$(foreach f,$(wildcard ./root/usr/share/singbox-ui/lib/*.uc), \

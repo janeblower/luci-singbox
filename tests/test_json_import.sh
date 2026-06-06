@@ -253,3 +253,123 @@ console.log('OK');
 NODE
 
 node "$TMP/run.js" "$JS"
+
+# ----------------------------------------------------------------------------
+# Roundtrip: export_section.uc emits an inbound, jsonImportInbound re-parses
+# it, and the resulting UCI fields re-export to a semantically equivalent
+# section. Requires both ucode (for the export side) and node (for the import
+# side). When ucode is missing we still ran the JSON-import expectations above.
+# ----------------------------------------------------------------------------
+if ! command -v ucode >/dev/null 2>&1; then
+	echo "SKIP: ucode not available; export half of roundtrip skipped"
+	exit 0
+fi
+UCODE_BIN=$(command -v ucode)
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+EXPORT_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc"
+
+UCI_DIR="$TMP/uci"
+mkdir -p "$UCI_DIR"
+cat >"$UCI_DIR/singbox-ui" <<'EOF'
+config inbound 'rt_vless'
+	option enabled '1'
+	option protocol 'vless'
+	option listen '::'
+	option listen_port '4443'
+	option server_uuid '11111111-2222-3333-4444-555555555555'
+	option vless_flow 'xtls-rprx-vision'
+	option security 'tls'
+	option tls_server_name 'cdn.example.com'
+EOF
+
+# Step 1: export.
+RT_OUT=$(UCI_CONFIG_DIR="$UCI_DIR" "$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" \
+	"$EXPORT_UC" inbound rt_vless)
+echo "$RT_OUT" | "$UCODE_BIN" -e '
+	let fs = require("fs");
+	let d = json(fs.stdin.read("all"));
+	exit(d.status == "ok" && d.section.type == "vless"
+	     && d.section.tag == "rt_vless"
+	     && d.section.listen_port == 4443
+	     && d.section.users[0].uuid == "11111111-2222-3333-4444-555555555555"
+	     && d.section.users[0].flow == "xtls-rprx-vision"
+	     && d.section.tls.enabled == true
+	     && d.section.tls.server_name == "cdn.example.com" ? 0 : 1);
+' || { echo "FAIL: roundtrip export shape; raw=$RT_OUT"; exit 1; }
+echo "ok roundtrip export (vless inbound)"
+
+# Step 2: re-import. Drive jsonImportInbound through node on the exported
+# section. The expected mapping is exactly what the inbound importer would
+# produce from the JSON shape above.
+cat >"$TMP/roundtrip.js" <<NODE
+const fs = require('fs');
+const vm = require('vm');
+const path = require('path');
+const src = fs.readFileSync('$JS', 'utf8');
+const body = src
+	.replace(/^'use strict';\s*/, '')
+	.replace(/^'require [^']+';\s*/gm, '')
+	.replace(/return view\.extend\(\{[\s\S]*\}\);?\s*\$/, '');
+const sandbox = {
+	form: { Map: function(){}, GridSection: function(){}, NamedSection: function(){},
+	        Value: function(){}, Flag: function(){}, ListValue: function(){},
+	        DynamicList: function(){}, TextValue: function(){} },
+	uci: { get: () => null, set: () => null, add: () => null, sections: () => [] },
+	ui: { showModal: () => null, hideModal: () => null, createHandlerFn: () => (() => {}) },
+	rpc: { declare: () => (() => Promise.resolve()) },
+	widgets: { DeviceSelect: function(){} },
+	view: { extend: (o) => o },
+	_: (s) => s,
+	E: () => ({ appendChild: () => null }),
+	Promise: Promise,
+	console: console,
+	setTimeout: setTimeout,
+};
+sandbox.window = sandbox;
+function loadModule(filePath) {
+	const msrc = fs.readFileSync(filePath, 'utf8');
+	const mbody = msrc
+		.replace(/^'use strict';\s*/, '')
+		.replace(/^'require [^']+';\s*/gm, '')
+		.replace(/return L\.Class\.extend\((\{[\s\S]*\})\);?\s*\$/, '__moduleExports = \$1;');
+	const mctx = vm.createContext(Object.assign({}, sandbox, { __moduleExports: null }));
+	vm.runInContext('(function() {' + mbody + '})();', mctx, { filename: path.basename(filePath) });
+	return mctx.__moduleExports;
+}
+const viewDir = path.dirname('$JS');
+sandbox.SbRpc = { callExportSection: () => Promise.resolve() };
+sandbox.SbCommon = loadModule(path.join(viewDir, 'lib/common.js'));
+sandbox.SbImpInbound  = loadModule(path.join(viewDir, 'importers/inbound.js'));
+sandbox.SbImpOutbound = loadModule(path.join(viewDir, 'importers/outbound.js'));
+const ctx = vm.createContext(sandbox);
+vm.runInContext('(function() {' + body + '})();', ctx, { filename: 'main.js' });
+
+const exportEnv = JSON.parse(fs.readFileSync('$TMP/exported.json', 'utf8'));
+const got = ctx.SbImpInbound.jsonImportInbound(exportEnv.section);
+if (!got.ok) {
+	console.error('FAIL: re-import failed', JSON.stringify(got.errors));
+	process.exit(1);
+}
+// The exported section faithfully round-trips through the importer for these
+// load-bearing fields. Defaults like 'security=tls' come from the TLS block.
+const f = got.fields;
+function need(k, v) {
+	if (String(f[k]) !== String(v)) {
+		console.error('FAIL: field', k, 'got', f[k], 'want', v);
+		process.exit(1);
+	}
+}
+need('protocol', 'vless');
+need('listen', '::');
+need('listen_port', 4443);
+need('server_uuid', '11111111-2222-3333-4444-555555555555');
+need('vless_flow', 'xtls-rprx-vision');
+need('security', 'tls');
+need('tls_server_name', 'cdn.example.com');
+console.log('ok roundtrip re-import (vless inbound)');
+NODE
+
+printf '%s' "$RT_OUT" >"$TMP/exported.json"
+node "$TMP/roundtrip.js"
+
+echo "OK"

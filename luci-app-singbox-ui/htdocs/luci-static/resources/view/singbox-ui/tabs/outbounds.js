@@ -46,6 +46,19 @@ function buildOutboundsMap() {
 	o.default  = '1';
 	o.editable = true;
 
+	// Per-row Export JSON button. Mirror of the inbound grid: GridSection
+	// renders form.Button as an inline action cell so users get the JSON for
+	// the row they clicked, not the whole config.
+	o = s.option(form.Button, '_export', _('JSON'));
+	o.editable = true;
+	o.modalonly = false;
+	o.inputtitle = _('Export');
+	o.inputstyle = 'action';
+	o.onclick = function (ev, section_id) {
+		SbImpOutbound.jsonExportOutbound(section_id);
+		return false;
+	};
+
 	o = s.option(form.ListValue, 'type', _('Type'));
 	o.value('vless',        'VLESS');
 	o.value('vmess',        'VMess');

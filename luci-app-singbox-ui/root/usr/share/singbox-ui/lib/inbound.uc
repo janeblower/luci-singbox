@@ -243,4 +243,4 @@ function build_inbounds(cur) {
 	return inbounds;
 }
 
-return { build_inbounds };
+return { build_inbounds, build_one };

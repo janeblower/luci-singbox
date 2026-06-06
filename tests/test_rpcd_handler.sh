@@ -52,11 +52,13 @@ jval() {
 
 echo "-- list emits valid JSON with all methods"
 out=$(run_h list)
-for m in generate nftables restart refresh status read_config clash_request; do
+for m in generate nftables restart refresh status read_config clash_request export_section; do
 	printf "%s\n" "$out" | je "d.$m != null" || { echo "FAIL: missing $m"; exit 1; }
 done
 printf "%s\n" "$out" | je 'd.nftables.action != null' || { echo "FAIL: missing nftables.action"; exit 1; }
 printf "%s\n" "$out" | je 'd.refresh.what != null'    || { echo "FAIL: missing refresh.what"; exit 1; }
+printf "%s\n" "$out" | je 'd.export_section.kind != null && d.export_section.name != null' \
+	|| { echo "FAIL: missing export_section args"; exit 1; }
 
 echo "-- call generate dispatches to generate.uc"
 tmpdir=$(mktemp -d)
@@ -222,5 +224,93 @@ for verb in PATCH PUT; do
 		|| { echo "FAIL: $verb should be accepted"; echo "$out"; exit 1; }
 done
 echo "  PASS: PATCH/PUT accepted"
+
+echo "-- call export_section validates kind/name and proxies to helper"
+# Build a tiny UCI tree with one inbound and one outbound. UCI_CONFIG_DIR is
+# honoured by both the handler's helper invocation and by export_section.uc
+# itself (uci.cursor reads from there).
+uci_dir="$tmpdir/uci"
+mkdir -p "$uci_dir"
+cat >"$uci_dir/singbox-ui" <<'EOF'
+config inbound 'in_ss'
+	option enabled '1'
+	option protocol 'shadowsocks'
+	option listen '::'
+	option listen_port '8388'
+	option shadowsocks_method 'aes-256-gcm'
+	option server_password 'pw'
+
+config outbound 'out_vless'
+	option enabled '1'
+	option type 'vless'
+	option server 'example.com'
+	option server_port '443'
+	option server_uuid '550e8400-e29b-41d4-a716-446655440000'
+
+config outbound 'out_url'
+	option enabled '1'
+	option type 'url'
+	option proxy_url 'vless://uuid@example.com:443'
+
+config outbound 'out_sub'
+	option enabled '1'
+	option type 'subscription'
+EOF
+
+# bad kind rejected
+out=$(echo '{"kind":"bogus","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: bad kind should error; got=$out"; exit 1; }
+
+# missing name rejected
+out=$(echo '{"kind":"inbound"}' | UCI_CONFIG_DIR="$uci_dir" run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: missing name should error; got=$out"; exit 1; }
+
+# nonexistent section rejected
+out=$(echo '{"kind":"inbound","name":"nope"}' | UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: missing section should error; got=$out"; exit 1; }
+
+# happy path: inbound shadowsocks
+out=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: ss inbound export should succeed; got=$out"; exit 1; }
+printf "%s\n" "$out" | je 'd.section.type == "shadowsocks" && d.section.tag == "in_ss"' \
+	|| { echo "FAIL: ss inbound section shape wrong; got=$out"; exit 1; }
+printf "%s\n" "$out" | je 'd.section.listen_port == 8388 && d.section.password == "pw"' \
+	|| { echo "FAIL: ss inbound fields wrong; got=$out"; exit 1; }
+
+# happy path: outbound vless
+out=$(echo '{"kind":"outbound","name":"out_vless"}' | UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: vless outbound export should succeed; got=$out"; exit 1; }
+printf "%s\n" "$out" | je 'd.section.type == "vless" && d.section.tag == "out_vless"' \
+	|| { echo "FAIL: vless outbound section shape wrong; got=$out"; exit 1; }
+printf "%s\n" "$out" | je 'd.section.server == "example.com" && d.section.server_port == 443' \
+	|| { echo "FAIL: vless outbound fields wrong; got=$out"; exit 1; }
+
+# kind mismatch (querying outbound for an inbound name) returns error
+out=$(echo '{"kind":"outbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: kind mismatch should error; got=$out"; exit 1; }
+
+# url / subscription outbound types are refused (out of scope per spec)
+for n in out_url out_sub; do
+	out=$(echo "{\"kind\":\"outbound\",\"name\":\"$n\"}" | UCI_CONFIG_DIR="$uci_dir" \
+		UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+		run_h call export_section)
+	printf "%s\n" "$out" | je 'd.status == "error"' \
+		|| { echo "FAIL: $n should be refused; got=$out"; exit 1; }
+done
+echo "  PASS: export_section happy path + refusals"
 
 echo "OK"
