@@ -110,7 +110,8 @@ Applies to `vless`, `vmess`, `trojan` (selectable), and `hysteria2` (always TLS)
 | `tls_certificate_path` | string | file path | no | `security=tls` or `protocol=hysteria2` | Path to PEM certificate file. |
 | `tls_key_path` | string | file path | no | `security=tls` or `protocol=hysteria2` | Path to PEM private key file. |
 | `tls_alpn` | list | e.g. `h2`, `http/1.1` | no | `security=tls` or `protocol=hysteria2` | ALPN protocols. UCI list type; stored as repeated option values. |
-| `tls_insecure` | bool | `0`/`1` | no | `security=tls/reality` | Allow insecure certificates. Present in `inbounds.js` UI; backend reads it via `s.tls_insecure` in `build_tls`. |
+| `tls_insecure` | bool | `0`/`1` | no | `security=tls/reality` or `protocol=hysteria2` | Allow insecure TLS certificates. Read by `build_tls` in `inbound.uc`. |
+| `utls_fingerprint` | enum | `chrome`, `firefox`, `safari`, `edge`, `random`, `""` | no | `security=tls/reality` | uTLS client fingerprint. Empty/absent omits uTLS block. Read by `build_tls`. |
 | `reality_private_key` | string | — | no | `security=reality` | Reality server private key. |
 | `reality_handshake_server` | string | hostname | no | `security=reality` | Reality handshake server address. |
 | `reality_handshake_server_port` | integer | port | no | `security=reality` | Reality handshake server port. |
