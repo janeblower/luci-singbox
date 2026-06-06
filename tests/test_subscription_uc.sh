@@ -333,6 +333,20 @@ echo "$out" | grep -q '"method":[[:space:]]*"aes-256-gcm"'    || { echo "$out"; 
 echo "$out" | grep -q '"password":[[:space:]]*"test-pw"'      || { echo "$out"; fail "ss b64 password"; }
 pass "parse_ss accepts legacy base64 userinfo"
 
+echo "-- parse_ss full-body b64: password control chars are dropped"
+# base64 of "aes-256-gcm:pa\x00ss@1.2.3.4:8443" (literal NUL byte) — full-body form.
+out=$(run_probe 'ss://YWVzLTI1Ni1nY206cGEAc3NAMS4yLjMuNDo4NDQz')
+echo "$out" | grep -q '"password":[[:space:]]*"pass"' \
+	|| { echo "$out"; fail "ss full-body b64: NUL not dropped from password"; }
+pass "parse_ss full-body b64 strips NUL from password"
+
+echo "-- parse_ss legacy b64 userinfo: password control chars are dropped"
+# base64 of "aes-256-gcm:pa\x00ss" — legacy userinfo form, host:port outside b64.
+out=$(run_probe 'ss://YWVzLTI1Ni1nY206cGEAc3M=@1.2.3.4:8443')
+echo "$out" | grep -q '"password":[[:space:]]*"pass"' \
+	|| { echo "$out"; fail "ss legacy b64: NUL not dropped from password"; }
+pass "parse_ss legacy b64 strips NUL from password"
+
 echo "-- parse_ss: missing port → null"
 out=$(run_probe 'ss://aes-256-gcm:test-pw@s.example.com')
 echo "$out" | grep -q '^null$' || { echo "$out"; fail "ss invalid: expected null"; }
