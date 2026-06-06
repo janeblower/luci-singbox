@@ -238,14 +238,14 @@ config inbound 'in_ss'
 	option listen '::'
 	option listen_port '8388'
 	option shadowsocks_method 'aes-256-gcm'
-	option server_password 'pw'
+	option server_password 'mysecret123'
 
 config outbound 'out_vless'
 	option enabled '1'
 	option type 'vless'
 	option server 'example.com'
 	option server_port '443'
-	option server_uuid '550e8400-e29b-41d4-a716-446655440000'
+	option server_uuid 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 
 config outbound 'out_url'
 	option enabled '1'
@@ -275,26 +275,53 @@ printf "%s\n" "$out" | je 'd.status == "error"' \
 	|| { echo "FAIL: missing section should error; got=$out"; exit 1; }
 
 # happy path: inbound shadowsocks
-out=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
+out_inbound=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
 	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
-printf "%s\n" "$out" | je 'd.status == "ok"' \
-	|| { echo "FAIL: ss inbound export should succeed; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.type == "shadowsocks" && d.section.tag == "in_ss"' \
-	|| { echo "FAIL: ss inbound section shape wrong; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.listen_port == 8388 && d.section.password == "pw"' \
-	|| { echo "FAIL: ss inbound fields wrong; got=$out"; exit 1; }
+printf "%s\n" "$out_inbound" | je 'd.status == "ok"' \
+	|| { echo "FAIL: ss inbound export should succeed; got=$out_inbound"; exit 1; }
+printf "%s\n" "$out_inbound" | je 'd.section.type == "shadowsocks" && d.section.tag == "in_ss"' \
+	|| { echo "FAIL: ss inbound section shape wrong; got=$out_inbound"; exit 1; }
+# password is a secret — scrub_secrets masks it to "***" (see lib/scrub.uc).
+printf "%s\n" "$out_inbound" | je 'd.section.listen_port == 8388 && d.section.password == "***"' \
+	|| { echo "FAIL: ss inbound fields wrong; got=$out_inbound"; exit 1; }
 
 # happy path: outbound vless
-out=$(echo '{"kind":"outbound","name":"out_vless"}' | UCI_CONFIG_DIR="$uci_dir" \
+out_outbound=$(echo '{"kind":"outbound","name":"out_vless"}' | UCI_CONFIG_DIR="$uci_dir" \
 	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
-printf "%s\n" "$out" | je 'd.status == "ok"' \
-	|| { echo "FAIL: vless outbound export should succeed; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.type == "vless" && d.section.tag == "out_vless"' \
-	|| { echo "FAIL: vless outbound section shape wrong; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.server == "example.com" && d.section.server_port == 443' \
-	|| { echo "FAIL: vless outbound fields wrong; got=$out"; exit 1; }
+printf "%s\n" "$out_outbound" | je 'd.status == "ok"' \
+	|| { echo "FAIL: vless outbound export should succeed; got=$out_outbound"; exit 1; }
+printf "%s\n" "$out_outbound" | je 'd.section.type == "vless" && d.section.tag == "out_vless"' \
+	|| { echo "FAIL: vless outbound section shape wrong; got=$out_outbound"; exit 1; }
+printf "%s\n" "$out_outbound" | je 'd.section.server == "example.com" && d.section.server_port == 443' \
+	|| { echo "FAIL: vless outbound fields wrong; got=$out_outbound"; exit 1; }
+
+# === scrub: secrets must be masked in export_section output (C1.2) ===
+
+# inbound shadowsocks: server_password should be "***" — not 'mysecret123'
+echo "$out_inbound" | grep -q 'mysecret123' && \
+	{ echo "FAIL: export_section leaked ss password"; exit 1; } || \
+	echo "  PASS: export_section masks ss password"
+# Both the je-parsed assertion above ("password == \"***\"") and a textual
+# grep guarantee the marker reaches the wire. ucode's %J inserts spaces around
+# `:` so we accept either compact or pretty form.
+echo "$out_inbound" | grep -Eq '"password":[[:space:]]*"\*\*\*"' && \
+	echo "  PASS: export_section emits *** marker for password" || \
+	{ echo "FAIL: no mask marker in inbound output; got=$out_inbound"; exit 1; }
+
+# outbound vless: server_uuid should be "***"
+echo "$out_outbound" | grep -q 'aaaaaaaa-bbbb' && \
+	{ echo "FAIL: export_section leaked vless uuid"; exit 1; } || \
+	echo "  PASS: export_section masks vless uuid"
+echo "$out_outbound" | grep -Eq '"uuid":[[:space:]]*"\*\*\*"' && \
+	echo "  PASS: export_section emits *** marker for uuid" || \
+	{ echo "FAIL: no mask marker in outbound output; got=$out_outbound"; exit 1; }
+
+# negative: non-secret fields (server, tag, type, listen_port, etc.) must be preserved verbatim
+echo "$out_outbound" | grep -Eq '"server":[[:space:]]*"\*\*\*"' && \
+	{ echo "FAIL: scrub touched non-secret server field"; exit 1; } || \
+	echo "  PASS: scrub leaves non-secret fields alone"
 
 # kind mismatch (querying outbound for an inbound name) returns error
 out=$(echo '{"kind":"outbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
