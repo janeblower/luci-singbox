@@ -44,6 +44,11 @@ grep -q 'verify_root_owner' "$S" \
 echo "  PASS"
 
 echo "-- version derived from git tag when no arg is passed"
+# OpenWrt rootfs (the CI/Docker test environment) does not ship git, so skip
+# the assertion there. The host-side run still exercises this path.
+if ! command -v git >/dev/null 2>&1; then
+    echo "  SKIP (git not available)"
+else
 # Create a temporary git tag, call the script without args, and verify the
 # "using version from git tag: ..." line is emitted.  Clean up via trap so the
 # tag is removed even if the assertion fails.
@@ -69,5 +74,6 @@ echo "$output" | grep -q "using version from git tag: 9.9.9-test" \
 git tag -d "$TEST_TAG" >/dev/null 2>&1 || true
 trap - EXIT
 echo "  PASS"
+fi
 
 echo "OK"
