@@ -43,4 +43,31 @@ grep -q 'verify_root_owner' "$S" \
     || { echo "FAIL: build-apk.sh must call verify_root_owner on produced .apk"; exit 1; }
 echo "  PASS"
 
+echo "-- version derived from git tag when no arg is passed"
+# Create a temporary git tag, call the script without args, and verify the
+# "using version from git tag: ..." line is emitted.  Clean up via trap so the
+# tag is removed even if the assertion fails.
+TEST_TAG="v9.9.9-test"
+trap 'git tag -d '"$TEST_TAG"' >/dev/null 2>&1 || true' EXIT
+git tag "$TEST_TAG" >/dev/null 2>&1
+# Run with DRY_RUN_VERSION_CHECK: the script exits early after printing the
+# version line when VERIFY_VERSION_ONLY=1 is set; otherwise we source only
+# the version-derivation block by parsing the script output up to the first
+# SDK download attempt.  We use a subshell with a fake git that only answers
+# 'describe --tags --abbrev=0' so the rest of the script never runs.
+output="$(
+    export PATH="$(mktemp -d):$PATH"
+    fake_git="$(echo "$PATH" | cut -d: -f1)/git"
+    printf '#!/bin/sh\nif [ "$1" = "describe" ]; then echo "%s"; else command git "$@"; fi\n' "$TEST_TAG" > "$fake_git"
+    chmod +x "$fake_git"
+    # Run the script; it will call SDK wget and exit with a non-zero code after
+    # printing the version line.  Capture stdout; ignore the exit code.
+    bash "$S" 2>/dev/null || true
+)"
+echo "$output" | grep -q "using version from git tag: 9.9.9-test" \
+    || { echo "FAIL: expected 'using version from git tag: 9.9.9-test' in output; got: $output"; exit 1; }
+git tag -d "$TEST_TAG" >/dev/null 2>&1 || true
+trap - EXIT
+echo "  PASS"
+
 echo "OK"

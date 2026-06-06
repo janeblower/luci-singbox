@@ -8,7 +8,8 @@
 #   - luci-app-singbox-ui_<version>.apk        main app (no translations)
 #   - luci-i18n-singbox-ui-ru_<version>.apk    Russian translation pack
 #
-# Usage: build-apk.sh <version> [output_dir]
+# Usage: build-apk.sh [version] [output_dir]
+#   version defaults to the most recent git tag (leading 'v' stripped).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,11 +29,15 @@ PKG_URL="https://github.com/Jyn/luci-app-sing-box"
 PKG_MAINTAINER="Jyn"
 
 VERSION="${1:-}"
-OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 if [ -z "$VERSION" ]; then
-  echo "Usage: $0 <version> [output_dir]" >&2
-  exit 1
+    VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+    if [ -z "$VERSION" ]; then
+        echo "no git tag found and no version arg passed" >&2
+        exit 1
+    fi
+    echo "using version from git tag: $VERSION"
 fi
+OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 
 SDK_URL="${SDK_URL:-https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst}"
 SDK_CACHE_DIR="${SDK_CACHE_DIR:-$HOME/.cache/luci-app-singbox-ui/openwrt-sdk}"
