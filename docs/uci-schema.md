@@ -261,15 +261,52 @@ Subscription URL and update policy are stored on the outbound UCI section itself
 
 ## `ruleset`
 
-TBD — populated in Task 20.
+UCI section type: `ruleset`. Named (non-anonymous) sections. Describes remote or local rule-set files referenced by route rules and DNS rules.
+
+Backend: `lib/ruleset.uc` — `build_rule_sets(cur, referenced_names)`. Only rulesets whose name appears in `referenced_names` (computed by `route.uc`) **and** whose `enabled` is not `"0"` are emitted. `format` is **not stored as a UCI field**; it is auto-detected from the file extension at runtime (`detect_format` in `helpers.uc`): `.srs` → `binary`, `.json` → `source`. `subscription.uc` also reads `enabled`, `update_interval`, and `nft_rules` to decide when to re-download.
+
+UI write: `tabs/rulesets.js` — `buildRulesetsMap()`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | Disabled rulesets are silently dropped by both `ruleset.uc` and `subscription.uc`. |
+| `type` | enum | `remote`, `local` | yes | — | Source type. Defaults to `remote` if absent. |
+| `url` | string | HTTPS URL | yes | `type=remote` | Download URL for the rule-set file (`.srs` or `.json`). Read by `subscription.uc` during fetch; stored path used by `ruleset.uc`. |
+| `path` | string | absolute file path | yes | `type=local` | Path to the local rule-set file on the router filesystem. Read by `ruleset.uc` to emit `path` in the sing-box config. |
+| `nft_rules` | bool | `0`/`1` | no | — | UI-only flag: `subscription.uc` iterates over rulesets with `nft_rules=1` to decide which to keep fresh. **Not read by `ruleset.uc`** (nftables integration is handled outside generate.uc). Default `0`. |
+| `update_interval` | integer | seconds | no | `type=remote` | Minimum age (seconds) before `subscription.uc` re-downloads the ruleset. Defaults to `86400` (24 h) when absent or `0`. **Not read by `ruleset.uc`**. |
+
+---
 
 ## `route_rule`
 
-TBD — populated in Task 20.
+UCI section type: `route_rule`. Named, sortable. Each section maps one or more rule-sets to a routing action.
+
+Backend: `lib/route.uc` — `build_route_rules(cur)`. Sections with `enabled=0` are skipped. The `ruleset` list is resolved against enabled ruleset sections; if the resolved list is empty the entire rule is skipped. The backend translates the UCI `action` value to a sing-box 1.11+ rule object (replacing the removed `block` outbound with `action: "reject"`).
+
+UI write: `tabs/routing.js` — `buildRouteRulesMap()`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | Disabled sections are skipped entirely by `build_route_rules`. |
+| `ruleset` | list | ruleset section names | yes | — | One or more names of `ruleset` sections to match. UCI list type (multi-value). Disabled or missing ruleset names are silently filtered; if filtering empties the list the rule is dropped. |
+| `action` | enum | `direct`, `block`, `outbound` | yes | — | Routing decision. `direct` → `outbound: "direct"`. `block` → emits `action: "reject"` (no outbound). `outbound` → routes to the named outbound below. Defaults to `direct`. |
+| `outbound` | string | outbound section name | yes (when `action=outbound`) | `action=outbound` | Target outbound tag. **Not read when `action` is `direct` or `block`**. |
+
+---
 
 ## `route_default`
 
-TBD — populated in Task 20.
+UCI section type: `route_default`. **Singleton named section** (the section's UCI name is literally `route_default`). Describes the final (default) route applied to traffic that matches no rule.
+
+Backend: `lib/route.uc` — reads via `cur.get_all("singbox-ui", "route_default")`. Absent section → no `route.final` is emitted. `action=block` is translated to a trailing catch-all `action: "reject"` rule appended to `route.rules` instead of setting `route.final`, because sing-box 1.11+ removed the `block` outbound.
+
+UI write: `tabs/routing.js` — `buildRouteDefaultMap()`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `action` | enum | `direct`, `block`, `outbound` | yes | — | Default routing decision. `direct` → `route.final = "direct"`. `block` → appends a final catch-all `action: "reject"` rule; no `route.final`. `outbound` → `route.final = <outbound>`. Defaults to `direct`. |
+| `outbound` | string | outbound section name | yes (when `action=outbound`) | `action=outbound` | Target outbound tag for the final route. |
 
 ## `dns`
 
