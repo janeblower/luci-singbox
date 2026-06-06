@@ -61,8 +61,10 @@ git tag "$TEST_TAG" >/dev/null 2>&1
 # SDK download attempt.  We use a subshell with a fake git that only answers
 # 'describe --tags --abbrev=0' so the rest of the script never runs.
 output="$(
-    export PATH="$(mktemp -d):$PATH"
-    fake_git="$(echo "$PATH" | cut -d: -f1)/git"
+    fake_dir="$(mktemp -d)"
+    export PATH="$fake_dir:$PATH"
+    fake_git="$fake_dir/git"
+    # shellcheck disable=SC2016  # $1/$@ are for the inner shim, not this shell
     printf '#!/bin/sh\nif [ "$1" = "describe" ]; then echo "%s"; else command git "$@"; fi\n' "$TEST_TAG" > "$fake_git"
     chmod +x "$fake_git"
     # Run the script; it will call SDK wget and exit with a non-zero code after

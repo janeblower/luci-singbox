@@ -66,7 +66,7 @@ is_whitelisted() {
     # ucode built-ins / object methods
     foreach|get|get_all|push|length|split|join|keys|values|delete|format) return 0 ;;
     # local / intermediate variable properties (not UCI fields)
-    tls|transport|multiplex|handshake|obfs|rule_set|ruleset|outbound|network) return 0 ;;
+    tls|transport|handshake|rule_set|ruleset|outbound|network) return 0 ;;
     # ucode cursor / module locals
     cur|sq|uc|opts|tag|idx|name|size|raw|read|open|close|write|sh|txt|stat|lsdir|mkdir|unlink|popen) return 0 ;;
     # sing-box config structural fields (not UCI)
