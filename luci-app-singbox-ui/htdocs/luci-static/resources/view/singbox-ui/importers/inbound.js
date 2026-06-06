@@ -51,14 +51,41 @@ function jsonImportInbound(o) {
 	}
 	if (o.type === 'vless' || o.type === 'vmess'
 	    || o.type === 'trojan' || o.type === 'hysteria2') {
-		var u = (o.users && o.users[0]) || {};
-		if (u.uuid)     f.server_uuid     = u.uuid;
-		if (u.password) f.server_password = u.password;
-		if (u.flow)     f.vless_flow      = u.flow;
-		// sing-box uses snake_case `alter_id`; accept legacy camelCase too
-		// in case the user pasted a v2ray-ng-style config.
-		var aid = (u.alter_id != null) ? u.alter_id : u.alterId;
-		if (aid != null) f.vmess_alter_id = String(aid);
+		// vmess/vless: when imported JSON carries multi-user `users[]`,
+		// emit a `list inbound_user` and drop section-level single-user
+		// fields (sing-box rejects both at once).
+		if ((o.type === 'vless' || o.type === 'vmess')
+		    && Array.isArray(o.users) && o.users.length > 1) {
+			var iu = [];
+			for (var ui2 = 0; ui2 < o.users.length; ui2++) {
+				var pu = o.users[ui2] || {};
+				if (pu.uuid == null || !String(pu.uuid).length) continue;
+				var nm = (pu.name != null) ? String(pu.name) : '';
+				if (!nm.length) continue;
+				var entry = nm + ':' + String(pu.uuid);
+				if (o.type === 'vmess') {
+					// Accept both spec-correct camelCase `alterId` and
+					// legacy snake_case `alter_id` for paste-compat.
+					var aid2 = (pu.alterId != null) ? pu.alterId : pu.alter_id;
+					if (aid2 != null) entry += ':' + String(aid2);
+				} else if (o.type === 'vless') {
+					if (pu.flow != null && String(pu.flow).length
+					    && String(pu.flow) !== 'none')
+						entry += ':' + String(pu.flow);
+				}
+				iu.push(entry);
+			}
+			if (iu.length) f.inbound_user = iu;
+		} else {
+			var u = (o.users && o.users[0]) || {};
+			if (u.uuid)     f.server_uuid     = u.uuid;
+			if (u.password) f.server_password = u.password;
+			if (u.flow)     f.vless_flow      = u.flow;
+			// sing-box 1.12 docs spec the camelCase `alterId`; accept the
+			// legacy snake_case for paste-compat.
+			var aid = (u.alterId != null) ? u.alterId : u.alter_id;
+			if (aid != null) f.vmess_alter_id = String(aid);
+		}
 	}
 	if (o.type === 'tun') {
 		if (o.interface_name) f.interface_name = o.interface_name;

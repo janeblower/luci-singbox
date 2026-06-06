@@ -88,15 +88,15 @@ Implemented by `build_tls` (inbound, `lib/inbound.uc:31`) and `build_tls_client`
 |---|---|
 | `users[0].name`, `users[0].uuid` | есть (single-user) |
 | `users[0].flow` (per-user `xtls-rprx-vision`) | есть (single-user) |
-| `users[]` multi-user | **нет** | Phase 7 |
+| `users[]` multi-user | есть (Phase 7: `list inbound_user 'name:uuid[:flow]'`) |
 | `tls`, `transport`, `multiplex` | есть |
 
 ### vmess inbound (`lib/inbound.uc:133`)
 | Field | Status | Notes |
 |---|---|---|
 | `users[0].name`, `users[0].uuid` | есть | single-user |
-| `users[0].alter_id` | **bug**: emitted as `alter_id`; spec is `alterId` (camelCase) | Phase 7 (rename to alterId) |
-| `users[]` multi-user | нет | Phase 7 |
+| `users[0].alterId` | есть | emitted as `alterId` (camelCase, corrected in Phase 7) |
+| `users[]` multi-user | есть | Phase 7: `list inbound_user 'name:uuid[:alterId]'` |
 | `tls`, `transport`, `multiplex` | есть | |
 
 ### trojan inbound (`lib/inbound.uc:133`)

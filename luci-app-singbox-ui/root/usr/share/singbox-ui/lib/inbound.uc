@@ -20,11 +20,42 @@ function build_user(s) {
 	}
 	if (proto === "vless" && length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
 		u.flow = s.vless_flow;
+	// sing-box 1.12: vmess inbound `users[].alterId` is camelCase in the
+	// wire JSON (not snake_case). The UCI field name stays `vmess_alter_id`
+	// so existing configs don't break.
 	if (proto === "vmess" && length(s_opt(s, "vmess_alter_id")))
-		u.alter_id = s_num(s.vmess_alter_id);
+		u.alterId = s_num(s.vmess_alter_id);
 	// vmess inbound users do not accept a per-user `security`; the cipher
 	// is selected by the client per connection. Field omitted.
 	return u;
+}
+
+// build_inbound_users(s, proto) — parse `list inbound_user` entries for
+// vmess/vless. Returns an array of user objects, or [] when no valid
+// entries.  Format per entry:
+//   vmess: "name:uuid"          or "name:uuid:alterId"
+//   vless: "name:uuid"          or "name:uuid:flow"
+// Invalid entries (missing name/uuid) are silently skipped.
+function build_inbound_users(s, proto) {
+	let entries = as_array(s.inbound_user);
+	let out = [];
+	for (let entry in entries) {
+		let parts = split(entry, ":");
+		if (length(parts) < 2) continue;
+		let name = parts[0], uuid = parts[1];
+		if (!length(name) || !length(uuid)) continue;
+		let u = { name: name, uuid: uuid };
+		if (length(parts) >= 3 && length(parts[2])) {
+			if (proto === "vmess") {
+				let aid = +parts[2];
+				u.alterId = aid || 0;
+			} else if (proto === "vless") {
+				if (parts[2] !== "none") u.flow = parts[2];
+			}
+		}
+		push(out, u);
+	}
+	return out;
 }
 
 // build_tls(s) — null when security=none. hysteria2 forces tls.
@@ -161,7 +192,14 @@ function build_one(s) {
 		if (mux) ob.multiplex = mux;
 	} else if (proto === "vless" || proto === "vmess" || proto === "trojan" || proto === "hysteria2") {
 		ob = { type: proto, tag: tag, listen: listen, listen_port: port };
-		ob.users = [ build_user(s) ];
+		// vmess/vless support a `list inbound_user` multi-user mode. When
+		// non-empty, the section-level single-user fields (server_uuid,
+		// vmess_alter_id, vless_flow) are dropped — sing-box rejects both
+		// at once.  trojan/hysteria2 stay single-user for this phase.
+		let multi = (proto === "vmess" || proto === "vless")
+			? build_inbound_users(s, proto)
+			: [];
+		ob.users = length(multi) ? multi : [ build_user(s) ];
 		if (proto === "hysteria2") {
 			let ob_type = s_opt(s, "hysteria2_obfs_type") || "none";
 			// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
