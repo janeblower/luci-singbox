@@ -8,7 +8,8 @@
 #   - luci-app-singbox-ui_<version>.apk        main app (no translations)
 #   - luci-i18n-singbox-ui-ru_<version>.apk    Russian translation pack
 #
-# Usage: build-apk.sh <version> [output_dir]
+# Usage: build-apk.sh [version] [output_dir]
+#   version defaults to the most recent git tag (leading 'v' stripped).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,11 +29,15 @@ PKG_URL="https://github.com/Jyn/luci-app-sing-box"
 PKG_MAINTAINER="Jyn"
 
 VERSION="${1:-}"
-OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 if [ -z "$VERSION" ]; then
-  echo "Usage: $0 <version> [output_dir]" >&2
-  exit 1
+    VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+    if [ -z "$VERSION" ]; then
+        echo "no git tag found and no version arg passed" >&2
+        exit 1
+    fi
+    echo "using version from git tag: $VERSION"
 fi
+OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 
 SDK_URL="${SDK_URL:-https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst}"
 SDK_CACHE_DIR="${SDK_CACHE_DIR:-$HOME/.cache/luci-app-singbox-ui/openwrt-sdk}"
@@ -93,7 +98,11 @@ install -d \
   "$APP_ROOT/usr/share/rpcd/acl.d" \
   "$APP_ROOT/usr/share/singbox-ui" \
   "$APP_ROOT/usr/share/singbox-ui/lib" \
-  "$APP_ROOT/www/luci-static/resources/view/singbox-ui"
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/lib" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/importers" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/tabs" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/widgets"
 
 install -m 0644 "$PKG_SRC/root/etc/config/singbox-ui"                        "$APP_ROOT/etc/config/singbox-ui"
 install -m 0755 "$PKG_SRC/root/etc/uci-defaults/99-luci-app-singbox-ui"      "$APP_ROOT/etc/uci-defaults/99-luci-app-singbox-ui"
@@ -108,6 +117,18 @@ for lib_uc in "$PKG_SRC"/root/usr/share/singbox-ui/lib/*.uc; do
   install -m 0644 "$lib_uc" "$APP_ROOT/usr/share/singbox-ui/lib/$(basename "$lib_uc")"
 done
 install -m 0644 "$PKG_SRC/htdocs/luci-static/resources/view/singbox-ui/main.js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/main.js"
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/lib/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/lib/$(basename "$view_js")"
+done
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/importers/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/importers/$(basename "$view_js")"
+done
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/tabs/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/tabs/$(basename "$view_js")"
+done
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/widgets/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/widgets/$(basename "$view_js")"
+done
 
 list_dir="$APP_ROOT/lib/apk/packages"
 mkdir -p "$list_dir"
