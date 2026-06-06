@@ -18,58 +18,19 @@
 'require view.singbox-ui.widgets.action-bar as SbActionBar';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
 
-var callRefresh    = SbRpc.callRefresh;
-var callRestart    = SbRpc.callRestart;
-var callStatus     = SbRpc.callStatus;
-var callReadConfig = SbRpc.callReadConfig;
-var callClash      = SbRpc.callClash;
-var callDhcpLeases = SbRpc.callDhcpLeases;
-
-var loadOutboundList = SbCommon.loadOutboundList;
-var addRenameField   = SbCommon.addRenameField;
-var wireTabs         = SbCommon.wireTabs;
-var notify           = SbCommon.notify;
-
-var SB_INBOUND_KNOWN       = SbImpInbound.SB_INBOUND_KNOWN;
-var __sb_jsonImportInbound = SbImpInbound.jsonImportInbound;
-
-var SB_OUTBOUND_KNOWN       = SbImpOutbound.SB_OUTBOUND_KNOWN;
-var __sb_jsonImportOutbound = SbImpOutbound.jsonImportOutbound;
-
-var SB_INBOUND_PROTOCOLS = SbTabInbounds.SB_INBOUND_PROTOCOLS;
-var openJsonImportModal  = SbTabInbounds.openJsonImportModal;
-var buildInboundsMap     = SbTabInbounds.buildInboundsMap;
-
-var buildOutboundsMap = SbTabOutbounds.buildOutboundsMap;
-
-var buildRulesetsMap = SbTabRulesets.buildRulesetsMap;
-
-var buildRouteRulesMap   = SbTabRouting.buildRouteRulesMap;
-var buildRouteDefaultMap = SbTabRouting.buildRouteDefaultMap;
-
-var loadDnsServerList = SbTabDns.loadDnsServerList;
-var buildDnsMap       = SbTabDns.buildDnsMap;
-
-var buildGeneralMap = SbTabGeneral.buildGeneralMap;
-
-var buildMonitoring = SbTabMon.buildMonitoring;
-
-var renderActionBar   = SbActionBar.renderActionBar;
-var renderStatusPanel = SbStatusPanel.renderStatusPanel;
-
 return view.extend({
 	load: function () { return uci.load('singbox-ui'); },
 
 	render: function () {
 		var self = this;
-		var mInbounds     = buildInboundsMap();
-		var mOutbounds    = buildOutboundsMap();
-		var mRulesets     = buildRulesetsMap();
-		var mRouteRules   = buildRouteRulesMap();
-		var mRouteDefault = buildRouteDefaultMap();
-		var mDns          = buildDnsMap();
-		var mGeneral      = buildGeneralMap();
-		var mon           = buildMonitoring();
+		var mInbounds     = SbTabInbounds.buildInboundsMap();
+		var mOutbounds    = SbTabOutbounds.buildOutboundsMap();
+		var mRulesets     = SbTabRulesets.buildRulesetsMap();
+		var mRouteRules   = SbTabRouting.buildRouteRulesMap();
+		var mRouteDefault = SbTabRouting.buildRouteDefaultMap();
+		var mDns          = SbTabDns.buildDnsMap();
+		var mGeneral      = SbTabGeneral.buildGeneralMap();
+		var mon           = SbTabMon.buildMonitoring();
 
 		self._maps = [ mInbounds, mOutbounds, mRulesets, mRouteRules, mRouteDefault, mDns, mGeneral ];
 
@@ -84,7 +45,7 @@ return view.extend({
 			var generalNode    = nodes[6];
 
 			var statusHolder = E('div', { 'class': 'sb-status', 'style': 'margin:.5em 0;padding:.5em;border:1px solid #ddd;border-radius:4px' });
-			var actionBar    = renderActionBar(statusHolder);
+			var actionBar    = SbActionBar.renderActionBar(statusHolder);
 
 			var outputWrap = E('div', {}, [
 				E('ul', { 'class': 'cbi-tabmenu sb-subtab-header' }, [
@@ -117,13 +78,13 @@ return view.extend({
 			]);
 
 			setTimeout(function () {
-				wireTabs(root, '.sb-subtab-header', {
+				SbCommon.wireTabs(root, '.sb-subtab-header', {
 					outbounds:  outboundsNode,
 					rulesets:   rulesetsNode,
 					routerules: routerulesNode,
 					routedef:   routedefNode
 				}, 'outbounds');
-				wireTabs(root, '.sb-tab-header', {
+				SbCommon.wireTabs(root, '.sb-tab-header', {
 					inbounds:   inboundsNode,
 					output:     outputWrap,
 					dns:        dnsNode,
@@ -136,7 +97,7 @@ return view.extend({
 						else mon.stop();
 					});
 				});
-				renderStatusPanel(statusHolder);
+				SbStatusPanel.renderStatusPanel(statusHolder);
 			}, 0);
 
 			return root;

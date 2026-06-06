@@ -92,7 +92,10 @@ grep -q "'default_resolver'"    "$DNS_TAB" || { echo "FAIL: dns.default_resolver
 
 echo "-- references Monitoring tab"
 grep -q "buildMonitoring"        "$JS" || { echo "FAIL: no buildMonitoring"; exit 1; }
-grep -q "callClash"              "$JS" || { echo "FAIL: no callClash wrapper"; exit 1; }
+# callClash lives in lib/rpc.js after alias shims were dropped from main.js
+LIB_RPC=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/rpc.js
+( grep -q "callClash" "$JS" || ( [ -f "$LIB_RPC" ] && grep -q "callClash" "$LIB_RPC" ) ) \
+  || { echo "FAIL: no callClash wrapper"; exit 1; }
 # clash_request may live in lib/rpc.js after modularization
 LIB_RPC=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/rpc.js
 ( grep -q "clash_request" "$JS" || ( [ -f "$LIB_RPC" ] && grep -q "clash_request" "$LIB_RPC" ) ) \
