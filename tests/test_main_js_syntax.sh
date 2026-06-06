@@ -64,8 +64,10 @@ grep -q "sub_interval"           "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_interv
 ! grep -q "'json'"               "$JS" || { echo "FAIL: legacy json outbound type still present"; exit 1; }
 
 echo "-- references ruleset fields"
-grep -q "nft_rules"              "$JS" || { echo "FAIL: no nft_rules field"; exit 1; }
-grep -q "update_interval"        "$JS" || { echo "FAIL: no update_interval field"; exit 1; }
+# nft_rules and update_interval live in tabs/rulesets.js after modularization (Task 9)
+RULESETS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js
+grep -q "nft_rules"       "$RULESETS_TAB" || { echo "FAIL: no nft_rules field (checked tabs/rulesets.js)"; exit 1; }
+grep -q "update_interval" "$RULESETS_TAB" || { echo "FAIL: no update_interval field (checked tabs/rulesets.js)"; exit 1; }
 
 echo "-- references DNS tab sections"
 grep -q "'dns_server'"          "$JS" || { echo "FAIL: no dns_server section type"; exit 1; }
