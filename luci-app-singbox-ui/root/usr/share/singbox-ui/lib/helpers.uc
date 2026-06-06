@@ -56,6 +56,22 @@ function detect_rs_format(target, override) {
 // sq(s) — single-quote escape for /bin/sh.
 function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
 
+// fnv1a32(s) — 32-bit FNV-1a hash, hex-encoded (8 chars). Used to shorten
+// long names to a stable identifier; not a cryptographic primitive. Pure
+// ucode so we don't require ucode-mod-digest, which isn't part of the
+// default OpenWrt image. Shared between nftables.uc (rs_*_<hash>_<fam>
+// set names) and lib/outbound.uc (safe_tag fallback for hostile
+// share-link names).
+function fnv1a32(s) {
+	let h = 2166136261;
+	let n = length(s);
+	for (let i = 0; i < n; i++) {
+		h = h ^ ord(s, i);
+		h = (h * 16777619) & 0xffffffff;
+	}
+	return sprintf("%08x", h);
+}
+
 // resolve_iface_device(iface) — translate a UCI logical interface name
 // (e.g. "wan", "lan") into the actual Linux netdev (e.g. "eth0", "pppoe-wan").
 // Falls back to the input verbatim when resolution fails or the daemon is
@@ -90,4 +106,5 @@ return {
 	sq,
 	detect_rs_format,
 	resolve_iface_device,
+	fnv1a32,
 };

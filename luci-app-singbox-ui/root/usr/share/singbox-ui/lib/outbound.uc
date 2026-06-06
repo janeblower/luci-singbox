@@ -10,6 +10,7 @@ const s_bool   = helpers.s_bool;
 const s_num    = helpers.s_num;
 const csv_list = helpers.csv_list;
 const as_array = helpers.as_array;
+const fnv1a32  = helpers.fnv1a32;
 // Client-side TLS. null when security=none. hysteria2 forces tls.
 function build_tls_client(s, proto) {
 	let sec = s_opt(s, "security") || "none";
@@ -151,9 +152,50 @@ function build_constructor_for(s, proto) {
 
 function url_decode(s) {
 	if (s == null) return s;
-	// Replace + with space, then percent-decode.
+	// Replace + with space, then percent-decode. Drop control characters
+	// (< 0x20) silently — a hostile subscription server should not be able
+	// to inject NUL/CR/LF/TAB into UCI-stored values that later land in
+	// config.json or get referenced by route rules.
 	let out = replace(s, "+", " ");
-	return replace(out, /%([0-9a-fA-F]{2})/g, function(m, h) { return chr(hex(h)); });
+	return replace(out, /%([0-9a-fA-F]{2})/g, function(m, h) {
+		let b = hex(h);
+		if (b < 0x20) return "";
+		return chr(b);
+	});
+}
+
+// safe_tag(raw, seed) — return raw if it matches the conservative tag
+// whitelist; otherwise generate a stable 'imported-<fnv1a hex>' tag from
+// the provided seed (typically the share-link URL itself). Tags appear in
+// the rendered config.json and are referenced by route rules; an attacker
+// who controls the source must not be able to inject arbitrary bytes here.
+// The user can rename the imported tag in the UI after import.
+function safe_tag(raw, seed) {
+	if (raw != null && length(raw) && match(raw, /^[A-Za-z0-9_.\-]+$/))
+		return raw;
+	return sprintf("imported-%s", fnv1a32(seed || "anon"));
+}
+
+// safe_host(raw) — return raw if it looks like a domain, IPv4, or IPv6;
+// otherwise null. Used to fail the parser early on hosts containing bytes
+// that have no business in a host string (whitespace, control chars,
+// non-ASCII). sing-box itself does stricter validation downstream; this
+// is a defence-in-depth check so a malformed outbound section can't land
+// in UCI in the first place.
+function safe_host(raw) {
+	if (raw == null || !length(raw)) return null;
+	if (match(raw, /^[A-Za-z0-9.\-]+$/))   return raw;  // domain | IPv4
+	if (match(raw, /^\[[0-9a-fA-F:]+\]$/)) return raw;  // [IPv6]
+	if (match(raw, /^[0-9a-fA-F:]+$/) && index(raw, ":") >= 0)
+		return raw;                                     // bare IPv6
+	return null;
+}
+
+// safe_port(raw) — return integer 1..65535 or null.
+function safe_port(raw) {
+	let n = (type(raw) === "int") ? raw : +raw;
+	if (type(n) !== "int" || n < 1 || n > 65535) return null;
+	return n;
 }
 
 function parse_query(query_string) {
@@ -172,7 +214,10 @@ function parse_vless(url) {
 	// vless://uuid@host:port?params
 	let m = match(url, /^vless:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
 	if (!m) return null;
-	let uuid = m[1], host = m[2], port = +m[3];
+	let uuid = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!length(uuid) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
 	let out = { type: "vless", server: host, server_port: port, uuid: uuid };
 	let security = params["security"];
@@ -194,7 +239,10 @@ function parse_hy2(url) {
 	let m = match(url, /^hy2:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/) ||
 	        match(url, /^hysteria2:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
 	if (!m) return null;
-	let password = m[1], host = m[2], port = +m[3];
+	let password = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!length(password) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
 	let out = {
 		type: "hysteria2", server: host, server_port: port, password: password,
@@ -241,16 +289,15 @@ function parse_vmess(url) {
 	try { j = json(decoded); } catch (e) { return null; }
 	if (type(j) !== "object") return null;
 
-	let add = j.add, id = j.id;
-	let port = j.port;
-	if (type(port) === "string") port = +port;
-	if (!length(add) || !length(id) || type(port) !== "int" || port <= 0)
-		return null;
+	let add = safe_host(j.add);
+	let id = j.id;
+	let port = safe_port(j.port);
+	if (!add || !length(id) || !port) return null;
 
 	let name = j.ps;
 	let out = {
 		type: "vmess",
-		tag: length(name) ? name : add,
+		tag: safe_tag(length(name) ? name : add, url),
 		server: add,
 		server_port: port,
 		uuid: id,
@@ -371,12 +418,14 @@ function parse_ss(url) {
 		password = substr(userinfo, colon + 1);
 	}
 
-	if (!length(method) || !length(password) || !length(host) || port <= 0)
+	host = safe_host(host);
+	port = safe_port(port);
+	if (!length(method) || !length(password) || !host || !port)
 		return null;
 
 	let out = {
 		type: "shadowsocks",
-		tag: length(frag) ? frag : host,
+		tag: safe_tag(length(frag) ? frag : host, url),
 		server: host,
 		server_port: port,
 		method: method,
@@ -391,15 +440,17 @@ function parse_ss(url) {
 function parse_trojan(url) {
 	let m = match(url, /^trojan:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
-	let password = url_decode(m[1]), host = m[2], port = +m[3];
-	if (!length(password) || !length(host) || port <= 0) return null;
+	let password = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!length(password) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
 	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
 
 	let sni = params["sni"] ?? params["peer"] ?? host;
 	let out = {
 		type: "trojan",
-		tag: length(frag) ? frag : host,
+		tag: safe_tag(length(frag) ? frag : host, url),
 		server: host,
 		server_port: port,
 		password: password,

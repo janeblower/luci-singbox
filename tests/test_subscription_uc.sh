@@ -353,4 +353,67 @@ out=$(run_probe 'trojan://trojan-pw@')
 echo "$out" | grep -q '^null$' || { echo "$out"; fail "trojan invalid: expected null"; }
 pass "parse_trojan rejects URL without host:port"
 
+# ---- share-link sanitizer (Phase C1 Task 6) ----
+# Hostile subscription servers should not be able to inject control chars
+# (NUL/CR/LF/TAB) or non-host bytes into UCI-stored fields. The sanitizers
+# in lib/outbound.uc (url_decode, safe_tag, safe_host, safe_port) defend
+# the parsers against such payloads. These tests verify each defense path.
+
+echo "-- url_decode strips control chars from ss password"
+# password contains %00 (NUL), %0a (LF), %09 (TAB); letters in between survive.
+out=$(run_probe 'ss://aes-256-gcm:pa%00ss%0aword%09end@1.2.3.4:8443#san')
+echo "$out" | grep -q '"password":[[:space:]]*"passwordend"' \
+	|| { echo "$out"; fail "ss password not scrubbed: expected 'passwordend'"; }
+pass "ss password control chars dropped by url_decode"
+
+echo "-- parse_trojan: control chars in password are dropped"
+# trojan://pw%0aevil@h.example.com:443 → password === "pwevil"
+out=$(run_probe 'trojan://pw%0aevil@h.example.com:443#san')
+echo "$out" | grep -q '"password":[[:space:]]*"pwevil"' \
+	|| { echo "$out"; fail "trojan password not scrubbed: expected 'pwevil'"; }
+pass "trojan password control chars dropped"
+
+echo "-- parse_vmess: tag with control chars is sanitized to imported-<hex>"
+# base64 of: {"v":"2","ps":"my\nevil","add":"v.example.com","port":443,
+#             "id":"550e8400-e29b-41d4-a716-446655440000","aid":0}
+VMESS_BAD_TAG='vmess://eyJ2IjoiMiIsInBzIjoibXlcbmV2aWwiLCJhZGQiOiJ2LmV4YW1wbGUuY29tIiwicG9ydCI6NDQzLCJpZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCIsImFpZCI6MH0='
+out=$(run_probe "$VMESS_BAD_TAG")
+# tag must NOT contain a literal newline; must match the fallback form.
+echo "$out" | grep -qE '"tag":[[:space:]]*"imported-[0-9a-f]{8}"' \
+	|| { echo "$out"; fail "vmess tag not sanitized to imported-<hex>"; }
+pass "vmess tag with newline replaced by imported-<hex>"
+
+echo "-- parse_vmess: server with non-host bytes → null"
+# base64 of: {"v":"2","ps":"x","add":"v.example.com\n","port":443,"id":"u","aid":0}
+VMESS_BAD_HOST='vmess://eyJ2IjoiMiIsInBzIjoieCIsImFkZCI6InYuZXhhbXBsZS5jb21cbiIsInBvcnQiOjQ0MywiaWQiOiJ1IiwiYWlkIjowfQ=='
+out=$(run_probe "$VMESS_BAD_HOST")
+echo "$out" | grep -q '^null$' || { echo "$out"; fail "vmess: bad host should return null"; }
+pass "parse_vmess rejects host with non-host bytes"
+
+echo "-- parse_hy2: port out of range → null"
+out=$(run_probe 'hy2://pw@h.example.com:99999')
+echo "$out" | grep -q '^null$' || { echo "$out"; fail "hy2: port 99999 should return null"; }
+out=$(run_probe 'hy2://pw@h.example.com:0')
+echo "$out" | grep -q '^null$' || { echo "$out"; fail "hy2: port 0 should return null"; }
+pass "parse_hy2 rejects port out of 1..65535"
+
+echo "-- parse_hy2: password control chars are dropped"
+out=$(run_probe 'hy2://pw%00boom@h.example.com:443')
+echo "$out" | grep -q '"password":[[:space:]]*"pwboom"' \
+	|| { echo "$out"; fail "hy2 password not scrubbed: expected 'pwboom'"; }
+pass "hy2 password control chars dropped"
+
+echo "-- parse_vless: port out of range → null"
+out=$(run_probe 'vless://u@h.example.com:70000')
+echo "$out" | grep -q '^null$' || { echo "$out"; fail "vless: port 70000 should return null"; }
+pass "parse_vless rejects port > 65535"
+
+echo "-- safe_tag fallback is deterministic and matches ^imported-[0-9a-f]{8}\$"
+# Run twice with same hostile input; tags should be byte-identical (FNV-1a is
+# stable). The fallback shape is also explicitly verified.
+out1=$(run_probe "$VMESS_BAD_TAG")
+out2=$(run_probe "$VMESS_BAD_TAG")
+[ "$out1" = "$out2" ] || fail "safe_tag fallback not deterministic across runs"
+pass "safe_tag fallback is deterministic"
+
 echo "OK"
