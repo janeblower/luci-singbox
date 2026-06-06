@@ -1,11 +1,15 @@
 // Secret-masking helper. See docs/superpowers/specs/phase-c1.md C1.1.
 // Pure function: returns a new object; original is unchanged.
 
+// readonly — do not mutate
 const SECRET_KEYS = [
     "uuid",
     "password",
     "private_key",
+    "public_key",     // reality public_key (spec C1.1)
+    "short_id",       // reality short_id — sensitive (spec C1.1)
     "key_pem",
+    "cert_pem",       // inline cert content (spec C1.1) — NOT *_path
     "secret",         // clash_api.secret
     "auth_str",       // hysteria2 obfs auth
     "proxy_url",      // share-link export contains creds
@@ -34,4 +38,4 @@ function scrub_secrets(value) {
     return value;
 }
 
-export { SECRET_KEYS, scrub_secrets };
+return { SECRET_KEYS, scrub_secrets };
