@@ -150,6 +150,20 @@ function build_constructor_for(s, proto) {
 	return ob;
 }
 
+// drop_ctrl(s) — drop bytes < 0x20 from a string. Used to scrub already-
+// decoded bytes (from base64, JSON, etc.) where url_decode's percent-decoder
+// doesn't apply. Hostile share-link sources should not be able to inject
+// NUL/CR/LF/TAB into UCI fields through any decoding path.
+function drop_ctrl(s) {
+	if (s == null) return s;
+	let out = "";
+	for (let i = 0; i < length(s); i++) {
+		let b = ord(s, i);
+		if (b >= 0x20) out += chr(b);
+	}
+	return out;
+}
+
 function url_decode(s) {
 	if (s == null) return s;
 	// Replace + with space, then percent-decode. Drop control characters
@@ -157,11 +171,9 @@ function url_decode(s) {
 	// to inject NUL/CR/LF/TAB into UCI-stored values that later land in
 	// config.json or get referenced by route rules.
 	let out = replace(s, "+", " ");
-	return replace(out, /%([0-9a-fA-F]{2})/g, function(m, h) {
-		let b = hex(h);
-		if (b < 0x20) return "";
-		return chr(b);
-	});
+	return drop_ctrl(replace(out, /%([0-9a-fA-F]{2})/g, function(m, h) {
+		return chr(hex(h));
+	}));
 }
 
 // safe_tag(raw, seed) — return raw if it matches the conservative tag
@@ -395,8 +407,8 @@ function parse_ss(url) {
 			if (dec == null) return null;
 			let dcolon = index(dec, ":");
 			if (dcolon < 0) return null;
-			method   = substr(dec, 0, dcolon);
-			password = substr(dec, dcolon + 1);
+			method   = drop_ctrl(substr(dec, 0, dcolon));
+			password = drop_ctrl(substr(dec, dcolon + 1));
 		}
 	} else {
 		// No '@' in the body. Entire body must be base64 of full
@@ -414,8 +426,8 @@ function parse_ss(url) {
 		host = hpm[1]; port = +hpm[2];
 		let colon = index(userinfo, ":");
 		if (colon < 0) return null;
-		method   = substr(userinfo, 0, colon);
-		password = substr(userinfo, colon + 1);
+		method   = drop_ctrl(substr(userinfo, 0, colon));
+		password = drop_ctrl(substr(userinfo, colon + 1));
 	}
 
 	host = safe_host(host);
