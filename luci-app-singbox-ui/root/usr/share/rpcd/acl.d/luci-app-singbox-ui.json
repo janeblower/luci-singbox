@@ -4,7 +4,7 @@
 		"read": {
 			"uci": [ "singbox-ui" ],
 			"ubus": {
-				"singbox-ui": [ "status", "read_config", "clash_request", "export_section" ]
+				"singbox-ui": [ "status", "read_config", "clash_request", "export_section", "preview_config" ]
 			}
 		},
 		"write": {

@@ -10,6 +10,7 @@ return L.Class.extend({
                                   params: [ 'method', 'path', 'body' ] }),
     callExportSection: rpc.declare({ object: 'singbox-ui', method: 'export_section',
                                      params: [ 'kind', 'name' ] }),
+    callPreviewConfig: rpc.declare({ object: 'singbox-ui', method: 'preview_config' }),
     callDhcpLeases: rpc.declare({ object: 'luci-rpc',   method: 'getDHCPLeases',
                                   expect: { '': {} } }),
 });
