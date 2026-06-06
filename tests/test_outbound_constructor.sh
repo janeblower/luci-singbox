@@ -271,4 +271,67 @@ nocheck "no ech when unset"      '"ech":'
 nocheck "no fragment when unset" '"fragment":'
 nocheck "no record_fragment unset" '"record_fragment":'
 
+echo "-- tuic outbound: congestion + heartbeat + zero_rtt + udp_relay_mode"
+write_cfg "
+config outbound 'tuic_basic'
+	option enabled '1'
+	option type 'tuic'
+	option server 't.example.com'
+	option server_port '443'
+	option server_uuid 'uuid-tuic'
+	option server_password 'pw'
+	option security 'tls'
+	option tls_server_name 't.example.com'
+	option tuic_congestion 'bbr'
+	option tuic_heartbeat '15s'
+	option tuic_zero_rtt '1'
+	option tuic_udp_relay_mode 'quic'
+"
+run_gen
+check  "tuic type"            '"type": "tuic"'
+check  "tuic uuid"            '"uuid": "uuid-tuic"'
+check  "tuic password"        '"password": "pw"'
+check  "tuic congestion"      '"congestion_control": "bbr"'
+check  "tuic heartbeat"       '"heartbeat": "15s"'
+check  "tuic zero_rtt"        '"zero_rtt_handshake": true'
+check  "tuic udp_relay_mode"  '"udp_relay_mode": "quic"'
+check  "tuic tls present"     '"tls":'
+
+echo "-- tuic outbound: udp_over_stream takes precedence over udp_relay_mode"
+write_cfg "
+config outbound 'tuic_stream'
+	option enabled '1'
+	option type 'tuic'
+	option server 't.example.com'
+	option server_port '443'
+	option server_uuid 'uuid'
+	option server_password 'pw'
+	option security 'tls'
+	option tuic_udp_over_stream '1'
+	option tuic_udp_relay_mode 'native'
+"
+run_gen
+check   "tuic udp_over_stream true" '"udp_over_stream": true'
+nocheck "tuic no udp_relay_mode"    '"udp_relay_mode":'
+
+echo "-- tuic outbound: defaults — empty optionals omit fields"
+write_cfg "
+config outbound 'tuic_min'
+	option enabled '1'
+	option type 'tuic'
+	option server 't.example.com'
+	option server_port '443'
+	option server_uuid 'uuid'
+	option server_password 'pw'
+	option security 'tls'
+"
+run_gen
+check   "tuic minimal type"        '"type": "tuic"'
+nocheck "tuic no congestion"       '"congestion_control":'
+nocheck "tuic no udp_relay_mode"   '"udp_relay_mode":'
+nocheck "tuic no udp_over_stream"  '"udp_over_stream":'
+nocheck "tuic no zero_rtt"         '"zero_rtt_handshake":'
+nocheck "tuic no heartbeat"        '"heartbeat":'
+nocheck "tuic no network"          '"network":'
+
 echo "OK"

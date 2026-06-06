@@ -136,6 +136,43 @@ check "vmess server" '"server": "json.example.com"' "$TMPDIR/out.json"
 check "vmess port"   '"server_port": 8443'          "$TMPDIR/out.json"
 check "vmess uuid"   '"uuid": "abc-123"'            "$TMPDIR/out.json"
 
+# ---- tuic constructor outbound + route_outbound reference ----
+echo "-- type=tuic constructor"
+write_cfg "
+config outbound 'my_tuic_out'
+	option enabled '1'
+	option type 'tuic'
+	option server 'tuic.example.com'
+	option server_port '443'
+	option server_uuid 'tuic-uuid-7'
+	option server_password 'tuic-pw'
+	option security 'tls'
+	option tls_server_name 'tuic.example.com'
+	option tuic_congestion 'bbr'
+	option tuic_udp_relay_mode 'quic'
+
+config ruleset 'geosite_cn'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/geosite-cn.srs'
+
+config route_rule 'rule_cn_tuic'
+	option enabled '1'
+	list ruleset 'geosite_cn'
+	option action 'outbound'
+	option outbound 'my_tuic_out'
+"
+run_gen
+check "tuic tag"                '"tag": "my_tuic_out"'            "$TMPDIR/out.json"
+check "tuic type"               '"type": "tuic"'                  "$TMPDIR/out.json"
+check "tuic server"             '"server": "tuic.example.com"'    "$TMPDIR/out.json"
+check "tuic port"               '"server_port": 443'              "$TMPDIR/out.json"
+check "tuic uuid"               '"uuid": "tuic-uuid-7"'           "$TMPDIR/out.json"
+check "tuic password"           '"password": "tuic-pw"'           "$TMPDIR/out.json"
+check "tuic congestion_control" '"congestion_control": "bbr"'     "$TMPDIR/out.json"
+check "tuic udp_relay_mode"     '"udp_relay_mode": "quic"'        "$TMPDIR/out.json"
+check "tuic route -> outbound"  '"outbound": "my_tuic_out"'       "$TMPDIR/out.json"
+
 # ---- outbound without type is skipped (no longer a valid outbound) ----
 echo "-- outbound without type is skipped"
 write_cfg "
