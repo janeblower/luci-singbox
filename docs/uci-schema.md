@@ -173,7 +173,7 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `network` | enum | `""` (both), `tcp`, `udp` | no | `protocol=direct` | Restricts accepted network. Empty or any other value omits `network` from output (sing-box treats absence as tcp+udp). |
+| `network` | enum | `""` (both), `tcp`, `udp` | no | `protocol=direct/shadowsocks` | Restricts accepted network. Empty or any other value omits `network` from output (sing-box treats absence as tcp+udp). |
 | `dns_listener` | bool | `0`/`1` | no | `protocol=direct` | UI-only: when set, the UI auto-emits a hijack-dns route rule for this inbound. **Not read by `inbound.uc`**. |
 
 ### `tproxy` protocol fields
@@ -203,8 +203,9 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `shadowsocks_method` | enum | e.g. `aes-256-gcm`, `chacha20-ietf-poly1305` | yes | `protocol=shadowsocks` | Encryption cipher. |
-| `server_password` | string | — | yes | `protocol=shadowsocks` | Shared password. |
+| `shadowsocks_method` | enum | e.g. `aes-256-gcm`, `chacha20-ietf-poly1305` | yes | `protocol=shadowsocks` | Encryption cipher. Shared across all users when `ss_user` is non-empty. |
+| `server_password` | string | — | yes (single-user) | `protocol=shadowsocks` | Shared password for the single-user mode. Ignored when `ss_user` is non-empty (multi-user `users[]` takes precedence). |
+| `ss_user` | list | `"name:password"` per entry | no | `protocol=shadowsocks` | Multi-user list. Each entry colon-separates the user name from the password. When non-empty, `users[]` is emitted and top-level `server_password` is dropped. Malformed entries (no colon, empty name, or empty password) are silently skipped. |
 
 ### User credential fields (vless / vmess / trojan)
 
@@ -267,11 +268,11 @@ Applies to `vless`, `vmess`, `trojan`.
 
 ### Multiplex fields
 
-Applies to `vless`, `vmess`, `trojan` when `multiplex_enabled=1`.
+Applies to `vless`, `vmess`, `trojan`, `shadowsocks` when `multiplex_enabled=1`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `multiplex_enabled` | bool | `0`/`1` | no | `protocol=vless/vmess/trojan` | Enables multiplex. |
+| `multiplex_enabled` | bool | `0`/`1` | no | `protocol=vless/vmess/trojan/shadowsocks` | Enables multiplex. |
 | `multiplex_protocol` | enum | `smux`, `yamux`, `h2mux` | no | `multiplex_enabled=1` | Multiplex protocol. Defaults to `smux`. |
 | `multiplex_max_connections` | integer | — | no | `multiplex_enabled=1` | Maximum number of multiplexed connections. |
 | `multiplex_min_streams` | integer | — | no | `multiplex_enabled=1` | Minimum concurrent streams before opening a new connection. |

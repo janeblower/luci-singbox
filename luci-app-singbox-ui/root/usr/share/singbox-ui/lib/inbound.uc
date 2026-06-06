@@ -139,8 +139,26 @@ function build_one(s) {
 		ob = {
 			type: "shadowsocks", tag: tag, listen: listen, listen_port: port,
 			method: s_opt(s, "shadowsocks_method") || "aes-128-gcm",
-			password: s_opt(s, "server_password"),
 		};
+		let users = [];
+		let entries = as_array(s.ss_user);
+		for (let entry in entries) {
+			let colon = index(entry, ":");
+			if (colon < 1) continue;  // malformed (empty name or no colon)
+			let name = substr(entry, 0, colon);
+			let pw   = substr(entry, colon + 1);
+			if (!length(name) || !length(pw)) continue;
+			push(users, { name: name, password: pw });
+		}
+		if (length(users)) {
+			ob.users = users;
+		} else if (length(s_opt(s, "server_password"))) {
+			ob.password = s.server_password;
+		}
+		let net = s_opt(s, "network");
+		if (net === "udp" || net === "tcp") ob.network = net;
+		let mux = build_multiplex(s);
+		if (mux) ob.multiplex = mux;
 	} else if (proto === "vless" || proto === "vmess" || proto === "trojan" || proto === "hysteria2") {
 		ob = { type: proto, tag: tag, listen: listen, listen_port: port };
 		ob.users = [ build_user(s) ];

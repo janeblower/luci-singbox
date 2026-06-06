@@ -33,7 +33,21 @@ function jsonImportInbound(o) {
 
 	if (o.type === 'shadowsocks') {
 		if (o.method)   f.shadowsocks_method = o.method;
-		if (o.password) f.server_password    = o.password;
+		// Multi-user wins: when `users[]` is present, emit a `ss_user` list
+		// and drop the top-level password (sing-box rejects both at once).
+		if (Array.isArray(o.users) && o.users.length) {
+			var ssu = [];
+			for (var si = 0; si < o.users.length; si++) {
+				var su = o.users[si] || {};
+				if (su.name == null || su.password == null) continue;
+				if (!String(su.name).length || !String(su.password).length) continue;
+				ssu.push(String(su.name) + ':' + String(su.password));
+			}
+			if (ssu.length) f.ss_user = ssu;
+			else if (o.password) f.server_password = o.password;
+		} else if (o.password) {
+			f.server_password = o.password;
+		}
 	}
 	if (o.type === 'vless' || o.type === 'vmess'
 	    || o.type === 'trojan' || o.type === 'hysteria2') {

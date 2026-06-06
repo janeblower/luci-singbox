@@ -78,9 +78,9 @@ Implemented by `build_tls` (inbound, `lib/inbound.uc:31`) and `build_tls_client`
 | Field | Status |
 |---|---|
 | `method`, `password` | есть (single-user) |
-| `users[]` (multi-user) | **нет** | Phase 5 |
-| `network` (`tcp`/`udp`/empty) | нет | Phase 5 |
-| `multiplex` | **нет** | Phase 5 |
+| `users[]` (multi-user) | есть | — |
+| `network` (`tcp`/`udp`/empty) | есть | — |
+| `multiplex` | есть | — |
 | `managed` (SSM API dynamic user) | out-of-scope |
 
 ### vless inbound (`lib/inbound.uc:133`)

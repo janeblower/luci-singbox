@@ -98,6 +98,17 @@ expect('shadowsocks inbound',
 		shadowsocks_method: 'aes-256-gcm', server_password: 'p',
 	}});
 
+expect('shadowsocks inbound multi-user',
+	fn({ type: 'shadowsocks', tag: 'ss', listen: '::', listen_port: 8388,
+	     method: '2022-blake3-aes-128-gcm',
+	     users: [ { name: 'alice', password: 'pw1' },
+	              { name: 'bob',   password: 'pw2' } ] }),
+	{ ok: true, errors: [], fields: {
+		protocol: 'shadowsocks', listen: '::', listen_port: 8388,
+		shadowsocks_method: '2022-blake3-aes-128-gcm',
+		ss_user: [ 'alice:pw1', 'bob:pw2' ],
+	}});
+
 expect('outbound JSON rejected',
 	fn({ type: 'shadowsocks', server: 'a.b', server_port: 8388, password: 'p' }),
 	{ ok: false,

@@ -138,13 +138,14 @@ function buildInboundsMap() {
 	o.depends('protocol', 'trojan');
 	o.depends('protocol', 'hysteria2');
 
-	// direct
+	// direct / shadowsocks
 	o = s.option(form.ListValue, 'network', _('Network'));
 	o.modalonly = true;
 	o.value('', _('Both (tcp+udp)'));
 	o.value('tcp', 'tcp');
 	o.value('udp', 'udp');
 	o.depends('protocol', 'direct');
+	o.depends('protocol', 'shadowsocks');
 
 	o = s.option(form.Flag, 'dns_listener', _('Hijack DNS'));
 	o.modalonly = true;
@@ -201,6 +202,16 @@ function buildInboundsMap() {
 	['aes-128-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305',
 	 '2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm'].forEach(function (v) { o.value(v, v); });
 	o.modalonly = true; o.default = 'aes-128-gcm';
+	o.depends('protocol', 'shadowsocks');
+
+	// Shadowsocks multi-user. Each entry: name:password.
+	// When at least one valid entry is present, top-level server_password
+	// is dropped and sing-box receives a users[] block.
+	o = s.option(form.DynamicList, 'ss_user', _('Users'));
+	o.modalonly = true;
+	o.placeholder = 'alice:password';
+	o.description = _('Multi-user shadowsocks. One entry per user, formatted as ' +
+		'"name:password". When non-empty, the single-user password above is ignored.');
 	o.depends('protocol', 'shadowsocks');
 
 	// users (vless/vmess/trojan/hysteria2)
@@ -324,6 +335,7 @@ function buildInboundsMap() {
 	o.depends('protocol', 'vless');
 	o.depends('protocol', 'vmess');
 	o.depends('protocol', 'trojan');
+	o.depends('protocol', 'shadowsocks');
 
 	o = s.option(form.ListValue, 'multiplex_protocol', _('Multiplex protocol'));
 	o.modalonly = true;

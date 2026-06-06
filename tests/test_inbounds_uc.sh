@@ -404,4 +404,65 @@ config inbound 'noech'
 run_gen
 nocheck "no ech when not requested" '"ech":'
 
+echo "-- shadowsocks inbound multi-user + network + multiplex"
+write_cfg "
+config inbound 'ss_multi'
+	option enabled '1'
+	option protocol 'shadowsocks'
+	option listen_port '8388'
+	option shadowsocks_method '2022-blake3-aes-128-gcm'
+	option server_password 'should-be-ignored'
+	list   ss_user 'alice:pw1'
+	list   ss_user 'bob:pw2'
+	option network 'tcp'
+	option multiplex_enabled '1'
+	option multiplex_protocol 'smux'
+"
+run_gen
+check "ss multi type"     '"type": "shadowsocks"'
+check "ss multi method"   '"method": "2022-blake3-aes-128-gcm"'
+check "ss user alice"     '"name": "alice"'
+check "ss user alice pw"  '"password": "pw1"'
+check "ss user bob"       '"name": "bob"'
+check "ss user bob pw"    '"password": "pw2"'
+check "ss network=tcp"    '"network": "tcp"'
+check "ss multiplex"      '"protocol": "smux"'
+# Top-level password dropped when users[] present.
+nocheck "no top-level password" '"password": "should-be-ignored"'
+
+echo "-- shadowsocks inbound single-user (no ss_user list)"
+write_cfg "
+config inbound 'ss_single'
+	option enabled '1'
+	option protocol 'shadowsocks'
+	option listen_port '8388'
+	option shadowsocks_method 'aes-128-gcm'
+	option server_password 'single-pw'
+"
+run_gen
+check "ss single type"     '"type": "shadowsocks"'
+check "ss single password" '"password": "single-pw"'
+nocheck "no users array"   '"users":'
+nocheck "no network field" '"network":'
+nocheck "no multiplex"     '"multiplex":'
+
+echo "-- shadowsocks inbound malformed ss_user entries are skipped"
+write_cfg "
+config inbound 'ss_bad'
+	option enabled '1'
+	option protocol 'shadowsocks'
+	option listen_port '8388'
+	option shadowsocks_method 'aes-128-gcm'
+	list   ss_user 'no-colon-here'
+	list   ss_user ':missing-name'
+	list   ss_user 'missing-pw:'
+	list   ss_user 'good:gp'
+"
+run_gen
+check "ss good user"        '"name": "good"'
+check "ss good password"    '"password": "gp"'
+nocheck "no malformed name"  '"name": "no-colon-here"'
+nocheck "no missing-name"    '"name": ""'
+nocheck "no missing-pw"      '"password": ""'
+
 echo "OK"
