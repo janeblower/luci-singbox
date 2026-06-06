@@ -8,6 +8,8 @@ return L.Class.extend({
     callReadConfig: rpc.declare({ object: 'singbox-ui', method: 'read_config' }),
     callClash:      rpc.declare({ object: 'singbox-ui', method: 'clash_request',
                                   params: [ 'method', 'path', 'body' ] }),
+    callExportSection: rpc.declare({ object: 'singbox-ui', method: 'export_section',
+                                     params: [ 'kind', 'name' ] }),
     callDhcpLeases: rpc.declare({ object: 'luci-rpc',   method: 'getDHCPLeases',
                                   expect: { '': {} } }),
 });

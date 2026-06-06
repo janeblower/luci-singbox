@@ -113,6 +113,7 @@ install -m 0644 "$PKG_SRC/root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"  "
 install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/generate.uc"             "$APP_ROOT/usr/share/singbox-ui/generate.uc"
 install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/subscription.uc"         "$APP_ROOT/usr/share/singbox-ui/subscription.uc"
 install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/nftables.uc"             "$APP_ROOT/usr/share/singbox-ui/nftables.uc"
+install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/export_section.uc"       "$APP_ROOT/usr/share/singbox-ui/export_section.uc"
 for lib_uc in "$PKG_SRC"/root/usr/share/singbox-ui/lib/*.uc; do
   install -m 0644 "$lib_uc" "$APP_ROOT/usr/share/singbox-ui/lib/$(basename "$lib_uc")"
 done

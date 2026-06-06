@@ -7,6 +7,7 @@
 'require view.singbox-ui.lib.validators as SbValidators';
 'require view.singbox-ui.importers.inbound as SbImpInbound';
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
+'require view.singbox-ui.lib.rpc as SbRpc';
 
 var loadOutboundList = SbCommon.loadOutboundList;
 var addRenameField   = SbCommon.addRenameField;
@@ -114,6 +115,19 @@ function buildInboundsMap() {
 	var o;
 	o = s.option(form.Flag, 'enabled', _('Enable'));
 	o.default = '1'; o.editable = true;
+
+	// Per-row Export JSON button. Rendered inline by GridSection as a column
+	// (form.Button is the LuCI primitive for non-input action cells). Click
+	// dispatches export_section RPC and opens the modal with the JSON.
+	o = s.option(form.Button, '_export', _('JSON'));
+	o.editable = true;
+	o.modalonly = false;
+	o.inputtitle = _('Export');
+	o.inputstyle = 'action';
+	o.onclick = function (ev, section_id) {
+		SbImpInbound.jsonExportInbound(section_id);
+		return false;
+	};
 
 	o = s.option(form.ListValue, 'protocol', _('Protocol'));
 	SB_INBOUND_PROTOCOLS.forEach(function (p) { o.value(p[0], _(p[1])); });

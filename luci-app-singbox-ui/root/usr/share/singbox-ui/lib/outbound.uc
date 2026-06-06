@@ -298,4 +298,4 @@ function build_outbounds(cur) {
 	return outbounds;
 }
 
-return { build_outbounds };
+return { build_outbounds, build_constructor_for };

@@ -6,9 +6,12 @@
 //   refresh {what}      run subscription.uc refresh subscriptions|rulesets|all force
 //   status              return JSON: { running, subscriptions[], rulesets[] }
 //   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
+//   clash_request       proxy HTTP request to Clash API (read+write methods)
+//   export_section      return sing-box JSON for ONE inbound/outbound section
 //
 // Env overrides (used by tests):
 //   NFTABLES_CMD GENERATE_UC SINGBOX_INIT SUBSCRIPTION_UC SINGBOX_TMP SINGBOX_CONFIG
+//   EXPORT_SECTION_UC CLASH_CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
 
 'use strict';
 
@@ -18,6 +21,7 @@ const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode -L /usr/share/singbox-ui/l
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
 const SINGBOX_INIT = getenv("SINGBOX_INIT") || "/etc/init.d/singbox-ui";
 const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subscription.uc";
+const EXPORT_SECTION_UC = getenv("EXPORT_SECTION_UC") || "/usr/share/singbox-ui/export_section.uc";
 const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
 const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
@@ -43,13 +47,14 @@ function parse_args() {
 
 function emit_list() {
 	emit({
-		generate:      {},
-		nftables:      { action: "string" },
-		restart:       {},
-		refresh:       { what: "string" },
-		status:        {},
-		read_config:   {},
-		clash_request: { method: "string", path: "string", body: "string" }
+		generate:       {},
+		nftables:       { action: "string" },
+		restart:        {},
+		refresh:        { what: "string" },
+		status:         {},
+		read_config:    {},
+		clash_request:  { method: "string", path: "string", body: "string" },
+		export_section: { kind: "string", name: "string" }
 	});
 }
 
@@ -177,6 +182,30 @@ function clash_params() {
 	return { listen: listen, port: port, secret: secret };
 }
 
+// export_section(kind, name) — pure read of a single inbound/outbound UCI
+// section, dispatched through the shared lib builder. The actual JSON shape
+// comes from export_section.uc (which has access to lib/ via -L); we just
+// forward its stdout verbatim. No side effects: no file writes, no service
+// restart, no nftables touch.
+function call_export_section() {
+	let args = parse_args();
+	let kind = args.kind || "";
+	let name = args.name || "";
+	if (kind !== "inbound" && kind !== "outbound") {
+		emit_err("invalid kind: " + (length(kind) ? kind : "<missing>"));
+		return;
+	}
+	if (!length(name)) { emit_err("missing name"); return; }
+	let body = run_capture(["ucode", "-L", UCODE_LIB, EXPORT_SECTION_UC, kind, name]);
+	if (body == null) { emit_err("export_section helper failed"); return; }
+	// export_section.uc always emits a single JSON line ({status,...}) — pass
+	// through verbatim so the section object stays a proper JSON value (not
+	// a re-stringified payload).
+	let trimmed = trim(body);
+	if (!length(trimmed)) { emit_err("export_section helper produced no output"); return; }
+	print(trimmed + "\n");
+}
+
 function call_clash_request() {
 	let args = parse_args();
 	let method = args.method || "GET";
@@ -216,6 +245,7 @@ if (cmd === "call") {
 	case "status":      call_status();       break;
 	case "read_config": call_read_config();  break;
 	case "clash_request": call_clash_request(); break;
+	case "export_section": call_export_section(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);
