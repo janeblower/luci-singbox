@@ -19,18 +19,9 @@ let helpers = require("helpers");
 
 function log_err(msg) { warn(msg + "\n"); }
 
-// fnv1a32(s) — 32-bit FNV-1a hash, hex-encoded (8 chars). Used to shorten
-// long ruleset names; not a cryptographic primitive. Pure ucode so we don't
-// require ucode-mod-digest, which isn't part of the default OpenWrt image.
-function fnv1a32(s) {
-	let h = 2166136261;
-	let n = length(s);
-	for (let i = 0; i < n; i++) {
-		h = h ^ ord(s, i);
-		h = (h * 16777619) & 0xffffffff;
-	}
-	return sprintf("%08x", h);
-}
+// fnv1a32 — shared with lib/outbound.uc::safe_tag, exported from helpers.uc
+// so there is exactly one implementation. See lib/helpers.uc for the body.
+const fnv1a32 = helpers.fnv1a32;
 
 // set_name_for(name, idx, family) — nft set names are capped at 31 bytes.
 // When the canonical `rs_${name}_${idx}_${family}` exceeds that, replace
