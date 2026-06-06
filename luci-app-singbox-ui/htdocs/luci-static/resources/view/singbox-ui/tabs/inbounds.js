@@ -232,6 +232,21 @@ function buildInboundsMap() {
 	o.modalonly = true; o.datatype = 'uinteger'; o.placeholder = '0';
 	o.depends('protocol', 'vmess');
 
+	// Multi-user vmess/vless. Each entry is colon-separated:
+	//   VMess: name:uuid          or name:uuid:alterId
+	//   VLESS: name:uuid          or name:uuid:flow
+	// When non-empty, the section-level server_uuid / vmess_alter_id /
+	// vless_flow are dropped (sing-box rejects both at once).
+	o = s.option(form.DynamicList, 'inbound_user', _('Users'));
+	o.modalonly = true;
+	o.placeholder = 'alice:550e8400-e29b-41d4-a716-446655440000';
+	o.description = _('Multi-user list. Each entry colon-separated: ' +
+		'VMess "name:uuid" or "name:uuid:alterId"; VLESS "name:uuid" or ' +
+		'"name:uuid:flow" (use "none" or omit to skip flow). ' +
+		'When non-empty, the single-user UUID / Alter ID / Flow above are ignored.');
+	o.depends('protocol', 'vmess');
+	o.depends('protocol', 'vless');
+
 	// hysteria2 specifics
 	o = s.option(form.ListValue, 'hysteria2_obfs_type', _('Obfuscation'));
 	o.value('none', _('None')); o.value('salamander', 'salamander');

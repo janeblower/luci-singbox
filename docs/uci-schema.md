@@ -211,10 +211,11 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `server_uuid` | string | UUID | yes | `protocol=vless` or `vmess` | UUID for the single user entry. |
+| `server_uuid` | string | UUID | yes (single-user) | `protocol=vless` or `vmess` | UUID for the single-user entry. Ignored when `inbound_user` is non-empty (multi-user `users[]` takes precedence). |
 | `server_password` | string | — | yes | `protocol=trojan` | Password for the single user entry (also used by `hysteria2`). |
-| `vless_flow` | enum | `none`, `xtls-rprx-vision` | no | `protocol=vless` | VLESS flow control. Omitted when `none`. |
-| `vmess_alter_id` | integer | `0`+ | no | `protocol=vmess` | VMess alter ID. |
+| `vless_flow` | enum | `none`, `xtls-rprx-vision` | no | `protocol=vless` | VLESS flow control. Omitted when `none`. Ignored when `inbound_user` is non-empty (per-user flow comes from each entry). |
+| `vmess_alter_id` | integer | `0`+ | no | `protocol=vmess` | VMess alter ID. Read by `build_user`; emitted as `users[].alterId` (camelCase, per sing-box 1.12 docs). Ignored when `inbound_user` is non-empty. |
+| `inbound_user` | list | `name:uuid` or `name:uuid:alterId` (vmess) / `name:uuid:flow` (vless) | no | `protocol=vmess` or `vless` | Multi-user list. When non-empty, emits `users[]` and ignores section-level `server_uuid` / `vmess_alter_id` / `vless_flow`. Malformed entries (missing name or uuid) are silently skipped. Existing single-user configs continue to work unchanged; no UCI migration is required. |
 | `vmess_security` | enum | `auto`, `none`, `aes-128-gcm`, `chacha20-poly1305` | no | `protocol=vmess` | UI-only: cipher hint written to UCI. **Not read by `inbound.uc`** (inbound VMess does not accept a per-user security field; cipher is client-selected). |
 
 ### `hysteria2` protocol fields
