@@ -39,19 +39,26 @@ grep -q "'require ui'"            "$JS" || { echo "FAIL: missing 'require ui'"; 
 grep -q "'require tools.widgets as widgets'" "$JS" || { echo "FAIL: missing 'require tools.widgets as widgets'"; exit 1; }
 
 echo "-- references input UCI sections"
-grep -q "fakeip"   "$JS" || { echo "FAIL: no fakeip section"; exit 1; }
+# fakeip lives in tabs/dns.js after modularization (Task 11)
+DNS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+grep -q "fakeip"   "$DNS_TAB" || { echo "FAIL: no fakeip section (checked tabs/dns.js)"; exit 1; }
 # tproxy lives in tabs/inbounds.js after modularization (Task 7)
 INBOUNDS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js
 grep -q "tproxy"   "$INBOUNDS_TAB" || { echo "FAIL: no tproxy section (checked tabs/inbounds.js)"; exit 1; }
 
 echo "-- references all three output GridSections"
-grep -q "GridSection"           "$JS" || { echo "FAIL: no GridSection"; exit 1; }
+# GridSection usage lives in extracted tab modules after modularization
+DNS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+( grep -q "GridSection" "$JS" || grep -q "GridSection" "$DNS_TAB" ) || { echo "FAIL: no GridSection"; exit 1; }
 # 'outbound', 'ruleset', 'route_rule' live in tabs/routing.js after modularization (Task 10)
 ROUTING_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js
 grep -q "'outbound'"            "$ROUTING_TAB" || { echo "FAIL: no outbound section type (checked tabs/routing.js)"; exit 1; }
 grep -q "'ruleset'"             "$ROUTING_TAB" || { echo "FAIL: no ruleset section type (checked tabs/routing.js)"; exit 1; }
 grep -q "'route_rule'"          "$ROUTING_TAB" || { echo "FAIL: no route_rule section type (checked tabs/routing.js)"; exit 1; }
-grep -q "modaltitle"            "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
+# modaltitle lives in extracted tab modules after modularization
+ROUTING_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js
+DNS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+( grep -q "modaltitle" "$JS" || grep -q "modaltitle" "$ROUTING_TAB" || grep -q "modaltitle" "$DNS_TAB" ) || { echo "FAIL: no modaltitle"; exit 1; }
 
 echo "-- references new outbound types (merged type field)"
 # These fields live in tabs/outbounds.js after modularization (Task 8)
@@ -72,14 +79,16 @@ grep -q "nft_rules"       "$RULESETS_TAB" || { echo "FAIL: no nft_rules field (c
 grep -q "update_interval" "$RULESETS_TAB" || { echo "FAIL: no update_interval field (checked tabs/rulesets.js)"; exit 1; }
 
 echo "-- references DNS tab sections"
-grep -q "'dns_server'"          "$JS" || { echo "FAIL: no dns_server section type"; exit 1; }
-grep -q "'dns_rule'"            "$JS" || { echo "FAIL: no dns_rule section type"; exit 1; }
+# dns_server, dns_rule, loadOutboundList(o, true), default_resolver live in tabs/dns.js after modularization (Task 11)
+DNS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+grep -q "'dns_server'"          "$DNS_TAB" || { echo "FAIL: no dns_server section type (checked tabs/dns.js)"; exit 1; }
+grep -q "'dns_rule'"            "$DNS_TAB" || { echo "FAIL: no dns_rule section type (checked tabs/dns.js)"; exit 1; }
 grep -q "data-tab.*dns"         "$JS" || { echo "FAIL: no dns tab marker"; exit 1; }
 # detour must be a dropdown of existing outbounds, not a freeform Value that
 # tempts users to type "direct" (which sing-box rejects when direct is the
 # auto-injected empty outbound).
-grep -q "loadOutboundList(o, true)" "$JS" || { echo "FAIL: detour dropdown must reuse loadOutboundList with includeNone"; exit 1; }
-grep -q "'default_resolver'"    "$JS" || { echo "FAIL: dns.default_resolver UI option missing"; exit 1; }
+grep -q "loadOutboundList(o, true)" "$DNS_TAB" || { echo "FAIL: detour dropdown must reuse loadOutboundList with includeNone (checked tabs/dns.js)"; exit 1; }
+grep -q "'default_resolver'"    "$DNS_TAB" || { echo "FAIL: dns.default_resolver UI option missing (checked tabs/dns.js)"; exit 1; }
 
 echo "-- references Monitoring tab"
 grep -q "buildMonitoring"        "$JS" || { echo "FAIL: no buildMonitoring"; exit 1; }
