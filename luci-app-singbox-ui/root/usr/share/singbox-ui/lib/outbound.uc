@@ -205,8 +205,239 @@ function parse_hy2(url) {
 	return out;
 }
 
+// b64_decode(s) — tolerant base64 decoder for share-link payloads.
+// Accepts both standard and url-safe alphabets and missing padding.
+// Returns the decoded string, or null on invalid input.
+function b64_decode(s) {
+	if (s == null) return null;
+	// Strip whitespace, normalise url-safe alphabet.
+	let t = replace(s, /\s+/g, "");
+	t = replace(t, "-", "+");
+	t = replace(t, "_", "/");
+	let pad = length(t) % 4;
+	if (pad === 2) t += "==";
+	else if (pad === 3) t += "=";
+	else if (pad === 1) return null;  // invalid base64 length
+	let dec = null;
+	try { dec = b64dec(t); } catch (e) { return null; }
+	return dec;
+}
+
+// parse_vmess(url) — v2rayN base64-JSON format.
+//   vmess://<base64(JSON)>
+// JSON fields (case-sensitive): v, ps, add, port, id, aid|alterId, scy,
+// net, type, host, path, tls, sni, alpn, fp.
+// Returns a sing-box vmess outbound object, or null on parse failure.
+function parse_vmess(url) {
+	let m = match(url, /^vmess:\/\/(.+)$/);
+	if (!m) return null;
+	let payload = m[1];
+	// Strip fragment if present — some clients include #name after the b64.
+	let hash = index(payload, "#");
+	if (hash >= 0) payload = substr(payload, 0, hash);
+	let decoded = b64_decode(payload);
+	if (decoded == null || !length(decoded)) return null;
+	let j = null;
+	try { j = json(decoded); } catch (e) { return null; }
+	if (type(j) !== "object") return null;
+
+	let add = j.add, id = j.id;
+	let port = j.port;
+	if (type(port) === "string") port = +port;
+	if (!length(add) || !length(id) || type(port) !== "int" || port <= 0)
+		return null;
+
+	let name = j.ps;
+	let out = {
+		type: "vmess",
+		tag: length(name) ? name : add,
+		server: add,
+		server_port: port,
+		uuid: id,
+	};
+	// alter_id: accept `aid` or `alterId`, number or string.
+	let aid = j.aid ?? j.alterId;
+	if (aid != null) {
+		if (type(aid) === "string") aid = +aid;
+		// Only emit when set and > 0 (default 0 is implicit).
+		if (type(aid) === "int" && aid > 0) out.alter_id = aid;
+	}
+	let scy = j.scy;
+	if (length(scy) && scy !== "auto") out.security = scy;
+
+	let tls_mode = j.tls;
+	if (tls_mode === "tls" || tls_mode === "reality") {
+		let tls = { enabled: true };
+		let sni = j.sni;
+		tls.server_name = length(sni) ? sni : add;
+		let alpn = j.alpn;
+		if (length(alpn)) {
+			let list = [];
+			for (let a in split(alpn, ",")) {
+				let v = trim(a);
+				if (length(v)) push(list, v);
+			}
+			if (length(list)) tls.alpn = list;
+		}
+		if (length(j.fp)) tls.utls = { enabled: true, fingerprint: j.fp };
+		out.tls = tls;
+	}
+
+	let net = j.net;
+	if (length(net) && net !== "tcp") {
+		let tr = { type: net };
+		if (net === "ws") {
+			if (length(j.path)) tr.path = j.path;
+			if (length(j.host)) tr.headers = { Host: j.host };
+		} else if (net === "grpc") {
+			if (length(j.path)) tr.service_name = j.path;
+		} else if (net === "h2" || net === "http") {
+			tr.type = "http";
+			if (length(j.path)) tr.path = j.path;
+			if (length(j.host)) {
+				let hosts = [];
+				for (let h in split(j.host, ",")) {
+					let v = trim(h);
+					if (length(v)) push(hosts, v);
+				}
+				if (length(hosts)) tr.host = hosts;
+			}
+		} else if (net === "xhttp") {
+			if (length(j.path)) tr.path = j.path;
+			if (length(j.type) && j.type !== "none") tr.mode = j.type;
+		}
+		out.transport = tr;
+	}
+	return out;
+}
+
+// parse_ss(url) — Shadowsocks share-link.
+//   Plain:  ss://<method>:<password>@<host>:<port>[?plugin=...][#name]
+//   Legacy: ss://<base64(method:password)>@<host>:<port>[#name]
+//           (some clients base64 the entire method:password@host:port).
+// Returns a sing-box shadowsocks outbound object, or null on parse failure.
+function parse_ss(url) {
+	let m = match(url, /^ss:\/\/([^#]*)(#.*)?$/);
+	if (!m) return null;
+	let body = m[1];
+	let frag = m[2] ? url_decode(substr(m[2], 1)) : null;
+
+	let method = null, password = null, host = null, port = null;
+
+	let at = index(body, "@");
+	if (at >= 0) {
+		// Could be plain (method:password@host:port[?...]) or legacy with
+		// base64(method:password)@host:port[?...].
+		let userinfo = substr(body, 0, at);
+		let tail = substr(body, at + 1);
+
+		// Tail: host:port[?query]
+		let q = index(tail, "?");
+		let hp = q >= 0 ? substr(tail, 0, q) : tail;
+		let hpm = match(hp, /^([^:]+):([0-9]+)$/);
+		if (!hpm) return null;
+		host = hpm[1]; port = +hpm[2];
+
+		// userinfo: either "method:password" plain, or base64.
+		let colon = index(userinfo, ":");
+		if (colon >= 0) {
+			method   = url_decode(substr(userinfo, 0, colon));
+			password = url_decode(substr(userinfo, colon + 1));
+		} else {
+			let dec = b64_decode(userinfo);
+			if (dec == null) return null;
+			let dcolon = index(dec, ":");
+			if (dcolon < 0) return null;
+			method   = substr(dec, 0, dcolon);
+			password = substr(dec, dcolon + 1);
+		}
+	} else {
+		// No '@' in the body. Entire body must be base64 of full
+		// "method:password@host:port".
+		let dec = b64_decode(body);
+		if (dec == null) return null;
+		let dat = index(dec, "@");
+		if (dat < 0) return null;
+		let userinfo = substr(dec, 0, dat);
+		let tail = substr(dec, dat + 1);
+		let q = index(tail, "?");
+		let hp = q >= 0 ? substr(tail, 0, q) : tail;
+		let hpm = match(hp, /^([^:]+):([0-9]+)$/);
+		if (!hpm) return null;
+		host = hpm[1]; port = +hpm[2];
+		let colon = index(userinfo, ":");
+		if (colon < 0) return null;
+		method   = substr(userinfo, 0, colon);
+		password = substr(userinfo, colon + 1);
+	}
+
+	if (!length(method) || !length(password) || !length(host) || port <= 0)
+		return null;
+
+	let out = {
+		type: "shadowsocks",
+		tag: length(frag) ? frag : host,
+		server: host,
+		server_port: port,
+		method: method,
+		password: password,
+	};
+	return out;
+}
+
+// parse_trojan(url) — trojan-GFW share-link.
+//   trojan://<password>@<host>:<port>[?sni=...&type=ws&path=...&allowInsecure=1][#name]
+// Returns a sing-box trojan outbound object, or null on parse failure.
+function parse_trojan(url) {
+	let m = match(url, /^trojan:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (!m) return null;
+	let password = url_decode(m[1]), host = m[2], port = +m[3];
+	if (!length(password) || !length(host) || port <= 0) return null;
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+
+	let sni = params["sni"] ?? params["peer"] ?? host;
+	let out = {
+		type: "trojan",
+		tag: length(frag) ? frag : host,
+		server: host,
+		server_port: port,
+		password: password,
+		tls: { enabled: true, server_name: sni },
+	};
+	if (params["allowInsecure"] === "1" || params["allowinsecure"] === "1")
+		out.tls.insecure = true;
+	if (length(params["alpn"])) {
+		let list = [];
+		for (let a in split(params["alpn"], ",")) {
+			let v = trim(a);
+			if (length(v)) push(list, v);
+		}
+		if (length(list)) out.tls.alpn = list;
+	}
+	if (length(params["fp"]))
+		out.tls.utls = { enabled: true, fingerprint: params["fp"] };
+
+	let tt = params["type"];
+	if (length(tt) && tt !== "tcp") {
+		let tr = { type: tt };
+		if (tt === "ws") {
+			if (length(params["path"])) tr.path = params["path"];
+			if (length(params["host"])) tr.headers = { Host: params["host"] };
+		} else if (tt === "grpc") {
+			if (length(params["serviceName"]))   tr.service_name = params["serviceName"];
+			else if (length(params["path"]))     tr.service_name = params["path"];
+		}
+		out.transport = tr;
+	}
+	return out;
+}
+
 function parse_proxy_url(url) {
 	if (match(url, /^vless:\/\//))     return parse_vless(url);
+	if (match(url, /^vmess:\/\//))     return parse_vmess(url);
+	if (match(url, /^ss:\/\//))        return parse_ss(url);
+	if (match(url, /^trojan:\/\//))    return parse_trojan(url);
 	if (match(url, /^hy2:\/\//) ||
 	    match(url, /^hysteria2:\/\//)) return parse_hy2(url);
 	warn("outbound.uc: unsupported proxy URL scheme: " + url + "\n");
@@ -298,4 +529,4 @@ function build_outbounds(cur) {
 	return outbounds;
 }
 
-return { build_outbounds, build_constructor_for };
+return { build_outbounds, build_constructor_for, parse_proxy_url };

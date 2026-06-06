@@ -236,9 +236,9 @@ Same status as selector: implemented via subscriptions, no standalone UCI form. 
 |---|---|---|
 | `vless://` | есть (`parse_vless`, :129) | — |
 | `hy2://`, `hysteria2://` | есть (`parse_hy2`, :150) | — |
-| `vmess://` (base64-JSON, v2rayN) | нет | Phase 10 |
-| `ss://` (plain + base64) | нет | Phase 10 |
-| `trojan://` | нет | Phase 10 |
+| `vmess://` (base64-JSON, v2rayN) | есть (`parse_vmess`) | — |
+| `ss://` (plain + base64) | есть (`parse_ss`) | — |
+| `trojan://` | есть (`parse_trojan`) | — |
 | `tuic://` | out-of-scope (no canonical share-link spec) |
 | `anytls://` | out-of-scope (no canonical share-link spec yet) |
 

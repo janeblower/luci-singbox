@@ -282,4 +282,75 @@ grep -q -- '--interface pppoe-wan' "$FAKE_CURL_LOG" \
 	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "expected --interface pppoe-wan"; }
 pass "sub_update_via resolves to pppoe-wan"
 
+# ---- share-link parsers (Phase B7): vmess://, ss://, trojan:// ----
+# A small probe imports lib/outbound.uc and prints the JSON the dispatcher
+# would feed into the outbound array for a given URL.
+cat >"$TMPDIR/parse_probe.uc" <<'EOF'
+let outbound = require("outbound");
+let url = ARGV[0];
+let parsed = outbound.parse_proxy_url(url);
+print(parsed == null ? "null" : sprintf("%J", parsed));
+EOF
+
+run_probe() {
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/parse_probe.uc" "$1"
+}
+
+echo "-- parse_vmess: v2rayN base64-JSON form"
+# base64 of: {"v":"2","ps":"v-test","add":"v.example.com","port":443,
+#             "id":"550e8400-e29b-41d4-a716-446655440000","aid":0,"tls":"tls"}
+VMESS_OK='vmess://eyJ2IjoiMiIsInBzIjoidi10ZXN0IiwiYWRkIjoidi5leGFtcGxlLmNvbSIsInBvcnQiOjQ0MywiaWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJhaWQiOjAsInRscyI6InRscyJ9'
+out=$(run_probe "$VMESS_OK")
+echo "$out" | grep -q '"type":[[:space:]]*"vmess"'            || { echo "$out"; fail "vmess type"; }
+echo "$out" | grep -q '"server":[[:space:]]*"v.example.com"'  || { echo "$out"; fail "vmess server"; }
+echo "$out" | grep -q '"server_port":[[:space:]]*443'         || { echo "$out"; fail "vmess port"; }
+echo "$out" | grep -q '"uuid":[[:space:]]*"550e8400-e29b-41d4-a716-446655440000"' || { echo "$out"; fail "vmess uuid"; }
+echo "$out" | grep -q '"enabled":[[:space:]]*true'            || { echo "$out"; fail "vmess tls.enabled"; }
+# aid: 0 → must NOT emit alter_id
+echo "$out" | grep -q 'alter_id' && { echo "$out"; fail "vmess alter_id leaked on aid=0"; }
+pass "parse_vmess accepts v2rayN base64-JSON URL"
+
+echo "-- parse_vmess: invalid base64 → null"
+out=$(run_probe 'vmess://!!!not-base64!!!')
+# build_outbounds returns no outbound when parse fails → probe prints "null".
+echo "$out" | grep -q '^null$' || { echo "$out"; fail "vmess invalid: expected null"; }
+pass "parse_vmess rejects malformed payload"
+
+echo "-- parse_ss: plain method:password@host:port#name"
+out=$(run_probe 'ss://aes-256-gcm:test-pw@s.example.com:8388#myname')
+echo "$out" | grep -q '"type":[[:space:]]*"shadowsocks"'      || { echo "$out"; fail "ss type"; }
+echo "$out" | grep -q '"server":[[:space:]]*"s.example.com"'  || { echo "$out"; fail "ss server"; }
+echo "$out" | grep -q '"server_port":[[:space:]]*8388'        || { echo "$out"; fail "ss port"; }
+echo "$out" | grep -q '"method":[[:space:]]*"aes-256-gcm"'    || { echo "$out"; fail "ss method"; }
+echo "$out" | grep -q '"password":[[:space:]]*"test-pw"'      || { echo "$out"; fail "ss password"; }
+pass "parse_ss accepts plain method:password URL"
+
+echo "-- parse_ss: legacy base64(method:password)@host:port"
+# base64("aes-256-gcm:test-pw") = "YWVzLTI1Ni1nY206dGVzdC1wdw=="
+out=$(run_probe 'ss://YWVzLTI1Ni1nY206dGVzdC1wdw==@s.example.com:8388#myname')
+echo "$out" | grep -q '"method":[[:space:]]*"aes-256-gcm"'    || { echo "$out"; fail "ss b64 method"; }
+echo "$out" | grep -q '"password":[[:space:]]*"test-pw"'      || { echo "$out"; fail "ss b64 password"; }
+pass "parse_ss accepts legacy base64 userinfo"
+
+echo "-- parse_ss: missing port → null"
+out=$(run_probe 'ss://aes-256-gcm:test-pw@s.example.com')
+echo "$out" | grep -q '^null$' || { echo "$out"; fail "ss invalid: expected null"; }
+pass "parse_ss rejects URL without port"
+
+echo "-- parse_trojan: full URL with sni"
+out=$(run_probe 'trojan://trojan-pw@t.example.com:443?sni=t.example.com#myname')
+echo "$out" | grep -q '"type":[[:space:]]*"trojan"'           || { echo "$out"; fail "trojan type"; }
+echo "$out" | grep -q '"server":[[:space:]]*"t.example.com"'  || { echo "$out"; fail "trojan server"; }
+echo "$out" | grep -q '"server_port":[[:space:]]*443'         || { echo "$out"; fail "trojan port"; }
+echo "$out" | grep -q '"password":[[:space:]]*"trojan-pw"'    || { echo "$out"; fail "trojan password"; }
+echo "$out" | grep -q '"server_name":[[:space:]]*"t.example.com"' || { echo "$out"; fail "trojan sni"; }
+echo "$out" | grep -q '"enabled":[[:space:]]*true'            || { echo "$out"; fail "trojan tls.enabled"; }
+pass "parse_trojan accepts canonical URL"
+
+echo "-- parse_trojan: no host:port → null"
+out=$(run_probe 'trojan://trojan-pw@')
+echo "$out" | grep -q '^null$' || { echo "$out"; fail "trojan invalid: expected null"; }
+pass "parse_trojan rejects URL without host:port"
+
 echo "OK"

@@ -336,7 +336,8 @@ function buildOutboundsMap() {
 	o = s.option(form.Value, 'proxy_url', _('URL'));
 	o.modalonly   = true;
 	o.password    = true;
-	o.placeholder = 'vless://uuid@host:443?security=tls&sni=host';
+	o.placeholder = 'vless:// | vmess:// | ss:// | trojan:// | hy2://';
+	o.description = _('Share-link URL. Supported schemes: vless://, vmess:// (v2rayN base64-JSON), ss://, trojan://, hy2:// / hysteria2://.');
 	o.depends('type', 'url');
 
 	o = s.option(form.Value, 'sub_url', _('Subscription URL'));
