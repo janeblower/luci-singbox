@@ -292,7 +292,7 @@ UI write: `tabs/outbounds.js` — `buildOutboundsMap()`.
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `enabled` | bool | `0`/`1` | yes | — | Disabled sections (`enabled=0`) are skipped by `build_outbounds`. Also checked by `subscription.uc` before fetching. |
-| `type` | enum | `vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`, `interface`, `url`, `subscription` | yes | — | Selects the outbound dispatch branch. Sections with an empty `type` are skipped. |
+| `type` | enum | `vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`, `tuic`, `interface`, `url`, `subscription` | yes | — | Selects the outbound dispatch branch. Sections with an empty `type` are skipped. |
 
 ### Proxy-constructor common fields
 
@@ -330,6 +330,18 @@ Applies to `type=vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`.
 | `hysteria2_masquerade` | string | URL | no | `type=hysteria2` | Masquerade URL served to non-Hysteria2 peers. Server-side concept — emitted as a passthrough field. |
 | `brutal_debug` | bool | `0`/`1` | no | `type=hysteria2` | Emit `brutal_debug` for Brutal CC debug output. |
 | `network` | enum | `""`, `tcp`, `udp` | no | `type=hysteria2/tuic` | Restricts the dialed network. Empty or any other value omits the field. |
+
+### TUIC fields
+
+TUIC reuses the standard `server`, `server_port`, `server_uuid`, `server_password`, `network`, and TLS block fields. TUIC always requires TLS — set `security=tls` (or `reality`) on the section. The fields below are TUIC-specific.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `tuic_congestion` | enum | `cubic`, `new_reno`, `bbr` | no | `type=tuic` | Congestion control algorithm. Emitted as `congestion_control`. sing-box default is `cubic` — omitted when UCI field is empty. |
+| `tuic_udp_relay_mode` | enum | `native`, `quic` | no | `type=tuic` | UDP relay mode. Emitted as `udp_relay_mode`. sing-box default is `native`. **Mutually exclusive with `tuic_udp_over_stream`**: when `tuic_udp_over_stream=1`, this field is silently dropped from the emit. |
+| `tuic_udp_over_stream` | bool | `0`/`1` | no | `type=tuic` | When `1`, emits `udp_over_stream: true` and suppresses `udp_relay_mode`. Default `0` (omitted). |
+| `tuic_zero_rtt` | bool | `0`/`1` | no | `type=tuic` | When `1`, emits `zero_rtt_handshake: true`. Default `0` (omitted). |
+| `tuic_heartbeat` | string | duration (e.g. `10s`, `15s`) | no | `type=tuic` | Heartbeat interval. sing-box default is `10s` — omitted when UCI field is empty. |
 
 ### TLS fields
 

@@ -7,7 +7,7 @@
 // shapes managed via dedicated fields, not by the JSON importer.
 var SB_OUTBOUND_KNOWN = {
 	'vless': true, 'vmess': true, 'trojan': true, 'hysteria2': true,
-	'shadowsocks': true,
+	'shadowsocks': true, 'tuic': true,
 };
 
 function jsonImportOutbound(o) {

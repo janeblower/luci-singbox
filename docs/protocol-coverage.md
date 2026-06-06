@@ -178,17 +178,17 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 | `multiplex` | нет (currently only enabled for vless/vmess/trojan in `build_constructor_for`:101) |
 | `plugin`, `plugin_opts` | out-of-scope (legacy SIP022 plugin chaining) |
 
-### tuic outbound
+### tuic outbound (`lib/outbound.uc`, tuic branch)
 | Field | Status |
 |---|---|
-| `server`, `server_port`, `uuid`, `password` | **нет** | Phase 4 |
-| `congestion_control` | нет | Phase 4 |
-| `udp_relay_mode` | нет | Phase 4 |
-| `udp_over_stream` | нет | Phase 4 |
-| `zero_rtt_handshake` | нет | Phase 4 |
-| `heartbeat` | нет | Phase 4 |
-| `network` | нет | Phase 4 |
-| `tls` (required) | нет | Phase 4 |
+| `server`, `server_port`, `uuid`, `password` | есть | — |
+| `congestion_control` | есть | — |
+| `udp_relay_mode` | есть | — |
+| `udp_over_stream` (mutually exclusive with `udp_relay_mode`) | есть | — |
+| `zero_rtt_handshake` | есть | — |
+| `heartbeat` | есть | — |
+| `network` (`tcp`/`udp`) | есть | — |
+| `tls` (required) | есть | — |
 
 ### anytls outbound (Since 1.12.0)
 | Field | Status |
