@@ -28,6 +28,20 @@ function build_tls_client(s, proto) {
 		if (length(s_opt(s, "reality_short_id")))   r.short_id   = s.reality_short_id;
 		tls.reality = r;
 	}
+	// ECH (client-side): config/config_path are client-only.
+	// pq_signature_schemes_enabled is deprecated in 1.12 and removed in 1.13 — never emitted.
+	if (s_bool(s, "tls_ech")) {
+		let ech = { enabled: true };
+		let cfg = as_array(s.tls_ech_config);
+		if (length(cfg)) ech.config = cfg;
+		if (length(s_opt(s, "tls_ech_config_path"))) ech.config_path = s.tls_ech_config_path;
+		tls.ech = ech;
+	}
+	// TLS fragmentation (client-only, Since sing-box 1.12). Flat fields in tls.
+	if (s_bool(s, "tls_fragment")) tls.fragment = true;
+	if (length(s_opt(s, "tls_fragment_fallback_delay")))
+		tls.fragment_fallback_delay = s.tls_fragment_fallback_delay;
+	if (s_bool(s, "tls_record_fragment")) tls.record_fragment = true;
 	return tls;
 }
 

@@ -45,7 +45,9 @@ function build_tls(s) {
 	} else if (sec === "reality") {
 		let r = { enabled: true };
 		if (length(s_opt(s, "reality_private_key"))) r.private_key = s.reality_private_key;
-		if (length(s_opt(s, "reality_short_id")))    r.short_id    = [ s.reality_short_id ];
+		// sing-box 1.12: tls.reality.short_id is a single hex string (0-8 chars),
+		// not an array. (sing-box.sagernet.org/configuration/shared/tls/)
+		if (length(s_opt(s, "reality_short_id")))    r.short_id    = s.reality_short_id;
 		let hs = {};
 		if (length(s_opt(s, "reality_handshake_server")))
 			hs.server = s.reality_handshake_server;
@@ -53,6 +55,15 @@ function build_tls(s) {
 			hs.server_port = s_num(s.reality_handshake_server_port);
 		if (length(keys(hs))) r.handshake = hs;
 		tls.reality = r;
+	}
+	// ECH (server-side): key/key_path are server-only.
+	// pq_signature_schemes_enabled is deprecated in 1.12 and removed in 1.13 — never emitted.
+	if (s_bool(s, "tls_ech")) {
+		let ech = { enabled: true };
+		let key = as_array(s.tls_ech_key);
+		if (length(key)) ech.key = key;
+		if (length(s_opt(s, "tls_ech_key_path"))) ech.key_path = s.tls_ech_key_path;
+		tls.ech = ech;
 	}
 	return tls;
 }

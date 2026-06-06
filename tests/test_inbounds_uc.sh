@@ -137,7 +137,9 @@ check "vless uuid"        '"uuid": "uuid-1111"'
 check "vless flow"        '"flow": "xtls-rprx-vision"'
 check "vless reality"     '"reality":'
 check "vless privkey"     '"private_key": "PRIVKEY"'
-check "vless short_id"    '"ab12"'
+# sing-box 1.12: tls.reality.short_id is a single string, not an array.
+check "vless short_id"    '"short_id": "ab12"'
+nocheck "no short_id array" '"short_id": \['
 check "vless handshake"   '"server": "www.example.com"'
 check "vless transport"   '"type": "ws"'
 check "vless ws path"     '"path": "/ray"'
@@ -332,5 +334,44 @@ config inbound 'vm2'
 "
 run_gen
 nocheck "no per-user security key" '"security":'
+
+echo "-- vless inbound with ECH (server-side: key + key_path)"
+write_cfg "
+config inbound 'vech'
+	option enabled '1'
+	option protocol 'vless'
+	option listen_port '4443'
+	option server_uuid 'uuid-ech'
+	option security 'tls'
+	option tls_server_name 'ech.example.com'
+	option tls_certificate_path '/etc/ssl/cert.pem'
+	option tls_key_path '/etc/ssl/key.pem'
+	option tls_ech '1'
+	list   tls_ech_key '-----BEGIN ECH KEY-----'
+	list   tls_ech_key 'AAAA'
+	list   tls_ech_key '-----END ECH KEY-----'
+	option tls_ech_key_path '/etc/ssl/ech.key'
+"
+run_gen
+check  "ech enabled"      '"ech":'
+check  "ech.enabled true" '"enabled": true'
+check  "ech.key array"    '"key": \['
+check  "ech.key line 1"   '"-----BEGIN ECH KEY-----"'
+check  "ech.key_path"     '"key_path": "/etc/ssl/ech.key"'
+# Deprecated in 1.12 / removed in 1.13 — never emitted.
+nocheck "no pq_signature_schemes_enabled" 'pq_signature_schemes_enabled'
+
+echo "-- vless inbound without tls_ech omits the ech block"
+write_cfg "
+config inbound 'noech'
+	option enabled '1'
+	option protocol 'vless'
+	option listen_port '4444'
+	option server_uuid 'uuid-noech'
+	option security 'tls'
+	option tls_server_name 'plain.example.com'
+"
+run_gen
+nocheck "no ech when not requested" '"ech":'
 
 echo "OK"
