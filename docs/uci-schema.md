@@ -372,16 +372,56 @@ UI write: `tabs/dns.js` — `buildDnsMap()`, `form.GridSection('dns_rule', …)`
 
 ## `cache`
 
-TBD — populated in Task 22.
+UCI section type: `cache`. **Singleton named section** (UCI name is literally `cache`). Controls sing-box's `experimental.cache_file` block.
+
+Backend: `lib/cache.uc` — `build_cache(cur)`. Absent section or `enabled=0` → returns `null` (no `experimental.cache_file` emitted). The `path` field is **derived** at runtime from the `storage` enum rather than read directly; `cache.uc` also cross-checks enabled `dns_server` sections for a `fakeip` type before emitting `store_fakeip`.
+
+UI write: `tabs/general.js` — `buildGeneralMap()`, `form.NamedSection('cache', 'cache', …)`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | When `0` or absent, `build_cache` returns `null` and no cache block is emitted. |
+| `storage` | enum | `ram`, `flash`, `custom` | no | `enabled=1` | Storage location strategy. `ram` → `/tmp/singbox-ui-cache.db` (lost on reboot). `flash` → `/etc/sing-box/cache.db` (persistent). `custom` → reads `path`. Defaults to `ram`. **Not emitted to sing-box config**; used only by `cache.uc` to resolve the actual path. |
+| `path` | string | absolute file path | yes (when `storage=custom`) | `storage=custom` | Absolute path for the cache database. Required when `storage=custom`; the UI validates it at save time. Ignored by `cache.uc` for `storage=ram` or `storage=flash`. |
+| `store_fakeip` | bool | `0`/`1` | no | `enabled=1` | When `1` **and** an enabled `dns_server` of type `fakeip` exists, emits `store_fakeip: true` in the cache block. Silently omitted otherwise. Default `1`. |
+
+---
 
 ## `log`
 
-TBD — populated in Task 22.
+UCI section type: `log`. **Singleton named section** (UCI name is literally `log`). Controls the sing-box `log` block.
+
+Backend: `lib/log.uc` — `build_log(cur)`. Absent section → returns `null` (sing-box default: `info` level). `enabled=0` → emits `{ disabled: true }`.
+
+UI write: `tabs/general.js` — `buildGeneralMap()`, `form.NamedSection('log', 'log', …)`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | When `0`, emits `{ disabled: true }`. When `1`, emits `{ level, timestamp: true, output? }`. |
+| `level` | enum | `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic` | no | `enabled=1` | Log verbosity level. Defaults to `info` if absent. Always emitted as `timestamp: true` alongside. |
+| `output` | string | file path | no | `enabled=1` | Log output file path. Empty/absent omits the field (sing-box writes to procd stdout). |
+
+---
 
 ## `clash_api`
 
-TBD — populated in Task 22.
+UCI section type: `clash_api`. **Singleton named section** (UCI name is literally `clash_api`). Controls the sing-box `experimental.clash_api` block.
+
+Backend: `lib/clash.uc` — `build_clash_api(cur)`. Absent section or `enabled=0` → returns `null` (no `experimental.clash_api` emitted).
+
+UI write: **none** — there is no UI tab or form for `clash_api`. The section and its defaults are provisioned exclusively by the uci-defaults script (`99-luci-app-singbox-ui`) at install time. `listen`, `port`, and a randomly generated `secret` are written once during package installation. Users must edit UCI directly to change these values.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | When `0` or absent, no `experimental.clash_api` block is emitted. Default set to `0` by uci-defaults. |
+| `listen` | string | IP address | no | `enabled=1` | Bind address for the Clash-compatible API. Defaults to `127.0.0.1` if absent or empty. |
+| `port` | integer | port | no | `enabled=1` | TCP port for the Clash API. Defaults to `9090` if absent or empty. |
+| `secret` | string | — | no | `enabled=1` | API authentication secret. Auto-generated (16 hex bytes from `/dev/urandom`) by uci-defaults on install if not already set. Omitted from the emitted config if empty. |
+
+---
 
 ## `subscription`
 
-TBD — populated in Task 22.
+This is **not a distinct UCI section type**. Subscription configuration lives on `outbound` sections of type `subscription` (see the [`outbound` Subscription subsection](#subscription-outbound-typesubscription) above). The `subscription.uc` script reads `sub_url`, `sub_update_via`, and `sub_interval` from those outbound sections.
+
+There is no separate UCI section named or typed `subscription`.
