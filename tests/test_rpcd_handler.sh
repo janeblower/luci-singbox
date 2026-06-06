@@ -330,8 +330,13 @@ real_cfg="$tmpdir/real-config.json"
 echo '{"real":"untouched"}' >"$real_cfg"
 real_before=$(cat "$real_cfg")
 
-# Count tmpfiles before and after — preview_config must leave none behind.
-before_count=$(ls /tmp/singbox-ui-preview.*.json 2>/dev/null | wc -l)
+# Remove any leftover tmpfiles from previous runs so leak detection is exact.
+rm -f /tmp/singbox-ui-preview.*.json
+
+count_preview_tmpfiles() {
+	find /tmp -maxdepth 1 -name 'singbox-ui-preview.*.json' 2>/dev/null | wc -l
+}
+before_count=$(count_preview_tmpfiles)
 
 out=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
 	run_h call preview_config)
@@ -351,8 +356,8 @@ esac
 	|| { echo "FAIL: preview_config mutated SINGBOX_CONFIG"; exit 1; }
 
 # Tmpfile must be gone (preview deletes after read).
-after_count=$(ls /tmp/singbox-ui-preview.*.json 2>/dev/null | wc -l)
-[ "$after_count" -le "$before_count" ] \
+after_count=$(count_preview_tmpfiles)
+[ "$after_count" -eq "$before_count" ] \
 	|| { echo "FAIL: preview_config left a tmpfile behind ($before_count -> $after_count)"; exit 1; }
 echo "  PASS: preview_config happy path + cleanup + side-effect-free"
 
@@ -367,8 +372,8 @@ printf "%s\n" "$out1" | je 'd.status == "ok"' \
 printf "%s\n" "$out2" | je 'd.status == "ok"' \
 	|| { echo "FAIL: second preview_config not ok"; exit 1; }
 # Both runs must leave a clean tmpdir.
-end_count=$(ls /tmp/singbox-ui-preview.*.json 2>/dev/null | wc -l)
-[ "$end_count" -le "$before_count" ] \
+end_count=$(count_preview_tmpfiles)
+[ "$end_count" -eq "$before_count" ] \
 	|| { echo "FAIL: preview_config tmpfile not cleaned after two calls"; exit 1; }
 echo "  PASS: two sequential preview_config calls"
 
@@ -383,8 +388,8 @@ chmod +x "$tmpdir/ucode"
 out=$(echo '{}' | PATH="$tmpdir:$PATH" run_h call preview_config)
 printf "%s\n" "$out" | je 'd.status == "error"' \
 	|| { echo "FAIL: preview_config should error when generate fails; out=$out"; exit 1; }
-fail_count=$(ls /tmp/singbox-ui-preview.*.json 2>/dev/null | wc -l)
-[ "$fail_count" -le "$before_count" ] \
+fail_count=$(count_preview_tmpfiles)
+[ "$fail_count" -eq "$before_count" ] \
 	|| { echo "FAIL: preview_config left a tmpfile after generate failure"; exit 1; }
 echo "  PASS: preview_config error path + cleanup"
 
