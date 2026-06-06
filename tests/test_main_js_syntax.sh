@@ -107,11 +107,15 @@ grep -q "data-tab.*routerules"   "$JS" || { echo "FAIL: no routerules sub-tab ma
 echo "-- has handleSaveApply via ui.changes.apply"
 grep -q "handleSaveApply"  "$JS" || { echo "FAIL: no handleSaveApply"; exit 1; }
 grep -q "ui.changes.apply" "$JS" || { echo "FAIL: no ui.changes.apply call (needed for /admin/uci/apply_rollback)"; exit 1; }
-grep -q "'enabled'"        "$JS" || { echo "FAIL: no enabled flag"; exit 1; }
+# 'enabled' flag lives in extracted tab modules after modularization
+GENERAL_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js
+( grep -q "'enabled'" "$JS" || grep -q "'enabled'" "$GENERAL_TAB" ) || { echo "FAIL: no enabled flag"; exit 1; }
 
 echo "-- references General tab sections"
-grep -q "'cache'"               "$JS" || { echo "FAIL: no cache section type"; exit 1; }
-grep -q "'log'"                 "$JS" || { echo "FAIL: no log section type"; exit 1; }
+# 'cache' and 'log' live in tabs/general.js after modularization (Task 12)
+GENERAL_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js
+grep -q "'cache'"               "$GENERAL_TAB" || { echo "FAIL: no cache section type (checked tabs/general.js)"; exit 1; }
+grep -q "'log'"                 "$GENERAL_TAB" || { echo "FAIL: no log section type (checked tabs/general.js)"; exit 1; }
 grep -q "data-tab.*general"     "$JS" || { echo "FAIL: no general tab marker"; exit 1; }
 
 echo "OK"
