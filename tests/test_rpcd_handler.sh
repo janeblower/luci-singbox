@@ -54,7 +54,7 @@ jval() {
 
 echo "-- list emits valid JSON with all methods"
 out=$(run_h list)
-for m in generate nftables restart refresh status read_config clash_request export_section preview_config; do
+for m in generate nftables restart refresh status read_config clash_get clash_mutate export_section preview_config; do
 	printf "%s\n" "$out" | je "d.$m != null" || { echo "FAIL: missing $m"; exit 1; }
 done
 printf "%s\n" "$out" | je 'd.nftables.action != null' || { echo "FAIL: missing nftables.action"; exit 1; }
@@ -193,39 +193,70 @@ echo "$out" | grep -q 'stdout-noise' && { echo "FAIL: stdout leaked into respons
 printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: status not ok"; exit 1; }
 echo "  PASS: stderr+stdout suppressed"
 
-echo "-- call clash_request proxies to curl with Bearer + method + path"
+echo "-- call clash_get proxies GET only with Bearer + path"
 cat >"$tmpdir/curl" <<EOF
 #!/bin/sh
 echo "curl args: \$*" >> "$tmpdir/curl.log"
 echo '{"connections":[],"downloadTotal":10,"uploadTotal":20}'
 EOF
 chmod +x "$tmpdir/curl"
-out=$(echo '{"method":"GET","path":"/connections"}' | \
+: > "$tmpdir/curl.log"
+out=$(echo '{"path":"/connections"}' | \
 	CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok \
-	run_h call clash_request)
-printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: clash_request not ok"; echo "$out"; exit 1; }
+	run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: clash_get not ok; out=$out"; exit 1; }
 body=$(printf "%s\n" "$out" | jval 'd.body')
-printf "%s\n" "$body" | je 'd.downloadTotal == 10' || { echo "FAIL: body not passed through"; echo "$out"; exit 1; }
-grep -q 'Authorization: Bearer tok' "$tmpdir/curl.log" || { echo "FAIL: Bearer secret not sent"; cat "$tmpdir/curl.log"; exit 1; }
-grep -q '/connections' "$tmpdir/curl.log" || { echo "FAIL: path not in URL"; cat "$tmpdir/curl.log"; exit 1; }
-echo "  PASS: clash_request proxies correctly"
+printf "%s\n" "$body" | je 'd.downloadTotal == 10' || { echo "FAIL: body not passed through; out=$out"; exit 1; }
+grep -q 'Authorization: Bearer tok' "$tmpdir/curl.log" || { echo "FAIL: Bearer not sent"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q '/connections' "$tmpdir/curl.log" || { echo "FAIL: path missing"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q -- '-X GET' "$tmpdir/curl.log" || { echo "FAIL: method not GET"; cat "$tmpdir/curl.log"; exit 1; }
+echo "  PASS: clash_get proxies GET"
 
-echo "-- call clash_request rejects bad method / path"
-out=$(echo '{"method":"FOO","path":"/x"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_request)
-printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad method should error"; exit 1; }
-out=$(echo '{"method":"GET","path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_request)
-printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error"; exit 1; }
-echo "  PASS: clash_request validates inputs"
+echo "-- call clash_get rejects method override + bad path"
+# A read-ACL caller must not be able to upgrade to a write verb by stuffing
+# {method:"PATCH"} into the args — clash_get must reject the field outright.
+out=$(echo '{"path":"/x","method":"PATCH"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: method param should be refused; out=$out"; exit 1; }
+out=$(echo '{"path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error; out=$out"; exit 1; }
+echo "  PASS: clash_get validates"
 
-echo "-- call clash_request accepts PATCH (clash uses PATCH /configs)"
-for verb in PATCH PUT; do
-	out=$(echo "{\"method\":\"$verb\",\"path\":\"/configs\",\"body\":\"{}\"}" | \
+echo "-- call clash_mutate accepts PATCH/PUT/POST/DELETE with body"
+: > "$tmpdir/curl.log"
+for verb in PATCH PUT POST DELETE; do
+	out=$(echo "{\"method\":\"$verb\",\"path\":\"/configs\",\"body\":\"{\\\"mode\\\":\\\"global\\\"}\"}" | \
 		CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok \
-		run_h call clash_request)
+		run_h call clash_mutate)
 	printf "%s\n" "$out" | je 'd.status == "ok"' \
-		|| { echo "FAIL: $verb should be accepted"; echo "$out"; exit 1; }
+		|| { echo "FAIL: $verb should be accepted; out=$out"; exit 1; }
 done
-echo "  PASS: PATCH/PUT accepted"
+grep -q -- '-X PATCH' "$tmpdir/curl.log" || { echo "FAIL: PATCH not in curl"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q -- '-X PUT'   "$tmpdir/curl.log" || { echo "FAIL: PUT not in curl"; cat "$tmpdir/curl.log"; exit 1; }
+echo "  PASS: clash_mutate accepts write verbs"
+
+echo "-- call clash_mutate rejects GET + missing method + bad path"
+out=$(echo '{"method":"GET","path":"/x"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: GET should be refused on mutate; out=$out"; exit 1; }
+out=$(echo '{"path":"/x"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: missing method should error; out=$out"; exit 1; }
+out=$(echo '{"method":"PATCH","path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error; out=$out"; exit 1; }
+echo "  PASS: clash_mutate validates"
+
+echo "-- legacy clash_request method is no longer dispatched"
+# Two regressions in one shot:
+#   1. `list` must NOT advertise the legacy method.
+#   2. `call clash_request` must reach the default branch (status=error) — the
+#      handler does not bind a case to it any more.
+list_out=$(run_h list)
+printf "%s\n" "$list_out" | je 'd.clash_request == null' \
+	|| { echo "FAIL: list still advertises clash_request; out=$list_out"; exit 1; }
+printf "%s\n" "$list_out" | je 'd.clash_get != null && d.clash_mutate != null' \
+	|| { echo "FAIL: list missing clash_get/clash_mutate; out=$list_out"; exit 1; }
+out=$(echo '{"method":"GET","path":"/x"}' | run_h call clash_request)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: clash_request should error (unknown method); out=$out"; exit 1; }
+echo "  PASS: clash_request removed from dispatcher"
 
 echo "-- call export_section validates kind/name and proxies to helper"
 # Build a tiny UCI tree with one inbound and one outbound. UCI_CONFIG_DIR is
