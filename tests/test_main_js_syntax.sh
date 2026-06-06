@@ -46,9 +46,11 @@ grep -q "tproxy"   "$INBOUNDS_TAB" || { echo "FAIL: no tproxy section (checked t
 
 echo "-- references all three output GridSections"
 grep -q "GridSection"           "$JS" || { echo "FAIL: no GridSection"; exit 1; }
-grep -q "'outbound'"            "$JS" || { echo "FAIL: no outbound section type"; exit 1; }
-grep -q "'ruleset'"             "$JS" || { echo "FAIL: no ruleset section type"; exit 1; }
-grep -q "'route_rule'"          "$JS" || { echo "FAIL: no route_rule section type"; exit 1; }
+# 'outbound', 'ruleset', 'route_rule' live in tabs/routing.js after modularization (Task 10)
+ROUTING_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js
+grep -q "'outbound'"            "$ROUTING_TAB" || { echo "FAIL: no outbound section type (checked tabs/routing.js)"; exit 1; }
+grep -q "'ruleset'"             "$ROUTING_TAB" || { echo "FAIL: no ruleset section type (checked tabs/routing.js)"; exit 1; }
+grep -q "'route_rule'"          "$ROUTING_TAB" || { echo "FAIL: no route_rule section type (checked tabs/routing.js)"; exit 1; }
 grep -q "modaltitle"            "$JS" || { echo "FAIL: no modaltitle"; exit 1; }
 
 echo "-- references new outbound types (merged type field)"
