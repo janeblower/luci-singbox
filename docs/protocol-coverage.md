@@ -190,14 +190,14 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 | `network` (`tcp`/`udp`) | есть | — |
 | `tls` (required) | есть | — |
 
-### anytls outbound (Since 1.12.0)
+### anytls outbound (`lib/outbound.uc`, anytls branch — Since 1.12.0)
 | Field | Status |
 |---|---|
-| `server`, `server_port`, `password` | **нет** | Phase 6 |
-| `idle_session_check_interval` (default `30s`) | нет | Phase 6 |
-| `idle_session_timeout` (default `30s`) | нет | Phase 6 |
-| `min_idle_session` (default `0`) | нет | Phase 6 |
-| `tls` (required) | нет | Phase 6 |
+| `server`, `server_port`, `password` | есть | — |
+| `idle_session_check_interval` (default `30s`) | есть | — |
+| `idle_session_timeout` (default `30s`) | есть | — |
+| `min_idle_session` (default `0`) | есть | — |
+| `tls` (required) | есть | — |
 | transport / multiplex | **out-of-scope** (AnyTLS has no v2ray-transport) |
 
 ### interface outbound (`lib/outbound.uc:202`)

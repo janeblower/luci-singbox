@@ -293,7 +293,7 @@ UI write: `tabs/outbounds.js` — `buildOutboundsMap()`.
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `enabled` | bool | `0`/`1` | yes | — | Disabled sections (`enabled=0`) are skipped by `build_outbounds`. Also checked by `subscription.uc` before fetching. |
-| `type` | enum | `vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`, `tuic`, `interface`, `url`, `subscription` | yes | — | Selects the outbound dispatch branch. Sections with an empty `type` are skipped. |
+| `type` | enum | `vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`, `tuic`, `anytls`, `interface`, `url`, `subscription` | yes | — | Selects the outbound dispatch branch. Sections with an empty `type` are skipped. |
 
 ### Proxy-constructor common fields
 
@@ -343,6 +343,16 @@ TUIC reuses the standard `server`, `server_port`, `server_uuid`, `server_passwor
 | `tuic_udp_over_stream` | bool | `0`/`1` | no | `type=tuic` | When `1`, emits `udp_over_stream: true` and suppresses `udp_relay_mode`. Default `0` (omitted). |
 | `tuic_zero_rtt` | bool | `0`/`1` | no | `type=tuic` | When `1`, emits `zero_rtt_handshake: true`. Default `0` (omitted). |
 | `tuic_heartbeat` | string | duration (e.g. `10s`, `15s`) | no | `type=tuic` | Heartbeat interval. sing-box default is `10s` — omitted when UCI field is empty. |
+
+### AnyTLS fields
+
+Applies to `type=anytls` outbound. AnyTLS is QUIC/TLS-only — no transport or multiplex. Reuses `server`, `server_port`, `server_password`, and the standard TLS block (`security`, `tls_server_name`, etc.).
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `anytls_idle_check_interval` | string | duration (e.g. `30s`) | no | `type=anytls` | How often idle sessions are scanned. sing-box default `30s`. |
+| `anytls_idle_timeout` | string | duration (e.g. `30s`) | no | `type=anytls` | Idle-session timeout. sing-box default `30s`. |
+| `anytls_min_idle_session` | integer | ≥ 0 | no | `type=anytls` | Minimum idle sessions kept open after a check. Default 0. Emit only when set to a positive value. |
 
 ### TLS fields
 

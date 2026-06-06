@@ -334,4 +334,64 @@ nocheck "tuic no zero_rtt"         '"zero_rtt_handshake":'
 nocheck "tuic no heartbeat"        '"heartbeat":'
 nocheck "tuic no network"          '"network":'
 
+echo "-- anytls outbound with all idle fields"
+write_cfg "
+config outbound 'at'
+	option enabled '1'
+	option type 'anytls'
+	option server 'at.example.com'
+	option server_port '443'
+	option server_password 'at-pw'
+	option security 'tls'
+	option tls_server_name 'at.example.com'
+	option anytls_idle_check_interval '15s'
+	option anytls_idle_timeout '45s'
+	option anytls_min_idle_session '5'
+"
+run_gen
+check "anytls type"     '"type": "anytls"'
+check "anytls server"   '"server": "at.example.com"'
+check "anytls password" '"password": "at-pw"'
+check "anytls idle_chk" '"idle_session_check_interval": "15s"'
+check "anytls idle_to"  '"idle_session_timeout": "45s"'
+check "anytls min_idle" '"min_idle_session": 5'
+check "anytls tls"      '"enabled": true'
+
+echo "-- anytls minimal — min_idle_session=0 dropped, idle fields omitted"
+write_cfg "
+config outbound 'at_min'
+	option enabled '1'
+	option type 'anytls'
+	option server 'at.example.com'
+	option server_port '443'
+	option server_password 'at-pw'
+	option security 'tls'
+	option anytls_min_idle_session '0'
+"
+run_gen
+check   "anytls minimal type"           '"type": "anytls"'
+nocheck "no idle_check_interval unset" '"idle_session_check_interval":'
+nocheck "no idle_timeout unset"        '"idle_session_timeout":'
+nocheck "no min_idle when 0"           '"min_idle_session":'
+
+echo "-- anytls drops transport/multiplex by design"
+write_cfg "
+config outbound 'at_no_transport'
+	option enabled '1'
+	option type 'anytls'
+	option server 'at.example.com'
+	option server_port '443'
+	option server_password 'at-pw'
+	option security 'tls'
+	option transport 'ws'
+	option transport_path '/should-be-ignored'
+	option multiplex_enabled '1'
+	option multiplex_protocol 'smux'
+"
+run_gen
+check   "anytls type only"          '"type": "anytls"'
+nocheck "no transport block"      '"transport":'
+nocheck "no multiplex block"      '"multiplex":'
+nocheck "no ignored ws path"      '/should-be-ignored'
+
 echo "OK"
