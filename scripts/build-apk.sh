@@ -93,7 +93,11 @@ install -d \
   "$APP_ROOT/usr/share/rpcd/acl.d" \
   "$APP_ROOT/usr/share/singbox-ui" \
   "$APP_ROOT/usr/share/singbox-ui/lib" \
-  "$APP_ROOT/www/luci-static/resources/view/singbox-ui"
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/lib" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/importers" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/tabs" \
+  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/widgets"
 
 install -m 0644 "$PKG_SRC/root/etc/config/singbox-ui"                        "$APP_ROOT/etc/config/singbox-ui"
 install -m 0755 "$PKG_SRC/root/etc/uci-defaults/99-luci-app-singbox-ui"      "$APP_ROOT/etc/uci-defaults/99-luci-app-singbox-ui"
@@ -108,6 +112,18 @@ for lib_uc in "$PKG_SRC"/root/usr/share/singbox-ui/lib/*.uc; do
   install -m 0644 "$lib_uc" "$APP_ROOT/usr/share/singbox-ui/lib/$(basename "$lib_uc")"
 done
 install -m 0644 "$PKG_SRC/htdocs/luci-static/resources/view/singbox-ui/main.js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/main.js"
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/lib/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/lib/$(basename "$view_js")"
+done
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/importers/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/importers/$(basename "$view_js")"
+done
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/tabs/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/tabs/$(basename "$view_js")"
+done
+for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/widgets/*.js; do
+  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/widgets/$(basename "$view_js")"
+done
 
 list_dir="$APP_ROOT/lib/apk/packages"
 mkdir -p "$list_dir"

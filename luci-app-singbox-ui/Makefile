@@ -56,6 +56,22 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
 	  $(1)/www/luci-static/resources/view/singbox-ui/main.js
 
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/lib
+	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/lib/*.js), \
+	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/lib/$(notdir $(f));)
+
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/importers
+	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/importers/*.js), \
+	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/importers/$(notdir $(f));)
+
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/tabs
+	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/tabs/*.js), \
+	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/tabs/$(notdir $(f));)
+
+	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/widgets
+	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/widgets/*.js), \
+	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/widgets/$(notdir $(f));)
+
 	if [ -f $(PO_DIR)/ru/luci-app-singbox-ui.po ]; then \
 		$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n; \
 		po2lmo $(PO_DIR)/ru/luci-app-singbox-ui.po \
