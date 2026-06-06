@@ -198,4 +198,49 @@ run_gen
 check "outbound vless xhttp"      '"type": "xhttp"'
 check "outbound vless xhttp mode" '"mode": "stream-up"'
 
+echo "-- vless outbound with ECH (client-side: config + config_path) + fragment"
+write_cfg "
+config outbound 'vech'
+	option enabled '1'
+	option type 'vless'
+	option server 'ech.example.com'
+	option server_port '443'
+	option server_uuid 'uu-ech'
+	option security 'tls'
+	option tls_server_name 'ech.example.com'
+	option tls_ech '1'
+	list   tls_ech_config '-----BEGIN ECH CONFIG-----'
+	list   tls_ech_config 'BASE64DATA'
+	list   tls_ech_config '-----END ECH CONFIG-----'
+	option tls_ech_config_path '/etc/sing-box/ech.pem'
+	option tls_fragment '1'
+	option tls_fragment_fallback_delay '750ms'
+	option tls_record_fragment '1'
+"
+run_gen
+check  "ech client enabled"      '"ech":'
+check  "ech.config array"        '"config": \['
+check  "ech.config first line"   '"-----BEGIN ECH CONFIG-----"'
+check  "ech.config_path"         '"config_path": "/etc/sing-box/ech.pem"'
+check  "fragment true"            '"fragment": true'
+check  "fragment_fallback_delay" '"fragment_fallback_delay": "750ms"'
+check  "record_fragment true"    '"record_fragment": true'
+nocheck "no pq schemes (deprecated)" 'pq_signature_schemes_enabled'
+
+echo "-- vless outbound without tls_ech / fragment omits all of them"
+write_cfg "
+config outbound 'vplain'
+	option enabled '1'
+	option type 'vless'
+	option server 'a.b'
+	option server_port '443'
+	option server_uuid 'uu'
+	option security 'tls'
+	option tls_server_name 'a.b'
+"
+run_gen
+nocheck "no ech when unset"      '"ech":'
+nocheck "no fragment when unset" '"fragment":'
+nocheck "no record_fragment unset" '"record_fragment":'
+
 echo "OK"

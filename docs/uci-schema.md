@@ -243,7 +243,12 @@ Applies to `vless`, `vmess`, `trojan` (selectable), and `hysteria2` (always TLS)
 | `reality_private_key` | string | — | no | `security=reality` | Reality server private key. |
 | `reality_handshake_server` | string | hostname | no | `security=reality` | Reality handshake server address. |
 | `reality_handshake_server_port` | integer | port | no | `security=reality` | Reality handshake server port. |
-| `reality_short_id` | string | hex | no | `security=reality` | Reality short ID. |
+| `reality_short_id` | string | hex (0-8 chars) | no | `security=reality` | Reality short ID. Single string per sing-box 1.12 docs (`tls.reality.short_id`). |
+| `tls_ech` | bool | `0`/`1` | no | `security=tls/reality` or `protocol=hysteria2` | Enable ECH (Encrypted ClientHello). Emits `tls.ech.enabled`. |
+| `tls_ech_key` | list | PEM lines | no | `tls_ech=1` | Inline ECH key (server-side). UCI list type; emitted as `tls.ech.key[]`. |
+| `tls_ech_key_path` | string | file path | no | `tls_ech=1` | Path to ECH key file. Emitted as `tls.ech.key_path`. |
+
+> **Note:** sing-box 1.12 also defines `tls.ech.pq_signature_schemes_enabled` and `tls.ech.dynamic_record_sizing_disabled`, but both are deprecated in 1.12 and removed in 1.13 — never emitted by this package.
 
 ### Transport fields
 
@@ -334,7 +339,13 @@ Applies to `type=vless`, `vmess`, `trojan` (selectable via `security`). Hysteria
 | `tls_alpn` | list | e.g. `h2`, `http/1.1` | no | `security=tls` or `type=hysteria2` | ALPN protocols. UCI list type. Read as `as_array(s.tls_alpn)`. |
 | `utls_fingerprint` | enum | `chrome`, `firefox`, `safari`, `edge`, `random`, `""` | no | `security=tls/reality` | uTLS client fingerprint. Empty/absent omits uTLS block. |
 | `reality_public_key` | string | — | no | `security=reality` | Reality server public key (outbound-side; contrast inbound's `reality_private_key`). |
-| `reality_short_id` | string | hex | no | `security=reality` | Reality short ID. |
+| `reality_short_id` | string | hex (0-8 chars) | no | `security=reality` | Reality short ID. Single string per sing-box 1.12 docs. |
+| `tls_ech` | bool | `0`/`1` | no | `security=tls/reality` or `type=hysteria2` | Enable ECH (Encrypted ClientHello). Emits `tls.ech.enabled`. |
+| `tls_ech_config` | list | PEM lines | no | `tls_ech=1` | Inline ECH config (client-side). UCI list type; emitted as `tls.ech.config[]`. |
+| `tls_ech_config_path` | string | file path | no | `tls_ech=1` | Path to ECH config file. Emitted as `tls.ech.config_path`. |
+| `tls_fragment` | bool | `0`/`1` | no | `type=vless/vmess/trojan/hysteria2` | Enable TLS handshake fragmentation. Since sing-box 1.12. Flat field `tls.fragment`. |
+| `tls_fragment_fallback_delay` | string | duration (e.g. `500ms`) | no | `tls_fragment=1` | Fragment fallback delay. Defaults to `500ms` in sing-box. |
+| `tls_record_fragment` | bool | `0`/`1` | no | `type=vless/vmess/trojan/hysteria2` | Split handshake across multiple TLS records. Since sing-box 1.12. Flat field `tls.record_fragment`. |
 
 ### Transport fields
 
