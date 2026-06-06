@@ -15,6 +15,8 @@
 'require view.singbox-ui.tabs.dns as SbTabDns';
 'require view.singbox-ui.tabs.general as SbTabGeneral';
 'require view.singbox-ui.tabs.monitoring as SbTabMon';
+'require view.singbox-ui.widgets.action-bar as SbActionBar';
+'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
 
 var callRefresh    = SbRpc.callRefresh;
 var callRestart    = SbRpc.callRestart;
@@ -52,84 +54,8 @@ var buildGeneralMap = SbTabGeneral.buildGeneralMap;
 
 var buildMonitoring = SbTabMon.buildMonitoring;
 
-function renderActionBar(statusHolder) {
-	function refreshStatus() { renderStatusPanel(statusHolder); }
-	function btn(label, handler) {
-		return E('button', {
-			'class': 'btn cbi-button cbi-button-action',
-			'click': ui.createHandlerFn(this, function () {
-				return Promise.resolve(handler.call(this)).then(refreshStatus);
-			})
-		}, _(label));
-	}
-	return E('div', { 'class': 'sb-actionbar', 'style': 'display:flex;gap:.5em;margin:.5em 0' }, [
-		btn(_('Refresh subscriptions'), function () {
-			return notify(callRefresh('subscriptions'), 'Done', _('Refresh subscriptions failed'));
-		}),
-		btn(_('Refresh rule-sets'), function () {
-			return notify(callRefresh('rulesets'),      'Done', _('Refresh rule-sets failed'));
-		}),
-		btn(_('Restart service'), function () {
-			return notify(callRestart(),                'Done', _('Restart failed'));
-		}),
-		btn(_('Preview generated config'), function () {
-			return callReadConfig().then(function (res) {
-				if (!res || res.status !== 'ok') {
-					ui.addNotification(null, E('p', (res && res.message) || _('not generated')), 'danger');
-					return;
-				}
-				ui.showModal(_('Preview generated config'), [
-					E('pre', { 'style': 'max-height:60vh;overflow:auto;font-family:monospace' }, res.content),
-					E('div', { 'class': 'right' }, [
-						E('button', { 'class': 'btn', 'click': ui.hideModal }, _('Close'))
-					])
-				]);
-			});
-		})
-	]);
-}
-
-function renderStatusPanel(holder) {
-	// Use the server-supplied `now` so 'X ago' stays accurate even when the
-	// browser clock has drifted from the router (common on routers without NTP).
-	function fmtAgo(now, mt) {
-		if (!mt) return _('never');
-		var ago = Math.max(0, now - mt);
-		if (ago < 60)    return ago + 's';
-		if (ago < 3600)  return Math.floor(ago / 60)   + 'm';
-		if (ago < 86400) return Math.floor(ago / 3600) + 'h';
-		return Math.floor(ago / 86400) + 'd';
-	}
-
-	return callStatus().then(function (res) {
-		holder.innerHTML = '';
-		if (!res || res.status !== 'ok') {
-			holder.appendChild(E('em', _('Status unavailable')));
-			return;
-		}
-		var rows = [];
-		rows.push(E('div', {}, [
-			E('strong', _('Status') + ': '),
-			E('span', { 'style': 'color:' + (res.running ? '#2e7d32' : '#c62828') },
-			  res.running ? _('Service running') : _('Service stopped'))
-		]));
-		function entryList(label, items) {
-			if (!items || !items.length) return null;
-			return E('div', {}, [
-				E('strong', label + ': '),
-				items.map(function (it) {
-					return it.name + ' (' + fmtAgo(res.now, it.mtime) + ')';
-				}).join(', ')
-			]);
-		}
-		var sub = entryList(_('Subscriptions'), res.subscriptions);
-		if (sub) rows.push(sub);
-		var rs = entryList(_('Rule-Sets'), res.rulesets);
-		if (rs) rows.push(rs);
-
-		rows.forEach(function (r) { holder.appendChild(r); });
-	});
-}
+var renderActionBar   = SbActionBar.renderActionBar;
+var renderStatusPanel = SbStatusPanel.renderStatusPanel;
 
 return view.extend({
 	load: function () { return uci.load('singbox-ui'); },
