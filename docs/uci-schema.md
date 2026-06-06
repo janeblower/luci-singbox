@@ -19,9 +19,137 @@ Source of truth: this file. Everything read by `lib/*.uc` or written by the LuCI
 
 ## Migrations
 
-See `luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui` for the source of truth on schema migrations applied on upgrade.
+Source file: `luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui`. The script runs once on package install/upgrade (OpenWrt `uci-defaults` mechanism) and removes itself on success. Every migration is idempotent — the script may re-run on upgrade without harm.
 
-(Detailed migration log will be populated in Task 23.)
+### Migration: `fakeip-list-to-option`
+
+**What:** Convert legacy list-typed `inet4_range` / `inet6_range` on the `fakeip` dns_server section into scalar options.
+
+**Effect:** sing-box 1.12+ rejects array-form CIDR ranges. If either field is a multi-value UCI list, only the first element is kept (a warning is logged via `logger`); the rest are dropped. No change if the field is already a scalar.
+
+**Idempotent:** yes — guard: `uci get singbox-ui.fakeip.<field>` returns empty when absent.
+
+**Introduced:** commit `2f8175b` (fix(fakeip): use single CIDR per family, align UI/UCI/generate/nft).
+
+---
+
+### Migration: `tproxy-section-to-inbound`
+
+**What:** Promote the legacy singleton `tproxy` section (type `tproxy`) to a proper named `inbound` section (`tproxy_in`, protocol `tproxy`).
+
+**Effect:** Reads `enabled`, `port`, `hijack_dns`, and `interface` from the old `tproxy` section; creates `singbox-ui.tproxy_in='inbound'` with equivalent fields (`listen_port`, `hijack_dns`, `interface` list, `nft_rules=1`, `protocol=tproxy`, `listen=::`) and deletes the `tproxy` section. The Inbounds tab replaced the old implicit-tproxy model.
+
+**Idempotent:** yes — guard: only executes when `uci get singbox-ui.tproxy` returns the section type `tproxy`.
+
+**Introduced:** commit `1949d72` (feat(migrate): tproxy section → inbound; drop per-outbound expose options).
+
+---
+
+### Migration: `drop-expose-options`
+
+**What:** Remove per-outbound `expose_*` options that were removed from the schema.
+
+**Effect:** Iterates all `outbound` sections and deletes any option whose name begins with `expose_` (e.g. `expose_proxy`, `expose_socks`, `expose_http`). Commits only when at least one deletion occurred.
+
+**Idempotent:** yes — `uci delete` on a non-existent option is a no-op (errors suppressed).
+
+**Introduced:** commit `1949d72` (feat(migrate): tproxy section → inbound; drop per-outbound expose options).
+
+---
+
+### Migration: `ensure-default-sections`
+
+**What:** Create default named sections for Phase 2 features if they do not already exist.
+
+**Effect:** Creates the `fakeip` (`dns_server`), `dns` (`dns`), `route_default` (`route_default`), and `log` (`log`) sections with safe defaults so users see these tabs populated in LuCI without manually editing UCI. Skips creation for any section that already exists.
+
+**Idempotent:** yes — uses `uci set` only when `uci get` returns empty for the section type.
+
+**Introduced:** commit `2868067` (feat(dns): migrate fakeip/dns_outbound/ruleset.dns_fakeip to typed model).
+
+---
+
+### Migration: `dns-outbound-to-server`
+
+**What:** Convert the legacy singleton `dns_outbound` section into a typed `dns_server` section named `out_dns`.
+
+**Effect:** Reads `address` and `detour` from the old `dns_outbound` section, parses the address to determine the DNS transport type (`https`, `tls`, `udp`), creates `singbox-ui.out_dns='dns_server'` with `enabled=1`, `type`, `server`, `server_port`, `path`, and `detour` fields, then deletes `singbox-ui.dns_outbound`. If no `dns_outbound` section exists, nothing happens.
+
+**Idempotent:** yes — guard: only runs while `uci get singbox-ui.dns_outbound` returns `dns_outbound`.
+
+**Introduced:** commit `2868067` (feat(dns): migrate fakeip/dns_outbound/ruleset.dns_fakeip to typed model).
+
+---
+
+### Migration: `ensure-clash-api-secret`
+
+**What:** Create the `clash_api` section with a stable random secret if it does not yet exist.
+
+**Effect:** If `singbox-ui.clash_api` does not exist, creates it as type `clash_api` with `enabled=0`, `listen=127.0.0.1`, `port=9090`, and a 16-byte hex secret generated from `/dev/urandom`. If the section already exists but has no `secret`, adds one. Existing secrets are never overwritten.
+
+**Idempotent:** yes — skips secret generation when `secret` is already non-empty.
+
+**Introduced:** commit `1d16259` (feat(monitoring): default clash_api section + generated secret).
+
+---
+
+### Migration: `cache-storage-mode`
+
+**What:** Convert the legacy `cache` section (which had `enabled`, an explicit `/tmp` `path`, and no `storage` field) to the storage-mode model.
+
+**Effect:** Ensures a `cache` section exists (creates one if absent). If `storage` is already set, exits early. Otherwise: if the legacy `path` points to a `/tmp/…` location, sets `storage=ram`; if it points elsewhere, sets `storage=flash`; if unknown, defaults to `ram`. Preserves the existing `enabled` value. Sets `store_fakeip=1` if that field is absent. Deletes the legacy `path` option for `ram`/`flash` modes.
+
+**Idempotent:** yes — guard: bails early if `storage` is already set.
+
+**Introduced:** commit `9bdbe2f` (feat(cache): migrate existing cache section to storage-mode schema), with a fixup in `b3571b6` (fixup(cache-migration): preserve user-disabled state; tighten legacy gate).
+
+---
+
+### Migration: `ensure-dns-inbound`
+
+**What:** Create a default DNS inbound section (`dns_in`) if one does not yet exist.
+
+**Effect:** Creates `singbox-ui.dns_in='inbound'` with `protocol=direct`, `enabled=1`, `listen=::`, `listen_port=53`, `network=udp`, `dns_listener=1` so that the daemon has a DNS listener available by default. Skips creation if a section named `dns_in` already exists (user may have customised it).
+
+**Idempotent:** yes — guard: `uci get singbox-ui.dns_in` non-empty means it already exists.
+
+**Introduced:** commit `cf15c5a` (feat(migrate): create dns_in direct inbound on upgrade).
+
+---
+
+### Migration: `purge-extra-json`
+
+**What:** Remove the deprecated `extra_json` option from all `inbound` and `outbound` sections.
+
+**Effect:** Iterates every UCI section of type `inbound` or `outbound` and deletes the `extra_json` option. The constructor model now covers all needed fields; raw-JSON merging is removed.
+
+**Idempotent:** yes — `uci delete` on a non-existent option is a no-op.
+
+**Introduced:** commit `9bda227` (refactor(constructor): drop deprecated extra_json field across UI, emit, and UCI).
+
+---
+
+### Migration: `purge-inbound-mode-json`
+
+**What:** Remove legacy `mode` and `inbound_json` discriminator fields from inbound sections, and disable any section that previously used `mode=json`.
+
+**Effect:** For every `inbound` section: if `mode=json` and `inbound_json` is non-empty, sets `enabled=0` (so the daemon does not receive stale raw JSON config) and logs a warning. In all cases, deletes `mode` and `inbound_json` options. Sections that used `mode=constructor` just have the options deleted; they remain enabled. Users with `mode=json` sections must re-import via the new UI button.
+
+**Idempotent:** yes — deleting already-absent options is harmless.
+
+**Introduced:** commit `2c87d67` (refactor(inbound): drop mode discriminator; protocol IS the kind).
+
+---
+
+### Migration: `outbound-proxy-type-to-type`
+
+**What:** Rename `proxy_type` → `type` on outbound sections, collapse the `constructor`/`protocol` model into a single `type` field, and disable `proxy_type=json` sections.
+
+**Effect:** For every `outbound` section: if `proxy_type` is set, renames it to `type` (or to the value of the nested `protocol` field for `proxy_type=constructor`). If `proxy_type=json`, sets `enabled=0` (cannot safely migrate raw JSON), deletes `proxy_type` and `outbound_json`. If `type` already exists and `proxy_type` is absent, does nothing.
+
+**Idempotent:** yes — guard: skips sections where `proxy_type` is absent.
+
+**Introduced:** commit `15cf591` (refactor(outbound): rename proxy_type→type; collapse constructor+protocol; drop json mode).
 
 ---
 
