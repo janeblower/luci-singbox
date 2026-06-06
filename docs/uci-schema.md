@@ -147,7 +147,117 @@ Applies to `vless`, `vmess`, `trojan` when `multiplex_enabled=1`.
 
 ## `outbound`
 
-TBD — populated in Task 19.
+UCI section type: `outbound`. Describes an outgoing connection for sing-box.
+
+Backend: `lib/outbound.uc` — `build_outbounds()` dispatches on `type`; proxy-constructor protocols go through `build_constructor_for(s, proto)`. Subscription URL fetching is handled by `subscription.uc` which also reads several fields here.
+UI write: `tabs/outbounds.js` — `buildOutboundsMap()`.
+
+### Core fields
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `enabled` | bool | `0`/`1` | yes | — | Disabled sections (`enabled=0`) are skipped by `build_outbounds`. Also checked by `subscription.uc` before fetching. |
+| `type` | enum | `vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`, `interface`, `url`, `subscription` | yes | — | Selects the outbound dispatch branch. Sections with an empty `type` are skipped. |
+
+### Proxy-constructor common fields
+
+Applies to `type=vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `server` | string | hostname or IP | yes | proxy types | Remote server address. |
+| `server_port` | integer | valid port | yes | proxy types | Remote server port. Read as `s_num(s.server_port)`. |
+
+### User credential fields
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `server_uuid` | string | UUID | yes | `type=vless` or `vmess` | Connection UUID. |
+| `server_password` | string | — | yes | `type=trojan`, `hysteria2`, `shadowsocks` | Authentication password or pre-shared key. |
+| `vless_flow` | enum | `none`, `xtls-rprx-vision` | no | `type=vless` | VLESS flow control. Omitted when `none`. |
+| `vmess_alter_id` | integer | `0`+ | no | `type=vmess` | VMess alter ID. |
+| `vmess_security` | enum | `auto`, `none`, `aes-128-gcm`, `chacha20-poly1305` | no | `type=vmess` | VMess cipher. Read by `build_constructor_for` via `s_opt(s, "vmess_security")`. |
+
+### Shadowsocks fields
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `shadowsocks_method` | enum | e.g. `aes-256-gcm`, `chacha20-ietf-poly1305` | yes | `type=shadowsocks` | Encryption cipher. |
+
+### `hysteria2` fields
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `hysteria2_obfs_type` | enum | `none`, `salamander` | no | `type=hysteria2` | Obfuscation type. Omitted when `none`. |
+| `hysteria2_obfs_password` | string | — | no | `hysteria2_obfs_type=salamander` | Obfuscation password. |
+| `up_mbps` | integer | Mbps | no | `type=hysteria2` | Upload bandwidth limit. |
+| `down_mbps` | integer | Mbps | no | `type=hysteria2` | Download bandwidth limit. |
+| `hysteria2_masquerade` | string | URL | no | `type=hysteria2` | Masquerade URL served to non-Hysteria2 peers. |
+
+### TLS fields
+
+Applies to `type=vless`, `vmess`, `trojan` (selectable via `security`). Hysteria2 always uses TLS — `security` field is absent from its UI branch but `tls_server_name` and other TLS options apply.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `security` | enum | `none`, `tls`, `reality` | no | `type=vless/vmess/trojan` | TLS mode. Defaults to `none`. |
+| `tls_server_name` | string | hostname | no | `security=tls/reality` or `type=hysteria2` | TLS SNI. |
+| `tls_insecure` | bool | `0`/`1` | no | `security=tls/reality` or `type=hysteria2` | Allow insecure certificates. |
+| `tls_alpn` | list | e.g. `h2`, `http/1.1` | no | `security=tls` or `type=hysteria2` | ALPN protocols. UCI list type. Read as `as_array(s.tls_alpn)`. |
+| `utls_fingerprint` | enum | `chrome`, `firefox`, `safari`, `edge`, `random`, `""` | no | `security=tls/reality` | uTLS client fingerprint. Empty/absent omits uTLS block. |
+| `reality_public_key` | string | — | no | `security=reality` | Reality server public key (outbound-side; contrast inbound's `reality_private_key`). |
+| `reality_short_id` | string | hex | no | `security=reality` | Reality short ID. |
+
+### Transport fields
+
+Applies to `type=vless`, `vmess`, `trojan`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `transport` | enum | `none`, `ws`, `grpc`, `httpupgrade`, `xhttp`, `http` | no | proxy constructor types | Transport layer. Defaults to `none`. |
+| `transport_path` | string | URL path | no | `transport=ws/httpupgrade/xhttp/http` | HTTP path. |
+| `transport_host` | string | hostname | no | `transport=ws/httpupgrade` | HTTP Host header override (single value). |
+| `transport_hosts` | list | hostnames | no | `transport=http` | HTTP host list. UCI list type. Read as `as_array(s.transport_hosts)`. |
+| `transport_service_name` | string | — | no | `transport=grpc` | gRPC service name. |
+| `transport_xhttp_mode` | enum | `auto`, `packet-up`, `stream-up`, `stream-one` | no | `transport=xhttp` | XHTTP operating mode. |
+
+### Multiplex fields
+
+Applies to `type=vless`, `vmess`, `trojan` when `multiplex_enabled=1`.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `multiplex_enabled` | bool | `0`/`1` | no | `type=vless/vmess/trojan` | Enables multiplex. |
+| `multiplex_protocol` | enum | `smux`, `yamux`, `h2mux` | no | `multiplex_enabled=1` | Multiplex sub-protocol. Defaults to `smux`. |
+| `multiplex_max_connections` | integer | — | no | `multiplex_enabled=1` | Maximum multiplexed connections. |
+| `multiplex_min_streams` | integer | — | no | `multiplex_enabled=1` | Minimum streams before opening a new connection. |
+| `multiplex_max_streams` | integer | — | no | `multiplex_enabled=1` | Maximum streams per connection. |
+| `multiplex_padding` | bool | `0`/`1` | no | `multiplex_enabled=1` | Enables stream padding. |
+
+### Interface outbound (`type=interface`)
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `interface` | string | device name | yes | `type=interface` | UCI logical interface name (e.g. `wan`) or real netdev. Backend resolves via `helpers.resolve_iface_device()` before binding; falls back to the value verbatim if resolution fails. |
+
+### Share-link URL outbound (`type=url`)
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `proxy_url` | string | proxy share-link URI | yes | `type=url` | A single proxy share link (e.g. `vless://…`, `ss://…`). Parsed by `parse_proxy_url()` at config-generation time. |
+
+### Subscription outbound (`type=subscription`)
+
+Subscription URL and update policy are stored on the outbound UCI section itself. The actual resolved proxy URLs are written by `subscription.uc` to `$TMPDIR/sub_<name>.txt` and read back by `outbound.uc` at config-generation time — `outbound.uc` never reads `sub_url` or `sub_interval` directly.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `sub_url` | string | HTTPS URL | yes | `type=subscription` | Subscription feed URL. Read by `subscription.uc` (`cmd_fetch_subs`) to download the proxy list; **not read by `outbound.uc`**. |
+| `sub_update_via` | string | `direct` or outbound section name | no | `type=subscription` | Route through which the subscription is fetched. `direct` = default WAN; an `interface`-type outbound section name = that WAN device. Read by `subscription.uc`; **not read by `outbound.uc`**. |
+| `sub_interval` | integer | seconds | no | `type=subscription` | Auto-refresh interval in seconds. Read by `subscription.uc` scheduler; **not read by `outbound.uc`**. |
+| `sub_multi` | bool | `0`/`1` | no | `type=subscription` | When `1`, all parsed proxy URLs are expanded into individual child outbounds grouped under a selector or urltest group. When `0`, only the first parseable URL is used. Read by `outbound.uc`. |
+| `sub_selector_type` | enum | `selector`, `urltest` | no | `sub_multi=1` | Group type for expanded proxies. Defaults to `selector`. Read by `outbound.uc`. |
+| `sub_urltest_url` | string | URL | no | `sub_selector_type=urltest` | Connectivity-test URL for the urltest group. Read by `outbound.uc`. |
 
 ## `ruleset`
 
