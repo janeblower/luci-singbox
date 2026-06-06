@@ -106,6 +106,15 @@ function build_constructor_for(s, proto) {
 		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
 			ob.network = s.network;
 	}
+	if (proto === "anytls") {
+		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
+		if (length(s_opt(s, "anytls_idle_check_interval")))
+			ob.idle_session_check_interval = s.anytls_idle_check_interval;
+		if (length(s_opt(s, "anytls_idle_timeout")))
+			ob.idle_session_timeout = s.anytls_idle_timeout;
+		let m = s_num(s.anytls_min_idle_session);
+		if (m > 0) ob.min_idle_session = m;
+	}
 	if (proto === "vless" && length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
 		ob.flow = s.vless_flow;
 	if (proto === "vmess") {
@@ -244,7 +253,7 @@ function build_outbounds(cur) {
 			if (parsed) { parsed.tag = name; outbound = parsed; }
 		} else if (kind === "vless" || kind === "vmess" || kind === "trojan"
 		           || kind === "hysteria2" || kind === "shadowsocks"
-		           || kind === "tuic") {
+		           || kind === "tuic" || kind === "anytls") {
 			outbound = build_constructor_for(section, kind);
 		} else if (kind === "subscription") {
 			let urls = read_subscription_urls(name);

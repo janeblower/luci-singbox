@@ -65,6 +65,8 @@ is_whitelisted() {
     address|alter_id|flow|masquerade|method|multiplex|obfs|password|users|uuid) return 0 ;;
     # JSON-emit keys for tuic (value comes from real UCI fields: tuic_*)
     congestion_control|heartbeat|udp_over_stream|udp_relay_mode|zero_rtt_handshake) return 0 ;;
+    # JSON-emit keys for anytls (value comes from real UCI fields: anytls_*)
+    idle_session_check_interval|idle_session_timeout|min_idle_session) return 0 ;;
     # ucode built-ins / object methods
     foreach|get|get_all|push|length|split|join|keys|values|delete|format) return 0 ;;
     # local / intermediate variable properties (not UCI fields)

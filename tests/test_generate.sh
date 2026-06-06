@@ -173,6 +173,29 @@ check "tuic congestion_control" '"congestion_control": "bbr"'     "$TMPDIR/out.j
 check "tuic udp_relay_mode"     '"udp_relay_mode": "quic"'        "$TMPDIR/out.json"
 check "tuic route -> outbound"  '"outbound": "my_tuic_out"'       "$TMPDIR/out.json"
 
+# ---- anytls constructor outbound end-to-end ----
+echo "-- anytls outbound end-to-end"
+write_cfg "
+config route_default 'rd'
+	option final 'at_e2e'
+
+config outbound 'at_e2e'
+	option enabled '1'
+	option type 'anytls'
+	option server 'e2e.example.com'
+	option server_port '443'
+	option server_password 'pw'
+	option security 'tls'
+	option tls_server_name 'e2e.example.com'
+	option anytls_idle_timeout '60s'
+"
+run_gen
+check "e2e anytls type"        '"type": "anytls"'                "$TMPDIR/out.json"
+check "e2e anytls server"      '"server": "e2e.example.com"'     "$TMPDIR/out.json"
+check "e2e anytls password"    '"password": "pw"'                "$TMPDIR/out.json"
+check "e2e anytls idle_to"     '"idle_session_timeout": "60s"'   "$TMPDIR/out.json"
+check "e2e anytls tls"         '"server_name": "e2e.example.com"' "$TMPDIR/out.json"
+
 # ---- outbound without type is skipped (no longer a valid outbound) ----
 echo "-- outbound without type is skipped"
 write_cfg "

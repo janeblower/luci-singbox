@@ -52,6 +52,7 @@ function buildOutboundsMap() {
 	o.value('hysteria2',    'Hysteria2');
 	o.value('shadowsocks',  'Shadowsocks');
 	o.value('tuic',         'TUIC');
+	o.value('anytls',       'AnyTLS');
 	o.value('interface',    _('Direct (interface)'));
 	o.value('url',          _('Share-link URL'));
 	o.value('subscription', _('Subscription URL'));
@@ -65,6 +66,7 @@ function buildOutboundsMap() {
 	o.depends('type', 'hysteria2');
 	o.depends('type', 'shadowsocks');
 	o.depends('type', 'tuic');
+	o.depends('type', 'anytls');
 	o = s.option(form.Value, 'server_port', _('Server port'));
 	o.modalonly = true; o.datatype = 'port'; o.placeholder = '443';
 	o.depends('type', 'vless');
@@ -73,6 +75,7 @@ function buildOutboundsMap() {
 	o.depends('type', 'hysteria2');
 	o.depends('type', 'shadowsocks');
 	o.depends('type', 'tuic');
+	o.depends('type', 'anytls');
 
 	o = s.option(form.Value, 'server_uuid', _('UUID'));
 	o.modalonly = true; o.password = true;
@@ -85,6 +88,7 @@ function buildOutboundsMap() {
 	o.depends('type', 'hysteria2');
 	o.depends('type', 'shadowsocks');
 	o.depends('type', 'tuic');
+	o.depends('type', 'anytls');
 
 	o = s.option(form.ListValue, 'vless_flow', _('Flow'));
 	o.value('none', _('None')); o.value('xtls-rprx-vision', 'xtls-rprx-vision');
@@ -117,7 +121,7 @@ function buildOutboundsMap() {
 	o.modalonly = true; o.datatype = 'uinteger';
 	o.depends('type', 'hysteria2');
 
-	// TLS (vless/vmess/trojan; hysteria2 and tuic are always TLS)
+	// TLS (vless/vmess/trojan; hysteria2, tuic and anytls are always TLS)
 	o = s.option(form.ListValue, 'security', _('Security'));
 	o.value('none', _('None')); o.value('tls', 'TLS'); o.value('reality', 'Reality');
 	o.modalonly = true; o.default = 'none';
@@ -125,6 +129,7 @@ function buildOutboundsMap() {
 	o.depends('type', 'vmess');
 	o.depends('type', 'trojan');
 	o.depends('type', 'tuic');
+	o.depends('type', 'anytls');
 	o = s.option(form.Value, 'tls_server_name', _('TLS server name'));
 	o.modalonly = true;
 	o.depends({ type: 'vless', security: 'tls' });
@@ -133,6 +138,7 @@ function buildOutboundsMap() {
 	o.depends({ type: 'trojan', security: 'tls' });
 	o.depends('type', 'hysteria2');
 	o.depends({ type: 'tuic', security: 'tls' });
+	o.depends({ type: 'anytls', security: 'tls' });
 	o = s.option(form.Flag, 'tls_insecure', _('Allow insecure'));
 	o.modalonly = true; o.default = '0';
 	o.depends({ type: 'vless', security: 'tls' });
@@ -255,6 +261,21 @@ function buildOutboundsMap() {
 	o.modalonly = true;
 	o.placeholder = '10s';
 	o.depends('type', 'tuic');
+
+	// AnyTLS-specific fields (no transport / multiplex by spec)
+	o = s.option(form.Value, 'anytls_idle_check_interval', _('Idle session check interval'));
+	o.modalonly = true;
+	o.placeholder = '30s';
+	o.depends('type', 'anytls');
+	o = s.option(form.Value, 'anytls_idle_timeout', _('Idle session timeout'));
+	o.modalonly = true;
+	o.placeholder = '30s';
+	o.depends('type', 'anytls');
+	o = s.option(form.Value, 'anytls_min_idle_session', _('Min idle sessions'));
+	o.modalonly = true;
+	o.datatype = 'uinteger';
+	o.placeholder = '0';
+	o.depends('type', 'anytls');
 
 	o = s.option(widgets.DeviceSelect, 'interface', _('Interface'));
 	o.modalonly = true;
