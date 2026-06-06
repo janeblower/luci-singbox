@@ -269,7 +269,23 @@ function call_preview_config() {
 	let body = f.read("all") ?? "";
 	f.close();
 	try { fs.unlink(tmp); } catch (_) {}
-	emit({ status: "ok", content: body });
+
+	// Scrub secrets from the generated config before exposing to read-ACL
+	// callers (spec C1.2). require("scrub") may fail in misconfigured installs;
+	// surface that as a clean RPC error instead of a raw stack trace. Pattern
+	// mirrors export_section.uc:48 (try/catch around require).
+	let scrub;
+	try { scrub = require("scrub"); }
+	catch (e) { emit_err("require(scrub) failed"); return; }
+
+	let obj;
+	try { obj = json(body); }
+	catch (e) { emit_err("preview output not valid JSON"); return; }
+
+	// Match generate.uc:102 pretty-print indent (%.4J) so the wire format the
+	// UI sees here is byte-identical to what `generate` would write to disk.
+	let scrubbed_body = sprintf("%.4J", scrub.scrub_secrets(obj));
+	emit({ status: "ok", content: scrubbed_body });
 }
 
 function call_clash_request() {

@@ -16,9 +16,11 @@ if command -v ucode >/dev/null 2>&1; then
 	# to spy on child invocations, and we mustn't let that stub catch the
 	# top-level interpreter that's running the rpcd handler itself.
 	UCODE_BIN=$(command -v ucode)
-	UCODE_LIB_FLAGS=""
+	# Handler itself does `require("scrub")` (preview_config secret-masking,
+	# spec C1.2), so it needs the app's lib dir on its module search path.
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
 else
 	echo "SKIP: ucode not available"
@@ -370,7 +372,10 @@ out=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
 printf "%s\n" "$out" | je 'd.status == "ok"' \
 	|| { echo "FAIL: preview_config not ok; out=$out"; exit 1; }
 content=$(printf "%s\n" "$out" | jval 'd.content')
-printf "%s\n" "$content" | grep -q '"preview":"hello"' \
+# Whitespace-tolerant: preview_config re-serializes via sprintf("%.4J", …) to
+# scrub secrets, which inserts a space after the colon. We just want to prove
+# the key/value survived the round-trip.
+printf "%s\n" "$content" | grep -Eq '"preview"[[:space:]]*:[[:space:]]*"hello"' \
 	|| { echo "FAIL: preview content missing; out=$out"; exit 1; }
 # Content must start with `{` — a valid JSON root.
 case "$content" in
@@ -419,5 +424,74 @@ fail_count=$(count_preview_tmpfiles)
 [ "$fail_count" -eq "$before_count" ] \
 	|| { echo "FAIL: preview_config left a tmpfile after generate failure"; exit 1; }
 echo "  PASS: preview_config error path + cleanup"
+
+echo "-- call preview_config scrubs secrets in the returned content"
+# Stub ucode to write a config JSON containing realistic secrets, then exit 0.
+# After scrub, the wire content must NOT include the secret values, MUST include
+# *** markers for the known secret keys, and MUST preserve non-secret fields.
+cat >"$tmpdir/ucode" <<'EOF'
+#!/bin/sh
+: "${SINGBOX_CONFIG:?SINGBOX_CONFIG not set}"
+cat >"$SINGBOX_CONFIG" <<'JSON'
+{
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "out-test",
+      "server": "vless.example.com",
+      "server_port": 443,
+      "uuid": "deadbeef-1111-2222-3333-cafecafecafe",
+      "password": "trojanish-secret",
+      "tls": {
+        "reality": {
+          "public_key": "REALITY-PUB",
+          "private_key": "REALITY-PRIV",
+          "short_id": "abcd1234"
+        }
+      }
+    }
+  ],
+  "experimental": {
+    "clash_api": { "secret": "topsecret-clash" }
+  }
+}
+JSON
+exit 0
+EOF
+chmod +x "$tmpdir/ucode"
+
+rm -f /tmp/singbox-ui-preview.*.json
+out=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
+	run_h call preview_config)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: preview_config not ok; out=$out"; exit 1; }
+content=$(printf "%s\n" "$out" | jval 'd.content')
+
+# Negative: raw secret strings must be absent from content.
+for secret in 'deadbeef-1111' 'trojanish-secret' 'REALITY-PRIV' 'REALITY-PUB' 'abcd1234' 'topsecret-clash'; do
+	printf "%s\n" "$content" | grep -q "$secret" && \
+		{ echo "FAIL: preview_config leaked secret '$secret'"; exit 1; }
+done
+echo "  PASS: preview_config strips all 6 secret values"
+
+# Positive: *** markers must appear at the masked keys.
+for k in uuid password private_key public_key short_id secret; do
+	printf "%s\n" "$content" | grep -Eq "\"$k\"[[:space:]]*:[[:space:]]*\"\*\*\*\"" \
+		|| { echo "FAIL: preview_config missing *** marker for $k"; exit 1; }
+done
+echo "  PASS: preview_config emits *** marker for every secret key"
+
+# Non-secret fields preserved verbatim.
+for keep in 'vless.example.com' 'out-test' '443'; do
+	printf "%s\n" "$content" | grep -q "$keep" \
+		|| { echo "FAIL: preview_config scrubbed non-secret '$keep'"; exit 1; }
+done
+echo "  PASS: preview_config preserves non-secret fields"
+
+# Cleanup — same invariant as the other preview_config tests.
+scrub_count=$(count_preview_tmpfiles)
+[ "$scrub_count" -eq "$before_count" ] \
+	|| { echo "FAIL: preview_config left a tmpfile after scrub test"; exit 1; }
+echo "  PASS: preview_config scrub + cleanup"
 
 echo "OK"
