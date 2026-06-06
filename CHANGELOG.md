@@ -6,7 +6,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-(empty — next development cycle is Phase B)
+Phase B — completion of protocol field coverage, JSON export, form
+validation, share-link parsers, and a pre-apply dry-run preview.
+
+### Added
+
+**TLS**
+- ECH support on inbound (`tls_ech_key` list, `tls_ech_key_path`) and outbound (`tls_ech_config` list, `tls_ech_config_path`).
+- TLS fragment options on outbound (`tls_fragment`, `tls_fragment_fallback_delay`, `tls_record_fragment`) — Since sing-box 1.12.
+
+**Hysteria2**
+- `brutal_debug` on both inbound and outbound.
+- `ignore_client_bandwidth` on inbound.
+- `network` restriction (`tcp` / `udp`) on outbound.
+
+**TUIC**
+- New TUIC outbound: `congestion_control`, `udp_relay_mode` and `udp_over_stream` (mutually exclusive), `zero_rtt_handshake`, `heartbeat`, `network`.
+
+**Shadowsocks**
+- Inbound multi-user via `list ss_user 'name:method:password'`.
+- Inbound `network` restriction.
+- Inbound `multiplex` block.
+
+**AnyTLS**
+- New AnyTLS outbound (Since sing-box 1.12) with idle session management (`idle_session_check_interval`, `idle_session_timeout`, `min_idle_session`).
+
+**VMess / VLESS multi-user inbound**
+- `list inbound_user 'name:uuid[:alterId]'` for VMess and `list inbound_user 'name:uuid[:flow]'` for VLESS.
+
+**UI**
+- Form validators in `lib/validators.js`: `isPort`, `isUuid`, `isHost`, `isAlpnNonEmpty`, `requiresWsPath`, plus a warn-only `softWarnCongestion` for unknown congestion-control values. Wired into the inbound and outbound tabs.
+- Per-row "Export JSON" button on inbounds and outbounds — calls new `singbox-ui::export_section` RPC, opens a modal with a Copy button.
+- Action-bar "Preview config" button — calls new `singbox-ui::preview_config` RPC, opens a modal with the full generated `config.json` and a Copy button. Dry-run does not write `/etc/sing-box/config.json`, does not touch nftables, and does not restart the service.
+
+**Share-link parsers**
+- `vmess://` (base64-JSON v2rayN variant, both `aid` and `alterId` accepted).
+- `ss://` (plain `method:password@host:port#name` and base64 userinfo).
+- `trojan://` (with `sni`, `type=ws`, `path` parameters).
+
+### Changed
+
+- VMess inbound users[] now emits `alterId` (camelCase) instead of `alter_id`, matching the sing-box 1.12 documented schema. Outbound legacy single-user `alter_id` retained.
+- Inbound `tls.reality.short_id` is now emitted as a single string (was wrapped in a single-element array) per sing-box 1.12 schema. Outbound was already correct.
+
+### Fixed
+
+- Reality `short_id` JSON shape on inbound (single string, not array).
+
+### Docs
+
+- New `docs/protocol-coverage.md` matrix tracking every protocol field × inbound/outbound × status (`есть` / `нет` / `out-of-scope`) for sing-box 1.12.
+- `docs/uci-schema.md` updated with all Phase B UCI fields (ECH, fragment, brutal_debug, ignore_client_bandwidth, TUIC fields, AnyTLS fields, Shadowsocks multi-user, VMess/VLESS multi-user, multiplex on shadowsocks inbound).
+
+### Tests
+
+- ucode unit coverage for every new field across `tests/test_inbounds_uc.sh` and `tests/test_outbound_constructor.sh`.
+- End-to-end `tests/test_generate.sh` scenarios for ECH, hysteria2 obfs/brutal_debug, multi-user vmess/vless inbound.
+- `tests/test_subscription_uc.sh` cases for the new vmess/ss/trojan parsers (one positive, one malformed input each).
+- `tests/test_rpcd_handler.sh` cases for `export_section` and `preview_config` (no FS side effects).
+- `tests/test_validators_js.sh` for the pure-function validators (skipped where `node` is absent).
+
+
 
 ## [v0.1.0] — 2026-06-06
 
