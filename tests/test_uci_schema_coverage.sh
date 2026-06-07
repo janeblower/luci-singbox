@@ -77,6 +77,8 @@ is_whitelisted() {
     inbounds|outbounds|dns|route|rules|servers|log|experimental|json) return 0 ;;
     # generated/computed local properties
     out_path|outpath|raw_path|v4|v6|timeout|user_agent) return 0 ;;
+    # reveal.uc internal JSON token-store fields (not UCI fields)
+    issued_ts|token) return 0 ;;
     *) return 1 ;;
   esac
 }
