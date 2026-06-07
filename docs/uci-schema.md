@@ -207,6 +207,8 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 | `server_password` | string | — | yes (single-user) | `protocol=shadowsocks` | Shared password for the single-user mode. Ignored when `ss_user` is non-empty (multi-user `users[]` takes precedence). |
 | `ss_user` | list | `"name:password"` per entry | no | `protocol=shadowsocks` | Multi-user list. Each entry colon-separates the user name from the password. When non-empty, `users[]` is emitted and top-level `server_password` is dropped. Malformed entries (no colon, empty name, or empty password) are silently skipped. |
 
+> **Limitation — colon-in-password:** the `ss_user` entry format uses `:` as the sole field separator, so the parser splits at the **first** colon only. A password that itself contains a literal `:` will be silently truncated at that first colon (anything after it is dropped). Use a colon-free passphrase, or base64-encode the password and document the encoding alongside the section, until a richer entry format (TSV / JSON) lands.
+
 ### User credential fields (vless / vmess / trojan)
 
 | Field | Type | Values | Required | Depends on | Description |

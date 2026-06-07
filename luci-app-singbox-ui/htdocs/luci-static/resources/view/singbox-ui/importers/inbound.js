@@ -2,6 +2,7 @@
 'require uci';
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
+'require view.singbox-ui.lib.common as SbCommon';
 
 // Constrained to the protocols inbound.uc actually builds — importing
 // anything else would create a UCI section that generate.uc silently drops.
@@ -157,50 +158,23 @@ function jsonImportInbound(o) {
 // message instead.
 function openJsonExportModal(kind, name) {
 	var pre = E('pre', {
-		'class': 'cbi-input-textarea',
+		'class': 'cbi-input-textarea sb-json-modal-pre',
 		'style': 'max-height:50vh;overflow:auto;white-space:pre-wrap;' +
 		         'font-family:monospace;font-size:90%;'
 	}, _('Loading…'));
-	var status = E('div', { 'style': 'margin-top:8px;color:#555;font-size:90%;' });
+	var status = E('div', { 'class': 'sb-json-modal-status',
+		'style': 'margin-top:8px;color:#555;font-size:90%;' });
 
+	// Clipboard helpers now live in lib/common.js (C2.2.6 dedup). showCopyResult
+	// stays inline because the status node is local to this modal — the helper
+	// just calls back into it.
 	function showCopyResult(msg, isErr) {
 		status.textContent = msg;
-		status.style.color = isErr ? '#c33' : '#3a3';
+		status.classList.remove('sb-error', 'sb-ok');
+		status.classList.add(isErr ? 'sb-error' : 'sb-ok');
 	}
-
-	function copyToClipboard() {
-		var txt = pre.textContent || '';
-		// Prefer the async clipboard API but fall back to a hidden textarea +
-		// document.execCommand("copy") for older browsers / non-HTTPS LuCI
-		// installs where navigator.clipboard is unavailable.
-		if (window.navigator && window.navigator.clipboard
-		    && typeof window.navigator.clipboard.writeText === 'function') {
-			window.navigator.clipboard.writeText(txt).then(function () {
-				showCopyResult(_('Copied to clipboard.'), false);
-			}, function () {
-				fallbackCopy(txt);
-			});
-		} else {
-			fallbackCopy(txt);
-		}
-	}
-
-	function fallbackCopy(txt) {
-		try {
-			var ta = E('textarea', {
-				'style': 'position:fixed;top:-1000px;left:-1000px;width:1px;height:1px;'
-			});
-			ta.value = txt;
-			document.body.appendChild(ta);
-			ta.focus(); ta.select();
-			var ok = false;
-			try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-			document.body.removeChild(ta);
-			if (ok) showCopyResult(_('Copied to clipboard.'), false);
-			else showCopyResult(_('Copy failed — select the text and copy manually.'), true);
-		} catch (e) {
-			showCopyResult(_('Copy failed — select the text and copy manually.'), true);
-		}
+	function onCopyClick() {
+		SbCommon.copyToClipboard(pre.textContent || '', showCopyResult);
 	}
 
 	ui.showModal(_('Export JSON') + ' — ' + kind + ' ' + name, [
@@ -208,7 +182,7 @@ function openJsonExportModal(kind, name) {
 		E('div', { 'class': 'right', 'style': 'margin-top:12px;' }, [
 			E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, _('Close')),
 			' ',
-			E('button', { 'class': 'cbi-button cbi-button-action', 'click': copyToClipboard },
+			E('button', { 'class': 'cbi-button cbi-button-action', 'click': onCopyClick },
 				_('Copy'))
 		])
 	]);

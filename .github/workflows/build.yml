@@ -53,7 +53,11 @@ jobs:
       - name: shellcheck
         run: |
           shellcheck tests/*.sh scripts/*.sh \
-            luci-app-singbox-ui/root/etc/init.d/singbox-ui \
+            luci-app-singbox-ui/root/etc/init.d/singbox-ui
+          # uci-defaults runs under busybox ash on OpenWrt, not bash. Lint
+          # it with --shell=ash so bashisms (arrays, [[ ]], $'...') fail at
+          # CI rather than silently at first-boot on the router.
+          shellcheck --shell=ash \
             luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui
 
   build:

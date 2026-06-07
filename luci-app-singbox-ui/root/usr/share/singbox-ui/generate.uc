@@ -14,6 +14,7 @@ let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 let fs  = require("fs");
 
+let helpers      = require("helpers");
 let log_mod      = require("log");
 let dns_mod      = require("dns");
 let inbound_mod  = require("inbound");
@@ -22,6 +23,13 @@ let route_mod    = require("route");
 let ruleset_mod  = require("ruleset");
 let cache_mod    = require("cache");
 let clash_mod    = require("clash");
+
+// Wipe the iface→netdev memoisation table held inside lib/helpers.uc. A
+// long-lived ucode process (e.g. rpcd worker that imports this module once
+// and re-invokes it across config reloads) would otherwise serve stale
+// mappings if /etc/config/network was edited between runs. The cost is
+// negligible — the table is small and re-populated lazily on demand.
+helpers.reset_iface_cache();
 
 let config = {};
 
@@ -94,12 +102,61 @@ let clash_block = clash_mod.build_clash_api(uci);
 if (clash_block) experimental.clash_api = clash_block;
 if (length(keys(experimental))) config.experimental = experimental;
 
-let f = fs.open(CONFIG_OUT, "w");
-if (!f) {
-	warn(`generate.uc: cannot open ${CONFIG_OUT} for writing\n`);
+// Atomic publish: write to <CONFIG_OUT>.tmp.<entropy>, then fs.rename to
+// CONFIG_OUT. On any failure, unlink the tmp. Keeps a <CONFIG_OUT>.prev
+// backup of the previous file so an operator can roll back manually.
+//
+// Crash-safety: a SIGKILL between fs.open and fs.rename leaves an orphan
+// tmpfile (which a subsequent successful run will replace, not stat); but
+// never a truncated CONFIG_OUT that sing-box would refuse to start with.
+// This is the file analog of preview_tmp() in rpcd/singbox-ui.
+//
+// Entropy: 4 bytes from /dev/urandom mixed with time(). On the off chance
+// /dev/urandom is unavailable, fall back to time() alone — collisions are
+// harmless because fs.rename over the tmp is atomic regardless.
+function publish_atomic(path, body) {
+	let n = 0;
+	let r;
+	try { r = fs.open("/dev/urandom", "r"); } catch (_) { r = null; }
+	if (r) {
+		let b = r.read(4) ?? "";
+		r.close();
+		for (let i = 0; i < length(b); i++) n = n * 256 + ord(b, i);
+	}
+	let tmp = sprintf("%s.tmp.%d.%d", path, time(), n);
+
+	let f = fs.open(tmp, "w");
+	if (!f) {
+		warn(sprintf("generate.uc: cannot open tmpfile %s for writing\n", tmp));
+		return false;
+	}
+	let ok = true;
+	try { f.write(body); } catch (_) { ok = false; }
+	f.close();
+	if (!ok) {
+		warn(sprintf("generate.uc: write to %s failed\n", tmp));
+		try { fs.unlink(tmp); } catch (_) {}
+		return false;
+	}
+
+	// Best-effort backup of the previous file. Ignore failures (file may
+	// not exist on first run, or the rename may not be permitted).
+	let prev = path + ".prev";
+	try { fs.unlink(prev); } catch (_) {}
+	try { fs.rename(path, prev); } catch (_) {}
+
+	let renamed = false;
+	try { renamed = fs.rename(tmp, path); } catch (_) { renamed = false; }
+	if (!renamed) {
+		warn(sprintf("generate.uc: rename %s -> %s failed\n", tmp, path));
+		try { fs.unlink(tmp); } catch (_) {}
+		return false;
+	}
+	return true;
+}
+
+if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 	exit(1);
 }
-f.write(sprintf("%.4J\n", config));
-f.close();
 
 print("OK\n");

@@ -1,15 +1,36 @@
 #!/bin/sh
 # Run by OpenWrt on first boot after package install. Removes itself on success.
 
+# ---------------------------------------------------------------------------
+# Schema version sentinel (Phase C2.1.2).
+# Bump CURRENT_SCHEMA when a new migration is added below. Old installs have
+# no _meta section and are treated as version 0. If the installed version is
+# already >= CURRENT_SCHEMA, every migration is a no-op and we exit early —
+# this is the canonical idempotency guarantee. (Individual data-shape guards
+# inside each migration_*() are kept as defence-in-depth.)
+# ---------------------------------------------------------------------------
+CURRENT_SCHEMA=15
+
+cur_ver=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
+case "$cur_ver" in
+	''|*[!0-9]*) cur_ver=0 ;;
+esac
+
+if [ "$cur_ver" -ge "$CURRENT_SCHEMA" ]; then
+	exit 0
+fi
+
 # Force LuCI's RPC ACL cache to reload so the menu entry appears immediately.
 rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
 
 # Reload rpcd so the new ACL JSON is picked up.
 /etc/init.d/rpcd reload >/dev/null 2>&1
 
-# Install cron entry: refresh subscriptions+rulesets every 30 minutes.
+# Install cron entry: refresh subscriptions+rulesets on a fixed interval.
 # Per-section update_interval / sub_interval is honoured by subscription.uc itself.
-CRON_LINE='*/30 * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh all >/dev/null 2>&1'
+# Single source of truth for the cadence — bump CRON_INTERVAL_MIN to change it.
+CRON_INTERVAL_MIN=30  # how often subscription/ruleset refresh runs (minutes)
+CRON_LINE="*/${CRON_INTERVAL_MIN} * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh all >/dev/null 2>&1"
 CRON_FILE=/etc/crontabs/root
 mkdir -p "$(dirname "$CRON_FILE")"
 touch "$CRON_FILE"
@@ -49,7 +70,6 @@ migrate_fakeip_list_to_option() {
 	# Re-set as a scalar option (uci delete first removes the list typing).
 	uci -q delete singbox-ui.fakeip."$1" >/dev/null 2>&1 || true
 	uci -q set    singbox-ui.fakeip."$1"="$_mig_first"
-	uci -q commit singbox-ui
 }
 
 migrate_fakeip_list_to_option inet4_range
@@ -85,7 +105,6 @@ migrate_tproxy_to_inbound() {
 	done
 
 	uci -q delete singbox-ui.tproxy
-	uci -q commit singbox-ui
 }
 
 migrate_tproxy_to_inbound
@@ -94,17 +113,12 @@ migrate_tproxy_to_inbound
 # Drop the removed per-outbound `expose_*` options from all outbound sections.
 # ---------------------------------------------------------------------------
 migrate_drop_expose() {
-	_changed=0
 	for _sec in $(uci -q show singbox-ui 2>/dev/null \
 		| sed -n 's/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
 		for _o in expose_proxy expose_type expose_port expose_listen; do
-			if uci -q get "singbox-ui.$_sec.$_o" >/dev/null 2>&1; then
-				uci -q delete "singbox-ui.$_sec.$_o"
-				_changed=1
-			fi
+			uci -q delete "singbox-ui.$_sec.$_o" 2>/dev/null || true
 		done
 	done
-	[ "$_changed" = "1" ] && uci -q commit singbox-ui
 	return 0
 }
 
@@ -128,13 +142,11 @@ ensure_section() {
 if ensure_section log log; then
 	uci -q set singbox-ui.log.enabled='1'
 	uci -q set singbox-ui.log.level='info'
-	uci -q commit singbox-ui
 fi
 
 if ensure_section cache cache; then
 	uci -q set singbox-ui.cache.enabled='0'
 	uci -q set singbox-ui.cache.path='/tmp/singbox-ui-cache.db'
-	uci -q commit singbox-ui
 fi
 
 # ---------------------------------------------------------------------------
@@ -152,7 +164,6 @@ migrate_fakeip_to_dns_server() {
 	uci -q set singbox-ui.fakeip.type='fakeip'
 	uci -q set singbox-ui.fakeip.inet4_range="$_v4"
 	[ -n "$_v6" ] && uci -q set singbox-ui.fakeip.inet6_range="$_v6"
-	uci -q commit singbox-ui
 }
 migrate_fakeip_to_dns_server
 
@@ -177,12 +188,10 @@ migrate_dns_outbound_to_server() {
 	uci -q set singbox-ui.dns='dns' 2>/dev/null || true
 	uci -q set singbox-ui.dns.final='out_dns'
 	uci -q delete singbox-ui.dns_outbound
-	uci -q commit singbox-ui
 }
 migrate_dns_outbound_to_server
 
 migrate_ruleset_dns_fakeip() {
-	_changed=0
 	for _sec in $(uci -q show singbox-ui 2>/dev/null | sed -n 's/^singbox-ui\.\([^.]*\)=ruleset$/\1/p'); do
 		if [ "$(uci -q get "singbox-ui.$_sec.dns_fakeip" 2>/dev/null)" = "1" ]; then
 			_tag=$(uci -q get "singbox-ui.$_sec.dns_fakeip_tag" 2>/dev/null || echo 'fakeip')
@@ -192,15 +201,11 @@ migrate_ruleset_dns_fakeip() {
 			uci -q delete "singbox-ui.$_rule.ruleset" 2>/dev/null || true
 			uci -q add_list "singbox-ui.$_rule.ruleset=$_sec"
 			uci -q set "singbox-ui.$_rule.server=$_tag"
-			_changed=1
 		fi
 		for _o in dns_fakeip dns_fakeip_tag; do
-			if uci -q get "singbox-ui.$_sec.$_o" >/dev/null 2>&1; then
-				uci -q delete "singbox-ui.$_sec.$_o"; _changed=1
-			fi
+			uci -q delete "singbox-ui.$_sec.$_o" 2>/dev/null || true
 		done
 	done
-	[ "$_changed" = "1" ] && uci -q commit singbox-ui
 	return 0
 }
 migrate_ruleset_dns_fakeip
@@ -212,7 +217,6 @@ if ensure_section clash_api clash_api; then
 	uci -q set singbox-ui.clash_api.enabled='0'
 	uci -q set singbox-ui.clash_api.listen='127.0.0.1'
 	uci -q set singbox-ui.clash_api.port='9090'
-	uci -q commit singbox-ui
 fi
 
 ensure_clash_api_secret() {
@@ -222,7 +226,6 @@ ensure_clash_api_secret() {
 	_new=$(head -c16 /dev/urandom 2>/dev/null | hexdump -v -e '/1 "%02x"' 2>/dev/null)
 	[ -n "$_new" ] || _new=$(date +%s)$$
 	uci -q set singbox-ui.clash_api.secret="$_new"
-	uci -q commit singbox-ui
 }
 ensure_clash_api_secret
 
@@ -260,8 +263,6 @@ migrate_cache_storage() {
 	# store_fakeip default: only set if absent.
 	_sf=$(uci -q get singbox-ui.cache.store_fakeip 2>/dev/null || echo '')
 	[ "$_sf" = "" ] && uci -q set singbox-ui.cache.store_fakeip='1'
-
-	uci -q commit singbox-ui
 }
 migrate_cache_storage
 
@@ -278,7 +279,6 @@ ensure_dns_inbound() {
 	uci -q set singbox-ui.dns_in.listen_port='53'
 	uci -q set singbox-ui.dns_in.network='udp'
 	uci -q set singbox-ui.dns_in.dns_listener='1'
-	uci -q commit singbox-ui
 }
 ensure_dns_inbound
 
@@ -293,7 +293,6 @@ purge_extra_json() {
 			uci -q delete "singbox-ui.$_sec.extra_json" 2>/dev/null || true
 		done
 	done
-	uci -q commit singbox-ui
 }
 purge_extra_json
 
@@ -315,7 +314,6 @@ purge_inbound_mode_json() {
 		uci -q delete "singbox-ui.$_sec.mode" 2>/dev/null || true
 		uci -q delete "singbox-ui.$_sec.inbound_json" 2>/dev/null || true
 	done
-	uci -q commit singbox-ui
 }
 purge_inbound_mode_json
 
@@ -361,8 +359,18 @@ migrate_outbound_type() {
 		uci -q delete "singbox-ui.$_sec.protocol"   2>/dev/null || true
 		uci -q delete "singbox-ui.$_sec.proxy_json" 2>/dev/null || true
 	done
-	uci -q commit singbox-ui
 }
 migrate_outbound_type
+
+# ---------------------------------------------------------------------------
+# Finalise (Phase C2.1.3): set the schema version sentinel and commit ONCE.
+# All migrations above were pure in-memory edits, so this single commit is
+# the only point at which UCI files are rewritten — crash-safe between
+# migrations. Also covers the fresh-install case (no migrations fired) by
+# initialising _meta unconditionally.
+# ---------------------------------------------------------------------------
+uci -q set singbox-ui._meta='_meta'
+uci -q set singbox-ui._meta.schema_version="$CURRENT_SCHEMA"
+uci commit singbox-ui
 
 exit 0

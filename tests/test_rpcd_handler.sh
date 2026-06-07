@@ -106,7 +106,10 @@ echo "-- call read_config returns file contents"
 echo '{"hello":"world"}' >"$tmpdir/config.json"
 out=$(echo '{}' | SINGBOX_CONFIG="$tmpdir/config.json" run_h call read_config)
 printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: read_config should return ok"; exit 1; }
-printf "%s\n" "$out" | jval 'd.content' | grep -q '"hello":"world"' || { echo "FAIL: read_config content mismatch"; exit 1; }
+# Phase C2: read_config now re-serializes via sprintf("%.4J", …) after scrub,
+# which inserts a space after `:` and pretty-prints. Whitespace-tolerant grep.
+printf "%s\n" "$out" | jval 'd.content' | grep -Eq '"hello"[[:space:]]*:[[:space:]]*"world"' \
+	|| { echo "FAIL: read_config content mismatch"; exit 1; }
 
 echo "-- call status returns ok with empty lists when tmpdir missing"
 out=$(echo '{}' | SINGBOX_TMP=/nonexistent/path run_h call status)
@@ -391,10 +394,13 @@ echo '{"real":"untouched"}' >"$real_cfg"
 real_before=$(cat "$real_cfg")
 
 # Remove any leftover tmpfiles from previous runs so leak detection is exact.
-rm -f /tmp/singbox-ui-preview.*.json
+# Phase C2 (C2.1.9): preview_tmp now uses mktemp -p /tmp
+# singbox-ui-preview.XXXXXX (atomic O_EXCL, no .json suffix), so the leak
+# glob matches that pattern.
+rm -f /tmp/singbox-ui-preview.*
 
 count_preview_tmpfiles() {
-	find /tmp -maxdepth 1 -name 'singbox-ui-preview.*.json' 2>/dev/null | wc -l
+	find /tmp -maxdepth 1 -name 'singbox-ui-preview.*' 2>/dev/null | wc -l
 }
 before_count=$(count_preview_tmpfiles)
 
@@ -491,7 +497,7 @@ exit 0
 EOF
 chmod +x "$tmpdir/ucode"
 
-rm -f /tmp/singbox-ui-preview.*.json
+rm -f /tmp/singbox-ui-preview.*
 out=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
 	run_h call preview_config)
 printf "%s\n" "$out" | je 'd.status == "ok"' \
@@ -524,5 +530,78 @@ scrub_count=$(count_preview_tmpfiles)
 [ "$scrub_count" -eq "$before_count" ] \
 	|| { echo "FAIL: preview_config left a tmpfile after scrub test"; exit 1; }
 echo "  PASS: preview_config scrub + cleanup"
+
+# === C2.1.5: is_singbox_running no longer uses pgrep -f ===
+echo "-- C2.1.5: is_singbox_running no longer uses pgrep -f"
+grep -q 'pgrep -f "sing-box run"' luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui && \
+	{ echo "FAIL: pgrep -f \"sing-box run\" still present"; exit 1; } || \
+	echo "  PASS: pgrep -f \"sing-box run\" removed"
+
+# Positive: rpcd answers status with running:true via fallback pgrep -x when
+# ubus is unavailable (the test env has no ubus, so the fallback path runs).
+cat >"$tmpdir/pgrep" <<'EOF'
+#!/bin/sh
+# Stub: only succeed for pgrep -x sing-box (the new fallback).
+case "$*" in
+	"-x sing-box") exit 0 ;;
+	*) exit 1 ;;
+esac
+EOF
+chmod +x "$tmpdir/pgrep"
+raw=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_TMP=/nonexistent/path run_h call status)
+printf "%s\n" "$raw" | je 'd.status == "ok" && d.running == true' \
+	|| { echo "FAIL: status running=true via pgrep -x fallback; raw=[$raw]"; exit 1; }
+echo "  PASS: status running=true via pgrep -x fallback"
+
+# === C2.1.9: preview_tmp uses mktemp ===
+echo "-- C2.1.9: preview_tmp uses mktemp"
+grep -q 'mktemp' luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui && \
+	echo "  PASS: preview_tmp uses mktemp" || \
+	{ echo "FAIL: mktemp not present"; exit 1; }
+
+# === C2 (read_config scrub gap): read_config masks secrets ===
+echo "-- C2 (read_config scrub gap): read_config masks secrets"
+cat >"$tmpdir/config-with-secrets.json" <<'EOF'
+{
+  "outbounds": [{
+    "type": "vless",
+    "tag": "out-rc",
+    "server": "vl.example.com",
+    "server_port": 443,
+    "uuid": "deadbeef-7777-8888-9999-secretsecret",
+    "tls": {
+      "reality": {
+        "public_key": "RC-PUBKEY",
+        "private_key": "RC-PRIVKEY",
+        "short_id": "rc-shortid"
+      }
+    }
+  }],
+  "experimental": { "clash_api": { "secret": "rc-clash-secret" } }
+}
+EOF
+out=$(echo '{}' | SINGBOX_CONFIG="$tmpdir/config-with-secrets.json" run_h call read_config)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: read_config not ok; out=$out"; exit 1; }
+content=$(printf "%s\n" "$out" | jval 'd.content')
+
+# Negative: raw secrets must be absent.
+for secret in 'deadbeef-7777' 'RC-PRIVKEY' 'RC-PUBKEY' 'rc-shortid' 'rc-clash-secret'; do
+	printf "%s\n" "$content" | grep -q "$secret" && \
+		{ echo "FAIL: read_config leaked '$secret'"; exit 1; }
+done
+echo "  PASS: read_config strips 5 secret values"
+
+# Positive: *** markers + non-secret preserved.
+for k in uuid private_key public_key short_id secret; do
+	printf "%s\n" "$content" | grep -Eq "\"$k\"[[:space:]]*:[[:space:]]*\"\*\*\*\"" \
+		|| { echo "FAIL: missing *** for $k"; exit 1; }
+done
+echo "  PASS: read_config emits *** markers"
+for keep in 'vl.example.com' 'out-rc' '443'; do
+	printf "%s\n" "$content" | grep -q "$keep" \
+		|| { echo "FAIL: scrubbed non-secret '$keep'"; exit 1; }
+done
+echo "  PASS: read_config preserves non-secret fields"
 
 echo "OK"

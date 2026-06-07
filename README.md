@@ -1,5 +1,41 @@
 # luci-app-singbox-ui
 
+LuCI web UI for [sing-box](https://sing-box.sagernet.org/) on OpenWrt
+24.10+. Provides a forms-based configuration interface for sing-box
+1.12.x — inbounds (tproxy, direct, tun, mixed/socks/http), outbounds
+(vless, vmess, trojan, hysteria2, shadowsocks, tuic, anytls, plus
+selector/urltest/direct/block/dns), routing, DNS, rule-sets, and
+subscriptions. Generates `config.json` directly from UCI sections.
+
+## Highlights
+
+- Native UI for the active sing-box 1.12.x feature set: TLS+ECH,
+  multiplex, reality, fragment, hysteria2 brutal/obfs, TUIC, anytls.
+- Multi-user vmess/vless/shadowsocks inbounds.
+- Share-link parsers for vmess://, vless://, ss://, trojan://, hy2://.
+- JSON import and (scrubbed) export per section.
+- Subscriptions with the right User-Agent for DDoS-Guarded providers.
+- nftables-driven TProxy with atomic table replace.
+- Monitoring tab backed by the Clash API.
+- Russian translation included.
+
+## Installation (preview)
+
+The package conflicts with the legacy `firewall` package because it
+drives nftables directly. See the warning printed by `opkg install`
+for details.
+
+## Documentation
+
+See `docs/uci-schema.md`, `docs/protocol-coverage.md`, and
+`docs/release.md` for the technical reference.
+
+---
+
+(Russian section below — оригинальное описание на русском.)
+
+# luci-app-singbox-ui
+
 LuCI-морда для [sing-box](https://github.com/SagerNet/sing-box) на OpenWrt —
 без правки JSON руками, без bash-обвязки, без fw3.
 

@@ -58,8 +58,9 @@ if (kind === "inbound") {
 	// half a config.
 	if (t === "interface" || t === "url" || t === "subscription")
 		fail("export_section does not support type=" + t);
-	if (t !== "vless" && t !== "vmess" && t !== "trojan" && t !== "hysteria2"
-	    && t !== "shadowsocks" && t !== "tuic" && t !== "anytls")
+	let helpers;
+	try { helpers = require("helpers"); } catch (e) { fail("require(helpers) failed"); }
+	if (!helpers.is_outbound_proxy_kind(t))
 		fail("unknown outbound type: " + (length(t) ? t : "<empty>"));
 	let mod;
 	try { mod = require("outbound"); } catch (e) { fail("require(outbound) failed"); }

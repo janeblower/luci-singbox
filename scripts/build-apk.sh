@@ -89,47 +89,22 @@ APP_ROOT="$WORK_DIR/pkg-root-app"
 APP_SCRIPTS="$WORK_DIR/scripts-app"
 rm -rf "$APP_ROOT" "$APP_SCRIPTS"
 
-install -d \
-  "$APP_ROOT/etc/config" \
-  "$APP_ROOT/etc/uci-defaults" \
-  "$APP_ROOT/etc/init.d" \
-  "$APP_ROOT/usr/libexec/rpcd" \
-  "$APP_ROOT/usr/share/luci/menu.d" \
-  "$APP_ROOT/usr/share/rpcd/acl.d" \
-  "$APP_ROOT/usr/share/singbox-ui" \
-  "$APP_ROOT/usr/share/singbox-ui/lib" \
-  "$APP_ROOT/www/luci-static/resources/view/singbox-ui" \
-  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/lib" \
-  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/importers" \
-  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/tabs" \
-  "$APP_ROOT/www/luci-static/resources/view/singbox-ui/widgets"
+# Install file set is driven from scripts/install-manifest.txt, shared with
+# luci-app-singbox-ui/Makefile. Single source of truth: adding a file means
+# editing one place. tests/test_install_lists_match.sh asserts the parity.
+MANIFEST="$SCRIPT_DIR/install-manifest.txt"
+[ -f "$MANIFEST" ] || { echo "install-manifest.txt missing at $MANIFEST" >&2; exit 1; }
 
-install -m 0644 "$PKG_SRC/root/etc/config/singbox-ui"                        "$APP_ROOT/etc/config/singbox-ui"
-install -m 0755 "$PKG_SRC/root/etc/uci-defaults/99-luci-app-singbox-ui"      "$APP_ROOT/etc/uci-defaults/99-luci-app-singbox-ui"
-install -m 0755 "$PKG_SRC/root/etc/init.d/singbox-ui"                        "$APP_ROOT/etc/init.d/singbox-ui"
-install -m 0755 "$PKG_SRC/root/usr/libexec/rpcd/singbox-ui"                  "$APP_ROOT/usr/libexec/rpcd/singbox-ui"
-install -m 0644 "$PKG_SRC/root/usr/share/luci/menu.d/luci-app-singbox-ui.json" "$APP_ROOT/usr/share/luci/menu.d/luci-app-singbox-ui.json"
-install -m 0644 "$PKG_SRC/root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"  "$APP_ROOT/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"
-install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/generate.uc"             "$APP_ROOT/usr/share/singbox-ui/generate.uc"
-install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/subscription.uc"         "$APP_ROOT/usr/share/singbox-ui/subscription.uc"
-install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/nftables.uc"             "$APP_ROOT/usr/share/singbox-ui/nftables.uc"
-install -m 0644 "$PKG_SRC/root/usr/share/singbox-ui/export_section.uc"       "$APP_ROOT/usr/share/singbox-ui/export_section.uc"
-for lib_uc in "$PKG_SRC"/root/usr/share/singbox-ui/lib/*.uc; do
-  install -m 0644 "$lib_uc" "$APP_ROOT/usr/share/singbox-ui/lib/$(basename "$lib_uc")"
-done
-install -m 0644 "$PKG_SRC/htdocs/luci-static/resources/view/singbox-ui/main.js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/main.js"
-for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/lib/*.js; do
-  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/lib/$(basename "$view_js")"
-done
-for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/importers/*.js; do
-  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/importers/$(basename "$view_js")"
-done
-for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/tabs/*.js; do
-  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/tabs/$(basename "$view_js")"
-done
-for view_js in "$PKG_SRC"/htdocs/luci-static/resources/view/singbox-ui/widgets/*.js; do
-  install -m 0644 "$view_js" "$APP_ROOT/www/luci-static/resources/view/singbox-ui/widgets/$(basename "$view_js")"
-done
+while IFS=$'\t' read -r src dst mode; do
+  case "$src" in '#'*|'') continue ;; esac
+  install -d "$APP_ROOT/$(dirname "$dst")"
+  case "$mode" in
+    bin)  install -m 0755 "$PKG_SRC/$src" "$APP_ROOT/$dst" ;;
+    conf) install -m 0644 "$PKG_SRC/$src" "$APP_ROOT/$dst" ;;
+    data) install -m 0644 "$PKG_SRC/$src" "$APP_ROOT/$dst" ;;
+    *)    echo "install-manifest.txt: unknown mode '$mode' for $src" >&2; exit 1 ;;
+  esac
+done < "$MANIFEST"
 
 list_dir="$APP_ROOT/lib/apk/packages"
 mkdir -p "$list_dir"

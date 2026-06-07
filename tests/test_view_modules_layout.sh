@@ -53,6 +53,79 @@ if grep -RnE 'window\.location\.reload\b|[^a-zA-Z_$]location\.reload\b' "$ROOT" 
   fail=1
 fi
 
+# C2 D.1: the loadOutboundList alias was dead in inbounds/outbounds — it was
+# imported but never called. Removing it shrinks the require graph and makes
+# the next refactor easier.
+if grep -nE 'var[[:space:]]+loadOutboundList[[:space:]]*=[[:space:]]*SbCommon\.loadOutboundList' \
+   "$ROOT/tabs/inbounds.js" "$ROOT/tabs/outbounds.js" >/dev/null 2>&1; then
+  echo "FAIL: dead loadOutboundList alias still present in inbounds/outbounds"
+  grep -nE 'var[[:space:]]+loadOutboundList[[:space:]]*=[[:space:]]*SbCommon\.loadOutboundList' \
+    "$ROOT/tabs/inbounds.js" "$ROOT/tabs/outbounds.js"
+  fail=1
+fi
+
+# C2 D.4: main.js must not schedule wireTabs via setTimeout(fn, 0) — a
+# microtask is enough and avoids the visible flicker.
+if grep -nE 'setTimeout\(.*,[[:space:]]*0[[:space:]]*\)' "$ROOT/main.js" >/dev/null 2>&1; then
+  echo "FAIL: setTimeout(fn, 0) still present in main.js (use Promise.resolve().then)"
+  grep -nE 'setTimeout\(.*,[[:space:]]*0[[:space:]]*\)' "$ROOT/main.js"
+  fail=1
+fi
+
+# C2 D.7: rulesets.js nft_rules flag must have a description.
+if ! awk '/o = s\.option\(form\.Flag, .nft_rules./{found=1} found && /o\.description/{print; exit 0} END{exit found?1:1}' \
+   "$ROOT/tabs/rulesets.js" >/dev/null 2>&1; then
+  # Fall back to a simpler grep: description string anywhere after nft_rules.
+  if ! grep -nA5 "'nft_rules'" "$ROOT/tabs/rulesets.js" | grep -q 'o\.description'; then
+    echo "FAIL: rulesets.js nft_rules form.Flag missing description"
+    fail=1
+  fi
+fi
+
+# C2 E.1: both Preview buttons in widgets/action-bar.js must route through
+# showJsonModal with the {error|json} shape — no raw ui.showModal in the
+# error path.
+ACTION_BAR="$ROOT/widgets/action-bar.js"
+if ! grep -qE '\{ ?error' "$ACTION_BAR"; then
+  echo "FAIL: action-bar.js Preview generated config not using {error} shape"
+  fail=1
+fi
+if grep -qE "ui\.showModal\(.*_\('Preview generated config'\)" "$ACTION_BAR"; then
+  echo "FAIL: Preview generated config still calls ui.showModal directly (use showJsonModal)"
+  fail=1
+fi
+
+# C2 E.2: withBusy helper must exist in lib/common.js and be exported.
+COMMON="$ROOT/lib/common.js"
+if ! grep -qE 'function[[:space:]]+withBusy\b' "$COMMON"; then
+  echo "FAIL: lib/common.js does not define withBusy"
+  fail=1
+fi
+if ! grep -qE 'withBusy:[[:space:]]*withBusy' "$COMMON"; then
+  echo "FAIL: lib/common.js does not export withBusy"
+  fail=1
+fi
+
+# C2 E.3: importers/inbound.js must no longer define its own fallbackCopy.
+fallback_in_importers=$(grep -c 'function fallbackCopy' "$ROOT/importers/inbound.js" || true)
+if [ "$fallback_in_importers" != "0" ]; then
+  echo "FAIL: importers/inbound.js still defines fallbackCopy ($fallback_in_importers occurrences)"
+  fail=1
+fi
+
+# C2 E.4: shared style.css must exist + be in the install manifest.
+# (After C2.3.1 the Makefile and build-apk.sh both consume
+# scripts/install-manifest.txt — that file is the source of truth for
+# what gets shipped, not per-file lines in the Makefile.)
+if [ ! -f "$ROOT/style.css" ]; then
+  echo "FAIL: $ROOT/style.css missing"
+  fail=1
+fi
+if ! grep -q 'style\.css' scripts/install-manifest.txt; then
+  echo "FAIL: scripts/install-manifest.txt does not include style.css"
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi

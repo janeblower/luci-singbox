@@ -48,6 +48,14 @@ function as_array(v) {
 function detect_rs_format(target, override) {
 	if (override === "binary" || override === "source") return override;
 	let lower = lc(target || "");
+	// Strip query string (and fragment) before suffix matching so URLs like
+	// https://x/path/file.srs?ver=1 are still recognized as binary instead
+	// of falling through to the default. Without this, the suffix check sees
+	// "...srs?ver=1" and never matches ".srs".
+	let q = index(lower, "?");
+	if (q >= 0) lower = substr(lower, 0, q);
+	let h = index(lower, "#");
+	if (h >= 0) lower = substr(lower, 0, h);
 	if (substr(lower, -4) === ".srs")  return "binary";
 	if (substr(lower, -5) === ".json") return "source";
 	return "binary";
@@ -79,20 +87,58 @@ function fnv1a32(s) {
 // behaviour is what lets a user type a real device name directly.
 //
 // Test override: env SINGBOX_DEV_<iface> (non-alphanumeric → '_').
+//
+// Caching: each lookup forks `. /lib/functions/network.sh` via popen, which
+// is non-trivial on a slow router (ash + sourcing network.sh ≈ 30–80 ms).
+// Outbound builders may call this N times per generate run (once per
+// `bind_interface`). Memoise at module scope so the second call onward is
+// O(1). The cache lives for the lifetime of the ucode process — rpcd
+// daemonises so generate.uc imports happen per-invocation and the cache is
+// implicitly fresh; long-lived hosts call reset_iface_cache() at the top
+// of generate.uc to avoid stale netdev mappings across config reloads.
+let _iface_dev_cache = {};
+
 function resolve_iface_device(iface) {
 	if (iface == null || iface === "") return iface;
+	if (_iface_dev_cache[iface] !== undefined) return _iface_dev_cache[iface];
 	let key = "SINGBOX_DEV_" + replace(iface, /[^A-Za-z0-9_]/g, "_");
 	let v = getenv(key);
-	if (v != null && length(v)) return v;
+	if (v != null && length(v)) { _iface_dev_cache[iface] = v; return v; }
 	let fs_mod = require("fs");
 	let p = fs_mod.popen(
 		". /lib/functions/network.sh 2>/dev/null; " +
 		"network_get_device DEV " + sq(iface) + " 2>/dev/null && printf %s \"$DEV\"",
 		"r");
-	if (!p) return iface;
+	if (!p) { _iface_dev_cache[iface] = iface; return iface; }
 	let body = trim(p.read("all") ?? "");
 	p.close();
-	return length(body) ? body : iface;
+	let result = length(body) ? body : iface;
+	_iface_dev_cache[iface] = result;
+	return result;
+}
+
+// reset_iface_cache() — clear the module-scope memoisation table. Called
+// from generate.uc on entry so a config reload always re-resolves netdevs;
+// also useful for tests that flip the SINGBOX_DEV_<iface> env between cases.
+function reset_iface_cache() { _iface_dev_cache = {}; }
+
+// OUTBOUND_PROXY_KINDS — the set of outbound `type` values that are real
+// proxy protocols (as opposed to interface / url / subscription / direct /
+// block / dns / selector / urltest). Single source for membership checks
+// across export_section.uc and lib/outbound.uc::build_outbounds() dispatch
+// branches — when a new protocol is added, only this list (and the
+// build_constructor_for switch) needs touching.
+//
+// Note: a *different*, shorter list exists at outbound.uc:144 covering
+// only user-credential proxies (vless/vmess/trojan) for transport+multiplex
+// emission. That subset is semantically distinct and is NOT merged here.
+const OUTBOUND_PROXY_KINDS = [
+	"vless", "vmess", "trojan", "hysteria2", "shadowsocks", "tuic", "anytls",
+];
+
+function is_outbound_proxy_kind(t) {
+	for (let k in OUTBOUND_PROXY_KINDS) if (k === t) return true;
+	return false;
 }
 
 return {
@@ -106,5 +152,8 @@ return {
 	sq,
 	detect_rs_format,
 	resolve_iface_device,
+	reset_iface_cache,
 	fnv1a32,
+	OUTBOUND_PROXY_KINDS,
+	is_outbound_proxy_kind,
 };

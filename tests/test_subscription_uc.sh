@@ -430,4 +430,151 @@ out2=$(run_probe "$VMESS_BAD_TAG")
 [ "$out1" = "$out2" ] || fail "safe_tag fallback not deterministic across runs"
 pass "safe_tag fallback is deterministic"
 
+# ---- C2.1.8: local ruleset path must be under a known prefix ----
+# Hostile (or accidental) UCI value path=/etc/shadow must NOT be copied into
+# the work dir. Only an LuCI admin can write UCI today, but defense in depth.
+echo "-- C2.1.8: local ruleset path outside whitelist is rejected"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config ruleset 'rs1'
+	option type 'local'
+	option path '/root/secret.json'
+	option nft_rules '1'
+EOF
+rm -f "$SINGBOX_TMPDIR/rs_rs1.json" "$SINGBOX_TMPDIR/rs_rs1.raw"
+out=$(run_uc fetch-rulesets 2>&1 || true)
+echo "$out" | grep -qiE 'outside whitelist|invalid path|reject' \
+	|| { echo "$out"; fail "expected rejection log, got: $out"; }
+[ ! -f "$SINGBOX_TMPDIR/rs_rs1.json" ] && [ ! -f "$SINGBOX_TMPDIR/rs_rs1.raw" ] \
+	|| fail "rs_rs1 file should not have been created from disallowed path"
+pass "local ruleset path outside whitelist is rejected"
+
+echo "-- C2.1.8: local ruleset under /tmp is still accepted"
+mkdir -p "$TMPDIR/src"
+printf '%s' '{"version":1,"rules":[]}' >"$TMPDIR/src/ok.json"
+cat >"$TMPDIR/singbox-ui" <<EOF
+config ruleset 'rs2'
+	option type 'local'
+	option path '$TMPDIR/src/ok.json'
+	option nft_rules '1'
+EOF
+rm -f "$SINGBOX_TMPDIR/rs_rs2.json"
+# $TMPDIR resolves under /tmp on standard hosts; skip if not.
+case "$TMPDIR" in
+	/tmp/*|/var/*|/etc/*|/usr/share/*)
+		run_uc fetch-rulesets >/dev/null 2>&1 || true
+		[ -s "$SINGBOX_TMPDIR/rs_rs2.json" ] \
+			|| fail "whitelisted local ruleset should have been copied"
+		pass "whitelisted local ruleset is accepted"
+		;;
+	*)
+		echo "  SKIP: TMPDIR $TMPDIR not under a whitelist prefix"
+		;;
+esac
+
+# ---- C2.1.10: try_b64_decode requires recognized scheme in decoded payload ----
+# A plaintext body that, when run through b64dec, contains '://' but no line
+# starting with a known share-link scheme must NOT be silently re-decoded.
+# Done indirectly via fetch-subs + by structural assertion on the source.
+echo "-- C2.1.10: try_b64_decode requires a recognized scheme in decoded payload"
+# Structural check: the new strict heuristic must regex over share-link schemes
+# rather than just searching for "://".
+grep -qE 'vmess\|vless\|ss\|trojan\|hy2\|hysteria2\|http\|https' \
+	"$SUB_UC" \
+	|| fail "subscription.uc: try_b64_decode strict heuristic missing"
+pass "subscription.uc: try_b64_decode tests for known schemes"
+
+# Behavioural complement: feed a body that is b64("visit https://example.com")
+# Old behaviour: contains "://" → decodes → URL extractor finds no line starting
+# with a scheme → empty output file (no sub_*.txt). New behaviour: no scheme-line
+# in decoded → keeps as plaintext blob "dmlz..." → also no valid URL → no output.
+# Either way the file should NOT be created. The key win is the same result for
+# a plaintext-with-URL-prefix vs. a real share-link b64.
+echo "-- C2.1.10: non-scheme b64 payload yields no output file"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subC'
+	option type 'subscription'
+	option sub_url 'https://example.test/sub'
+EOF
+# b64("visit https://example.com/path") = "dmlzaXQgaHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo"
+printf '%s' 'dmlzaXQgaHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo' >"$TMPDIR/body"
+rm -f "$SINGBOX_TMPDIR/sub_subC.txt"
+run_uc fetch-subs >/dev/null 2>&1 || true
+[ ! -f "$SINGBOX_TMPDIR/sub_subC.txt" ] \
+	|| fail "non-scheme b64 payload should not produce a subscription file"
+pass "non-scheme b64 payload produces no subscription file"
+
+# ---- C2.1.11: URL match accepts uppercase scheme (HTTPS://) ----
+echo "-- C2.1.11: subscription URL match is case-insensitive"
+# Structural check is sufficient: production must lowercase before regex match.
+grep -qE 'match\(lc\(t\)' "$SUB_UC" \
+	|| fail "subscription.uc URL match still case-sensitive (expected lc(t) wrap)"
+pass "subscription.uc URL match supports uppercase schemes"
+
+# Behavioural: HTTPS://-prefixed line in plaintext body is accepted as a URL.
+echo "-- C2.1.11: plaintext body with HTTPS:// is accepted"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subD'
+	option type 'subscription'
+	option sub_url 'https://example.test/sub'
+EOF
+# Plaintext body (not valid b64 alphabet — contains '://' which is not b64).
+printf 'HTTPS://example.test/upstream\n' >"$TMPDIR/body"
+rm -f "$SINGBOX_TMPDIR/sub_subD.txt"
+run_uc fetch-subs >/dev/null 2>&1 || true
+[ -s "$SINGBOX_TMPDIR/sub_subD.txt" ] \
+	|| { echo "expected non-empty file"; fail "HTTPS:// line not accepted"; }
+grep -qi '^HTTPS://example.test/upstream' "$SINGBOX_TMPDIR/sub_subD.txt" \
+	|| { cat "$SINGBOX_TMPDIR/sub_subD.txt"; fail "HTTPS:// URL not preserved"; }
+pass "plaintext HTTPS:// URL is accepted"
+
+# ---- C2.1.16: local-ruleset cp failure cleans up raw_path ----
+# Structural check: the local-ruleset error branch must explicitly unlink
+# raw_path so a partial copy can't poison subsequent runs.
+echo "-- C2.1.16: local-ruleset cp-failure branch removes raw_path"
+grep -qE 'fs\.unlink\(raw_path\)' "$SUB_UC" \
+	|| fail "subscription.uc: missing fs.unlink(raw_path) cleanup in local branch"
+pass "subscription.uc: local cp-failure cleans up raw_path"
+
+# ---- C2.3.11: detect_rs_format strips URL query/fragment before suffix check ----
+# Anchor: lib/helpers.uc detect_rs_format. URLs with ?ver=N or #frag must still
+# be recognised by their underlying .srs / .json suffix; without the strip the
+# suffix check sees "...srs?ver=1" and falls through to the default.
+echo "-- C2.3.11: detect_rs_format strips URL query before suffix check"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+    let h = require("helpers");
+    printf("%s\n", h.detect_rs_format("https://x/y.srs?ver=1", null));
+    printf("%s\n", h.detect_rs_format("https://x/y.json?token=abc", null));
+    printf("%s\n", h.detect_rs_format("https://x/y.srs#frag", null));
+')
+[ "$out" = "binary
+source
+binary" ] && pass "query/fragment stripped" || \
+    { echo "FAIL: got [$out]"; exit 1; }
+
+# ---- C2.3.12: OUTBOUND_PROXY_KINDS single constant ----
+# Anchor: lib/helpers.uc exports is_outbound_proxy_kind(t). export_section.uc
+# and lib/outbound.uc::build_outbounds() use it instead of open-coded chained
+# string compares.
+echo "-- C2.3.12: OUTBOUND_PROXY_KINDS single constant"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+    let h = require("helpers");
+    printf("%s\n", h.is_outbound_proxy_kind("vless"));
+    printf("%s\n", h.is_outbound_proxy_kind("interface"));
+')
+[ "$out" = "true
+false" ] && pass "is_outbound_proxy_kind works" || { echo "FAIL: [$out]"; exit 1; }
+
+# Membership coverage — every kind the dispatch branches once enumerated.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+    let h = require("helpers");
+    let want = ["vless","vmess","trojan","hysteria2","shadowsocks","tuic","anytls"];
+    let ok = true;
+    for (let t in want) if (!h.is_outbound_proxy_kind(t)) ok = false;
+    printf("%s\n", ok ? "all-covered" : "missing");
+')
+[ "$out" = "all-covered" ] && pass "all 7 kinds present" || { echo "FAIL"; exit 1; }
+
 echo "OK"

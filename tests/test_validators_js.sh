@@ -106,19 +106,28 @@ check('isHost with space invalid',  V.isHost('not a host!'),     'error');
 check('isHost leading dot invalid', V.isHost('.example.com'),    'error');
 check('isHost non-string invalid',  V.isHost(null),              'error');
 
-// --- isAlpnNonEmpty ---------------------------------------------------------
-check('isAlpnNonEmpty ["h2"] valid',
-	V.isAlpnNonEmpty(['h2']), true);
-check('isAlpnNonEmpty ["h2","http/1.1"] valid',
-	V.isAlpnNonEmpty(['h2', 'http/1.1']), true);
-check('isAlpnNonEmpty "h2, http/1.1" valid',
-	V.isAlpnNonEmpty('h2, http/1.1'), true);
-check('isAlpnNonEmpty [] invalid',
-	V.isAlpnNonEmpty([]), 'error');
-check('isAlpnNonEmpty "" invalid',
-	V.isAlpnNonEmpty(''), 'error');
-check('isAlpnNonEmpty [""] invalid',
-	V.isAlpnNonEmpty(['']), 'error');
+// --- validateAlpn -----------------------------------------------------------
+// Per spec C2.2.3: empty ALPN is valid; only validates known protocol names.
+check('validateAlpn ["h2"] valid',
+	V.validateAlpn(['h2']), true);
+check('validateAlpn ["h2","http/1.1"] valid',
+	V.validateAlpn(['h2', 'http/1.1']), true);
+check('validateAlpn ["h3"] valid',
+	V.validateAlpn(['h3']), true);
+check('validateAlpn "h2, http/1.1" valid',
+	V.validateAlpn('h2, http/1.1'), true);
+check('validateAlpn [] valid (empty allowed)',
+	V.validateAlpn([]), true);
+check('validateAlpn "" valid (empty allowed)',
+	V.validateAlpn(''), true);
+check('validateAlpn null valid (empty allowed)',
+	V.validateAlpn(null), true);
+check('validateAlpn [""] valid (blank entries ignored)',
+	V.validateAlpn(['']), true);
+check('validateAlpn ["unknown"] invalid',
+	V.validateAlpn(['unknown']), 'error');
+check('validateAlpn ["h2","bogus"] invalid',
+	V.validateAlpn(['h2', 'bogus']), 'error');
 
 // --- requiresWsPath ---------------------------------------------------------
 check('requiresWsPath (ws, "/path") valid',

@@ -44,8 +44,17 @@ return view.extend({
 			var dnsNode        = nodes[5];
 			var generalNode    = nodes[6];
 
-			var statusHolder = E('div', { 'class': 'sb-status', 'style': 'margin:.5em 0;padding:.5em;border:1px solid #ddd;border-radius:4px' });
+			var statusHolder = E('div', { 'class': 'sb-status' });
 			var actionBar    = SbActionBar.renderActionBar(statusHolder);
+
+			// Inject the shared CSS once per page render. L.resource() resolves
+			// to /luci-static/resources/view/singbox-ui/style.css — same pattern
+			// as luci-app-nlbwmon / luci-app-mwan3 (C2.2.9).
+			var cssLink = E('link', {
+				'rel':  'stylesheet',
+				'type': 'text/css',
+				'href': L.resource('view/singbox-ui/style.css')
+			});
 
 			var outputWrap = E('div', {}, [
 				E('ul', { 'class': 'cbi-tabmenu sb-subtab-header' }, [
@@ -61,6 +70,7 @@ return view.extend({
 			]);
 
 			var root = E('div', {}, [
+				cssLink,
 				actionBar,
 				statusHolder,
 				E('ul', { 'class': 'cbi-tabmenu sb-tab-header' }, [
@@ -77,7 +87,10 @@ return view.extend({
 				generalNode
 			]);
 
-			setTimeout(function () {
+			// Defer tab wiring until after the DOM is attached. A microtask
+			// (Promise.resolve().then) runs before the next macrotask without
+			// the 0-delay flicker setTimeout introduced (spec C2.2.10).
+			Promise.resolve().then(function () {
 				SbCommon.wireTabs(root, '.sb-subtab-header', {
 					outbounds:  outboundsNode,
 					rulesets:   rulesetsNode,
@@ -98,7 +111,7 @@ return view.extend({
 					});
 				});
 				SbStatusPanel.renderStatusPanel(statusHolder);
-			}, 0);
+			});
 
 			return root;
 		});

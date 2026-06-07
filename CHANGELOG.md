@@ -103,7 +103,156 @@ non-destructive JSON import, and full Russian translation coverage.
 - Russian translation coverage expanded from ~40% to 100% (211 msgid in `po/ru/`, 0 untranslated, 4 drift). All Phase B and C1 strings translated, stale `#~` entries removed.
 - Pre-release i18n freshness step added to `docs/release.md`.
 
+---
 
+Phase C2 — Important fixes (~25 backend/UI/build items) and minor sweep
+(~16 documentation/build items). Atomic config publish, single-commit
+migrations with `schema_version` sentinel, share-link hardening, RPC
+read-path scrub completion, frontend polish (form tabs, busy state,
+debounce), single install-manifest, `sing-box check` on generated configs.
+
+### Security (Phase C2)
+
+- `read_config` RPC handler now scrubs secrets in the same way
+  `preview_config` and `export_section` do (gap identified in the C1
+  final review). Read-ACL LuCI users no longer see verbatim credentials
+  when viewing the on-disk `/tmp/singbox-ui.json`.
+- `is_singbox_running()` queries procd via `ubus call service list`
+  first, falling back to `pgrep -x sing-box` (basename match only). The
+  previous `pgrep -f "sing-box run"` false-positived on any process
+  whose commandline contained that string (including shells/editors).
+- Local rule-set paths are restricted to under `/etc`, `/tmp`, `/var`,
+  `/usr/share`. UCI `ruleset` `local_path` can no longer be pointed at
+  `/etc/shadow` or similar via a hostile config.
+- nftables emitter validates `listen_port` (int `1..65535`) and iface
+  names (`^[A-Za-z0-9_.@-]+$`) before splicing them into rules. Argv
+  injection via crafted UCI is no longer possible at the nft layer.
+- `preview_config` tmpfile uses `mktemp(1)` (atomic `O_EXCL`); the
+  previous time+urandom path used `fs.open(..., "w")` which lacks
+  `O_EXCL`, opening a theoretical symlink race.
+- Subscription URL accept is case-insensitive; `try_b64_decode`
+  requires a recognized share-link scheme (`vless://`, `vmess://`,
+  `trojan://`, `ss://`, `hy2://`, `hysteria2://`) to decode. Plaintext
+  subscription bodies that happen to contain `://` are no longer
+  silently mangled.
+
+### Changed (Phase C2)
+
+- Generated `/tmp/singbox-ui.json` is now written via `tmp + rename`.
+  A SIGKILL mid-write no longer leaves a truncated config that
+  sing-box refuses to start. The previous generation is retained as
+  `.prev` for one-generation rollback.
+- `etc/uci-defaults/99-...` migrations now guarded by
+  `_meta.schema_version` (CURRENT_SCHEMA=15); re-runs short-circuit.
+  All `uci commit` calls consolidated to a single commit at end of
+  script — partial migration state on power-loss is no longer
+  representable.
+- `init.d::start_service` calls `nftables.uc remove` defensively
+  before deciding whether to apply, so a config flipping from
+  tproxy-required to direct-only no longer leaves stale nft tables.
+- `lib/clash.uc` brackets IPv6 listen addresses for
+  `external_controller` (was emitting `::1:9090` style, which clients
+  parsed as host `::1` port `9090` or hostname `::1:9090` depending on
+  client).
+- `lib/helpers.uc::resolve_iface_device` caches results module-scope,
+  reset on each `generate.uc` run — eliminates repeated `ubus`/UCI
+  lookups during outbound emission.
+- `is_outbound_proxy_kind()` + `OUTBOUND_PROXY_KINDS` constant in
+  `lib/helpers.uc` is now the single source of truth for membership
+  of the 7 proxy outbound types (vless / vmess / trojan / hysteria2 /
+  shadowsocks / tuic / anytls). Replaces ad-hoc inline lists in
+  `subscription.uc` and `generate.uc`.
+- `nftables.uc::nft delete table` now uses argv form (consistent with
+  the rest of the file).
+- `detect_rs_format` strips URL query and fragment before suffix
+  check, so `https://.../rules.srs?token=...` is detected as `binary`
+  rather than `unknown`.
+
+### Frontend / UX (Phase C2)
+
+- Inbound and outbound modal forms grouped into 6 tabs (basic /
+  credentials / TLS / transport / multiplex / advanced) via LuCI
+  `s.tab(...)`. The modal is no longer 50 fields of vertical scroll.
+- Both "Preview generated config" (`read_config`) and "Preview config
+  (dry-run)" (`preview_config`) buttons now go through the same
+  `showJsonModal({error|json})` helper — consistent error display and
+  copy affordance.
+- New `withBusy(btn, label, fn)` helper in `lib/common.js`; all
+  long-running RPC handlers (preview, fetch-subs, restart) disable
+  the button and show a busy label for the duration.
+- `fallbackCopy` and `copyToClipboard` deduplicated into
+  `lib/common.js` (previously duplicated across importers).
+- Inline `<style>` blocks extracted to
+  `htdocs/luci-static/resources/view/singbox-ui/style.css`; Makefile
+  installs it.
+- `softWarnCongestion` now shows `L.ui.addNotification` (user-visible)
+  instead of `console.warn` (invisible to operators).
+- `monitoring` search input is debounced at 200 ms and preserves
+  scroll position on repaint.
+- `addRenameField` rejects renames that collide with an existing
+  section of the same kind (was producing UCI rename errors after Save).
+- Removed dead `loadOutboundList` aliases from `tabs/inbounds.js` and
+  `tabs/outbounds.js` (already moved to `lib/common.js` in Phase A).
+- `transport_*` fields' `depends()` chains now require BOTH the
+  protocol/type AND the transport selector, so transport-specific
+  fields no longer leak onto sections whose protocol does not support
+  the chosen transport.
+- `validateAlpn` replaces `isAlpnNonEmpty`: empty ALPN list is now
+  accepted (sing-box treats empty as default), and only known
+  protocol entries are validated (`http/1.1`, `h2`, `h3`).
+- `rulesets.js`: `nft_rules` flag now has a description tooltip.
+- `main.js`: `setTimeout(fn, 0)` replaced with
+  `Promise.resolve().then()` microtask.
+
+### Build / CI / Docs (Phase C2)
+
+- `scripts/install-manifest.txt` is the single source of truth for the
+  install file set. `Makefile` and `scripts/build-apk.sh` both consume
+  it via `while read`. New `tests/test_install_lists_match.sh`
+  asserts the parity invariant between the two paths.
+- `tests/test_generate.sh` runs `sing-box check` on every generated
+  config in Docker mode — catches the entire class of "shape looks
+  right but the daemon rejects it" bugs.
+- `Makefile` ships a `preinst` hook that warns the operator before
+  removing the conflicting `firewall` package via `PKG_CONFLICTS`.
+- `README.md` gains an English overview block at the top (existing
+  Russian content preserved below).
+- `docs/release.md` documents the SDK-vs-host build artifact
+  difference (host build also produces a separate
+  `luci-i18n-singbox-ui-ru` package).
+- `docs/protocol-coverage.md` dead links to the gitignored
+  `docs/superpowers/` tree removed.
+- `.gitignore` no longer self-ignores `.gitignore`.
+- `etc/uci-defaults/99-...` cron interval is a named constant
+  (`CRON_INTERVAL_MIN`).
+- `.github/workflows/build.yml` lints `etc/uci-defaults/99-...` with
+  `shellcheck --shell=ash` to catch ash-incompatible constructs (the
+  runtime is busybox ash, not bash).
+
+### Tests (Phase C2)
+
+- New: `tests/test_install_lists_match.sh`.
+- Extended: `tests/test_generate.sh` (orphan tmpfile detection +
+  `sing-box check` on generated configs),
+  `tests/test_uci_defaults_migration.sh` (`schema_version` sentinel +
+  single-commit invariants), `tests/test_nftables_emit.sh` and
+  `tests/test_nftables_uc.sh` (listen_port + iface name validation),
+  `tests/test_subscription_uc.sh` (rule-set path whitelist +
+  strict b64 heuristic + case-insensitive URL + `detect_rs_format`
+  query strip), `tests/test_rpcd_handler.sh` (procd-based running
+  detect, `mktemp`-backed preview, `read_config` scrub,
+  `OUTBOUND_PROXY_KINDS` membership).
+- `tests/test_validators_js.sh`: `validateAlpn` replaces
+  `isAlpnNonEmpty`; total assertion count is now ~44.
+
+### Deferred to Phase C3
+
+- The wholesale rewrite of `lib/*.uc` emit paths to use only
+  `s_opt` / `s_num` / `s_bool` helpers (item C2.3.3 in the plan)
+  naturally lands as part of the schema-driven protocol descriptors
+  in Phase C3.1, so it is deferred rather than landed here.
+
+---
 
 ## [v0.1.0] — 2026-06-06
 

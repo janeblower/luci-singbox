@@ -29,6 +29,14 @@ start_service() {
 		return 1
 	fi
 
+	# Defensive: if a previous start_service installed nft rules and the
+	# user has since flipped every tproxy inbound to a non-tproxy protocol
+	# (or disabled the section), `needed` will now return "0" — but the
+	# old table would linger until the next `stop`. Remove unconditionally
+	# first so the post-apply state always reflects the latest `needed`
+	# decision. The remove is idempotent and a no-op when no table exists.
+	ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove 2>/dev/null || true
+
 	if [ "$(ucode -L "$UCODE_LIB" "$NFTABLES_UC" needed)" = "1" ]; then
 		ucode -L "$UCODE_LIB" "$NFTABLES_UC" apply
 	fi

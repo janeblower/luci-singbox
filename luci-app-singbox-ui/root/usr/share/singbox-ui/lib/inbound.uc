@@ -173,6 +173,14 @@ function build_one(s) {
 		};
 		let users = [];
 		let entries = as_array(s.ss_user);
+		// Limitation: the on-the-wire entry format is `name:password`, with
+		// `:` as the sole field separator. A password containing a literal
+		// colon is split at the FIRST colon — anything after the second
+		// colon is silently dropped. Operators who need ':' in a password
+		// must base64-encode it (and document the encoding alongside the
+		// section) or pick a colon-free passphrase. A future migration to
+		// a TSV / JSON entry format would lift this restriction. Mirrored
+		// in docs/uci-schema.md → inbound shadowsocks section.
 		for (let entry in entries) {
 			let colon = index(entry, ":");
 			if (colon < 1) continue;  // malformed (empty name or no colon)
