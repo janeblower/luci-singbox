@@ -9,6 +9,7 @@ let helpers = require("helpers");
 // module load. Wrapped in try/catch so an absent descriptor never breaks
 // the legacy dispatcher — it just falls through to the switch-by-type below.
 try { require("protocols.ssh"); } catch (_) {}
+try { require("protocols.trojan"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -104,7 +105,7 @@ function build_constructor_for(s, proto) {
 	if (proto === "vless" || proto === "vmess") {
 		if (length(s_opt(s, "server_uuid"))) ob.uuid = s.server_uuid;
 	}
-	if (proto === "trojan" || proto === "hysteria2" || proto === "shadowsocks") {
+	if (proto === "hysteria2" || proto === "shadowsocks") {
 		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
 	}
 	if (proto === "tuic") {
@@ -152,11 +153,11 @@ function build_constructor_for(s, proto) {
 		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
 			ob.network = s.network;
 	}
-	if (proto !== "shadowsocks") {
+	if (proto !== "shadowsocks" && proto !== "trojan") {
 		let tls = build_tls_client(s, proto);
 		if (tls) ob.tls = tls;
 	}
-	if (proto === "vless" || proto === "vmess" || proto === "trojan") {
+	if (proto === "vless" || proto === "vmess") {
 		let tr = build_transport(s);
 		if (tr) ob.transport = tr;
 		let mux = build_multiplex(s);
@@ -605,4 +606,5 @@ function build_outbounds(cur) {
 	return outbounds;
 }
 
-return { build_outbounds, build_constructor_for, parse_proxy_url };
+return { build_outbounds, build_constructor_for, parse_proxy_url,
+         build_tls_client, build_transport, build_multiplex };

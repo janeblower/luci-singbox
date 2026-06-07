@@ -394,4 +394,26 @@ nocheck "no transport block"      '"transport":'
 nocheck "no multiplex block"      '"multiplex":'
 nocheck "no ignored ws path"      '/should-be-ignored'
 
+# D1.1: trojan descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- trojan descriptor parity (D1.1 golden)"
+golden='{ "type": "trojan", "tag": "t1", "server": "example.com", "server_port": 443, "password": "pw", "tls": { "enabled": true, "server_name": "example.com" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"t1", "server":"example.com", "server_port":"443",
+          "server_password":"pw", "security":"tls", "tls_server_name":"example.com" };
+printf("%J", ob.build_constructor_for(s, "trojan"));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: trojan parity"
+else
+	echo "FAIL: trojan parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
 echo "OK"
