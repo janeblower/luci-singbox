@@ -254,6 +254,82 @@ debounce), single install-manifest, `sing-box check` on generated configs.
 
 ---
 
+Phase C3 — architecture foundations: protocol descriptor registry,
+post-processing pipeline, structured logging, status_detail RPC,
+capability drop, auto-generated install manifest. Scope intentionally
+focused on architecture infrastructure; wholesale per-protocol migration
+and frontend descriptor-driven rendering tracked as Phase D work.
+
+### Added (Phase C3)
+
+- `lib/post_process.uc` — centralised post-build pipeline. The
+  implicit-direct scrub (previously inline in `generate.uc`) now runs
+  here, extended to cover `route.rules[].outbound`, `route.final`, and
+  `dns.detour` in addition to the original `dns_server.detour`.
+- `lib/log.uc::log_event(level, event, kv)` — structured event logger
+  that writes via busybox `logger -t singbox-ui`. Format:
+  `event=<n> ts=<unix> key=val ...`. Wired into `generate.uc` success,
+  `rpcd` error paths, and `uci-defaults` migration completion. Mockable
+  via `_set_logger_for_test()` for unit tests.
+- `singbox-ui::status_detail` RPC — returns running flag, last_generate
+  timestamp, last_apply_result, config_hash placeholder, schema_version,
+  package_version, service_start_ts, and current `now`. Backed by
+  `/var/lib/singbox-ui/{last_state,service_state}.json` written by
+  `generate.uc` and `init.d` respectively.
+- `lib/protocols/registry.uc` + `lib/protocols/ssh.uc` — descriptor
+  framework + first reference descriptor (new SSH outbound, sing-box
+  1.12+). `lib/outbound.uc::build_constructor_for` now consults the
+  registry first; falls through to the legacy switch when no descriptor
+  is registered. Migration of the 7 existing proxy outbounds to
+  descriptors is Phase D incremental work.
+- `/etc/capabilities/singbox-ui.json` — minimal capability set
+  (`CAP_NET_ADMIN` + `CAP_NET_RAW` + `CAP_NET_BIND_SERVICE`). init.d
+  wires it via `procd_set_param capabilities`. Sing-box no longer needs
+  full root. Drop to `user=nobody` deferred (would require fixing
+  `/tmp/singbox-ui.json` ownership).
+- `scripts/gen-manifest.sh` — auto-generates `scripts/install-manifest.txt`
+  by scanning `luci-app-singbox-ui/`. Mode auto-detection
+  (bin / conf / data); manual overrides via
+  `scripts/install-manifest-overrides.txt`.
+- `tests/test_post_process_uc.sh`, `tests/test_log_uc.sh`,
+  `tests/test_status_detail.sh`, `tests/test_capability_drop.sh`,
+  `tests/test_install_manifest_fresh.sh`,
+  `tests/test_protocol_descriptors.sh` — six new test files covering
+  the foundation tasks.
+- `docs/protocol-descriptors.md` — reference for writing protocol
+  descriptors.
+
+### Changed (Phase C3)
+
+- `generate.uc` no longer scrubs implicit-direct references inline; it
+  collects implicit tags and calls `lib/post_process.uc::run_pipeline`.
+- `etc/uci-defaults/99-...` `CURRENT_SCHEMA` bumped to 16 (marker for
+  the Phase C3 metadata additions; no new structural migrations).
+
+### Deferred to Phase D
+
+- **Wholesale protocol migration to descriptors** (originally C3.1
+  Tasks 9-15) — the registry is in place; migrating each existing
+  protocol is an incremental task. The dispatcher in `lib/outbound.uc`
+  falls through cleanly to the legacy switch for any type not in the
+  registry, so descriptors can land one at a time without coordinated
+  cuts.
+- **Frontend descriptor-driven form rendering** (originally C3.1
+  Task 16) — depends on the per-protocol descriptors landing first.
+- **Secret-reveal UX with 5-minute token** (originally C3.7) — token
+  storage, RPC method, and UI toggle. Substantial work that depends on
+  the existing scrub working end-to-end (it does, since C1).
+- **Plugin scaffolding + auto-detect-geo POC** (originally C3.8) —
+  foundation for easy-mode UX. Picks up naturally after Phase D opens.
+
+### Tests
+
+- 28 test files now; new files: post_process, log, status_detail,
+  capability_drop, install_manifest_fresh, protocol_descriptors.
+- Full suite passes in the OpenWrt rootfs Docker harness.
+
+---
+
 ## [v0.1.0] — 2026-06-06
 
 ### Added

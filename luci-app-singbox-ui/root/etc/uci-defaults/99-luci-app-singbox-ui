@@ -9,7 +9,7 @@
 # this is the canonical idempotency guarantee. (Individual data-shape guards
 # inside each migration_*() are kept as defence-in-depth.)
 # ---------------------------------------------------------------------------
-CURRENT_SCHEMA=15
+CURRENT_SCHEMA=16
 
 cur_ver=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
 case "$cur_ver" in
