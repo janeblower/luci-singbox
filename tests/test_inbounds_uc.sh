@@ -640,4 +640,54 @@ else
 	exit 1
 fi
 
+# D1.5.5: vmess inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- vmess inbound descriptor parity: multi-user (D1.5.5 golden)"
+golden='{ "type": "vmess", "tag": "vm_in1", "listen": "::", "listen_port": 443, "users": [ { "name": "alice", "uuid": "11111111-1111-1111-1111-111111111111" }, { "name": "bob", "uuid": "22222222-2222-2222-2222-222222222222", "alterId": 64 } ], "tls": { "enabled": true, "server_name": "example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"vm_in1", "protocol":"vmess", "listen":"::", "listen_port":"443",
+          "inbound_user":["alice:11111111-1111-1111-1111-111111111111",
+                          "bob:22222222-2222-2222-2222-222222222222:64"],
+          "security":"tls",
+          "tls_server_name":"example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vmess inbound parity (multi-user)"
+else
+	echo "FAIL: vmess inbound parity (multi-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+echo "-- vmess inbound descriptor parity: single-user (D1.5.5 golden)"
+golden='{ "type": "vmess", "tag": "vm_in2", "listen": "::", "listen_port": 443, "users": [ { "name": "vm_in2", "uuid": "33333333-3333-3333-3333-333333333333", "alterId": 64 } ], "tls": { "enabled": true, "server_name": "example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"vm_in2", "protocol":"vmess", "listen":"::", "listen_port":"443",
+          "server_uuid":"33333333-3333-3333-3333-333333333333",
+          "vmess_alter_id":"64",
+          "security":"tls",
+          "tls_server_name":"example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vmess inbound parity (single-user)"
+else
+	echo "FAIL: vmess inbound parity (single-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
 echo "OK"

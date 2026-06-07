@@ -197,36 +197,21 @@ function build_one(s) {
 		if (length(addr)) ob.address = addr;
 		if (s_bool(s, "auto_route"))   ob.auto_route = true;
 		if (s_bool(s, "strict_route")) ob.strict_route = true;
-	} else if (proto === "vmess" || proto === "hysteria2") {
+	} else if (proto === "hysteria2") {
 		ob = { type: proto, tag: tag, listen: listen, listen_port: port };
-		// vmess supports a `list inbound_user` multi-user mode. When
-		// non-empty, the section-level single-user fields (server_uuid,
-		// vmess_alter_id) are dropped — sing-box rejects both at once.
-		// hysteria2 stays single-user for this phase.
-		let multi = (proto === "vmess")
-			? build_inbound_users(s, proto)
-			: [];
-		ob.users = length(multi) ? multi : [ build_user(s) ];
-		if (proto === "hysteria2") {
-			let ob_type = s_opt(s, "hysteria2_obfs_type") || "none";
-			// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
-			if (ob_type !== "none" && length(s_opt(s, "hysteria2_obfs_password")))
-				ob.obfs = { type: ob_type, password: s.hysteria2_obfs_password };
-			if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
-			if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
-			if (length(s_opt(s, "hysteria2_masquerade")))
-				ob.masquerade = s.hysteria2_masquerade;
-			if (s_bool(s, "brutal_debug")) ob.brutal_debug = true;
-			if (s_bool(s, "ignore_client_bandwidth")) ob.ignore_client_bandwidth = true;
-		}
+		ob.users = [ build_user(s) ];
+		let ob_type = s_opt(s, "hysteria2_obfs_type") || "none";
+		// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
+		if (ob_type !== "none" && length(s_opt(s, "hysteria2_obfs_password")))
+			ob.obfs = { type: ob_type, password: s.hysteria2_obfs_password };
+		if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
+		if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
+		if (length(s_opt(s, "hysteria2_masquerade")))
+			ob.masquerade = s.hysteria2_masquerade;
+		if (s_bool(s, "brutal_debug")) ob.brutal_debug = true;
+		if (s_bool(s, "ignore_client_bandwidth")) ob.ignore_client_bandwidth = true;
 		let tls = build_tls(s);
 		if (tls) ob.tls = tls;
-		if (proto !== "hysteria2") {
-			let tr = build_transport(s);
-			if (tr) ob.transport = tr;
-			let mux = build_multiplex(s);
-			if (mux) ob.multiplex = mux;
-		}
 	} else if (proto === "direct") {
 		ob = { type: "direct", tag: tag, listen: listen, listen_port: port };
 		let net = s_opt(s, "network");
