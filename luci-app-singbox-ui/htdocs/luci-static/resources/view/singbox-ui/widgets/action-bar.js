@@ -52,7 +52,7 @@ function renderActionBar(statusHolder) {
 		// with the same {error|json} shape so the error path looks identical
 		// (C2.2.4).
 		btn(_('Preview generated config'), _('Loading…'), function () {
-			var p = callReadConfig().then(function (res) {
+			var p = callReadConfig(SbRpc.withRevealToken({}).token).then(function (res) {
 				if (!res || res.status !== 'ok')
 					return { error: (res && res.message) || _('not generated') };
 				return { json: res.content };
@@ -66,7 +66,7 @@ function renderActionBar(statusHolder) {
 		// /etc/sing-box, nftables, or the running service. Useful for
 		// reviewing a draft before pressing "Save & Apply".
 		btn(_('Preview config'), _('Generating…'), function () {
-			var p = callPreviewConfig().then(function (res) {
+			var p = callPreviewConfig(SbRpc.withRevealToken({}).token).then(function (res) {
 				if (!res || res.status !== 'ok')
 					return { error: (res && res.message) || _('preview failed') };
 				return { json: res.content };
