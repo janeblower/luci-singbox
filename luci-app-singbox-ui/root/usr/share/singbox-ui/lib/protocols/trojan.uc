@@ -48,13 +48,13 @@ reg.register({
 		  group: "basic",       ui_label: "Listen address" },
 		{ name: "listen_port",   type: "number",  required: true,
 		  validate: "port",     group: "basic",   ui_label: "Listen port" },
-		{ name: "user_name",     type: "string",  group: "credentials",
-		  ui_label: "User name" },
-		{ name: "server_password", type: "string", required: true, secret: true,
-		  group: "credentials", ui_label: "Password" },
+		{ name: "server_password", type: "string",  required: true, secret: true,
+		  group: "credentials",   ui_label: "Password" },
 		// NOTE: tls_* / transport_* / multiplex_* fields are intentionally
 		// absent here. They are emitted by emit() via shared helpers in
 		// lib/inbound.uc, and will be merged into schema_dump() output in D2.
+		// The user `name` is derived from the UCI section name (s[".name"]),
+		// not from a UCI option, so no descriptor field for it.
 	],
 	emit: function(s) {
 		let inb = require("inbound");
