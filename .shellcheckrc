@@ -1,0 +1,14 @@
+# Project-wide shellcheck config.
+#
+# Disabled checks (all info-level — these are idiomatic across the test
+# suite, not bugs):
+#
+#   SC2015 — "A && B || C is not if-then-else". Used pervasively in
+#            assertion lines: `[ "$got" = "expected" ] && PASS || FAIL`.
+#            In our usage the C branch always exits non-zero, so the
+#            ambiguity SC2015 warns about doesn't apply.
+#
+#   SC1091 — "Not following: <path>". We conditionally source helper
+#            files (`[ -f tests/lib/sb_helpers.sh ] && . ...`) so
+#            shellcheck can't resolve them without -x. Inline.
+disable=SC2015,SC1091
