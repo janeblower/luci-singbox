@@ -330,6 +330,34 @@ and frontend descriptor-driven rendering tracked as Phase D work.
 
 ---
 
+Phase D — descriptor migration of the 7 proxy protocols (outbound first
+in D1, inbound in D1.5), descriptor-driven UI in D2, secret-reveal UX
+with TTL token in D3, plugin scaffolding in D4. `[Unreleased]` accumulates
+sub-phase entries as work lands.
+
+### Added (Phase D)
+
+- `lib/protocols/{trojan,shadowsocks,vless,vmess,hysteria2,tuic,anytls}.uc` —
+  outbound descriptors for the 7 proxy protocols. Each registers via
+  `lib/protocols/registry.uc` at module load; `lib/outbound.uc::build_constructor_for`
+  now consults the registry only — no per-protocol switch arms remain.
+- `tests/test_protocol_field_coverage.sh` — drift guard between registered
+  descriptor fields and `docs/protocol-coverage.md`. Caught real gaps in
+  the doc which were filled in the same commit (per-protocol UCI columns
+  for all 7 outbounds + new ssh outbound section).
+
+### Changed (Phase D)
+
+- `lib/outbound.uc::build_constructor_for` reduced to a registry-lookup
+  dispatcher (10 lines of body). `test_view_modules_layout.sh` enforces
+  the dispatcher-size invariant (≤14 lines including header/braces).
+  `build_tls_client`, `build_transport`, `build_multiplex` exported so
+  descriptors can reuse them.
+- `docs/protocol-coverage.md`: 7 per-protocol outbound sections now have
+  explicit UCI field columns; new ssh outbound section added.
+
+---
+
 ## [v0.1.0] — 2026-06-06
 
 ### Added
