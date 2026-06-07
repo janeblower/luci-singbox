@@ -1,6 +1,18 @@
 // lib/inbound.uc — sing-box `inbounds` array, built from `inbound` UCI sections.
 // Protocol IS the kind; mode/inbound_json are legacy and silently ignored. Pure: no I/O.
 
+// D1.5: eagerly load descriptor modules so their register() calls fire at
+// module load. Inbound descriptors land incrementally in D1.5.2-D1.5.8;
+// each require() is wrapped so an absent module never breaks the legacy
+// switch — it just falls through to the per-type handler below.
+try { require("protocols.trojan");      } catch (_) {}
+try { require("protocols.shadowsocks"); } catch (_) {}
+try { require("protocols.vless");       } catch (_) {}
+try { require("protocols.vmess");       } catch (_) {}
+try { require("protocols.hysteria2");   } catch (_) {}
+try { require("protocols.tuic");        } catch (_) {}
+try { require("protocols.anytls");      } catch (_) {}
+
 let helpers = require("helpers");
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -138,6 +150,15 @@ function build_multiplex(s) {
 }
 
 function build_one(s) {
+	// D1.5: consult protocol registry first. If a descriptor is registered
+	// for ("inbound", s.type), use its emit() and skip the legacy switch.
+	// Same pattern as lib/outbound.uc::build_constructor_for (D1 invariant).
+	try {
+		let reg = require("protocols.registry");
+		let d = reg.get("inbound", s.type);
+		if (d != null) return d.emit(s);
+	} catch (_) { /* registry not available — fall through to legacy switch */ }
+
 	let tag = s[".name"];
 	// mode/inbound_json are legacy; protocol IS the kind (mode is ignored).
 	let proto = s_opt(s, "protocol") || "tproxy";
@@ -251,4 +272,5 @@ function build_inbounds(cur) {
 	return inbounds;
 }
 
-return { build_inbounds, build_one };
+return { build_inbounds, build_one, build_user, build_inbound_users,
+         build_tls, build_transport, build_multiplex };
