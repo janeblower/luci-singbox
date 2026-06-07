@@ -140,6 +140,43 @@ else
   echo "PASS build_constructor_for dispatcher region size ($total lines)"
 fi
 
+# D2.9 regression guard: per-protocol depends('type'|'protocol', ...) chains
+# in tabs/outbounds.js and tabs/inbounds.js are forbidden for descriptor-owned
+# proxy protocols. The descriptor-driven loop in each tab must be the only
+# place per-protocol fields are wired.
+#
+# Allowed depends: those targeting non-proxy types only (interface, selector,
+# urltest, subscription, url, json for outbound; tproxy, tun, direct for inbound).
+#
+# Bar: total `depends('type'|'protocol', '<proxy>')` occurrences in tabs/ must
+# be zero for each of the descriptor-owned types. We grep for each name and
+# count.
+
+OUTBOUNDS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
+INBOUNDS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js
+
+fail_depends=0
+for proto in ssh trojan shadowsocks vless vmess hysteria2 tuic anytls; do
+    n=$(grep -cE "depends\(['\"]type['\"], *['\"]${proto}['\"]\\)" "$OUTBOUNDS" || true)
+    if [ "$n" -gt 0 ]; then
+        echo "FAIL outbounds.js has $n hand-coded depends('type','${proto}') — must come from descriptor_form"
+        fail_depends=1
+    fi
+done
+for proto in trojan shadowsocks vless vmess hysteria2; do
+    n=$(grep -cE "depends\(['\"]protocol['\"], *['\"]${proto}['\"]\\)" "$INBOUNDS" || true)
+    if [ "$n" -gt 0 ]; then
+        echo "FAIL inbounds.js has $n hand-coded depends('protocol','${proto}') — must come from descriptor_form"
+        fail_depends=1
+    fi
+done
+
+if [ "$fail_depends" -ne 0 ]; then
+    fail=1
+else
+    echo "PASS depends-type/protocol guard (no per-proxy-protocol chains in tabs)"
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi
