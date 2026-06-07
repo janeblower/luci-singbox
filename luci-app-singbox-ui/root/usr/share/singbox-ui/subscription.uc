@@ -49,15 +49,34 @@ function parallel_download(specs) {
 
 // Subscription bodies are usually base64-encoded plaintext containing one
 // proxy URL per line; some servers return plaintext directly. Decode only
-// when the decoded payload looks like proxy URLs (contains "://"). This
-// keeps plaintext bodies that happen to use only base64-alphabet chars
-// from being silently mangled.
+// when the decoded payload looks like proxy URLs — strict heuristic: at
+// least one decoded LINE must start with a recognized share-link scheme.
+// The old "contains '://'" check tripped on plaintext error pages like
+// "visit https://example.com/help" and silently mangled the body.
 function try_b64_decode(s) {
 	let dec = null;
 	try { dec = b64dec(s); } catch (e) { /* invalid base64 */ }
-	if (dec != null && length(dec) > 0 && index(dec, "://") >= 0)
-		return dec;
+	if (dec == null || !length(dec)) return s;
+	let lines = split(dec, "\n");
+	for (let l in lines) {
+		let t = lc(trim(l));
+		if (match(t, /^(vmess|vless|ss|trojan|hy2|hysteria2|http|https):\/\//))
+			return dec;
+	}
 	return s;
+}
+
+// Local rule-set sources must live under a known prefix to keep a hostile
+// (or accidental) UCI value from copying /etc/shadow or similar into the
+// work dir for `sing-box rule-set decompile` to swallow. Today only the
+// LuCI admin can write UCI, but this is defense in depth.
+function path_under_whitelist(p) {
+	if (p == null || !length(p)) return false;
+	let prefixes = ["/etc/", "/tmp/", "/var/", "/usr/share/"];
+	for (let pref in prefixes) {
+		if (substr(p, 0, length(pref)) === pref) return true;
+	}
+	return false;
 }
 
 function cmd_fetch_subs(cur) {
@@ -132,7 +151,7 @@ function cmd_fetch_subs(cur) {
 		let urls = [];
 		for (let line in split(decoded, "\n")) {
 			let t = trim(line);
-			if (t !== "" && match(t, /^[a-z][a-z0-9+.-]*:\/\//))
+			if (t !== "" && match(lc(t), /^[a-z][a-z0-9+.-]*:\/\//))
 				push(urls, t);
 		}
 		if (!length(urls)) {
@@ -187,9 +206,19 @@ function cmd_fetch_rulesets(cur) {
 			push(specs, { url: target, outpath: raw_path, opts: { timeout: timeout } });
 			push(meta,  { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
 		} else if (rs_type === "local") {
+			// Restrict local copies to a small set of known prefixes
+			// (/etc, /tmp, /var, /usr/share) — defense in depth so a
+			// hostile UCI value cannot pull /etc/shadow or similar.
+			if (!path_under_whitelist(target)) {
+				log_err(`fetch_rulesets: ${name} target path '${target}' outside whitelist (/etc, /tmp, /var, /usr/share), rejecting`);
+				continue;
+			}
 			// Local copies are cheap, do them inline.
 			if (system(["cp", "--", target, raw_path]) !== 0) {
 				log_err(`fetch_rulesets: cannot read: ${target}`);
+				// cp may have left a partial file behind; remove it so
+				// stale content never reaches sing-box rule-set decompile.
+				fs.unlink(raw_path);
 				continue;
 			}
 			push(meta, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
