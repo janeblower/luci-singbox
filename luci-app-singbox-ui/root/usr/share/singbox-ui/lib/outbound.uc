@@ -14,6 +14,7 @@ try { require("protocols.shadowsocks"); } catch (_) {}
 try { require("protocols.vless"); } catch (_) {}
 try { require("protocols.vmess"); } catch (_) {}
 try { require("protocols.hysteria2"); } catch (_) {}
+try { require("protocols.tuic"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -106,21 +107,6 @@ function build_constructor_for(s, proto) {
 
 	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
 
-	if (proto === "tuic") {
-		if (length(s_opt(s, "server_uuid")))     ob.uuid     = s.server_uuid;
-		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
-		if (length(s_opt(s, "tuic_congestion")))
-			ob.congestion_control = s.tuic_congestion;
-		let over_stream = s_bool(s, "tuic_udp_over_stream");
-		if (over_stream) ob.udp_over_stream = true;
-		// udp_relay_mode is mutually exclusive with udp_over_stream — drop it when over_stream is on.
-		if (!over_stream && length(s_opt(s, "tuic_udp_relay_mode")))
-			ob.udp_relay_mode = s.tuic_udp_relay_mode;
-		if (s_bool(s, "tuic_zero_rtt")) ob.zero_rtt_handshake = true;
-		if (length(s_opt(s, "tuic_heartbeat"))) ob.heartbeat = s.tuic_heartbeat;
-		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
-			ob.network = s.network;
-	}
 	if (proto === "anytls") {
 		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
 		if (length(s_opt(s, "anytls_idle_check_interval")))

@@ -559,4 +559,76 @@ else
 	exit 1
 fi
 
+# D1.6: tuic descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- tuic descriptor parity tuic1 full udp_relay_mode (D1.6 golden)"
+golden_tuic1='{ "type": "tuic", "tag": "tuic1", "server": "t.example.com", "server_port": 9443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "password": "pw", "congestion_control": "bbr", "udp_relay_mode": "native", "zero_rtt_handshake": true, "heartbeat": "10s", "network": "udp", "tls": { "enabled": true, "server_name": "t.example.com" } }'
+actual_tuic1=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"tuic1", "server":"t.example.com", "server_port":"9443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "server_password":"pw", "tuic_congestion":"bbr",
+          "tuic_udp_relay_mode":"native", "tuic_zero_rtt":"1",
+          "tuic_heartbeat":"10s", "network":"udp",
+          "security":"tls", "tls_server_name":"t.example.com" };
+printf("%J", ob.build_constructor_for(s, "tuic"));
+'
+)
+if [ "$actual_tuic1" = "$golden_tuic1" ]; then
+	echo "  PASS: tuic parity (full, udp_relay_mode)"
+else
+	echo "FAIL: tuic parity (full, udp_relay_mode)"
+	echo "  expected: $golden_tuic1"
+	echo "  actual:   $actual_tuic1"
+	exit 1
+fi
+
+# D1.6 udp_over_stream variant: relay_mode dropped when over_stream is set.
+echo "-- tuic descriptor parity tuic2 udp_over_stream (D1.6 golden)"
+golden_tuic2='{ "type": "tuic", "tag": "tuic2", "server": "t.example.com", "server_port": 9443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "password": "pw", "congestion_control": "bbr", "udp_over_stream": true, "zero_rtt_handshake": true, "heartbeat": "10s", "network": "udp", "tls": { "enabled": true, "server_name": "t.example.com" } }'
+actual_tuic2=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"tuic2", "server":"t.example.com", "server_port":"9443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "server_password":"pw", "tuic_congestion":"bbr",
+          "tuic_udp_over_stream":"1", "tuic_zero_rtt":"1",
+          "tuic_heartbeat":"10s", "network":"udp",
+          "security":"tls", "tls_server_name":"t.example.com" };
+printf("%J", ob.build_constructor_for(s, "tuic"));
+'
+)
+if [ "$actual_tuic2" = "$golden_tuic2" ]; then
+	echo "  PASS: tuic parity (udp_over_stream)"
+else
+	echo "FAIL: tuic parity (udp_over_stream)"
+	echo "  expected: $golden_tuic2"
+	echo "  actual:   $actual_tuic2"
+	exit 1
+fi
+
+# D1.6 minimal variant: confirms all conditional branches skip cleanly.
+echo "-- tuic descriptor parity tuic3 minimal (D1.6 golden)"
+golden_tuic3='{ "type": "tuic", "tag": "tuic3", "server": "t.example.com", "server_port": 9443, "tls": { "enabled": true, "server_name": "t.example.com" } }'
+actual_tuic3=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"tuic3", "server":"t.example.com", "server_port":"9443",
+          "security":"tls", "tls_server_name":"t.example.com" };
+printf("%J", ob.build_constructor_for(s, "tuic"));
+'
+)
+if [ "$actual_tuic3" = "$golden_tuic3" ]; then
+	echo "  PASS: tuic parity (minimal)"
+else
+	echo "FAIL: tuic parity (minimal)"
+	echo "  expected: $golden_tuic3"
+	echo "  actual:   $actual_tuic3"
+	exit 1
+fi
+
 echo "OK"
