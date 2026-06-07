@@ -54,6 +54,7 @@ function emit_list() {
 		restart:        {},
 		refresh:        { what: "string" },
 		status:         {},
+		status_detail:  {},
 		read_config:    {},
 		clash_get:      { path: "string" },
 		clash_mutate:   { method: "string", path: "string", body: "string" },
@@ -198,6 +199,54 @@ function call_status() {
 		running:       is_singbox_running(),
 		subscriptions: subs,
 		rulesets:      rs
+	});
+}
+
+// status_detail — aggregate diagnostic snapshot for the Monitoring tab.
+// Returns running flag, last_generate_ts, last_apply_result, config_hash
+// (from generate.uc state file), schema_version (uci _meta), package_version
+// (opkg list-installed), service_start_ts (from init.d state file), and the
+// current 'now' timestamp. All side-effect-free, safe for read ACL.
+function call_status_detail() {
+	drain_stdin();
+	let running = is_singbox_running();
+
+	let last_state = {};
+	try {
+		let f = fs.open("/var/lib/singbox-ui/last_state.json", "r");
+		if (f) { last_state = json(f.read("all") || "{}") || {}; f.close(); }
+	} catch (_) {}
+
+	let svc_state = {};
+	try {
+		let f = fs.open("/var/lib/singbox-ui/service_state.json", "r");
+		if (f) { svc_state = json(f.read("all") || "{}") || {}; f.close(); }
+	} catch (_) {}
+
+	let schema = 0;
+	try {
+		let s = run_capture(["uci", "-q", "get", "singbox-ui._meta.schema_version"]) ?? "";
+		schema = +trim(s) || 0;
+	} catch (_) {}
+
+	let pkg_ver = "unknown";
+	try {
+		let line = trim(run_capture(["opkg", "list-installed", "luci-app-singbox-ui"]) ?? "");
+		// format: "luci-app-singbox-ui - 0.2.0-1"
+		let parts = split(line, " - ");
+		if (length(parts) >= 2) pkg_ver = parts[1];
+	} catch (_) {}
+
+	emit({
+		status: "ok",
+		running: running,
+		last_generate_ts: last_state.last_generate_ts || 0,
+		last_apply_result: last_state.last_apply_result || "unknown",
+		config_hash: last_state.config_hash || "unknown",
+		schema_version: schema,
+		package_version: pkg_ver,
+		service_start_ts: svc_state.service_start_ts || 0,
+		now: time(),
 	});
 }
 
@@ -386,6 +435,7 @@ if (cmd === "call") {
 	case "restart":     call_restart();      break;
 	case "refresh":     call_refresh();      break;
 	case "status":      call_status();       break;
+	case "status_detail": call_status_detail(); break;
 	case "read_config": call_read_config();  break;
 	case "clash_get":     call_clash_get();    break;
 	case "clash_mutate":  call_clash_mutate(); break;

@@ -45,6 +45,10 @@ start_service() {
 	procd_set_param command /usr/bin/sing-box run -c /tmp/singbox-ui.json
 	procd_set_param respawn
 	procd_close_instance
+
+	# C3.3: record service-start timestamp for status_detail RPC.
+	mkdir -p /var/lib/singbox-ui
+	echo "{\"service_start_ts\":$(date +%s)}" > /var/lib/singbox-ui/service_state.json
 }
 
 stop_service() {
