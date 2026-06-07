@@ -155,6 +155,20 @@ if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 	exit(1);
 }
 
+// C3.3: record generate state for status_detail RPC.
+try {
+	let fs_mod = require("fs");
+	fs_mod.mkdir("/var/lib/singbox-ui", 0755);
+	let f = fs_mod.open("/var/lib/singbox-ui/last_state.json", "w");
+	if (f) {
+		let body = sprintf(
+			"{\"last_generate_ts\":%d,\"last_apply_result\":\"ok\",\"config_hash\":\"unknown\"}",
+			time());
+		f.write(body);
+		f.close();
+	}
+} catch (_) {}
+
 try { log_mod.log_event("info", "config.generated", {}); } catch (_) {}
 
 print("OK\n");
