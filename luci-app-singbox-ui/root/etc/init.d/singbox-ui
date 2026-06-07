@@ -42,9 +42,19 @@ start_service() {
 	fi
 
 	procd_open_instance
+	# C3.6: drop to minimal capability set so sing-box runs without root.
+	# We intentionally do NOT switch user/group to nobody/nogroup here —
+	# that requires fixing FS-permissions on /tmp/singbox-ui.json and the
+	# /tmp/singbox-ui/ subscription cache, which could break test envs.
+	# Capabilities-only is a real security win without that risk.
+	procd_set_param capabilities /etc/capabilities/singbox-ui.json
 	procd_set_param command /usr/bin/sing-box run -c /tmp/singbox-ui.json
 	procd_set_param respawn
 	procd_close_instance
+
+	# C3.3: record service-start timestamp for status_detail RPC.
+	mkdir -p /var/lib/singbox-ui
+	echo "{\"service_start_ts\":$(date +%s)}" > /var/lib/singbox-ui/service_state.json
 }
 
 stop_service() {

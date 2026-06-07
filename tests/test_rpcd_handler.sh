@@ -54,7 +54,7 @@ jval() {
 
 echo "-- list emits valid JSON with all methods"
 out=$(run_h list)
-for m in generate nftables restart refresh status read_config clash_get clash_mutate export_section preview_config; do
+for m in generate nftables restart refresh status status_detail read_config clash_get clash_mutate export_section preview_config; do
 	printf "%s\n" "$out" | je "d.$m != null" || { echo "FAIL: missing $m"; exit 1; }
 done
 printf "%s\n" "$out" | je 'd.nftables.action != null' || { echo "FAIL: missing nftables.action"; exit 1; }

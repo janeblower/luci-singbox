@@ -48,27 +48,23 @@ let out_block = outbound_mod.build_outbounds(uci);
 // 1.11+ no longer provides an implicit `direct` outbound, so inject one when
 // the user hasn't defined their own. The `block` outbound was removed in 1.11;
 // route.uc emits `action: "reject"` rules instead, so nothing to inject here.
+let post_process = require("post_process");
+
 let have_direct = false;
 for (let o in out_block) {
 	if (o.tag === "direct") have_direct = true;
 }
-// The auto-injected direct is field-less. sing-box 1.12 fatally rejects a
-// dns_server `detour` pointing at it ("detour to an empty direct outbound
-// makes no sense"); the scrub below drops such references.
-let implicit_empty = {};
-if (!have_direct) { implicit_empty["direct"] = true; push(out_block, { tag: "direct", type: "direct" }); }
+
+let implicit_tags = [];
+if (!have_direct) {
+	push(out_block, { tag: "direct", type: "direct" });
+	push(implicit_tags, "direct");
+}
 
 config.outbounds = out_block;
 
-if (config.dns && type(config.dns.servers) === "array") {
-	for (let s in config.dns.servers) {
-		if (s.detour != null && implicit_empty[s.detour]) {
-			warn(sprintf("generate.uc: dropping dns_server[%s].detour='%s' (would reference an empty implicit outbound)\n",
-				s.tag ?? "?", s.detour));
-			delete s.detour;
-		}
-	}
-}
+// Centralised post-processing pipeline. See lib/post_process.uc.
+config = post_process.run_pipeline(config, { implicit_tags: implicit_tags });
 
 let r = route_mod.build_route_rules(uci);
 let rsets = ruleset_mod.build_rule_sets(uci, r.referenced);
@@ -158,5 +154,21 @@ function publish_atomic(path, body) {
 if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 	exit(1);
 }
+
+// C3.3: record generate state for status_detail RPC.
+try {
+	let fs_mod = require("fs");
+	fs_mod.mkdir("/var/lib/singbox-ui", 0755);
+	let f = fs_mod.open("/var/lib/singbox-ui/last_state.json", "w");
+	if (f) {
+		let body = sprintf(
+			"{\"last_generate_ts\":%d,\"last_apply_result\":\"ok\",\"config_hash\":\"unknown\"}",
+			time());
+		f.write(body);
+		f.close();
+	}
+} catch (_) {}
+
+try { log_mod.log_event("info", "config.generated", {}); } catch (_) {}
 
 print("OK\n");
