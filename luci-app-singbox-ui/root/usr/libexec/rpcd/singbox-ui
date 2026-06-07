@@ -95,11 +95,42 @@ function run_env(cmd, env_map) {
 	return system(shcmd) === 0;
 }
 
-// run() — never bypass it for child commands. The array form of system()
-// inherits this process's stdout/stderr, so a chatty child (pgrep prints
-// matching PIDs) would corrupt the JSON response that rpcd parses.
+// run_capture(argv) — like run() but returns child stdout (string) or null.
+// stderr is discarded so it can't corrupt the captured body.
+function run_capture(argv) {
+	let quoted = [];
+	for (let a in argv) push(quoted, sq(a));
+	let p = fs.popen(join(" ", quoted) + " 2>/dev/null", "r");
+	if (!p) return null;
+	let out = p.read("all") ?? "";
+	p.close();
+	return out;
+}
+
+// is_singbox_running() — query procd via ubus first; fall back to
+// `pgrep -x sing-box` (basename-only match) if ubus is unavailable.
+// Avoids false positives on shells/processes whose commandline merely
+// contains the string "sing-box run" (e.g. the old `pgrep -f` form).
 function is_singbox_running() {
-	return run(["pgrep", "-f", "sing-box run"]);
+	// Try procd ubus first. `service list {name:"singbox-ui"}` returns
+	// {"singbox-ui":{"instances":{...}}} where each instance has `running`.
+	let body = run_capture(["ubus", "call", "service", "list",
+	                        "{\"name\":\"singbox-ui\"}"]);
+	if (body != null && length(body)) {
+		let j;
+		try { j = json(body); } catch (_) { j = null; }
+		if (type(j) === "object" && type(j["singbox-ui"]) === "object") {
+			let instances = j["singbox-ui"].instances;
+			if (type(instances) === "object") {
+				for (let _name, inst in instances) {
+					if (inst.running === true) return true;
+				}
+			}
+		}
+	}
+	// Fallback: `pgrep -x sing-box` matches the basename only (no false
+	// positives on shells containing "sing-box run").
+	return run(["pgrep", "-x", "sing-box"]);
 }
 
 function list_files_with_mtime(dir, prefix, suffix) {
@@ -173,19 +204,21 @@ function call_read_config() {
 	if (!fd) { emit_err("config not generated yet"); return; }
 	let content = fd.read("all") || "";
 	fd.close();
-	emit({ status: "ok", content: content });
-}
 
-// run_capture(argv) — like run() but returns child stdout (string) or null.
-// stderr is discarded so it can't corrupt the captured body.
-function run_capture(argv) {
-	let quoted = [];
-	for (let a in argv) push(quoted, sq(a));
-	let p = fs.popen(join(" ", quoted) + " 2>/dev/null", "r");
-	if (!p) return null;
-	let out = p.read("all") ?? "";
-	p.close();
-	return out;
+	// Phase C2: same scrub treatment as preview_config / export_section —
+	// read-ACL users should not see verbatim credentials in the on-disk
+	// config. Pattern mirrors call_preview_config (try/catch around
+	// require("scrub") + json(), re-serialize via sprintf("%.4J", …)).
+	let scrub;
+	try { scrub = require("scrub"); }
+	catch (e) { emit_err("require(scrub) failed"); return; }
+
+	let obj;
+	try { obj = json(content); }
+	catch (e) { emit_err("config not valid JSON"); return; }
+
+	let scrubbed = sprintf("%.4J", scrub.scrub_secrets(obj));
+	emit({ status: "ok", content: scrubbed });
 }
 
 // clash_params() — env overrides (tests) win, else read the clash_api UCI section.
@@ -227,21 +260,18 @@ function call_export_section() {
 	print(trimmed + "\n");
 }
 
-// preview_tmp() — build a tmpfile path that won't collide across concurrent
-// callers. ucode has no getpid() and no rand() builtin, so we mix time()
-// with 4 bytes from /dev/urandom (always present on OpenWrt). The urandom
-// open is best-effort: on the off chance it fails we fall back to time()
-// alone — collisions there are harmless because fs.open(..., "w") truncates.
+// preview_tmp() — atomic tmpfile creation via mktemp(1). mktemp uses
+// O_EXCL under the hood, so there is no symlink race (cf. the previous
+// time+urandom path form, which used fs.open(..., "w") that truncates
+// without O_EXCL). Returns the absolute path or null on failure.
 function preview_tmp() {
-	let n = 0;
-	let f;
-	try { f = fs.open("/dev/urandom", "r"); } catch (_) { f = null; }
-	if (f) {
-		let b = f.read(4) ?? "";
-		f.close();
-		for (let i = 0; i < length(b); i++) n = n * 256 + ord(b, i);
-	}
-	return sprintf("/tmp/singbox-ui-preview.%d.%d.json", time(), n);
+	let path = run_capture(["mktemp", "-p", "/tmp",
+	                        "singbox-ui-preview.XXXXXX"]);
+	if (path == null) return null;
+	// mktemp prints the path with a trailing newline.
+	let trimmed = trim(path);
+	if (!length(trimmed)) return null;
+	return trimmed;
 }
 
 // preview_config — dry-run flavour of `generate`. Runs generate.uc with
@@ -256,6 +286,7 @@ function preview_tmp() {
 function call_preview_config() {
 	drain_stdin();
 	let tmp = preview_tmp();
+	if (tmp == null) { emit_err("cannot create preview tmpfile"); return; }
 	let ok = run_env(["ucode", "-L", UCODE_LIB, GENERATE_UC],
 	                 { SINGBOX_CONFIG: tmp });
 	if (!ok) {

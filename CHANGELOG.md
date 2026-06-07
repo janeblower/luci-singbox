@@ -103,6 +103,17 @@ non-destructive JSON import, and full Russian translation coverage.
 - Russian translation coverage expanded from ~40% to 100% (211 msgid in `po/ru/`, 0 untranslated, 4 drift). All Phase B and C1 strings translated, stale `#~` entries removed.
 - Pre-release i18n freshness step added to `docs/release.md`.
 
+---
+
+Phase C2 — additional security and robustness hardening discovered during
+the C1 final review.
+
+### Security (Phase C2)
+
+- `read_config` RPC handler now scrubs secrets in the same way `preview_config` and `export_section` do (gap identified in C1 final review). Read-ACL LuCI users no longer see verbatim credentials when viewing the on-disk `/tmp/singbox-ui.json`.
+- `is_singbox_running` no longer uses `pgrep -f "sing-box run"` (false-positive on any process whose commandline contains that string, including shells). Now queries procd via `ubus call service list` first, falling back to `pgrep -x sing-box` (basename match only).
+- `preview_config` tmpfile creation switched to `mktemp(1)` (atomic O_EXCL). The previous time+urandom path form used `fs.open(..., "w")` which lacks `O_EXCL`, opening a theoretical symlink race.
+
 
 
 ## [v0.1.0] — 2026-06-06
