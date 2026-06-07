@@ -526,6 +526,49 @@ nocheck "no malformed no-colon-here" '"name": "no-colon-here"'
 nocheck "no malformed missing-name"  '"name": ""'
 nocheck "no malformed empty uuid"    '"uuid": ""'
 
+# D1.5.3: shadowsocks inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- shadowsocks inbound descriptor parity: multi-user (D1.5.3 golden)"
+golden='{ "type": "shadowsocks", "tag": "ss_in1", "listen": "::", "listen_port": 8388, "method": "2022-blake3-aes-128-gcm", "users": [ { "name": "alice", "password": "pwA" }, { "name": "bob", "password": "pwB" } ], "network": "tcp" }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"ss_in1", "protocol":"shadowsocks", "listen":"::", "listen_port":"8388",
+          "shadowsocks_method":"2022-blake3-aes-128-gcm",
+          "ss_user":["alice:pwA","bob:pwB"], "network":"tcp" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: shadowsocks inbound parity (multi-user)"
+else
+	echo "FAIL: shadowsocks inbound parity (multi-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+echo "-- shadowsocks inbound descriptor parity: single-user fallback (D1.5.3 golden)"
+golden='{ "type": "shadowsocks", "tag": "ss_in2", "listen": "::", "listen_port": 8388, "method": "aes-128-gcm", "password": "pw" }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"ss_in2", "protocol":"shadowsocks", "listen_port":"8388",
+          "shadowsocks_method":"aes-128-gcm", "server_password":"pw" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: shadowsocks inbound parity (single-user fallback)"
+else
+	echo "FAIL: shadowsocks inbound parity (single-user fallback)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
 # D1.5.2: trojan inbound descriptor parity (golden).
 # Must pass both before (legacy) and after (descriptor) the migration.
 echo "-- trojan inbound descriptor parity (D1.5.2 golden)"
