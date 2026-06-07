@@ -180,6 +180,13 @@ function build_one(s) {
 	}
 	let ob = null;
 
+	// D1.5: `tproxy` (transparent proxy mode), `tun` (tun virtual interface),
+	// and `direct` (DNS listener) are infrastructure inbound types — not user
+	// proxy protocols. They stay in this switch indefinitely by design. All
+	// 5 proxy protocols (trojan / shadowsocks / vless / vmess / hysteria2)
+	// are descriptor-owned and never reach this code path; the registry
+	// consult above intercepts them. (tuic / anytls inbound are out-of-scope
+	// per docs/protocol-coverage.md.)
 	if (proto === "tproxy") {
 		ob = { type: "tproxy", tag: tag, listen: listen, listen_port: port };
 		if (s_bool(s, "tcp_fast_open")) ob.tcp_fast_open = true;
