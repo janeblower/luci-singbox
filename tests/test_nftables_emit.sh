@@ -209,4 +209,40 @@ echo "$out" | grep -q 'iifname { "br-lan" }' \
     && { echo "FAIL: single iface must NOT use brace form (back-compat)"; exit 1; }
 echo "  PASS: single-iface back-compat"
 
+echo "-- C2.1.6: iface names with quotes/spaces/shell metacharacters are dropped"
+# emit's iface_str is comma-split; a hostile name with embedded quotes would
+# otherwise break out of the iifname "..." string and inject arbitrary nft.
+# Valid neighbours must survive; invalid ones must be filtered with a warning.
+# We split stdout (the emitted nft script) from stderr (the warning) so the
+# "bad iface" grep only matches if the name reached the nft text.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" 'br-lan,evil"; ls #,wan0' 2>/tmp/c2_iface_err.log)
+err=$(cat /tmp/c2_iface_err.log)
+rm -f /tmp/c2_iface_err.log
+echo "$out" | grep -q 'evil' \
+    && { echo "FAIL: bad iface made it through to nft"; echo "$out"; exit 1; }
+echo "$out" | grep -q 'iifname "br-lan"\|iifname { "br-lan"' \
+    || { echo "FAIL: valid iface br-lan was dropped"; echo "$out"; exit 1; }
+echo "$out" | grep -q 'wan0' \
+    || { echo "FAIL: valid iface wan0 was dropped"; echo "$out"; exit 1; }
+echo "$err" | grep -qi 'invalid iface\|iface.*skip' \
+    || { echo "FAIL: no warning emitted for filtered iface"; echo "stderr: $err"; exit 1; }
+echo "  PASS: bad iface filtered + warning emitted"
+
+echo "-- C2.1.6: iface name with backslash is dropped"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" 'br-lan,bad\name' 2>/dev/null)
+echo "$out" | grep -q 'bad\\name\|bad\\\\name' \
+    && { echo "FAIL: backslash iface made it through"; echo "$out"; exit 1; }
+echo "  PASS: backslash iface filtered"
+
+echo "-- C2.1.6: dotted/at-sign iface names are accepted (vlan, alias forms)"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" 'eth0.100,br-lan@if5' 2>/dev/null)
+echo "$out" | grep -q 'eth0.100' \
+    || { echo "FAIL: dotted iface dropped (should be valid)"; echo "$out"; exit 1; }
+echo "$out" | grep -q 'br-lan@if5' \
+    || { echo "FAIL: @-iface dropped (should be valid)"; echo "$out"; exit 1; }
+echo "  PASS: dotted/at-sign iface names accepted"
+
 echo "OK"
