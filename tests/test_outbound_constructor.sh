@@ -462,4 +462,52 @@ else
 	exit 1
 fi
 
+# D1.4: vmess descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- vmess descriptor parity (D1.4 golden)"
+golden='{ "type": "vmess", "tag": "vm1", "server": "vmess.example.com", "server_port": 8443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "alter_id": 64, "security": "aes-128-gcm", "tls": { "enabled": true, "server_name": "vmess.example.com" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"vm1", "server":"vmess.example.com", "server_port":"8443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "vmess_alter_id":"64", "vmess_security":"aes-128-gcm",
+          "security":"tls", "tls_server_name":"vmess.example.com" };
+printf("%J", ob.build_constructor_for(s, "vmess"));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vmess parity"
+else
+	echo "FAIL: vmess parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.4 transport variant: vmess with ws transport
+echo "-- vmess descriptor parity ws transport (D1.4 golden)"
+golden_ws='{ "type": "vmess", "tag": "vm2", "server": "vmess.example.com", "server_port": 8443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "alter_id": 0, "security": "auto", "tls": { "enabled": true, "server_name": "vmess.example.com" }, "transport": { "type": "ws", "path": "/ws" } }'
+actual_ws=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"vm2", "server":"vmess.example.com", "server_port":"8443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "vmess_alter_id":"0", "vmess_security":"auto",
+          "security":"tls", "tls_server_name":"vmess.example.com",
+          "transport":"ws", "transport_path":"/ws" };
+printf("%J", ob.build_constructor_for(s, "vmess"));
+'
+)
+if [ "$actual_ws" = "$golden_ws" ]; then
+	echo "  PASS: vmess ws-transport parity"
+else
+	echo "FAIL: vmess ws-transport parity"
+	echo "  expected: $golden_ws"
+	echo "  actual:   $actual_ws"
+	exit 1
+fi
+
 echo "OK"

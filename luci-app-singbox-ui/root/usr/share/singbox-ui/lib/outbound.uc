@@ -12,6 +12,7 @@ try { require("protocols.ssh"); } catch (_) {}
 try { require("protocols.trojan"); } catch (_) {}
 try { require("protocols.shadowsocks"); } catch (_) {}
 try { require("protocols.vless"); } catch (_) {}
+try { require("protocols.vmess"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -104,9 +105,6 @@ function build_constructor_for(s, proto) {
 
 	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
 
-	if (proto === "vmess") {
-		if (length(s_opt(s, "server_uuid"))) ob.uuid = s.server_uuid;
-	}
 	if (proto === "hysteria2") {
 		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
 	}
@@ -134,10 +132,6 @@ function build_constructor_for(s, proto) {
 		let m = s_num(s.anytls_min_idle_session);
 		if (m > 0) ob.min_idle_session = m;
 	}
-	if (proto === "vmess") {
-		if (length(s_opt(s, "vmess_alter_id"))) ob.alter_id = s_num(s.vmess_alter_id);
-		if (length(s_opt(s, "vmess_security"))) ob.security = s.vmess_security;
-	}
 	if (proto === "hysteria2") {
 		let ot = s_opt(s, "hysteria2_obfs_type") || "none";
 		// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
@@ -156,12 +150,6 @@ function build_constructor_for(s, proto) {
 	if (proto !== "shadowsocks" && proto !== "trojan") {
 		let tls = build_tls_client(s, proto);
 		if (tls) ob.tls = tls;
-	}
-	if (proto === "vmess") {
-		let tr = build_transport(s);
-		if (tr) ob.transport = tr;
-		let mux = build_multiplex(s);
-		if (mux) ob.multiplex = mux;
 	}
 	return ob;
 }
