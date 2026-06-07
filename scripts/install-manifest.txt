@@ -37,6 +37,7 @@ root/usr/share/singbox-ui/lib/post_process.uc	usr/share/singbox-ui/lib/post_proc
 root/usr/share/singbox-ui/lib/protocols/anytls.uc	usr/share/singbox-ui/lib/protocols/anytls.uc	data
 root/usr/share/singbox-ui/lib/protocols/hysteria2.uc	usr/share/singbox-ui/lib/protocols/hysteria2.uc	data
 root/usr/share/singbox-ui/lib/protocols/registry.uc	usr/share/singbox-ui/lib/protocols/registry.uc	data
+root/usr/share/singbox-ui/lib/protocols/schema_dump.uc	usr/share/singbox-ui/lib/protocols/schema_dump.uc	data
 root/usr/share/singbox-ui/lib/protocols/shadowsocks.uc	usr/share/singbox-ui/lib/protocols/shadowsocks.uc	data
 root/usr/share/singbox-ui/lib/protocols/ssh.uc	usr/share/singbox-ui/lib/protocols/ssh.uc	data
 root/usr/share/singbox-ui/lib/protocols/trojan.uc	usr/share/singbox-ui/lib/protocols/trojan.uc	data
