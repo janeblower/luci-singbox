@@ -21,3 +21,17 @@ if ! cmp -s scripts/install-manifest.txt "$tmp"; then
 	exit 1
 fi
 echo "PASS: install-manifest.txt is fresh"
+
+# D4.5: plugin scaffolding invariant. The production manifest must contain
+# exactly ONE file under lib/plugins/ — the registry. Any additional file
+# would mean a Phase D plugin shipped that wasn't sanctioned by spec.
+plugin_count=$(grep -c '^root/usr/share/singbox-ui/lib/plugins/' scripts/install-manifest.txt)
+if [ "$plugin_count" -ne 1 ]; then
+	echo "FAIL: expected 1 file under lib/plugins/ in manifest, found $plugin_count"
+	exit 1
+fi
+if ! grep -q '^root/usr/share/singbox-ui/lib/plugins/registry\.uc' scripts/install-manifest.txt; then
+	echo "FAIL: lib/plugins/registry.uc missing from manifest"
+	exit 1
+fi
+echo "PASS: lib/plugins invariant (exactly registry.uc)"
