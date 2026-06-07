@@ -58,8 +58,9 @@ function emit_list() {
 		read_config:    {},
 		clash_get:      { path: "string" },
 		clash_mutate:   { method: "string", path: "string", body: "string" },
-		export_section: { kind: "string", name: "string" },
-		preview_config: {}
+		export_section:    { kind: "string", name: "string" },
+		preview_config:    {},
+		protocol_schema:   {}
 	});
 }
 
@@ -248,6 +249,16 @@ function call_status_detail() {
 		service_start_ts: svc_state.service_start_ts || 0,
 		now: time(),
 	});
+}
+
+function call_protocol_schema() {
+    let dump;
+    try { dump = require("protocols.schema_dump"); }
+    catch (e) { emit_err("require(protocols.schema_dump) failed"); return; }
+    // Ensure all descriptors are eager-loaded into the registry.
+    try { require("outbound"); require("inbound"); }
+    catch (e) { emit_err("registry load failed"); return; }
+    emit({ status: "ok", version: 1, schema: dump.dump_all() });
 }
 
 function call_read_config() {
@@ -441,6 +452,7 @@ if (cmd === "call") {
 	case "clash_mutate":  call_clash_mutate(); break;
 	case "export_section": call_export_section(); break;
 	case "preview_config": call_preview_config(); break;
+	case "protocol_schema": call_protocol_schema(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);
