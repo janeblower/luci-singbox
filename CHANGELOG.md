@@ -425,6 +425,31 @@ sub-phase entries as work lands.
   `read_config` / `export_section` / `preview_config` callers wired.
 - `docs/secret-reveal.md` operator guide.
 
+### Added (Phase D — D4)
+
+- `lib/plugins/registry.uc` exposes `register({name, on_generate_post})`,
+  `get_all()`, `invoke_on_generate_post(config, ctx)`. Hook errors logged
+  via `lib/log.uc` but never propagated.
+- `lib/post_process.uc::run_pipeline` invokes registered plugins after
+  implicit-direct scrubbing.
+- `generate.uc` eager-loads any `/usr/share/singbox-ui/lib/plugins/*.uc`
+  on boot; broken modules skipped with a `plugin.load_failed` log event.
+- `tests/test_plugins_registry.sh` (TDD) covers register / invoke /
+  hook-throws-don't-propagate.
+- `tests/fixtures/plugins/noop.uc` — test-only plugin (NOT in install
+  manifest); `tests/test_post_process_uc.sh` extended with a case
+  confirming `run_pipeline` invokes the noop hook.
+- `tests/test_install_manifest_fresh.sh` extended with invariant:
+  production manifest contains exactly ONE file under `lib/plugins/`
+  (the registry); no production plugin ships in Phase D.
+- `docs/plugins.md` — plugin API contract, invariants, threat model.
+
+### Changed (Phase D — D4)
+
+- `lib/post_process.uc::run_pipeline` signature unchanged but now invokes
+  registered plugins as a post-scrub pipeline step. Behaviour unchanged
+  when no plugins are present.
+
 ---
 
 ## [v0.1.0] — 2026-06-06
