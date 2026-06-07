@@ -401,6 +401,30 @@ sub-phase entries as work lands.
 - `test_view_modules_layout.sh` extended with depends-count guard: zero
   hand-coded depends for any descriptor-owned proto allowed in either tab.
 
+### Security (Phase D — D3)
+
+- **Secret-reveal UX with 5-minute TTL token.** `lib/reveal.uc` token
+  store (16 random bytes → 32 hex chars, persisted to
+  `/var/lib/singbox-ui/reveal_token.json` mode 0600). Two new write-ACL
+  RPC methods `reveal_token_grant` and `reveal_token_revoke`; existing
+  read-ACL methods (`read_config`, `export_section`, `preview_config`)
+  accept an optional `token` arg that bypasses scrub when valid.
+- **Token is router-global, not per-session** — documented in
+  `docs/secret-reveal.md` with threat model and operator guide. Audit log
+  entry `event=reveal.granted user=<x>` via `lib/log.uc`.
+- Frontend `Show secrets` button in action-bar with live countdown
+  (`Hide secrets (M:SS)`); token lives only in `window.singboxUiRevealToken`.
+  `tests/test_view_modules_layout.sh` enforces "no token in
+  localStorage/sessionStorage".
+
+### Added (Phase D — D3)
+
+- `lib/reveal.uc` + `tests/test_reveal_uc.sh` (TDD).
+- `widgets/action-bar.js` reveal button + countdown timer.
+- `lib/rpc.js` `revealGrant` / `revealRevoke` / `withRevealToken(args)` helpers;
+  `read_config` / `export_section` / `preview_config` callers wired.
+- `docs/secret-reveal.md` operator guide.
+
 ---
 
 ## [v0.1.0] — 2026-06-06
