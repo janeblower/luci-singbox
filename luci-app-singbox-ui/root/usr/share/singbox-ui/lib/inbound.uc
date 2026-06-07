@@ -150,13 +150,17 @@ function build_multiplex(s) {
 }
 
 function build_one(s) {
-	// D1.5: consult protocol registry first. If a descriptor is registered
-	// for ("inbound", s.type), use its emit() and skip the legacy switch.
-	// Same pattern as lib/outbound.uc::build_constructor_for (D1 invariant).
+	// D1.5: consult protocol registry first. Inbound sections discriminate
+	// by `protocol` (not `type`); we mirror the legacy default-to-tproxy
+	// fallback below. If a descriptor is registered for the resolved
+	// proto, use its emit() and skip the legacy switch.
 	try {
 		let reg = require("protocols.registry");
-		let d = reg.get("inbound", s.type);
-		if (d != null) return d.emit(s);
+		let proto_lookup = s_opt(s, "protocol");
+		if (proto_lookup) {
+			let d = reg.get("inbound", proto_lookup);
+			if (d != null) return d.emit(s);
+		}
 	} catch (_) { /* registry not available — fall through to legacy switch */ }
 
 	let tag = s[".name"];
