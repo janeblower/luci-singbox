@@ -13,6 +13,7 @@ try { require("protocols.trojan"); } catch (_) {}
 try { require("protocols.shadowsocks"); } catch (_) {}
 try { require("protocols.vless"); } catch (_) {}
 try { require("protocols.vmess"); } catch (_) {}
+try { require("protocols.hysteria2"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -105,9 +106,6 @@ function build_constructor_for(s, proto) {
 
 	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
 
-	if (proto === "hysteria2") {
-		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
-	}
 	if (proto === "tuic") {
 		if (length(s_opt(s, "server_uuid")))     ob.uuid     = s.server_uuid;
 		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
@@ -131,19 +129,6 @@ function build_constructor_for(s, proto) {
 			ob.idle_session_timeout = s.anytls_idle_timeout;
 		let m = s_num(s.anytls_min_idle_session);
 		if (m > 0) ob.min_idle_session = m;
-	}
-	if (proto === "hysteria2") {
-		let ot = s_opt(s, "hysteria2_obfs_type") || "none";
-		// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
-		if (ot !== "none" && length(s_opt(s, "hysteria2_obfs_password")))
-			ob.obfs = { type: ot, password: s.hysteria2_obfs_password };
-		if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
-		if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
-		if (length(s_opt(s, "hysteria2_masquerade")))
-			ob.masquerade = s.hysteria2_masquerade;
-		if (s_bool(s, "brutal_debug")) ob.brutal_debug = true;
-		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
-			ob.network = s.network;
 	}
 	// shadowsocks: no TLS in the protocol itself.
 	// trojan: descriptor-owned (D1.1) — fallback must not double-emit tls.
