@@ -46,4 +46,22 @@ out=$(run_uc '
 ')
 [ "$out" = "scrubbed" ] && echo "  PASS: pipeline idempotent" || { echo "FAIL: [$out]"; exit 1; }
 
+# D4.4: post_process.run_pipeline must invoke registered plugin hooks.
+# Load the test-only noop plugin from tests/fixtures/plugins via a second -L,
+# then assert _test_noop_called was set during run_pipeline.
+echo "-- run_pipeline invokes registered plugin hooks (noop fixture)"
+out=$("$UCODE_BIN" \
+    -L "$UCODE_APP_LIB_DIR" \
+    -L "$PWD/tests/fixtures" \
+    -e '
+        require("plugins.noop");
+        let pp = require("post_process");
+        pp.run_pipeline({ route: { rules: [] } }, { generation_ts: 12345 });
+        assert(global._test_noop_called != null, "noop plugin not invoked");
+        assert(global._test_noop_called.ts === 12345, "ctx.generation_ts not passed");
+        assert(global._test_noop_called.had_config === true, "config not passed");
+        print("PASS test_post_process_uc plugin invocation\n");
+    ')
+[ "$out" = "PASS test_post_process_uc plugin invocation" ] && echo "  PASS: plugin hook invoked by run_pipeline" || { echo "FAIL: [$out]"; exit 1; }
+
 echo "ALL PASS"

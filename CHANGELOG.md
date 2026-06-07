@@ -330,6 +330,128 @@ and frontend descriptor-driven rendering tracked as Phase D work.
 
 ---
 
+Phase D — descriptor migration of the 7 proxy protocols (outbound first
+in D1, inbound in D1.5), descriptor-driven UI in D2, secret-reveal UX
+with TTL token in D3, plugin scaffolding in D4. `[Unreleased]` accumulates
+sub-phase entries as work lands.
+
+### Added (Phase D)
+
+- `lib/protocols/{trojan,shadowsocks,vless,vmess,hysteria2,tuic,anytls}.uc` —
+  outbound descriptors for the 7 proxy protocols. Each registers via
+  `lib/protocols/registry.uc` at module load; `lib/outbound.uc::build_constructor_for`
+  now consults the registry only — no per-protocol switch arms remain.
+- `tests/test_protocol_field_coverage.sh` — drift guard between registered
+  descriptor fields and `docs/protocol-coverage.md`. Caught real gaps in
+  the doc which were filled in the same commit (per-protocol UCI columns
+  for all 7 outbounds + new ssh outbound section).
+
+### Changed (Phase D)
+
+- `lib/outbound.uc::build_constructor_for` reduced to a registry-lookup
+  dispatcher (10 lines of body). `test_view_modules_layout.sh` enforces
+  the dispatcher-size invariant (≤14 lines including header/braces).
+  `build_tls_client`, `build_transport`, `build_multiplex` exported so
+  descriptors can reuse them.
+- `docs/protocol-coverage.md`: 7 per-protocol outbound sections now have
+  explicit UCI field columns; new ssh outbound section added.
+
+### Added (Phase D — D1.5)
+
+- Inbound descriptors appended to `lib/protocols/{trojan,shadowsocks,vless,vmess,hysteria2}.uc`.
+  Each protocol module now registers BOTH outbound and inbound sides of
+  the registry. Multi-user inbound modes (`ss_user` for shadowsocks,
+  `inbound_user` for vless/vmess) preserved with first-colon split parsing
+  identical to legacy. tuic / anytls inbound are out-of-scope per
+  `docs/protocol-coverage.md` (not implemented in legacy either).
+- `lib/inbound.uc` exports shared emit helpers (`build_user`,
+  `build_inbound_users`, `build_tls`, `build_transport`, `build_multiplex`,
+  `build_one`) so descriptors can call them.
+
+### Changed (Phase D — D1.5)
+
+- `lib/inbound.uc::build_one` now consults the protocol registry first
+  (keyed on `s_opt(s, "protocol")`); legacy switch retains only
+  infrastructure types `tproxy` / `tun` / `direct` plus the default
+  warn-and-skip. Invariant documented in-line.
+
+### Added (Phase D — D2)
+
+- `singbox-ui::protocol_schema` RPC (read ACL) — returns the descriptor
+  projection from `lib/protocols/schema_dump.uc`. Response shape:
+  `{status, version:1, schema:{outbound:{...}, inbound:{...}}}`.
+  `emit` functions are explicitly dropped via a whitelist of declarative
+  keys (`name`, `type`, `required`, `default`, `validate`, `group`,
+  `ui_label`, `secret`, `values`, `item`).
+- `htdocs/.../lib/descriptor_form.js` — pure helper `applyDescriptor(s, kind, protoName, descriptor)`
+  that creates LuCI `s.taboption()` widgets from descriptor metadata and
+  wires depends on the right UCI key (`type` for outbound, `protocol` for inbound).
+- `tests/test_protocol_schema_rpc.sh`, `tests/test_descriptor_form_js.sh` —
+  RPC response shape + JS form-helper unit tests (node SKIP-aware).
+
+### Changed (Phase D — D2)
+
+- `tabs/outbounds.js` (-255 lines) and `tabs/inbounds.js` (-250 lines)
+  no longer hand-code per-protocol `depends('type'|'protocol', '<proto>')`
+  chains for descriptor-owned types. Each tab keeps its 6 `s.tab(...)`
+  declarations, its discriminator ListValue, and the non-proxy infrastructure
+  blocks; descriptor-owned fields come from a single `applyDescriptor` loop.
+- `main.js` augmented to call `protocol_schema` RPC in the `load()` phase
+  and populate `window.singboxUiSchemaCache` before render.
+- `test_view_modules_layout.sh` extended with depends-count guard: zero
+  hand-coded depends for any descriptor-owned proto allowed in either tab.
+
+### Security (Phase D — D3)
+
+- **Secret-reveal UX with 5-minute TTL token.** `lib/reveal.uc` token
+  store (16 random bytes → 32 hex chars, persisted to
+  `/var/lib/singbox-ui/reveal_token.json` mode 0600). Two new write-ACL
+  RPC methods `reveal_token_grant` and `reveal_token_revoke`; existing
+  read-ACL methods (`read_config`, `export_section`, `preview_config`)
+  accept an optional `token` arg that bypasses scrub when valid.
+- **Token is router-global, not per-session** — documented in
+  `docs/secret-reveal.md` with threat model and operator guide. Audit log
+  entry `event=reveal.granted user=<x>` via `lib/log.uc`.
+- Frontend `Show secrets` button in action-bar with live countdown
+  (`Hide secrets (M:SS)`); token lives only in `window.singboxUiRevealToken`.
+  `tests/test_view_modules_layout.sh` enforces "no token in
+  localStorage/sessionStorage".
+
+### Added (Phase D — D3)
+
+- `lib/reveal.uc` + `tests/test_reveal_uc.sh` (TDD).
+- `widgets/action-bar.js` reveal button + countdown timer.
+- `lib/rpc.js` `revealGrant` / `revealRevoke` / `withRevealToken(args)` helpers;
+  `read_config` / `export_section` / `preview_config` callers wired.
+- `docs/secret-reveal.md` operator guide.
+
+### Added (Phase D — D4)
+
+- `lib/plugins/registry.uc` exposes `register({name, on_generate_post})`,
+  `get_all()`, `invoke_on_generate_post(config, ctx)`. Hook errors logged
+  via `lib/log.uc` but never propagated.
+- `lib/post_process.uc::run_pipeline` invokes registered plugins after
+  implicit-direct scrubbing.
+- `generate.uc` eager-loads any `/usr/share/singbox-ui/lib/plugins/*.uc`
+  on boot; broken modules skipped with a `plugin.load_failed` log event.
+- `tests/test_plugins_registry.sh` (TDD) covers register / invoke /
+  hook-throws-don't-propagate.
+- `tests/fixtures/plugins/noop.uc` — test-only plugin (NOT in install
+  manifest); `tests/test_post_process_uc.sh` extended with a case
+  confirming `run_pipeline` invokes the noop hook.
+- `tests/test_install_manifest_fresh.sh` extended with invariant:
+  production manifest contains exactly ONE file under `lib/plugins/`
+  (the registry); no production plugin ships in Phase D.
+- `docs/plugins.md` — plugin API contract, invariants, threat model.
+
+### Changed (Phase D — D4)
+
+- `lib/post_process.uc::run_pipeline` signature unchanged but now invokes
+  registered plugins as a post-scrub pipeline step. Behaviour unchanged
+  when no plugins are present.
+
+---
+
 ## [v0.1.0] — 2026-06-06
 
 ### Added

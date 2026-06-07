@@ -22,7 +22,14 @@ function fail(msg) { emit({ status: "error", message: msg }); exit(0); }
 // Apply lib/scrub.uc on the section object before emit so that read-ACL users
 // never see uuid/password/private_key/etc. verbatim (spec C1.2). Loaded lazily
 // to keep the bad-kind / missing-name error paths independent of scrub.uc.
+// Phase D3.3: if REVEAL_TOKEN env is set and validates, return obj unscrubbed.
 function scrubbed(obj) {
+	let token = getenv("REVEAL_TOKEN");
+	if (length(token)) {
+		let rv;
+		try { rv = require("reveal"); } catch (_) { rv = null; }
+		if (rv && rv.validate(token)) return obj;
+	}
 	let scrub = require("scrub");
 	return scrub.scrub_secrets(obj);
 }

@@ -526,4 +526,218 @@ nocheck "no malformed no-colon-here" '"name": "no-colon-here"'
 nocheck "no malformed missing-name"  '"name": ""'
 nocheck "no malformed empty uuid"    '"uuid": ""'
 
+# D1.5.3: shadowsocks inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- shadowsocks inbound descriptor parity: multi-user (D1.5.3 golden)"
+golden='{ "type": "shadowsocks", "tag": "ss_in1", "listen": "::", "listen_port": 8388, "method": "2022-blake3-aes-128-gcm", "users": [ { "name": "alice", "password": "pwA" }, { "name": "bob", "password": "pwB" } ], "network": "tcp" }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"ss_in1", "protocol":"shadowsocks", "listen":"::", "listen_port":"8388",
+          "shadowsocks_method":"2022-blake3-aes-128-gcm",
+          "ss_user":["alice:pwA","bob:pwB"], "network":"tcp" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: shadowsocks inbound parity (multi-user)"
+else
+	echo "FAIL: shadowsocks inbound parity (multi-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+echo "-- shadowsocks inbound descriptor parity: single-user fallback (D1.5.3 golden)"
+golden='{ "type": "shadowsocks", "tag": "ss_in2", "listen": "::", "listen_port": 8388, "method": "aes-128-gcm", "password": "pw" }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"ss_in2", "protocol":"shadowsocks", "listen_port":"8388",
+          "shadowsocks_method":"aes-128-gcm", "server_password":"pw" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: shadowsocks inbound parity (single-user fallback)"
+else
+	echo "FAIL: shadowsocks inbound parity (single-user fallback)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.5.2: trojan inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- trojan inbound descriptor parity (D1.5.2 golden)"
+golden='{ "type": "trojan", "tag": "in_t1", "listen": "::", "listen_port": 443, "users": [ { "name": "in_t1", "password": "pw" } ], "tls": { "enabled": true, "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"in_t1", "protocol":"trojan", "listen":"::", "listen_port":"443",
+          "server_password":"pw", "security":"tls",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: trojan inbound parity"
+else
+	echo "FAIL: trojan inbound parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.5.4: vless inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- vless inbound descriptor parity: multi-user (D1.5.4 golden)"
+golden='{ "type": "vless", "tag": "v_in1", "listen": "::", "listen_port": 443, "users": [ { "name": "alice", "uuid": "11111111-1111-1111-1111-111111111111" }, { "name": "bob", "uuid": "22222222-2222-2222-2222-222222222222", "flow": "xtls-rprx-vision" } ], "tls": { "enabled": true, "certificate_path": "/etc/ssl/cert.pem", "key_path": "/etc/ssl/key.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"v_in1", "protocol":"vless", "listen":"::", "listen_port":"443",
+          "inbound_user":["alice:11111111-1111-1111-1111-111111111111",
+                          "bob:22222222-2222-2222-2222-222222222222:xtls-rprx-vision"],
+          "security":"tls",
+          "tls_certificate_path":"/etc/ssl/cert.pem", "tls_key_path":"/etc/ssl/key.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vless inbound parity (multi-user)"
+else
+	echo "FAIL: vless inbound parity (multi-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+echo "-- vless inbound descriptor parity: single-user (D1.5.4 golden)"
+golden='{ "type": "vless", "tag": "v_in2", "listen": "::", "listen_port": 443, "users": [ { "name": "v_in2", "uuid": "33333333-3333-3333-3333-333333333333", "flow": "xtls-rprx-vision" } ], "tls": { "enabled": true, "certificate_path": "/etc/ssl/cert.pem", "key_path": "/etc/ssl/key.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"v_in2", "protocol":"vless", "listen":"::", "listen_port":"443",
+          "server_uuid":"33333333-3333-3333-3333-333333333333",
+          "vless_flow":"xtls-rprx-vision",
+          "security":"tls",
+          "tls_certificate_path":"/etc/ssl/cert.pem", "tls_key_path":"/etc/ssl/key.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vless inbound parity (single-user)"
+else
+	echo "FAIL: vless inbound parity (single-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.5.5: vmess inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- vmess inbound descriptor parity: multi-user (D1.5.5 golden)"
+golden='{ "type": "vmess", "tag": "vm_in1", "listen": "::", "listen_port": 443, "users": [ { "name": "alice", "uuid": "11111111-1111-1111-1111-111111111111" }, { "name": "bob", "uuid": "22222222-2222-2222-2222-222222222222", "alterId": 64 } ], "tls": { "enabled": true, "server_name": "example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"vm_in1", "protocol":"vmess", "listen":"::", "listen_port":"443",
+          "inbound_user":["alice:11111111-1111-1111-1111-111111111111",
+                          "bob:22222222-2222-2222-2222-222222222222:64"],
+          "security":"tls",
+          "tls_server_name":"example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vmess inbound parity (multi-user)"
+else
+	echo "FAIL: vmess inbound parity (multi-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+echo "-- vmess inbound descriptor parity: single-user (D1.5.5 golden)"
+golden='{ "type": "vmess", "tag": "vm_in2", "listen": "::", "listen_port": 443, "users": [ { "name": "vm_in2", "uuid": "33333333-3333-3333-3333-333333333333", "alterId": 64 } ], "tls": { "enabled": true, "server_name": "example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"vm_in2", "protocol":"vmess", "listen":"::", "listen_port":"443",
+          "server_uuid":"33333333-3333-3333-3333-333333333333",
+          "vmess_alter_id":"64",
+          "security":"tls",
+          "tls_server_name":"example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vmess inbound parity (single-user)"
+else
+	echo "FAIL: vmess inbound parity (single-user)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.5.6: hysteria2 inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- hysteria2 inbound descriptor parity: full (D1.5.6 golden)"
+golden='{ "type": "hysteria2", "tag": "h2_in1", "listen": "::", "listen_port": 443, "users": [ { "name": "h2_in1", "password": "pw" } ], "obfs": { "type": "salamander", "password": "obfspw" }, "up_mbps": 100, "down_mbps": 200, "masquerade": "https://example.com", "brutal_debug": true, "ignore_client_bandwidth": true, "tls": { "enabled": true, "server_name": "h2.example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"h2_in1", "protocol":"hysteria2", "listen_port":"443",
+          "server_password":"pw",
+          "hysteria2_obfs_type":"salamander", "hysteria2_obfs_password":"obfspw",
+          "up_mbps":"100", "down_mbps":"200",
+          "hysteria2_masquerade":"https://example.com",
+          "brutal_debug":"1", "ignore_client_bandwidth":"1",
+          "tls_server_name":"h2.example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: hysteria2 inbound parity (full)"
+else
+	echo "FAIL: hysteria2 inbound parity (full)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+echo "-- hysteria2 inbound descriptor parity: minimal (D1.5.6 golden)"
+golden='{ "type": "hysteria2", "tag": "h2_in2", "listen": "::", "listen_port": 443, "users": [ { "name": "h2_in2", "password": "pw" } ], "tls": { "enabled": true, "server_name": "h2.example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"h2_in2", "protocol":"hysteria2", "listen_port":"443",
+          "server_password":"pw",
+          "tls_server_name":"h2.example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: hysteria2 inbound parity (minimal)"
+else
+	echo "FAIL: hysteria2 inbound parity (minimal)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
 echo "OK"

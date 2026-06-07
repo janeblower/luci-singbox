@@ -126,6 +126,84 @@ if ! grep -q 'style\.css' scripts/install-manifest.txt; then
   fail=1
 fi
 
+# D1.8: build_constructor_for must remain dispatcher-only.
+# Count total lines from `function build_constructor_for` to the next `^function`.
+OUTBOUND_UC="luci-app-singbox-ui/root/usr/share/singbox-ui/lib/outbound.uc"
+end_marker=$(grep -n '^function ' "$OUTBOUND_UC" | \
+             awk -F: '$2 ~ /build_constructor_for/{found=1; next} found{print $1; exit}')
+start=$(grep -n '^function build_constructor_for' "$OUTBOUND_UC" | cut -d: -f1)
+total=$((end_marker - start))
+if [ "$total" -gt 14 ]; then
+  echo "FAIL build_constructor_for region too large ($total lines, expected ≤14)"
+  fail=1
+else
+  echo "PASS build_constructor_for dispatcher region size ($total lines)"
+fi
+
+# D2.9 regression guard: per-protocol depends('type'|'protocol', ...) chains
+# in tabs/outbounds.js and tabs/inbounds.js are forbidden for descriptor-owned
+# proxy protocols. The descriptor-driven loop in each tab must be the only
+# place per-protocol fields are wired.
+#
+# Allowed depends: those targeting non-proxy types only (interface, selector,
+# urltest, subscription, url, json for outbound; tproxy, tun, direct for inbound).
+#
+# Bar: total `depends('type'|'protocol', '<proxy>')` occurrences in tabs/ must
+# be zero for each of the descriptor-owned types. We grep for each name and
+# count.
+
+OUTBOUNDS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
+INBOUNDS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js
+
+fail_depends=0
+for proto in ssh trojan shadowsocks vless vmess hysteria2 tuic anytls; do
+    n=$(grep -cE "depends\(['\"]type['\"], *['\"]${proto}['\"]\\)" "$OUTBOUNDS" || true)
+    if [ "$n" -gt 0 ]; then
+        echo "FAIL outbounds.js has $n hand-coded depends('type','${proto}') — must come from descriptor_form"
+        fail_depends=1
+    fi
+done
+for proto in trojan shadowsocks vless vmess hysteria2; do
+    n=$(grep -cE "depends\(['\"]protocol['\"], *['\"]${proto}['\"]\\)" "$INBOUNDS" || true)
+    if [ "$n" -gt 0 ]; then
+        echo "FAIL inbounds.js has $n hand-coded depends('protocol','${proto}') — must come from descriptor_form"
+        fail_depends=1
+    fi
+done
+
+if [ "$fail_depends" -ne 0 ]; then
+    fail=1
+else
+    echo "PASS depends-type/protocol guard (no per-proxy-protocol chains in tabs)"
+fi
+
+# D3.7 reveal-token layout guards.
+#
+# Guard 1: reveal token must NEVER be persisted to localStorage / sessionStorage
+# (router-global token survives browser refresh trivially via the file on disk;
+# any client-side persistence would extend the attack window beyond the 5-min TTL).
+storage_hits=$(grep -rnE 'localStorage|sessionStorage' \
+    luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/ \
+    2>/dev/null | grep -vE '/widgets/monitoring\.js|test_' || true)
+# (Filter known-OK files: monitoring tab's filter persistence is unrelated.
+# If it doesn't actually exist in this codebase, the filter is a no-op.)
+if echo "$storage_hits" | grep -qiE 'singboxUiRevealToken|revealToken|token'; then
+    echo "FAIL reveal token referenced near *Storage — must live in window memory only"
+    echo "$storage_hits" | grep -iE 'singboxUiRevealToken|revealToken|token'
+    fail=1
+else
+    echo "PASS reveal-token not in *Storage"
+fi
+
+# Guard 2: action-bar exposes Show secrets button.
+if grep -q 'Show secrets' \
+    luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js; then
+    echo "PASS Show secrets button present"
+else
+    echo "FAIL Show secrets button missing from action-bar.js"
+    fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi

@@ -394,4 +394,288 @@ nocheck "no transport block"      '"transport":'
 nocheck "no multiplex block"      '"multiplex":'
 nocheck "no ignored ws path"      '/should-be-ignored'
 
+# D1.2: shadowsocks descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- shadowsocks descriptor parity (D1.2 golden)"
+golden='{ "type": "shadowsocks", "tag": "ss1", "server": "example.com", "server_port": 8388, "password": "pw", "method": "aes-128-gcm" }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"ss1", "server":"example.com", "server_port":"8388",
+          "server_password":"pw", "shadowsocks_method":"aes-128-gcm" };
+printf("%J", ob.build_constructor_for(s, "shadowsocks"));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: shadowsocks parity"
+else
+	echo "FAIL: shadowsocks parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.1: trojan descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- trojan descriptor parity (D1.1 golden)"
+golden='{ "type": "trojan", "tag": "t1", "server": "example.com", "server_port": 443, "password": "pw", "tls": { "enabled": true, "server_name": "example.com" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"t1", "server":"example.com", "server_port":"443",
+          "server_password":"pw", "security":"tls", "tls_server_name":"example.com" };
+printf("%J", ob.build_constructor_for(s, "trojan"));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: trojan parity"
+else
+	echo "FAIL: trojan parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.3: vless descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- vless descriptor parity (D1.3 golden)"
+golden='{ "type": "vless", "tag": "vl1", "server": "vless.example.com", "server_port": 443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "flow": "xtls-rprx-vision", "tls": { "enabled": true, "server_name": "vless.example.com" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"vl1", "server":"vless.example.com", "server_port":"443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "vless_flow":"xtls-rprx-vision",
+          "security":"tls", "tls_server_name":"vless.example.com" };
+printf("%J", ob.build_constructor_for(s, "vless"));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vless parity"
+else
+	echo "FAIL: vless parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.4: vmess descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- vmess descriptor parity (D1.4 golden)"
+golden='{ "type": "vmess", "tag": "vm1", "server": "vmess.example.com", "server_port": 8443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "alter_id": 64, "security": "aes-128-gcm", "tls": { "enabled": true, "server_name": "vmess.example.com" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"vm1", "server":"vmess.example.com", "server_port":"8443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "vmess_alter_id":"64", "vmess_security":"aes-128-gcm",
+          "security":"tls", "tls_server_name":"vmess.example.com" };
+printf("%J", ob.build_constructor_for(s, "vmess"));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vmess parity"
+else
+	echo "FAIL: vmess parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+# D1.4 transport variant: vmess with ws transport
+echo "-- vmess descriptor parity ws transport (D1.4 golden)"
+golden_ws='{ "type": "vmess", "tag": "vm2", "server": "vmess.example.com", "server_port": 8443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "alter_id": 0, "security": "auto", "tls": { "enabled": true, "server_name": "vmess.example.com" }, "transport": { "type": "ws", "path": "/ws" } }'
+actual_ws=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"vm2", "server":"vmess.example.com", "server_port":"8443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "vmess_alter_id":"0", "vmess_security":"auto",
+          "security":"tls", "tls_server_name":"vmess.example.com",
+          "transport":"ws", "transport_path":"/ws" };
+printf("%J", ob.build_constructor_for(s, "vmess"));
+'
+)
+if [ "$actual_ws" = "$golden_ws" ]; then
+	echo "  PASS: vmess ws-transport parity"
+else
+	echo "FAIL: vmess ws-transport parity"
+	echo "  expected: $golden_ws"
+	echo "  actual:   $actual_ws"
+	exit 1
+fi
+
+# D1.5: hysteria2 descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- hysteria2 descriptor parity (D1.5 golden)"
+golden_hy2='{ "type": "hysteria2", "tag": "hy2full", "server": "hy2.example.com", "server_port": 8443, "password": "secret-pass", "obfs": { "type": "salamander", "password": "obfs-pw" }, "up_mbps": 100, "down_mbps": 50, "masquerade": "https://www.example.com", "brutal_debug": true, "network": "tcp", "tls": { "enabled": true, "server_name": "hy2.example.com" } }'
+actual_hy2=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"hy2full", "server":"hy2.example.com", "server_port":"8443",
+          "server_password":"secret-pass",
+          "hysteria2_obfs_type":"salamander", "hysteria2_obfs_password":"obfs-pw",
+          "up_mbps":"100", "down_mbps":"50",
+          "hysteria2_masquerade":"https://www.example.com",
+          "brutal_debug":"1", "network":"tcp",
+          "security":"tls", "tls_server_name":"hy2.example.com" };
+printf("%J", ob.build_constructor_for(s, "hysteria2"));
+'
+)
+if [ "$actual_hy2" = "$golden_hy2" ]; then
+	echo "  PASS: hysteria2 parity (full)"
+else
+	echo "FAIL: hysteria2 parity (full)"
+	echo "  expected: $golden_hy2"
+	echo "  actual:   $actual_hy2"
+	exit 1
+fi
+
+# D1.5 minimal variant: confirms all conditional branches skip cleanly.
+echo "-- hysteria2 descriptor parity minimal (D1.5 golden)"
+golden_hy2_min='{ "type": "hysteria2", "tag": "hy2min", "server": "hy2.example.com", "server_port": 8443, "password": "secret-pass", "tls": { "enabled": true, "server_name": "hy2.example.com" } }'
+actual_hy2_min=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"hy2min", "server":"hy2.example.com", "server_port":"8443",
+          "server_password":"secret-pass",
+          "security":"tls", "tls_server_name":"hy2.example.com" };
+printf("%J", ob.build_constructor_for(s, "hysteria2"));
+'
+)
+if [ "$actual_hy2_min" = "$golden_hy2_min" ]; then
+	echo "  PASS: hysteria2 parity (minimal)"
+else
+	echo "FAIL: hysteria2 parity (minimal)"
+	echo "  expected: $golden_hy2_min"
+	echo "  actual:   $actual_hy2_min"
+	exit 1
+fi
+
+# D1.6: tuic descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- tuic descriptor parity tuic1 full udp_relay_mode (D1.6 golden)"
+golden_tuic1='{ "type": "tuic", "tag": "tuic1", "server": "t.example.com", "server_port": 9443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "password": "pw", "congestion_control": "bbr", "udp_relay_mode": "native", "zero_rtt_handshake": true, "heartbeat": "10s", "network": "udp", "tls": { "enabled": true, "server_name": "t.example.com" } }'
+actual_tuic1=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"tuic1", "server":"t.example.com", "server_port":"9443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "server_password":"pw", "tuic_congestion":"bbr",
+          "tuic_udp_relay_mode":"native", "tuic_zero_rtt":"1",
+          "tuic_heartbeat":"10s", "network":"udp",
+          "security":"tls", "tls_server_name":"t.example.com" };
+printf("%J", ob.build_constructor_for(s, "tuic"));
+'
+)
+if [ "$actual_tuic1" = "$golden_tuic1" ]; then
+	echo "  PASS: tuic parity (full, udp_relay_mode)"
+else
+	echo "FAIL: tuic parity (full, udp_relay_mode)"
+	echo "  expected: $golden_tuic1"
+	echo "  actual:   $actual_tuic1"
+	exit 1
+fi
+
+# D1.6 udp_over_stream variant: relay_mode dropped when over_stream is set.
+echo "-- tuic descriptor parity tuic2 udp_over_stream (D1.6 golden)"
+golden_tuic2='{ "type": "tuic", "tag": "tuic2", "server": "t.example.com", "server_port": 9443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "password": "pw", "congestion_control": "bbr", "udp_over_stream": true, "zero_rtt_handshake": true, "heartbeat": "10s", "network": "udp", "tls": { "enabled": true, "server_name": "t.example.com" } }'
+actual_tuic2=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"tuic2", "server":"t.example.com", "server_port":"9443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "server_password":"pw", "tuic_congestion":"bbr",
+          "tuic_udp_over_stream":"1", "tuic_zero_rtt":"1",
+          "tuic_heartbeat":"10s", "network":"udp",
+          "security":"tls", "tls_server_name":"t.example.com" };
+printf("%J", ob.build_constructor_for(s, "tuic"));
+'
+)
+if [ "$actual_tuic2" = "$golden_tuic2" ]; then
+	echo "  PASS: tuic parity (udp_over_stream)"
+else
+	echo "FAIL: tuic parity (udp_over_stream)"
+	echo "  expected: $golden_tuic2"
+	echo "  actual:   $actual_tuic2"
+	exit 1
+fi
+
+# D1.6 minimal variant: confirms all conditional branches skip cleanly.
+echo "-- tuic descriptor parity tuic3 minimal (D1.6 golden)"
+golden_tuic3='{ "type": "tuic", "tag": "tuic3", "server": "t.example.com", "server_port": 9443, "tls": { "enabled": true, "server_name": "t.example.com" } }'
+actual_tuic3=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"tuic3", "server":"t.example.com", "server_port":"9443",
+          "security":"tls", "tls_server_name":"t.example.com" };
+printf("%J", ob.build_constructor_for(s, "tuic"));
+'
+)
+if [ "$actual_tuic3" = "$golden_tuic3" ]; then
+	echo "  PASS: tuic parity (minimal)"
+else
+	echo "FAIL: tuic parity (minimal)"
+	echo "  expected: $golden_tuic3"
+	echo "  actual:   $actual_tuic3"
+	exit 1
+fi
+
+# D1.7: anytls descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- anytls descriptor parity at1 full (D1.7 golden)"
+golden_at1='{ "type": "anytls", "tag": "at1", "server": "a.example.com", "server_port": 8443, "password": "secret", "idle_session_check_interval": "30s", "idle_session_timeout": "60s", "min_idle_session": 5, "tls": { "enabled": true, "server_name": "a.example.com" } }'
+actual_at1=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"at1", "server":"a.example.com", "server_port":"8443",
+          "server_password":"secret",
+          "anytls_idle_check_interval":"30s", "anytls_idle_timeout":"60s",
+          "anytls_min_idle_session":"5",
+          "security":"tls", "tls_server_name":"a.example.com" };
+printf("%J", ob.build_constructor_for(s, "anytls"));
+'
+)
+if [ "$actual_at1" = "$golden_at1" ]; then
+	echo "  PASS: anytls parity (full)"
+else
+	echo "FAIL: anytls parity (full)"
+	echo "  expected: $golden_at1"
+	echo "  actual:   $actual_at1"
+	exit 1
+fi
+
+# D1.7 minimal variant: confirms all idle_* conditionals skip and min_idle_session is absent.
+echo "-- anytls descriptor parity at2 minimal (D1.7 golden)"
+golden_at2='{ "type": "anytls", "tag": "at2", "server": "a.example.com", "server_port": 8443, "password": "secret", "tls": { "enabled": true, "server_name": "a.example.com" } }'
+actual_at2=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"at2", "server":"a.example.com", "server_port":"8443",
+          "server_password":"secret",
+          "security":"tls", "tls_server_name":"a.example.com" };
+printf("%J", ob.build_constructor_for(s, "anytls"));
+'
+)
+if [ "$actual_at2" = "$golden_at2" ]; then
+	echo "  PASS: anytls parity (minimal)"
+else
+	echo "FAIL: anytls parity (minimal)"
+	echo "  expected: $golden_at2"
+	echo "  actual:   $actual_at2"
+	exit 1
+fi
+
 echo "OK"

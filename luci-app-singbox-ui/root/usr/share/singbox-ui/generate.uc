@@ -50,6 +50,23 @@ let out_block = outbound_mod.build_outbounds(uci);
 // route.uc emits `action: "reject"` rules instead, so nothing to inject here.
 let post_process = require("post_process");
 
+// D4: eagerly load any plugins present under /usr/share/singbox-ui/lib/plugins/*.uc.
+// Each plugin's register() call fires on require. Failures are logged but never
+// fatal — a broken plugin file must not stop config generation.
+let plugin_files = fs.glob("/usr/share/singbox-ui/lib/plugins/*.uc") || [];
+for (let path in plugin_files) {
+	if (match(path, /\/registry\.uc$/)) continue;
+	let m = match(path, /\/([^\/]+)\.uc$/);
+	if (!m) continue;
+	let modname = "plugins." + m[1];
+	try { require(modname); }
+	catch (e) {
+		try { log_mod.log_event("warn", "plugin.load_failed",
+		                        { module: modname, err: ""+e }); }
+		catch (_) {}
+	}
+}
+
 let have_direct = false;
 for (let o in out_block) {
 	if (o.tag === "direct") have_direct = true;

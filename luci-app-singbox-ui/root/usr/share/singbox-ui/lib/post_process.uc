@@ -34,6 +34,12 @@ function scrub_implicit_refs(config, opts) {
 
 function run_pipeline(config, opts) {
 	config = scrub_implicit_refs(config, opts);
+	// D4: invoke any registered plugin hooks. Failures inside plugins are
+	// logged but never propagated (plugin registry guarantees this).
+	try {
+		let plugins = require("plugins.registry");
+		plugins.invoke_on_generate_post(config, opts);
+	} catch (_) { /* registry not available — no plugins, no-op */ }
 	return config;
 }
 

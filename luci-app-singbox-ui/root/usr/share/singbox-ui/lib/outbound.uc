@@ -9,6 +9,13 @@ let helpers = require("helpers");
 // module load. Wrapped in try/catch so an absent descriptor never breaks
 // the legacy dispatcher — it just falls through to the switch-by-type below.
 try { require("protocols.ssh"); } catch (_) {}
+try { require("protocols.trojan"); } catch (_) {}
+try { require("protocols.shadowsocks"); } catch (_) {}
+try { require("protocols.vless"); } catch (_) {}
+try { require("protocols.vmess"); } catch (_) {}
+try { require("protocols.hysteria2"); } catch (_) {}
+try { require("protocols.tuic"); } catch (_) {}
+try { require("protocols.anytls"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -89,80 +96,13 @@ function build_multiplex(s) {
 }
 
 function build_constructor_for(s, proto) {
-	// C3.1: consult protocol registry first. If a descriptor is registered
-	// for ("outbound", proto), use its emit() and skip the legacy switch
-	// entirely. Wrapped in try/catch so registry loading errors never
-	// break the legacy code path.
-	try {
-		let reg = require("protocols.registry");
-		let d = reg.get("outbound", proto);
-		if (d != null) return d.emit(s);
-	} catch (_) { /* registry not available — fall through to legacy switch */ }
-
-	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
-
-	if (proto === "vless" || proto === "vmess") {
-		if (length(s_opt(s, "server_uuid"))) ob.uuid = s.server_uuid;
-	}
-	if (proto === "trojan" || proto === "hysteria2" || proto === "shadowsocks") {
-		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
-	}
-	if (proto === "tuic") {
-		if (length(s_opt(s, "server_uuid")))     ob.uuid     = s.server_uuid;
-		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
-		if (length(s_opt(s, "tuic_congestion")))
-			ob.congestion_control = s.tuic_congestion;
-		let over_stream = s_bool(s, "tuic_udp_over_stream");
-		if (over_stream) ob.udp_over_stream = true;
-		// udp_relay_mode is mutually exclusive with udp_over_stream — drop it when over_stream is on.
-		if (!over_stream && length(s_opt(s, "tuic_udp_relay_mode")))
-			ob.udp_relay_mode = s.tuic_udp_relay_mode;
-		if (s_bool(s, "tuic_zero_rtt")) ob.zero_rtt_handshake = true;
-		if (length(s_opt(s, "tuic_heartbeat"))) ob.heartbeat = s.tuic_heartbeat;
-		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
-			ob.network = s.network;
-	}
-	if (proto === "anytls") {
-		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
-		if (length(s_opt(s, "anytls_idle_check_interval")))
-			ob.idle_session_check_interval = s.anytls_idle_check_interval;
-		if (length(s_opt(s, "anytls_idle_timeout")))
-			ob.idle_session_timeout = s.anytls_idle_timeout;
-		let m = s_num(s.anytls_min_idle_session);
-		if (m > 0) ob.min_idle_session = m;
-	}
-	if (proto === "vless" && length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
-		ob.flow = s.vless_flow;
-	if (proto === "vmess") {
-		if (length(s_opt(s, "vmess_alter_id"))) ob.alter_id = s_num(s.vmess_alter_id);
-		if (length(s_opt(s, "vmess_security"))) ob.security = s.vmess_security;
-	}
-	if (proto === "shadowsocks")
-		ob.method = s_opt(s, "shadowsocks_method") || "aes-128-gcm";
-	if (proto === "hysteria2") {
-		let ot = s_opt(s, "hysteria2_obfs_type") || "none";
-		// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
-		if (ot !== "none" && length(s_opt(s, "hysteria2_obfs_password")))
-			ob.obfs = { type: ot, password: s.hysteria2_obfs_password };
-		if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
-		if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
-		if (length(s_opt(s, "hysteria2_masquerade")))
-			ob.masquerade = s.hysteria2_masquerade;
-		if (s_bool(s, "brutal_debug")) ob.brutal_debug = true;
-		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
-			ob.network = s.network;
-	}
-	if (proto !== "shadowsocks") {
-		let tls = build_tls_client(s, proto);
-		if (tls) ob.tls = tls;
-	}
-	if (proto === "vless" || proto === "vmess" || proto === "trojan") {
-		let tr = build_transport(s);
-		if (tr) ob.transport = tr;
-		let mux = build_multiplex(s);
-		if (mux) ob.multiplex = mux;
-	}
-	return ob;
+	// D1.8: all proxy outbounds are descriptor-owned (lib/protocols/*.uc).
+	// Reaching the error path means proto is unknown — config invalid.
+	let reg = require("protocols.registry");
+	let d = reg.get("outbound", proto);
+	if (d != null) return d.emit(s);
+	require("log").log_event("error", "outbound.unknown_proto", { proto: proto });
+	return { type: proto, tag: s[".name"] };  // sing-box check rejects this
 }
 
 // drop_ctrl(s) — drop bytes < 0x20 from a string. Used to scrub already-
@@ -605,4 +545,5 @@ function build_outbounds(cur) {
 	return outbounds;
 }
 
-return { build_outbounds, build_constructor_for, parse_proxy_url };
+return { build_outbounds, build_constructor_for, parse_proxy_url,
+         build_tls_client, build_transport, build_multiplex };

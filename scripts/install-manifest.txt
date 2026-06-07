@@ -4,6 +4,7 @@
 htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js	www/luci-static/resources/view/singbox-ui/importers/inbound.js	data
 htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js	www/luci-static/resources/view/singbox-ui/importers/outbound.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/common.js	www/luci-static/resources/view/singbox-ui/lib/common.js	data
+htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js	www/luci-static/resources/view/singbox-ui/lib/descriptor_form.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/rpc.js	www/luci-static/resources/view/singbox-ui/lib/rpc.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/validators.js	www/luci-static/resources/view/singbox-ui/lib/validators.js	data
 htdocs/luci-static/resources/view/singbox-ui/main.js	www/luci-static/resources/view/singbox-ui/main.js	data
@@ -33,9 +34,19 @@ root/usr/share/singbox-ui/lib/helpers.uc	usr/share/singbox-ui/lib/helpers.uc	dat
 root/usr/share/singbox-ui/lib/inbound.uc	usr/share/singbox-ui/lib/inbound.uc	data
 root/usr/share/singbox-ui/lib/log.uc	usr/share/singbox-ui/lib/log.uc	data
 root/usr/share/singbox-ui/lib/outbound.uc	usr/share/singbox-ui/lib/outbound.uc	data
+root/usr/share/singbox-ui/lib/plugins/registry.uc	usr/share/singbox-ui/lib/plugins/registry.uc	data
 root/usr/share/singbox-ui/lib/post_process.uc	usr/share/singbox-ui/lib/post_process.uc	data
+root/usr/share/singbox-ui/lib/protocols/anytls.uc	usr/share/singbox-ui/lib/protocols/anytls.uc	data
+root/usr/share/singbox-ui/lib/protocols/hysteria2.uc	usr/share/singbox-ui/lib/protocols/hysteria2.uc	data
 root/usr/share/singbox-ui/lib/protocols/registry.uc	usr/share/singbox-ui/lib/protocols/registry.uc	data
+root/usr/share/singbox-ui/lib/protocols/schema_dump.uc	usr/share/singbox-ui/lib/protocols/schema_dump.uc	data
+root/usr/share/singbox-ui/lib/protocols/shadowsocks.uc	usr/share/singbox-ui/lib/protocols/shadowsocks.uc	data
 root/usr/share/singbox-ui/lib/protocols/ssh.uc	usr/share/singbox-ui/lib/protocols/ssh.uc	data
+root/usr/share/singbox-ui/lib/protocols/trojan.uc	usr/share/singbox-ui/lib/protocols/trojan.uc	data
+root/usr/share/singbox-ui/lib/protocols/tuic.uc	usr/share/singbox-ui/lib/protocols/tuic.uc	data
+root/usr/share/singbox-ui/lib/protocols/vless.uc	usr/share/singbox-ui/lib/protocols/vless.uc	data
+root/usr/share/singbox-ui/lib/protocols/vmess.uc	usr/share/singbox-ui/lib/protocols/vmess.uc	data
+root/usr/share/singbox-ui/lib/reveal.uc	usr/share/singbox-ui/lib/reveal.uc	data
 root/usr/share/singbox-ui/lib/route.uc	usr/share/singbox-ui/lib/route.uc	data
 root/usr/share/singbox-ui/lib/ruleset.uc	usr/share/singbox-ui/lib/ruleset.uc	data
 root/usr/share/singbox-ui/lib/scrub.uc	usr/share/singbox-ui/lib/scrub.uc	data

@@ -55,12 +55,29 @@ function emit_list() {
 		refresh:        { what: "string" },
 		status:         {},
 		status_detail:  {},
-		read_config:    {},
+		read_config:    { token: "string" },
 		clash_get:      { path: "string" },
 		clash_mutate:   { method: "string", path: "string", body: "string" },
-		export_section: { kind: "string", name: "string" },
-		preview_config: {}
+		export_section:    { kind: "string", name: "string", token: "string" },
+		preview_config:    { token: "string" },
+		protocol_schema:   {},
+		reveal_token_grant:  {},
+		reveal_token_revoke: {}
 	});
+}
+
+// maybe_unscrub(obj, args) — if args carries a valid reveal token, return obj
+// unscrubbed; otherwise fall through to scrub.scrub_secrets(obj).
+// require("reveal") is attempted inside so the caller need not import it.
+function maybe_unscrub(obj, args) {
+	let token = (args != null && type(args) === "object") ? args.token : null;
+	if (!length(token)) {
+		return require("scrub").scrub_secrets(obj);
+	}
+	let rv;
+	try { rv = require("reveal"); }
+	catch (e) { return require("scrub").scrub_secrets(obj); }
+	return rv.validate(token) ? obj : require("scrub").scrub_secrets(obj);
 }
 
 // sq(s) — single-quote escape for /bin/sh.
@@ -250,8 +267,18 @@ function call_status_detail() {
 	});
 }
 
+function call_protocol_schema() {
+    let dump;
+    try { dump = require("protocols.schema_dump"); }
+    catch (e) { emit_err("require(protocols.schema_dump) failed"); return; }
+    // Ensure all descriptors are eager-loaded into the registry.
+    try { require("outbound"); require("inbound"); }
+    catch (e) { emit_err("registry load failed"); return; }
+    emit({ status: "ok", version: 1, schema: dump.dump_all() });
+}
+
 function call_read_config() {
-	drain_stdin();
+	let args = parse_args();
 	let fd = fs.open(CONFIG_JSON, "r");
 	if (!fd) { emit_err("config not generated yet"); return; }
 	let content = fd.read("all") || "";
@@ -261,6 +288,7 @@ function call_read_config() {
 	// read-ACL users should not see verbatim credentials in the on-disk
 	// config. Pattern mirrors call_preview_config (try/catch around
 	// require("scrub") + json(), re-serialize via sprintf("%.4J", …)).
+	// Phase D3.3: maybe_unscrub honours a valid reveal token from args.
 	let scrub;
 	try { scrub = require("scrub"); }
 	catch (e) { emit_err("require(scrub) failed"); return; }
@@ -269,7 +297,7 @@ function call_read_config() {
 	try { obj = json(content); }
 	catch (e) { emit_err("config not valid JSON"); return; }
 
-	let scrubbed = sprintf("%.4J", scrub.scrub_secrets(obj));
+	let scrubbed = sprintf("%.4J", maybe_unscrub(obj, args));
 	emit({ status: "ok", content: scrubbed });
 }
 
@@ -302,7 +330,25 @@ function call_export_section() {
 		return;
 	}
 	if (!length(name)) { emit_err("missing name"); return; }
-	let body = run_capture(["ucode", "-L", UCODE_LIB, EXPORT_SECTION_UC, kind, name]);
+	// Phase D3.3: validate token here (in handler process) and pass REVEAL_TOKEN
+	// env to subprocess so export_section.uc can skip scrub when token is valid.
+	let token = (type(args.token) === "string" && length(args.token)) ? args.token : null;
+	let reveal_env = {};
+	if (token != null) {
+		let rv;
+		try { rv = require("reveal"); } catch (_) { rv = null; }
+		if (rv && rv.validate(token)) reveal_env.REVEAL_TOKEN = token;
+	}
+	// run_capture doesn't support env injection; build env prefix via sq() manually.
+	let env_prefix = "";
+	for (let k, v in reveal_env) env_prefix += k + "=" + "'" + replace(v, "'", "'\\''") + "' ";
+	let quoted = [];
+	for (let a in ["ucode", "-L", UCODE_LIB, EXPORT_SECTION_UC, kind, name])
+		push(quoted, "'" + replace(a, "'", "'\\''") + "'");
+	let shcmd = env_prefix + join(" ", quoted) + " 2>/dev/null";
+	let p = fs.popen(shcmd, "r");
+	let body = null;
+	if (p) { body = p.read("all") ?? ""; p.close(); }
 	if (body == null) { emit_err("export_section helper failed"); return; }
 	// export_section.uc always emits a single JSON line ({status,...}) — pass
 	// through verbatim so the section object stays a proper JSON value (not
@@ -336,7 +382,7 @@ function preview_tmp() {
 // tmpfile before returning the error, so a partial write never lingers on
 // disk.
 function call_preview_config() {
-	drain_stdin();
+	let args = parse_args();
 	let tmp = preview_tmp();
 	if (tmp == null) { emit_err("cannot create preview tmpfile"); return; }
 	let ok = run_env(["ucode", "-L", UCODE_LIB, GENERATE_UC],
@@ -359,6 +405,7 @@ function call_preview_config() {
 	// callers (spec C1.2). require("scrub") may fail in misconfigured installs;
 	// surface that as a clean RPC error instead of a raw stack trace. Pattern
 	// mirrors export_section.uc:48 (try/catch around require).
+	// Phase D3.3: maybe_unscrub honours a valid reveal token from args.
 	let scrub;
 	try { scrub = require("scrub"); }
 	catch (e) { emit_err("require(scrub) failed"); return; }
@@ -369,7 +416,7 @@ function call_preview_config() {
 
 	// Match generate.uc:102 pretty-print indent (%.4J) so the wire format the
 	// UI sees here is byte-identical to what `generate` would write to disk.
-	let scrubbed_body = sprintf("%.4J", scrub.scrub_secrets(obj));
+	let scrubbed_body = sprintf("%.4J", maybe_unscrub(obj, args));
 	emit({ status: "ok", content: scrubbed_body });
 }
 
@@ -419,6 +466,27 @@ function call_clash_mutate() {
 	clash_proxy(method, path, args.body);
 }
 
+function call_reveal_token_grant() {
+	let rv;
+	try { rv = require("reveal"); }
+	catch (e) { emit_err("require(reveal) failed"); return; }
+	let issuer = getenv("LUCI_USER") || null;
+	let r = rv.grant(issuer);
+	try {
+		require("log").log_event("info", "reveal.granted",
+			{ user: (issuer || "?"), expires_ts: r.expires_ts });
+	} catch (_) {}
+	emit({ status: "ok", token: r.token, expires_ts: r.expires_ts });
+}
+
+function call_reveal_token_revoke() {
+	let rv;
+	try { rv = require("reveal"); }
+	catch (e) { emit_err("require(reveal) failed"); return; }
+	rv.revoke();
+	emit({ status: "ok" });
+}
+
 let argv   = ARGV;
 let cmd    = argv[0] || "";
 let method = argv[1] || "";
@@ -441,6 +509,9 @@ if (cmd === "call") {
 	case "clash_mutate":  call_clash_mutate(); break;
 	case "export_section": call_export_section(); break;
 	case "preview_config": call_preview_config(); break;
+	case "protocol_schema": call_protocol_schema(); break;
+	case "reveal_token_grant":  call_reveal_token_grant();  break;
+	case "reveal_token_revoke": call_reveal_token_revoke(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);

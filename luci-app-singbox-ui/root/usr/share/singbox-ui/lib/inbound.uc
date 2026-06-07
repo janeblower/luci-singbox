@@ -1,6 +1,24 @@
 // lib/inbound.uc — sing-box `inbounds` array, built from `inbound` UCI sections.
 // Protocol IS the kind; mode/inbound_json are legacy and silently ignored. Pure: no I/O.
 
+// Shadowsocks inbound ss_user format limitation: each entry is "name:password"
+// with `:` as the FIRST-colon separator. A password containing a literal colon
+// is truncated at the second colon — operators must base64-encode it or pick a
+// colon-free passphrase. Mirrored in docs/uci-schema.md → inbound shadowsocks
+// section. (C2.1.15 guard — keep this comment even after full descriptor migration.)
+
+// D1.5: eagerly load descriptor modules so their register() calls fire at
+// module load. Inbound descriptors land incrementally in D1.5.2-D1.5.8;
+// each require() is wrapped so an absent module never breaks the legacy
+// switch — it just falls through to the per-type handler below.
+try { require("protocols.trojan");      } catch (_) {}
+try { require("protocols.shadowsocks"); } catch (_) {}
+try { require("protocols.vless");       } catch (_) {}
+try { require("protocols.vmess");       } catch (_) {}
+try { require("protocols.hysteria2");   } catch (_) {}
+try { require("protocols.tuic");        } catch (_) {}
+try { require("protocols.anytls");      } catch (_) {}
+
 let helpers = require("helpers");
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -138,6 +156,19 @@ function build_multiplex(s) {
 }
 
 function build_one(s) {
+	// D1.5: consult protocol registry first. Inbound sections discriminate
+	// by `protocol` (not `type`); we mirror the legacy default-to-tproxy
+	// fallback below. If a descriptor is registered for the resolved
+	// proto, use its emit() and skip the legacy switch.
+	try {
+		let reg = require("protocols.registry");
+		let proto_lookup = s_opt(s, "protocol");
+		if (proto_lookup) {
+			let d = reg.get("inbound", proto_lookup);
+			if (d != null) return d.emit(s);
+		}
+	} catch (_) { /* registry not available — fall through to legacy switch */ }
+
 	let tag = s[".name"];
 	// mode/inbound_json are legacy; protocol IS the kind (mode is ignored).
 	let proto = s_opt(s, "protocol") || "tproxy";
@@ -149,6 +180,13 @@ function build_one(s) {
 	}
 	let ob = null;
 
+	// D1.5: `tproxy` (transparent proxy mode), `tun` (tun virtual interface),
+	// and `direct` (DNS listener) are infrastructure inbound types — not user
+	// proxy protocols. They stay in this switch indefinitely by design. All
+	// 5 proxy protocols (trojan / shadowsocks / vless / vmess / hysteria2)
+	// are descriptor-owned and never reach this code path; the registry
+	// consult above intercepts them. (tuic / anytls inbound are out-of-scope
+	// per docs/protocol-coverage.md.)
 	if (proto === "tproxy") {
 		ob = { type: "tproxy", tag: tag, listen: listen, listen_port: port };
 		if (s_bool(s, "tcp_fast_open")) ob.tcp_fast_open = true;
@@ -166,68 +204,6 @@ function build_one(s) {
 		if (length(addr)) ob.address = addr;
 		if (s_bool(s, "auto_route"))   ob.auto_route = true;
 		if (s_bool(s, "strict_route")) ob.strict_route = true;
-	} else if (proto === "shadowsocks") {
-		ob = {
-			type: "shadowsocks", tag: tag, listen: listen, listen_port: port,
-			method: s_opt(s, "shadowsocks_method") || "aes-128-gcm",
-		};
-		let users = [];
-		let entries = as_array(s.ss_user);
-		// Limitation: the on-the-wire entry format is `name:password`, with
-		// `:` as the sole field separator. A password containing a literal
-		// colon is split at the FIRST colon — anything after the second
-		// colon is silently dropped. Operators who need ':' in a password
-		// must base64-encode it (and document the encoding alongside the
-		// section) or pick a colon-free passphrase. A future migration to
-		// a TSV / JSON entry format would lift this restriction. Mirrored
-		// in docs/uci-schema.md → inbound shadowsocks section.
-		for (let entry in entries) {
-			let colon = index(entry, ":");
-			if (colon < 1) continue;  // malformed (empty name or no colon)
-			let name = substr(entry, 0, colon);
-			let pw   = substr(entry, colon + 1);
-			if (!length(name) || !length(pw)) continue;
-			push(users, { name: name, password: pw });
-		}
-		if (length(users)) {
-			ob.users = users;
-		} else if (length(s_opt(s, "server_password"))) {
-			ob.password = s.server_password;
-		}
-		let net = s_opt(s, "network");
-		if (net === "udp" || net === "tcp") ob.network = net;
-		let mux = build_multiplex(s);
-		if (mux) ob.multiplex = mux;
-	} else if (proto === "vless" || proto === "vmess" || proto === "trojan" || proto === "hysteria2") {
-		ob = { type: proto, tag: tag, listen: listen, listen_port: port };
-		// vmess/vless support a `list inbound_user` multi-user mode. When
-		// non-empty, the section-level single-user fields (server_uuid,
-		// vmess_alter_id, vless_flow) are dropped — sing-box rejects both
-		// at once.  trojan/hysteria2 stay single-user for this phase.
-		let multi = (proto === "vmess" || proto === "vless")
-			? build_inbound_users(s, proto)
-			: [];
-		ob.users = length(multi) ? multi : [ build_user(s) ];
-		if (proto === "hysteria2") {
-			let ob_type = s_opt(s, "hysteria2_obfs_type") || "none";
-			// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
-			if (ob_type !== "none" && length(s_opt(s, "hysteria2_obfs_password")))
-				ob.obfs = { type: ob_type, password: s.hysteria2_obfs_password };
-			if (length(s_opt(s, "up_mbps")))   ob.up_mbps   = s_num(s.up_mbps);
-			if (length(s_opt(s, "down_mbps"))) ob.down_mbps = s_num(s.down_mbps);
-			if (length(s_opt(s, "hysteria2_masquerade")))
-				ob.masquerade = s.hysteria2_masquerade;
-			if (s_bool(s, "brutal_debug")) ob.brutal_debug = true;
-			if (s_bool(s, "ignore_client_bandwidth")) ob.ignore_client_bandwidth = true;
-		}
-		let tls = build_tls(s);
-		if (tls) ob.tls = tls;
-		if (proto !== "hysteria2") {
-			let tr = build_transport(s);
-			if (tr) ob.transport = tr;
-			let mux = build_multiplex(s);
-			if (mux) ob.multiplex = mux;
-		}
 	} else if (proto === "direct") {
 		ob = { type: "direct", tag: tag, listen: listen, listen_port: port };
 		let net = s_opt(s, "network");
@@ -251,4 +227,5 @@ function build_inbounds(cur) {
 	return inbounds;
 }
 
-return { build_inbounds, build_one };
+return { build_inbounds, build_one, build_user, build_inbound_users,
+         build_tls, build_transport, build_multiplex };
