@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: luci-app-singbox-ui\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-07 18:49+0700\n"
+"POT-Creation-Date: 2026-06-07 19:11+0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -46,7 +46,7 @@ msgid ""
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:164
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:54
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:127
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js:139
 msgid "Loading…"
 msgstr ""
@@ -451,6 +451,7 @@ msgid " object. Fields will be parsed and a new section created."
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:81
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:78
 msgid "Cancel"
 msgstr ""
 
@@ -658,61 +659,84 @@ msgstr ""
 msgid "Final route applied to traffic that does not match any rule."
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:41
-msgid "Refresh subscriptions"
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:25
+msgid "Show secrets"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:41
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:44
-msgid "Refreshing…"
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:29
+#, javascript-format
+msgid "Hide secrets (%d:%02d)"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:42
-msgid "Refresh subscriptions failed"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:44
-msgid "Refresh rule-sets"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:45
-msgid "Refresh rule-sets failed"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:47
-msgid "Restart service"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:47
-msgid "Restarting…"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:48
-msgid "Restart failed"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:54
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:62
-msgid "Preview generated config"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:57
-msgid "not generated"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:68
-msgid "Preview config"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:68
-msgid "Generating…"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:71
-msgid "preview failed"
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:75
+msgid "Reveal secrets?"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:76
+msgid ""
+"You are about to reveal credentials. They will be visible to anyone with "
+"read access to this LuCI install for the next 5 minutes."
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:80
+msgid "Reveal"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:114
+msgid "Refresh subscriptions"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:114
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:117
+msgid "Refreshing…"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:115
+msgid "Refresh subscriptions failed"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:117
+msgid "Refresh rule-sets"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:118
+msgid "Refresh rule-sets failed"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:120
+msgid "Restart service"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:120
+msgid "Restarting…"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:121
+msgid "Restart failed"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:127
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:135
+msgid "Preview generated config"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:130
+msgid "not generated"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:141
+msgid "Preview config"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:141
+msgid "Generating…"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:144
+msgid "preview failed"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:149
 msgid "Preview config (dry-run)"
 msgstr ""
 

@@ -1,5 +1,6 @@
 'use strict';
 'require ui';
+'require dom';
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
@@ -12,6 +13,78 @@ var notify         = SbCommon.notify;
 var showJsonModal  = SbCommon.showJsonModal;
 var withBusy       = SbCommon.withBusy;
 var renderStatusPanel = SbStatusPanel.renderStatusPanel;
+
+// ── Reveal-secrets button (D3.6) ─────────────────────────────────────────────
+// The container node lives at module scope so the timer can repaint it without
+// holding a reference to the enclosing renderActionBar call.
+var revealBtnContainer = E('span', { 'data-singbox-ui-reveal': '1' });
+var revealTimer = null;
+
+function revealBtnLabel() {
+	var t = window.singboxUiRevealToken;
+	if (!t) return _('Show secrets');
+	var remaining = Math.max(0, t.expires_ts - Math.floor(Date.now() / 1000));
+	var m = Math.floor(remaining / 60);
+	var s = remaining % 60;
+	return _('Hide secrets (%d:%02d)').format(m, s);
+}
+
+function repaintRevealBtn() {
+	dom.content(revealBtnContainer, E('button', {
+		'class': 'btn cbi-button cbi-button-neutral',
+		'click': onRevealClick,
+	}, revealBtnLabel()));
+}
+
+function stopRevealTimer() {
+	if (revealTimer) { clearInterval(revealTimer); revealTimer = null; }
+}
+
+function startRevealTimer() {
+	stopRevealTimer();
+	revealTimer = setInterval(function () {
+		var t = window.singboxUiRevealToken;
+		if (!t) { stopRevealTimer(); repaintRevealBtn(); return; }
+		if (Math.floor(Date.now() / 1000) >= t.expires_ts) {
+			window.singboxUiRevealToken = null;
+			stopRevealTimer();
+		}
+		repaintRevealBtn();
+	}, 1000);
+}
+
+function doGrant() {
+	ui.hideModal();
+	return SbRpc.revealGrant().then(function (r) {
+		if (r && r.status === 'ok') {
+			window.singboxUiRevealToken = { token: r.token, expires_ts: r.expires_ts };
+			startRevealTimer();
+			repaintRevealBtn();
+		}
+	});
+}
+
+function onRevealClick(/*ev*/) {
+	if (window.singboxUiRevealToken) {
+		return SbRpc.revealRevoke().then(function () {
+			window.singboxUiRevealToken = null;
+			stopRevealTimer();
+			repaintRevealBtn();
+		});
+	}
+	return ui.showModal(_('Reveal secrets?'), [
+		E('p', {}, _('You are about to reveal credentials. They will be visible to anyone with read access to this LuCI install for the next 5 minutes.')),
+		E('div', { 'class': 'right' }, [
+			E('button', { 'class': 'btn cbi-button', 'click': ui.hideModal }, _('Cancel')),
+			' ',
+			E('button', { 'class': 'btn cbi-button cbi-button-action', 'click': doGrant }, _('Reveal')),
+		]),
+	]);
+}
+
+// Render the initial button state (idle = no token).
+repaintRevealBtn();
+// ─────────────────────────────────────────────────────────────────────────────
 
 function renderActionBar(statusHolder) {
 	function refreshStatus() { renderStatusPanel(statusHolder); }
@@ -74,7 +147,9 @@ function renderActionBar(statusHolder) {
 				return { error: (err && err.message) ? err.message : String(err) };
 			});
 			showJsonModal(_('Preview config (dry-run)'), p);
-		})
+		}),
+		// Show / Hide secrets toggle (D3.6).
+		revealBtnContainer,
 	]);
 }
 
