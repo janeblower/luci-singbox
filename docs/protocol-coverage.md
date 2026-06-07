@@ -1,9 +1,9 @@
 # Protocol Coverage — sing-box 1.12.x
 
 **Target sing-box version:** 1.12.x (latest of the 1.12 branch at the time of writing).
-**Scope:** see `docs/superpowers/specs/phase-b.md` § "Scope: активные протоколы".
-**Status legend:** `есть` (covered in `lib/inbound.uc` or `lib/outbound.uc`) / `нет` (planned, see phase-b plan) / `out-of-scope` (intentional, with rationale).
-**Cross-references:** `docs/uci-schema.md` for UCI field names, `docs/superpowers/plans/phase-b.md` for the implementation phases.
+**Scope:** active protocols for the OpenWrt 24.10 client/router use-case (TProxy + outbound proxies); see `../CHANGELOG.md` for per-phase coverage history.
+**Status legend:** `есть` (covered in `lib/inbound.uc` or `lib/outbound.uc`) / `нет` (planned) / `out-of-scope` (intentional, with rationale).
+**Cross-references:** `docs/uci-schema.md` for UCI field names, `../CHANGELOG.md` for the implementation history.
 
 Each row lists the **sing-box JSON path** and the **UCI field** (when one exists). Where the JSON path differs between inbound and outbound (rare), both sides are listed.
 

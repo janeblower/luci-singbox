@@ -18,6 +18,20 @@ PO_DIR := $(CURDIR)/po
 
 include $(TOPDIR)/feeds/luci/luci.mk
 
+# PKG_CONFLICTS:=firewall causes opkg/apk to silently remove the legacy
+# `firewall` package on install. Surface that explicitly to the operator
+# before any state is changed, so they don't lose fw3 rules unawares.
+define Package/$(PKG_NAME)/preinst
+#!/bin/sh
+echo "=============================================================="
+echo "INFO: luci-app-singbox-ui conflicts with package 'firewall'."
+echo "If you continue, 'firewall' will be removed and any fw3-based"
+echo "rules in /etc/config/firewall will stop being applied."
+echo "Make sure no other software depends on fw3 before proceeding."
+echo "=============================================================="
+exit 0
+endef
+
 define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./root/etc/config/singbox-ui $(1)/etc/config/singbox-ui
