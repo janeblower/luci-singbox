@@ -24,7 +24,7 @@ fi
 SAFE_READ_METHODS="status status_detail read_config clash_get export_section preview_config protocol_schema"
 
 # Whitelist of methods expected in write.ubus.
-EXPECTED_WRITE_METHODS="generate nftables restart refresh clash_mutate"
+EXPECTED_WRITE_METHODS="generate nftables restart refresh clash_mutate reveal_token_grant reveal_token_revoke"
 
 # Use jsonfilter (available on OpenWrt). On a generic host CI box it usually
 # isn't present, so fall back to python3. If neither is available, SKIP

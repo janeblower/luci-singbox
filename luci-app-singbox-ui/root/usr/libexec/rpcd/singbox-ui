@@ -60,7 +60,9 @@ function emit_list() {
 		clash_mutate:   { method: "string", path: "string", body: "string" },
 		export_section:    { kind: "string", name: "string" },
 		preview_config:    {},
-		protocol_schema:   {}
+		protocol_schema:   {},
+		reveal_token_grant:  {},
+		reveal_token_revoke: {}
 	});
 }
 
@@ -430,6 +432,27 @@ function call_clash_mutate() {
 	clash_proxy(method, path, args.body);
 }
 
+function call_reveal_token_grant() {
+	let rv;
+	try { rv = require("reveal"); }
+	catch (e) { emit_err("require(reveal) failed"); return; }
+	let issuer = getenv("LUCI_USER") || null;
+	let r = rv.grant(issuer);
+	try {
+		require("log").log_event("info", "reveal.granted",
+			{ user: (issuer || "?"), expires_ts: r.expires_ts });
+	} catch (_) {}
+	emit({ status: "ok", token: r.token, expires_ts: r.expires_ts });
+}
+
+function call_reveal_token_revoke() {
+	let rv;
+	try { rv = require("reveal"); }
+	catch (e) { emit_err("require(reveal) failed"); return; }
+	rv.revoke();
+	emit({ status: "ok" });
+}
+
 let argv   = ARGV;
 let cmd    = argv[0] || "";
 let method = argv[1] || "";
@@ -453,6 +476,8 @@ if (cmd === "call") {
 	case "export_section": call_export_section(); break;
 	case "preview_config": call_preview_config(); break;
 	case "protocol_schema": call_protocol_schema(); break;
+	case "reveal_token_grant":  call_reveal_token_grant();  break;
+	case "reveal_token_revoke": call_reveal_token_revoke(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);
