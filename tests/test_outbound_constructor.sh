@@ -438,4 +438,28 @@ else
 	exit 1
 fi
 
+# D1.3: vless descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- vless descriptor parity (D1.3 golden)"
+golden='{ "type": "vless", "tag": "vl1", "server": "vless.example.com", "server_port": 443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "flow": "xtls-rprx-vision", "tls": { "enabled": true, "server_name": "vless.example.com" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"vl1", "server":"vless.example.com", "server_port":"443",
+          "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
+          "vless_flow":"xtls-rprx-vision",
+          "security":"tls", "tls_server_name":"vless.example.com" };
+printf("%J", ob.build_constructor_for(s, "vless"));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: vless parity"
+else
+	echo "FAIL: vless parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
 echo "OK"
