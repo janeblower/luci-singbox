@@ -62,54 +62,93 @@ function wireTabs(root, headerSelector, paneByTab, defaultTab) {
 	activate(defaultTab);
 }
 
-// showJsonModal(title, contentPromise) — generic modal that displays a JSON
-// string in a <pre> with a Copy button. `contentPromise` resolves to either
-// the string to display or to { error: "<message>" } to render an error.
+// fallbackCopy / copyToClipboard — extracted to file scope so importers and
+// widgets share one implementation (C2.2.6). `text` is the literal string to
+// place on the clipboard. `onResult(msg, isErr)` is an optional callback used
+// by callers that show a small "Copied." / "Copy failed." status string.
+function fallbackCopy(text, onResult) {
+	try {
+		var ta = E('textarea', {
+			'style': 'position:fixed;top:-1000px;left:-1000px;width:1px;height:1px;'
+		});
+		ta.value = text;
+		document.body.appendChild(ta);
+		ta.focus(); ta.select();
+		var ok = false;
+		try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+		document.body.removeChild(ta);
+		if (onResult) {
+			if (ok) onResult(_('Copied to clipboard.'), false);
+			else onResult(_('Copy failed — select the text and copy manually.'), true);
+		}
+	} catch (e) {
+		if (onResult) onResult(_('Copy failed — select the text and copy manually.'), true);
+	}
+}
+
+function copyToClipboard(text, onResult) {
+	if (window.navigator && window.navigator.clipboard
+	    && typeof window.navigator.clipboard.writeText === 'function') {
+		window.navigator.clipboard.writeText(text).then(function () {
+			if (onResult) onResult(_('Copied to clipboard.'), false);
+		}, function () {
+			fallbackCopy(text, onResult);
+		});
+	} else {
+		fallbackCopy(text, onResult);
+	}
+}
+
+// withBusy(btn, busyLabel, fn) — flips a button into a disabled "busy" state
+// for the duration of fn(). Used by widgets/action-bar.js to give visible
+// feedback during long RPCs like Refresh subscriptions (C2.2.5).
+function withBusy(btn, busyLabel, fn) {
+	if (!btn || !btn.classList) return Promise.resolve().then(fn);
+	btn.classList.add('busy');
+	btn.disabled = true;
+	var prevText = btn.textContent;
+	if (busyLabel) btn.textContent = busyLabel;
+	function restore() {
+		btn.classList.remove('busy');
+		btn.disabled = false;
+		btn.textContent = prevText;
+	}
+	return Promise.resolve().then(fn).then(function (r) {
+		restore();
+		return r;
+	}, function (e) {
+		restore();
+		throw e;
+	});
+}
+
+// showJsonModal(title, contentOrPromise) — generic modal that displays a JSON
+// string in a <pre> with a Copy button. The second argument may be:
+//   * a string (rendered directly),
+//   * a Promise resolving to the string,
+//   * an object { error: msg }  (renders an error line),
+//   * an object { json: str }   (renders the string),
+//   * a Promise resolving to one of those object shapes.
 // Used by importers/inbound.js (export_section) and widgets/action-bar.js
-// (preview_config) — keep the markup/behaviour consistent.
-function showJsonModal(title, contentPromise) {
+// (read_config / preview_config) — keep the markup/behaviour consistent.
+function showJsonModal(title, contentOrPromise) {
 	var pre = E('pre', {
-		'class': 'cbi-input-textarea',
+		'class': 'cbi-input-textarea sb-json-modal-pre',
 		'style': 'max-height:50vh;overflow:auto;white-space:pre-wrap;' +
 		         'font-family:monospace;font-size:90%;'
 	}, _('Loading…'));
-	var status = E('div', { 'style': 'margin-top:8px;color:#555;font-size:90%;' });
+	var status = E('div', { 'class': 'sb-json-modal-status',
+		'style': 'margin-top:8px;color:#555;font-size:90%;' });
 
 	function showCopyResult(msg, isErr) {
 		status.textContent = msg;
-		status.style.color = isErr ? '#c33' : '#3a3';
+		// `.sb-error` / `.sb-ok` carry the colour rules from style.css.
+		status.classList.remove('sb-error', 'sb-ok');
+		status.classList.add(isErr ? 'sb-error' : 'sb-ok');
 	}
 
-	function fallbackCopy(txt) {
-		try {
-			var ta = E('textarea', {
-				'style': 'position:fixed;top:-1000px;left:-1000px;width:1px;height:1px;'
-			});
-			ta.value = txt;
-			document.body.appendChild(ta);
-			ta.focus(); ta.select();
-			var ok = false;
-			try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
-			document.body.removeChild(ta);
-			if (ok) showCopyResult(_('Copied to clipboard.'), false);
-			else showCopyResult(_('Copy failed — select the text and copy manually.'), true);
-		} catch (e) {
-			showCopyResult(_('Copy failed — select the text and copy manually.'), true);
-		}
-	}
-
-	function copyToClipboard() {
-		var txt = pre.textContent || '';
-		if (window.navigator && window.navigator.clipboard
-		    && typeof window.navigator.clipboard.writeText === 'function') {
-			window.navigator.clipboard.writeText(txt).then(function () {
-				showCopyResult(_('Copied to clipboard.'), false);
-			}, function () {
-				fallbackCopy(txt);
-			});
-		} else {
-			fallbackCopy(txt);
-		}
+	function onCopyClick() {
+		copyToClipboard(pre.textContent || '', showCopyResult);
 	}
 
 	ui.showModal(title, [
@@ -117,15 +156,25 @@ function showJsonModal(title, contentPromise) {
 		E('div', { 'class': 'right', 'style': 'margin-top:12px;' }, [
 			E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, _('Close')),
 			' ',
-			E('button', { 'class': 'cbi-button cbi-button-action', 'click': copyToClipboard },
+			E('button', { 'class': 'cbi-button cbi-button-action', 'click': onCopyClick },
 				_('Copy'))
 		])
 	]);
 
-	Promise.resolve(contentPromise).then(function (res) {
-		if (res && typeof res === 'object' && res.error != null) {
-			pre.textContent = _('Error: ') + res.error;
-			return;
+	Promise.resolve(contentOrPromise).then(function (res) {
+		if (res && typeof res === 'object') {
+			if (res.error != null) {
+				pre.textContent = _('Error: ') + res.error;
+				return;
+			}
+			if (res.json != null) {
+				pre.textContent = String(res.json);
+				return;
+			}
+			if (res.content != null) {
+				pre.textContent = String(res.content);
+				return;
+			}
 		}
 		pre.textContent = (res == null) ? '' : String(res);
 	}, function (err) {
@@ -153,4 +202,7 @@ return L.Class.extend({
     wireTabs:         wireTabs,
     notify:           notify,
     showJsonModal:    showJsonModal,
+    copyToClipboard:  copyToClipboard,
+    fallbackCopy:     fallbackCopy,
+    withBusy:         withBusy,
 });

@@ -57,6 +57,8 @@ define Package/$(PKG_NAME)/install
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
 	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
 	  $(1)/www/luci-static/resources/view/singbox-ui/main.js
+	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/style.css \
+	  $(1)/www/luci-static/resources/view/singbox-ui/style.css
 
 	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/lib
 	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/lib/*.js), \

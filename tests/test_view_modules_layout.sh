@@ -82,6 +82,47 @@ if ! awk '/o = s\.option\(form\.Flag, .nft_rules./{found=1} found && /o\.descrip
   fi
 fi
 
+# C2 E.1: both Preview buttons in widgets/action-bar.js must route through
+# showJsonModal with the {error|json} shape — no raw ui.showModal in the
+# error path.
+ACTION_BAR="$ROOT/widgets/action-bar.js"
+if ! grep -qE '\{ ?error' "$ACTION_BAR"; then
+  echo "FAIL: action-bar.js Preview generated config not using {error} shape"
+  fail=1
+fi
+if grep -qE "ui\.showModal\(.*_\('Preview generated config'\)" "$ACTION_BAR"; then
+  echo "FAIL: Preview generated config still calls ui.showModal directly (use showJsonModal)"
+  fail=1
+fi
+
+# C2 E.2: withBusy helper must exist in lib/common.js and be exported.
+COMMON="$ROOT/lib/common.js"
+if ! grep -qE 'function[[:space:]]+withBusy\b' "$COMMON"; then
+  echo "FAIL: lib/common.js does not define withBusy"
+  fail=1
+fi
+if ! grep -qE 'withBusy:[[:space:]]*withBusy' "$COMMON"; then
+  echo "FAIL: lib/common.js does not export withBusy"
+  fail=1
+fi
+
+# C2 E.3: importers/inbound.js must no longer define its own fallbackCopy.
+fallback_in_importers=$(grep -c 'function fallbackCopy' "$ROOT/importers/inbound.js" || true)
+if [ "$fallback_in_importers" != "0" ]; then
+  echo "FAIL: importers/inbound.js still defines fallbackCopy ($fallback_in_importers occurrences)"
+  fail=1
+fi
+
+# C2 E.4: shared style.css must exist + Makefile must install it.
+if [ ! -f "$ROOT/style.css" ]; then
+  echo "FAIL: $ROOT/style.css missing"
+  fail=1
+fi
+if ! grep -q 'style.css' luci-app-singbox-ui/Makefile; then
+  echo "FAIL: Makefile does not install style.css"
+  fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi

@@ -1,0 +1,54 @@
+/* singbox-ui shared styles
+ *
+ * Extracted from inline style="..." strings in the view modules (C2.2.9).
+ * The CSS lives next to main.js and is loaded by injecting a <link rel="stylesheet">
+ * via L.resource() — same pattern as luci-app-nlbwmon, luci-app-mwan3 etc.
+ */
+
+/* Status panel above the tab strip. */
+.sb-status {
+	margin: .5em 0;
+	padding: .5em;
+	border: 1px solid #ddd;
+	border-radius: 4px;
+}
+
+/* Action-bar row of buttons. */
+.sb-actionbar {
+	display: flex;
+	gap: .5em;
+	margin: .5em 0;
+	flex-wrap: wrap;
+	align-items: center;
+}
+
+/* Busy state set by SbCommon.withBusy() while a long RPC is in flight. */
+.sb-actionbar button.busy,
+button.cbi-button.busy {
+	opacity: 0.6;
+	cursor: wait;
+}
+
+/* JSON modal (preview_config / read_config / export_section). */
+.sb-json-modal-pre {
+	max-height: 60vh;
+	overflow: auto;
+	font-family: monospace;
+	font-size: 90%;
+	white-space: pre-wrap;
+}
+.sb-json-modal-status {
+	margin-top: 8px;
+	font-size: 90%;
+	color: #555;
+}
+
+/* Status colours. `.sb-error` and `.sb-ok` are used by the JSON modal copy-result
+ * line and the monitoring tab; `.sb-warn` is reserved for non-fatal warnings. */
+.sb-ok    { color: #3a3; }
+.sb-warn  { color: #c80; }
+.sb-error { color: #c33; }
+
+/* Monitoring tab table — closed connections fade out. */
+.sb-monitoring table         { width: 100%; }
+.sb-monitoring tr.closed td  { opacity: 0.6; }
