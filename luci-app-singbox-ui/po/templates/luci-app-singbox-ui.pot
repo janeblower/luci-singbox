@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: luci-app-singbox-ui\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-07 13:21+0700\n"
+"POT-Creation-Date: 2026-06-07 18:45+0700\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -81,12 +81,18 @@ msgstr ""
 msgid "RPC failed: "
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:61
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:15
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:35
+msgid ""
+"Failed to load protocol schema. Some forms may be incomplete; restart rpcd "
+"or reinstall package."
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:79
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:17
 msgid "Outbounds"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:62
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:80
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:65
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:9
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:25
@@ -94,43 +100,44 @@ msgstr ""
 msgid "Rule-Sets"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:63
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:81
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:10
 msgid "Route Rules"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:64
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:82
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:103
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:50
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:53
 msgid "Default"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:77
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:95
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:89
 msgid "Inbounds"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:78
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:96
 msgid "Output"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:79
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:97
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:22
 msgid "DNS"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:80
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:98
 msgid "Monitoring"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:81
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js:99
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:6
 msgid "General"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:13
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js:10
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:52
 msgid "(none)"
 msgstr ""
 
@@ -148,7 +155,7 @@ msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:34
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:64
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:54
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:56
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:129
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:20
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:42
@@ -157,18 +164,16 @@ msgid "Enable"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:35
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:71
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:73
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:24
 msgid "Type"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:38
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:84
 msgid "Server"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:40
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:97
 msgid "Server port"
 msgstr ""
 
@@ -250,13 +255,13 @@ msgstr ""
 msgid "Independent cache"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:16
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:18
 msgid ""
 "Define outbounds: direct via interface, share-link URL, subscription, or "
 "proxy constructor."
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:24
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:26
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:38
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:42
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:60
@@ -264,304 +269,110 @@ msgstr ""
 msgid "Outbound"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:31
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:33
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:106
 msgid "Basic"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:32
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:34
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:107
 msgid "Credentials"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:33
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:35
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:108
 msgid "TLS"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:34
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:218
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:36
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:109
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:364
 msgid "Transport"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:35
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:269
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:37
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:110
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:420
 msgid "Multiplex"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:36
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:38
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:111
 msgid "Advanced"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:48
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:50
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:77
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:123
 msgid "Import JSON"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:61
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:63
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:135
 msgid "JSON"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:64
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:66
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:138
 msgid "Export"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:79
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:82
 msgid "Direct (interface)"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:80
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:83
 msgid "Share-link URL"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:81
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:368
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:84
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:113
 msgid "Subscription URL"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:111
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:250
-msgid "UUID"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:120
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:258
-msgid "Password"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:128
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:263
-msgid "Flow"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:129
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:148
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:163
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:203
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:264
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:291
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:306
-msgid "None"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:132
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:267
-msgid "Alter ID"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:136
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:457
-msgid "Cipher"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:140
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:233
-msgid "Method"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:147
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:290
-msgid "Obfuscation"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:151
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:294
-msgid "Obfs password"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:154
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:297
-msgid "Up Mbps"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:157
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:300
-msgid "Down Mbps"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:162
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:305
-msgid "Security"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:170
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:311
-msgid "TLS server name"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:183
-msgid "Allow insecure"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:190
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:334
-msgid "ALPN"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:202
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:471
-msgid "uTLS fingerprint"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:210
-msgid "Reality public key"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:213
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:353
-msgid "Reality short ID"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:227
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:373
-msgid "Transport path"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:241
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:390
-msgid "Transport host"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:247
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:396
-msgid "gRPC service name"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:253
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:402
-msgid "XHTTP mode"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:262
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:413
-msgid "HTTP hosts"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:275
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:427
-msgid "Multiplex protocol"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:281
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:433
-msgid "Multiplex max connections"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:285
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:437
-msgid "Multiplex min streams"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:289
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:441
-msgid "Multiplex max streams"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:293
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:445
-msgid "Multiplex padding"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:298
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:450
-msgid "Masquerade URL"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:304
-msgid "Congestion control"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:306
-msgid "Default (cubic)"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:317
-msgid "UDP relay mode"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:319
-msgid "Default (native)"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:323
-msgid "UDP over stream"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:327
-msgid "Overrides UDP relay mode when enabled."
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:328
-msgid "Zero-RTT handshake"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:332
-msgid "Heartbeat"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:338
-msgid "Idle session check interval"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:342
-msgid "Idle session timeout"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:346
-msgid "Min idle sessions"
-msgstr ""
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:355
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:100
 msgid "Interface"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:359
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:104
 msgid ""
 "For a direct-via-WAN outbound, pick the real WAN device (may differ from "
 "\"wan\")."
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:361
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:106
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:30
 msgid "URL"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:365
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:110
 msgid ""
 "Share-link URL. Supported schemes: vless://, vmess:// (v2rayN base64-JSON), "
 "ss://, trojan://, hy2:// / hysteria2://."
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:374
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:119
 msgid "Update via"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:380
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:125
 msgid "Direct (WAN)"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:388
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:133
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:48
 msgid "Update interval (s)"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:394
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:139
 msgid "Expand to selector"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:399
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:144
 msgid "Selector type"
 msgstr ""
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:406
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:151
 msgid "URL-test URL"
 msgstr ""
 
@@ -733,6 +544,10 @@ msgstr ""
 msgid "Strict route"
 msgstr ""
 
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:233
+msgid "Method"
+msgstr ""
+
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:242
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:276
 msgid "Users"
@@ -744,12 +559,58 @@ msgid ""
 "When non-empty, the single-user password above is ignored."
 msgstr ""
 
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:250
+msgid "UUID"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:258
+msgid "Password"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:263
+msgid "Flow"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:264
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:291
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:306
+msgid "None"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:267
+msgid "Alter ID"
+msgstr ""
+
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:279
 msgid ""
 "Multi-user list. Each entry colon-separated: VMess \"name:uuid\" or \"name:"
 "uuid:alterId\"; VLESS \"name:uuid\" or \"name:uuid:flow\" (use \"none\" or "
 "omit to skip flow). When non-empty, the single-user UUID / Alter ID / Flow "
 "above are ignored."
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:290
+msgid "Obfuscation"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:294
+msgid "Obfs password"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:297
+msgid "Up Mbps"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:300
+msgid "Down Mbps"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:305
+msgid "Security"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:311
+msgid "TLS server name"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:322
@@ -760,8 +621,16 @@ msgstr ""
 msgid "Key path"
 msgstr ""
 
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:334
+msgid "ALPN"
+msgstr ""
+
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:350
 msgid "Reality private key"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:353
+msgid "Reality short ID"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:356
@@ -772,8 +641,60 @@ msgstr ""
 msgid "Handshake server port"
 msgstr ""
 
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:373
+msgid "Transport path"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:390
+msgid "Transport host"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:396
+msgid "gRPC service name"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:402
+msgid "XHTTP mode"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:413
+msgid "HTTP hosts"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:427
+msgid "Multiplex protocol"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:433
+msgid "Multiplex max connections"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:437
+msgid "Multiplex min streams"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:441
+msgid "Multiplex max streams"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:445
+msgid "Multiplex padding"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:450
+msgid "Masquerade URL"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:457
+msgid "Cipher"
+msgstr ""
+
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:464
 msgid "TLS insecure (skip verify)"
+msgstr ""
+
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:471
+msgid "uTLS fingerprint"
 msgstr ""
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:10

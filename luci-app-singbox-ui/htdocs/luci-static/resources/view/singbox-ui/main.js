@@ -1,6 +1,7 @@
 'use strict';
 'require view';
 'require form';
+'require rpc';
 'require uci';
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
@@ -19,7 +20,24 @@
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
 
 return view.extend({
-	load: function () { return uci.load('singbox-ui'); },
+	load: function () {
+		var callProtocolSchema = rpc.declare({
+			object: 'singbox-ui',
+			method: 'protocol_schema',
+		});
+		return Promise.all([
+			uci.load('singbox-ui'),
+			L.resolveDefault(callProtocolSchema(), null).then(function (r) {
+				if (r && r.status === 'ok') {
+					window.singboxUiSchemaCache = r.schema;
+				} else {
+					L.ui.addNotification(null,
+						E('p', _('Failed to load protocol schema. Some forms may be incomplete; restart rpcd or reinstall package.')),
+						'warning');
+				}
+			}),
+		]);
+	},
 
 	render: function () {
 		var self = this;
