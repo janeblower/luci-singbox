@@ -14,7 +14,7 @@ if ! command -v "$UCODE_BIN" >/dev/null 2>&1; then
 fi
 
 TMPDIR=$(mktemp -d)
-trap "rm -rf $TMPDIR" EXIT
+trap 'rm -rf "$TMPDIR"' EXIT
 export REVEAL_TOKEN_PATH="$TMPDIR/reveal_token.json"
 
 "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
