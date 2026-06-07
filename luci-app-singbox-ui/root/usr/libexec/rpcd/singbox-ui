@@ -6,7 +6,8 @@
 //   refresh {what}      run subscription.uc refresh subscriptions|rulesets|all force
 //   status              return JSON: { running, subscriptions[], rulesets[] }
 //   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
-//   clash_request       proxy HTTP request to Clash API (read+write methods)
+//   clash_get           proxy GET request to Clash API (read-side, read ACL)
+//   clash_mutate        proxy POST/PATCH/PUT/DELETE to Clash API (write ACL)
 //   export_section      return sing-box JSON for ONE inbound/outbound section
 //   preview_config      dry-run: generate full config to a tmpfile, return body
 //
@@ -54,7 +55,8 @@ function emit_list() {
 		refresh:        { what: "string" },
 		status:         {},
 		read_config:    {},
-		clash_request:  { method: "string", path: "string", body: "string" },
+		clash_get:      { path: "string" },
+		clash_mutate:   { method: "string", path: "string", body: "string" },
 		export_section: { kind: "string", name: "string" },
 		preview_config: {}
 	});
@@ -269,28 +271,69 @@ function call_preview_config() {
 	let body = f.read("all") ?? "";
 	f.close();
 	try { fs.unlink(tmp); } catch (_) {}
-	emit({ status: "ok", content: body });
+
+	// Scrub secrets from the generated config before exposing to read-ACL
+	// callers (spec C1.2). require("scrub") may fail in misconfigured installs;
+	// surface that as a clean RPC error instead of a raw stack trace. Pattern
+	// mirrors export_section.uc:48 (try/catch around require).
+	let scrub;
+	try { scrub = require("scrub"); }
+	catch (e) { emit_err("require(scrub) failed"); return; }
+
+	let obj;
+	try { obj = json(body); }
+	catch (e) { emit_err("preview output not valid JSON"); return; }
+
+	// Match generate.uc:102 pretty-print indent (%.4J) so the wire format the
+	// UI sees here is byte-identical to what `generate` would write to disk.
+	let scrubbed_body = sprintf("%.4J", scrub.scrub_secrets(obj));
+	emit({ status: "ok", content: scrubbed_body });
 }
 
-function call_clash_request() {
-	let args = parse_args();
-	let method = args.method || "GET";
-	let path   = args.path || "";
-	// Clash uses PATCH (e.g. /configs to switch mode) and PUT (/proxies/<g>);
-	// the rest of the verbs are write-side actions covered by the ACL.
-	if (method !== "GET" && method !== "DELETE" && method !== "POST"
-	    && method !== "PATCH" && method !== "PUT") {
-		emit_err("invalid method"); return;
-	}
-	if (substr(path, 0, 1) !== "/") { emit_err("invalid path"); return; }
+// clash_proxy(method, path, body) — shared low-level curl proxy. Inputs MUST
+// be pre-validated by the caller: `method` is one of the HTTP verbs accepted
+// by Clash, `path` starts with '/', and `body` is either null or a string.
+// Reads Clash listen/port/secret from env (test override) or UCI.
+function clash_proxy(method, path, body) {
 	let p = clash_params();
 	let url = `http://${p.listen}:${p.port}${path}`;
 	let argv = [ CLASH_CURL, "-s", "-m", "5", "-X", method,
 	             "-H", `Authorization: Bearer ${p.secret}`, url ];
-	if (args.body != null && length(args.body)) { push(argv, "--data"); push(argv, args.body); }
-	let body = run_capture(argv);
-	if (body == null) { emit_err("clash request failed"); return; }
-	emit({ status: "ok", body: body });
+	if (body != null && length(body)) { push(argv, "--data"); push(argv, body); }
+	let resp = run_capture(argv);
+	if (resp == null) { emit_err("clash request failed"); return; }
+	emit({ status: "ok", body: resp });
+}
+
+// clash_get — GET only. Refuses any caller-supplied `method` field so a
+// caller restricted to the read ACL cannot upgrade to a write verb by
+// stuffing { method: "PATCH" } into the args (spec C1.2).
+function call_clash_get() {
+	let args = parse_args();
+	if (args.method != null) {
+		emit_err("clash_get does not accept method; use clash_mutate");
+		return;
+	}
+	let path = args.path || "";
+	if (substr(path, 0, 1) !== "/") { emit_err("invalid path"); return; }
+	clash_proxy("GET", path, null);
+}
+
+// clash_mutate — POST/PATCH/PUT/DELETE only. GET is refused so writes are
+// only reachable through the write ACL. PATCH covers `/configs` (mode
+// switch), PUT covers `/proxies/<group>` selector, DELETE covers
+// `/connections` close-all, POST covers misc actions.
+function call_clash_mutate() {
+	let args = parse_args();
+	let method = args.method;
+	if (method !== "POST" && method !== "PATCH"
+	    && method !== "PUT" && method !== "DELETE") {
+		emit_err("clash_mutate requires method in {POST,PATCH,PUT,DELETE}");
+		return;
+	}
+	let path = args.path || "";
+	if (substr(path, 0, 1) !== "/") { emit_err("invalid path"); return; }
+	clash_proxy(method, path, args.body);
 }
 
 let argv   = ARGV;
@@ -310,7 +353,8 @@ if (cmd === "call") {
 	case "refresh":     call_refresh();      break;
 	case "status":      call_status();       break;
 	case "read_config": call_read_config();  break;
-	case "clash_request": call_clash_request(); break;
+	case "clash_get":     call_clash_get();    break;
+	case "clash_mutate":  call_clash_mutate(); break;
 	case "export_section": call_export_section(); break;
 	case "preview_config": call_preview_config(); break;
 	default:            emit_err(`unknown method: ${method}`); break;

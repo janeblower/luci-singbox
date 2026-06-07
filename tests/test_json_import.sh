@@ -66,7 +66,8 @@ const viewDir = path.dirname(process.argv[2]);
 sandbox.SbRpc = {
 	callRefresh: () => Promise.resolve(), callRestart: () => Promise.resolve(),
 	callStatus: () => Promise.resolve(), callReadConfig: () => Promise.resolve(),
-	callClash: () => Promise.resolve(), callDhcpLeases: () => Promise.resolve(),
+	callClashGet: () => Promise.resolve(), callClashMutate: () => Promise.resolve(),
+	callDhcpLeases: () => Promise.resolve(),
 };
 sandbox.SbCommon = loadModule(path.join(viewDir, 'lib/common.js'));
 sandbox.SbImpInbound  = loadModule(path.join(viewDir, 'importers/inbound.js'));

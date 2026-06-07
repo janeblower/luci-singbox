@@ -16,9 +16,11 @@ if command -v ucode >/dev/null 2>&1; then
 	# to spy on child invocations, and we mustn't let that stub catch the
 	# top-level interpreter that's running the rpcd handler itself.
 	UCODE_BIN=$(command -v ucode)
-	UCODE_LIB_FLAGS=""
+	# Handler itself does `require("scrub")` (preview_config secret-masking,
+	# spec C1.2), so it needs the app's lib dir on its module search path.
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
 else
 	echo "SKIP: ucode not available"
@@ -52,7 +54,7 @@ jval() {
 
 echo "-- list emits valid JSON with all methods"
 out=$(run_h list)
-for m in generate nftables restart refresh status read_config clash_request export_section preview_config; do
+for m in generate nftables restart refresh status read_config clash_get clash_mutate export_section preview_config; do
 	printf "%s\n" "$out" | je "d.$m != null" || { echo "FAIL: missing $m"; exit 1; }
 done
 printf "%s\n" "$out" | je 'd.nftables.action != null' || { echo "FAIL: missing nftables.action"; exit 1; }
@@ -191,39 +193,70 @@ echo "$out" | grep -q 'stdout-noise' && { echo "FAIL: stdout leaked into respons
 printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: status not ok"; exit 1; }
 echo "  PASS: stderr+stdout suppressed"
 
-echo "-- call clash_request proxies to curl with Bearer + method + path"
+echo "-- call clash_get proxies GET only with Bearer + path"
 cat >"$tmpdir/curl" <<EOF
 #!/bin/sh
 echo "curl args: \$*" >> "$tmpdir/curl.log"
 echo '{"connections":[],"downloadTotal":10,"uploadTotal":20}'
 EOF
 chmod +x "$tmpdir/curl"
-out=$(echo '{"method":"GET","path":"/connections"}' | \
+: > "$tmpdir/curl.log"
+out=$(echo '{"path":"/connections"}' | \
 	CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok \
-	run_h call clash_request)
-printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: clash_request not ok"; echo "$out"; exit 1; }
+	run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: clash_get not ok; out=$out"; exit 1; }
 body=$(printf "%s\n" "$out" | jval 'd.body')
-printf "%s\n" "$body" | je 'd.downloadTotal == 10' || { echo "FAIL: body not passed through"; echo "$out"; exit 1; }
-grep -q 'Authorization: Bearer tok' "$tmpdir/curl.log" || { echo "FAIL: Bearer secret not sent"; cat "$tmpdir/curl.log"; exit 1; }
-grep -q '/connections' "$tmpdir/curl.log" || { echo "FAIL: path not in URL"; cat "$tmpdir/curl.log"; exit 1; }
-echo "  PASS: clash_request proxies correctly"
+printf "%s\n" "$body" | je 'd.downloadTotal == 10' || { echo "FAIL: body not passed through; out=$out"; exit 1; }
+grep -q 'Authorization: Bearer tok' "$tmpdir/curl.log" || { echo "FAIL: Bearer not sent"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q '/connections' "$tmpdir/curl.log" || { echo "FAIL: path missing"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q -- '-X GET' "$tmpdir/curl.log" || { echo "FAIL: method not GET"; cat "$tmpdir/curl.log"; exit 1; }
+echo "  PASS: clash_get proxies GET"
 
-echo "-- call clash_request rejects bad method / path"
-out=$(echo '{"method":"FOO","path":"/x"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_request)
-printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad method should error"; exit 1; }
-out=$(echo '{"method":"GET","path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_request)
-printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error"; exit 1; }
-echo "  PASS: clash_request validates inputs"
+echo "-- call clash_get rejects method override + bad path"
+# A read-ACL caller must not be able to upgrade to a write verb by stuffing
+# {method:"PATCH"} into the args — clash_get must reject the field outright.
+out=$(echo '{"path":"/x","method":"PATCH"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: method param should be refused; out=$out"; exit 1; }
+out=$(echo '{"path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error; out=$out"; exit 1; }
+echo "  PASS: clash_get validates"
 
-echo "-- call clash_request accepts PATCH (clash uses PATCH /configs)"
-for verb in PATCH PUT; do
-	out=$(echo "{\"method\":\"$verb\",\"path\":\"/configs\",\"body\":\"{}\"}" | \
+echo "-- call clash_mutate accepts PATCH/PUT/POST/DELETE with body"
+: > "$tmpdir/curl.log"
+for verb in PATCH PUT POST DELETE; do
+	out=$(echo "{\"method\":\"$verb\",\"path\":\"/configs\",\"body\":\"{\\\"mode\\\":\\\"global\\\"}\"}" | \
 		CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok \
-		run_h call clash_request)
+		run_h call clash_mutate)
 	printf "%s\n" "$out" | je 'd.status == "ok"' \
-		|| { echo "FAIL: $verb should be accepted"; echo "$out"; exit 1; }
+		|| { echo "FAIL: $verb should be accepted; out=$out"; exit 1; }
 done
-echo "  PASS: PATCH/PUT accepted"
+grep -q -- '-X PATCH' "$tmpdir/curl.log" || { echo "FAIL: PATCH not in curl"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q -- '-X PUT'   "$tmpdir/curl.log" || { echo "FAIL: PUT not in curl"; cat "$tmpdir/curl.log"; exit 1; }
+echo "  PASS: clash_mutate accepts write verbs"
+
+echo "-- call clash_mutate rejects GET + missing method + bad path"
+out=$(echo '{"method":"GET","path":"/x"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: GET should be refused on mutate; out=$out"; exit 1; }
+out=$(echo '{"path":"/x"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: missing method should error; out=$out"; exit 1; }
+out=$(echo '{"method":"PATCH","path":"noslash"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "error"' || { echo "FAIL: bad path should error; out=$out"; exit 1; }
+echo "  PASS: clash_mutate validates"
+
+echo "-- legacy clash_request method is no longer dispatched"
+# Two regressions in one shot:
+#   1. `list` must NOT advertise the legacy method.
+#   2. `call clash_request` must reach the default branch (status=error) — the
+#      handler does not bind a case to it any more.
+list_out=$(run_h list)
+printf "%s\n" "$list_out" | je 'd.clash_request == null' \
+	|| { echo "FAIL: list still advertises clash_request; out=$list_out"; exit 1; }
+printf "%s\n" "$list_out" | je 'd.clash_get != null && d.clash_mutate != null' \
+	|| { echo "FAIL: list missing clash_get/clash_mutate; out=$list_out"; exit 1; }
+out=$(echo '{"method":"GET","path":"/x"}' | run_h call clash_request)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: clash_request should error (unknown method); out=$out"; exit 1; }
+echo "  PASS: clash_request removed from dispatcher"
 
 echo "-- call export_section validates kind/name and proxies to helper"
 # Build a tiny UCI tree with one inbound and one outbound. UCI_CONFIG_DIR is
@@ -238,14 +271,14 @@ config inbound 'in_ss'
 	option listen '::'
 	option listen_port '8388'
 	option shadowsocks_method 'aes-256-gcm'
-	option server_password 'pw'
+	option server_password 'mysecret123'
 
 config outbound 'out_vless'
 	option enabled '1'
 	option type 'vless'
 	option server 'example.com'
 	option server_port '443'
-	option server_uuid '550e8400-e29b-41d4-a716-446655440000'
+	option server_uuid 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 
 config outbound 'out_url'
 	option enabled '1'
@@ -275,26 +308,53 @@ printf "%s\n" "$out" | je 'd.status == "error"' \
 	|| { echo "FAIL: missing section should error; got=$out"; exit 1; }
 
 # happy path: inbound shadowsocks
-out=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
+out_inbound=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
 	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
-printf "%s\n" "$out" | je 'd.status == "ok"' \
-	|| { echo "FAIL: ss inbound export should succeed; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.type == "shadowsocks" && d.section.tag == "in_ss"' \
-	|| { echo "FAIL: ss inbound section shape wrong; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.listen_port == 8388 && d.section.password == "pw"' \
-	|| { echo "FAIL: ss inbound fields wrong; got=$out"; exit 1; }
+printf "%s\n" "$out_inbound" | je 'd.status == "ok"' \
+	|| { echo "FAIL: ss inbound export should succeed; got=$out_inbound"; exit 1; }
+printf "%s\n" "$out_inbound" | je 'd.section.type == "shadowsocks" && d.section.tag == "in_ss"' \
+	|| { echo "FAIL: ss inbound section shape wrong; got=$out_inbound"; exit 1; }
+# password is a secret — scrub_secrets masks it to "***" (see lib/scrub.uc).
+printf "%s\n" "$out_inbound" | je 'd.section.listen_port == 8388 && d.section.password == "***"' \
+	|| { echo "FAIL: ss inbound fields wrong; got=$out_inbound"; exit 1; }
 
 # happy path: outbound vless
-out=$(echo '{"kind":"outbound","name":"out_vless"}' | UCI_CONFIG_DIR="$uci_dir" \
+out_outbound=$(echo '{"kind":"outbound","name":"out_vless"}' | UCI_CONFIG_DIR="$uci_dir" \
 	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
-printf "%s\n" "$out" | je 'd.status == "ok"' \
-	|| { echo "FAIL: vless outbound export should succeed; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.type == "vless" && d.section.tag == "out_vless"' \
-	|| { echo "FAIL: vless outbound section shape wrong; got=$out"; exit 1; }
-printf "%s\n" "$out" | je 'd.section.server == "example.com" && d.section.server_port == 443' \
-	|| { echo "FAIL: vless outbound fields wrong; got=$out"; exit 1; }
+printf "%s\n" "$out_outbound" | je 'd.status == "ok"' \
+	|| { echo "FAIL: vless outbound export should succeed; got=$out_outbound"; exit 1; }
+printf "%s\n" "$out_outbound" | je 'd.section.type == "vless" && d.section.tag == "out_vless"' \
+	|| { echo "FAIL: vless outbound section shape wrong; got=$out_outbound"; exit 1; }
+printf "%s\n" "$out_outbound" | je 'd.section.server == "example.com" && d.section.server_port == 443' \
+	|| { echo "FAIL: vless outbound fields wrong; got=$out_outbound"; exit 1; }
+
+# === scrub: secrets must be masked in export_section output (C1.2) ===
+
+# inbound shadowsocks: server_password should be "***" — not 'mysecret123'
+echo "$out_inbound" | grep -q 'mysecret123' && \
+	{ echo "FAIL: export_section leaked ss password"; exit 1; } || \
+	echo "  PASS: export_section masks ss password"
+# Both the je-parsed assertion above ("password == \"***\"") and a textual
+# grep guarantee the marker reaches the wire. ucode's %J inserts spaces around
+# `:` so we accept either compact or pretty form.
+echo "$out_inbound" | grep -Eq '"password":[[:space:]]*"\*\*\*"' && \
+	echo "  PASS: export_section emits *** marker for password" || \
+	{ echo "FAIL: no mask marker in inbound output; got=$out_inbound"; exit 1; }
+
+# outbound vless: server_uuid should be "***"
+echo "$out_outbound" | grep -q 'aaaaaaaa-bbbb' && \
+	{ echo "FAIL: export_section leaked vless uuid"; exit 1; } || \
+	echo "  PASS: export_section masks vless uuid"
+echo "$out_outbound" | grep -Eq '"uuid":[[:space:]]*"\*\*\*"' && \
+	echo "  PASS: export_section emits *** marker for uuid" || \
+	{ echo "FAIL: no mask marker in outbound output; got=$out_outbound"; exit 1; }
+
+# negative: non-secret fields (server, tag, type, listen_port, etc.) must be preserved verbatim
+echo "$out_outbound" | grep -Eq '"server":[[:space:]]*"\*\*\*"' && \
+	{ echo "FAIL: scrub touched non-secret server field"; exit 1; } || \
+	echo "  PASS: scrub leaves non-secret fields alone"
 
 # kind mismatch (querying outbound for an inbound name) returns error
 out=$(echo '{"kind":"outbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
@@ -343,7 +403,10 @@ out=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
 printf "%s\n" "$out" | je 'd.status == "ok"' \
 	|| { echo "FAIL: preview_config not ok; out=$out"; exit 1; }
 content=$(printf "%s\n" "$out" | jval 'd.content')
-printf "%s\n" "$content" | grep -q '"preview":"hello"' \
+# Whitespace-tolerant: preview_config re-serializes via sprintf("%.4J", …) to
+# scrub secrets, which inserts a space after the colon. We just want to prove
+# the key/value survived the round-trip.
+printf "%s\n" "$content" | grep -Eq '"preview"[[:space:]]*:[[:space:]]*"hello"' \
 	|| { echo "FAIL: preview content missing; out=$out"; exit 1; }
 # Content must start with `{` — a valid JSON root.
 case "$content" in
@@ -392,5 +455,74 @@ fail_count=$(count_preview_tmpfiles)
 [ "$fail_count" -eq "$before_count" ] \
 	|| { echo "FAIL: preview_config left a tmpfile after generate failure"; exit 1; }
 echo "  PASS: preview_config error path + cleanup"
+
+echo "-- call preview_config scrubs secrets in the returned content"
+# Stub ucode to write a config JSON containing realistic secrets, then exit 0.
+# After scrub, the wire content must NOT include the secret values, MUST include
+# *** markers for the known secret keys, and MUST preserve non-secret fields.
+cat >"$tmpdir/ucode" <<'EOF'
+#!/bin/sh
+: "${SINGBOX_CONFIG:?SINGBOX_CONFIG not set}"
+cat >"$SINGBOX_CONFIG" <<'JSON'
+{
+  "outbounds": [
+    {
+      "type": "vless",
+      "tag": "out-test",
+      "server": "vless.example.com",
+      "server_port": 443,
+      "uuid": "deadbeef-1111-2222-3333-cafecafecafe",
+      "password": "trojanish-secret",
+      "tls": {
+        "reality": {
+          "public_key": "REALITY-PUB",
+          "private_key": "REALITY-PRIV",
+          "short_id": "abcd1234"
+        }
+      }
+    }
+  ],
+  "experimental": {
+    "clash_api": { "secret": "topsecret-clash" }
+  }
+}
+JSON
+exit 0
+EOF
+chmod +x "$tmpdir/ucode"
+
+rm -f /tmp/singbox-ui-preview.*.json
+out=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
+	run_h call preview_config)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: preview_config not ok; out=$out"; exit 1; }
+content=$(printf "%s\n" "$out" | jval 'd.content')
+
+# Negative: raw secret strings must be absent from content.
+for secret in 'deadbeef-1111' 'trojanish-secret' 'REALITY-PRIV' 'REALITY-PUB' 'abcd1234' 'topsecret-clash'; do
+	printf "%s\n" "$content" | grep -q "$secret" && \
+		{ echo "FAIL: preview_config leaked secret '$secret'"; exit 1; }
+done
+echo "  PASS: preview_config strips all 6 secret values"
+
+# Positive: *** markers must appear at the masked keys.
+for k in uuid password private_key public_key short_id secret; do
+	printf "%s\n" "$content" | grep -Eq "\"$k\"[[:space:]]*:[[:space:]]*\"\*\*\*\"" \
+		|| { echo "FAIL: preview_config missing *** marker for $k"; exit 1; }
+done
+echo "  PASS: preview_config emits *** marker for every secret key"
+
+# Non-secret fields preserved verbatim.
+for keep in 'vless.example.com' 'out-test' '443'; do
+	printf "%s\n" "$content" | grep -q "$keep" \
+		|| { echo "FAIL: preview_config scrubbed non-secret '$keep'"; exit 1; }
+done
+echo "  PASS: preview_config preserves non-secret fields"
+
+# Cleanup — same invariant as the other preview_config tests.
+scrub_count=$(count_preview_tmpfiles)
+[ "$scrub_count" -eq "$before_count" ] \
+	|| { echo "FAIL: preview_config left a tmpfile after scrub test"; exit 1; }
+echo "  PASS: preview_config scrub + cleanup"
 
 echo "OK"

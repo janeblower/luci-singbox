@@ -66,6 +66,43 @@ validation, share-link parsers, and a pre-apply dry-run preview.
 - `tests/test_rpcd_handler.sh` cases for `export_section` and `preview_config` (no FS side effects).
 - `tests/test_validators_js.sh` for the pure-function validators (skipped where `node` is absent).
 
+---
+
+Phase C1 — security and UX hardening: secret scrubbing on RPC output,
+split read/write Clash proxy methods, share-link parser input sanitization,
+non-destructive JSON import, and full Russian translation coverage.
+
+### Security (Phase C1)
+
+- **`preview_config` and `export_section` RPC handlers now scrub secrets by default.** Sensitive keys (`uuid`, `password`, `private_key`, `public_key`, `short_id`, `key_pem`, `cert_pem`, `secret`, `auth_str`, `proxy_url`, `sub_url`) are masked as `"***"` before the response leaves rpcd. Read-ACL LuCI users no longer see verbatim credentials.
+- **Share-link parsers harden against malicious input.** `url_decode` drops control characters (`< 0x20`) and a new `drop_ctrl()` helper protects the `ss://` base64 plaintext paths. Parsers (`vless://`, `vmess://`, `trojan://`, `ss://`, `hy2://`) validate host (`safe_host`), port (`safe_port`), and tag (`safe_tag` with `imported-<fnv1a>` fallback). Hostile subscription servers can no longer inject NUL/CR/LF into UCI fields.
+
+### Changed (BREAKING)
+
+- **RPC method `clash_request` removed and replaced by `clash_get` + `clash_mutate`.**
+  - `clash_get` — GET only, `read.ubus` ACL. Refuses any `method` argument (defense in depth so a read-only caller cannot upgrade to write).
+  - `clash_mutate` — POST/PATCH/PUT/DELETE only, `write.ubus` ACL. Refuses GET.
+  - Frontend (`lib/rpc.js`, `tabs/monitoring.js`) migrated. Any external caller of `clash_request` must update to the new split methods.
+
+### Added (Phase C1)
+
+- `lib/scrub.uc` — central secret-masking helper used by RPC output paths. Pure function, returns a new object, leaves paths untouched (only inline secret content is masked).
+- `lib/helpers.uc::fnv1a32` — promoted from `nftables.uc` to be the single FNV-1a implementation, now reused by share-link parsers.
+- `scripts/regen-po.sh` — one-shot xgettext + msgmerge for keeping Russian translations in sync with JS sources.
+- `tests/test_scrub_uc.sh` — 12 cases covering scrub recursion, idempotency, path preservation, reality keys, cert pem.
+- `tests/test_acl_coverage.sh` — pins read/write ACL membership against safety whitelists.
+- `tests/test_po_coverage.sh` — enforces |JS-po| ≤ 5 drift and ≤ 5 untranslated msgstr.
+
+### Fixed (Phase C1)
+
+- JSON import in inbound/outbound tabs no longer calls `window.location.reload()`. The importer stages the new section into `uci.state` only; the user must press Save & Apply to commit. Previously, importing a section discarded any unsaved edits in other sections.
+- `tests/test_view_modules_layout.sh` enforces the no-`location.reload` invariant.
+
+### i18n
+
+- Russian translation coverage expanded from ~40% to 100% (211 msgid in `po/ru/`, 0 untranslated, 4 drift). All Phase B and C1 strings translated, stale `#~` entries removed.
+- Pre-release i18n freshness step added to `docs/release.md`.
+
 
 
 ## [v0.1.0] — 2026-06-06

@@ -2,8 +2,9 @@
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
 
-var callClash      = SbRpc.callClash;
-var callDhcpLeases = SbRpc.callDhcpLeases;
+var callClashGet    = SbRpc.callClashGet;
+var callClashMutate = SbRpc.callClashMutate;
+var callDhcpLeases  = SbRpc.callDhcpLeases;
 
 function buildMonitoring() {
 	var state = {
@@ -21,10 +22,10 @@ function buildMonitoring() {
 	function nameFor(ip) { return state.leases[ip] || ip; }
 
 	function closeConn(id) {
-		return callClash('DELETE', '/connections/' + id, '').then(poll);
+		return callClashMutate('DELETE', '/connections/' + id, '').then(poll);
 	}
 	function closeAll() {
-		return callClash('DELETE', '/connections', '').then(poll);
+		return callClashMutate('DELETE', '/connections', '').then(poll);
 	}
 
 	function renderTable(conns) {
@@ -106,7 +107,7 @@ function buildMonitoring() {
 	}
 
 	function poll() {
-		return callClash('GET', '/connections', '').then(function (res) {
+		return callClashGet('/connections').then(function (res) {
 			if (!res || res.status !== 'ok') {
 				root.innerHTML = '';
 				root.appendChild(E('em', {}, _('Clash API unreachable — enable it in settings and restart.')));

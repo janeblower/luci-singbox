@@ -19,6 +19,14 @@
 function emit(obj) { printf("%J\n", obj); }
 function fail(msg) { emit({ status: "error", message: msg }); exit(0); }
 
+// Apply lib/scrub.uc on the section object before emit so that read-ACL users
+// never see uuid/password/private_key/etc. verbatim (spec C1.2). Loaded lazily
+// to keep the bad-kind / missing-name error paths independent of scrub.uc.
+function scrubbed(obj) {
+	let scrub = require("scrub");
+	return scrub.scrub_secrets(obj);
+}
+
 let kind = ARGV[0] || "";
 let name = ARGV[1] || "";
 
@@ -40,7 +48,7 @@ if (kind === "inbound") {
 	try { mod = require("inbound"); } catch (e) { fail("require(inbound) failed"); }
 	let ob = mod.build_one(section);
 	if (!ob) fail("build_one returned null");
-	emit({ status: "ok", section: ob });
+	emit({ status: "ok", section: scrubbed(ob) });
 } else {
 	let t = section.type;
 	// build_constructor_for() only handles the proxy-protocol kinds. The
@@ -57,5 +65,5 @@ if (kind === "inbound") {
 	try { mod = require("outbound"); } catch (e) { fail("require(outbound) failed"); }
 	let ob = mod.build_constructor_for(section, t);
 	if (!ob) fail("build_constructor_for returned null");
-	emit({ status: "ok", section: ob });
+	emit({ status: "ok", section: scrubbed(ob) });
 }
