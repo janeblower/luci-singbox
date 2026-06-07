@@ -197,13 +197,13 @@ function build_one(s) {
 		if (length(addr)) ob.address = addr;
 		if (s_bool(s, "auto_route"))   ob.auto_route = true;
 		if (s_bool(s, "strict_route")) ob.strict_route = true;
-	} else if (proto === "vless" || proto === "vmess" || proto === "hysteria2") {
+	} else if (proto === "vmess" || proto === "hysteria2") {
 		ob = { type: proto, tag: tag, listen: listen, listen_port: port };
-		// vmess/vless support a `list inbound_user` multi-user mode. When
+		// vmess supports a `list inbound_user` multi-user mode. When
 		// non-empty, the section-level single-user fields (server_uuid,
-		// vmess_alter_id, vless_flow) are dropped — sing-box rejects both
-		// at once.  trojan/hysteria2 stay single-user for this phase.
-		let multi = (proto === "vmess" || proto === "vless")
+		// vmess_alter_id) are dropped — sing-box rejects both at once.
+		// hysteria2 stays single-user for this phase.
+		let multi = (proto === "vmess")
 			? build_inbound_users(s, proto)
 			: [];
 		ob.users = length(multi) ? multi : [ build_user(s) ];
