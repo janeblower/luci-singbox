@@ -10,6 +10,7 @@ let helpers = require("helpers");
 // the legacy dispatcher — it just falls through to the switch-by-type below.
 try { require("protocols.ssh"); } catch (_) {}
 try { require("protocols.trojan"); } catch (_) {}
+try { require("protocols.shadowsocks"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -105,7 +106,7 @@ function build_constructor_for(s, proto) {
 	if (proto === "vless" || proto === "vmess") {
 		if (length(s_opt(s, "server_uuid"))) ob.uuid = s.server_uuid;
 	}
-	if (proto === "hysteria2" || proto === "shadowsocks") {
+	if (proto === "hysteria2") {
 		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
 	}
 	if (proto === "tuic") {
@@ -138,8 +139,6 @@ function build_constructor_for(s, proto) {
 		if (length(s_opt(s, "vmess_alter_id"))) ob.alter_id = s_num(s.vmess_alter_id);
 		if (length(s_opt(s, "vmess_security"))) ob.security = s.vmess_security;
 	}
-	if (proto === "shadowsocks")
-		ob.method = s_opt(s, "shadowsocks_method") || "aes-128-gcm";
 	if (proto === "hysteria2") {
 		let ot = s_opt(s, "hysteria2_obfs_type") || "none";
 		// 1.12: only "salamander" is defined; "gecko" lands in 1.14.
