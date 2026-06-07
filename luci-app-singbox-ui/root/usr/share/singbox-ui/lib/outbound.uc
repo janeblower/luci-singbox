@@ -5,6 +5,11 @@ const TMPDIR = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 let fs = require("fs");
 let helpers = require("helpers");
 
+// C3.1: eagerly load descriptor modules so their register() calls fire at
+// module load. Wrapped in try/catch so an absent descriptor never breaks
+// the legacy dispatcher — it just falls through to the switch-by-type below.
+try { require("protocols.ssh"); } catch (_) {}
+
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
 const s_num    = helpers.s_num;
@@ -84,6 +89,16 @@ function build_multiplex(s) {
 }
 
 function build_constructor_for(s, proto) {
+	// C3.1: consult protocol registry first. If a descriptor is registered
+	// for ("outbound", proto), use its emit() and skip the legacy switch
+	// entirely. Wrapped in try/catch so registry loading errors never
+	// break the legacy code path.
+	try {
+		let reg = require("protocols.registry");
+		let d = reg.get("outbound", proto);
+		if (d != null) return d.emit(s);
+	} catch (_) { /* registry not available — fall through to legacy switch */ }
+
 	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
 
 	if (proto === "vless" || proto === "vmess") {

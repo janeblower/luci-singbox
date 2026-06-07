@@ -34,6 +34,8 @@ root/usr/share/singbox-ui/lib/inbound.uc	usr/share/singbox-ui/lib/inbound.uc	dat
 root/usr/share/singbox-ui/lib/log.uc	usr/share/singbox-ui/lib/log.uc	data
 root/usr/share/singbox-ui/lib/outbound.uc	usr/share/singbox-ui/lib/outbound.uc	data
 root/usr/share/singbox-ui/lib/post_process.uc	usr/share/singbox-ui/lib/post_process.uc	data
+root/usr/share/singbox-ui/lib/protocols/registry.uc	usr/share/singbox-ui/lib/protocols/registry.uc	data
+root/usr/share/singbox-ui/lib/protocols/ssh.uc	usr/share/singbox-ui/lib/protocols/ssh.uc	data
 root/usr/share/singbox-ui/lib/route.uc	usr/share/singbox-ui/lib/route.uc	data
 root/usr/share/singbox-ui/lib/ruleset.uc	usr/share/singbox-ui/lib/ruleset.uc	data
 root/usr/share/singbox-ui/lib/scrub.uc	usr/share/singbox-ui/lib/scrub.uc	data
