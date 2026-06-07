@@ -679,26 +679,28 @@ msgstr "Финальное правило для трафика, не совпа
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:25
 msgid "Show secrets"
-msgstr ""
+msgstr "Показать секреты"
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:29
 #, javascript-format
 msgid "Hide secrets (%d:%02d)"
-msgstr ""
+msgstr "Скрыть секреты (%d:%02d)"
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:75
 msgid "Reveal secrets?"
-msgstr ""
+msgstr "Раскрыть секреты?"
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:76
 msgid ""
 "You are about to reveal credentials. They will be visible to anyone with "
 "read access to this LuCI install for the next 5 minutes."
 msgstr ""
+"Сейчас будут раскрыты учётные данные. Они будут видны всем пользователям с "
+"правом чтения этой LuCI-установки в течение следующих 5 минут."
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:80
 msgid "Reveal"
-msgstr ""
+msgstr "Раскрыть"
 
 # Action bar
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:114
