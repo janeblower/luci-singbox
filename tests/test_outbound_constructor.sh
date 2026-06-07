@@ -510,4 +510,53 @@ else
 	exit 1
 fi
 
+# D1.5: hysteria2 descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- hysteria2 descriptor parity (D1.5 golden)"
+golden_hy2='{ "type": "hysteria2", "tag": "hy2full", "server": "hy2.example.com", "server_port": 8443, "password": "secret-pass", "obfs": { "type": "salamander", "password": "obfs-pw" }, "up_mbps": 100, "down_mbps": 50, "masquerade": "https://www.example.com", "brutal_debug": true, "network": "tcp", "tls": { "enabled": true, "server_name": "hy2.example.com" } }'
+actual_hy2=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"hy2full", "server":"hy2.example.com", "server_port":"8443",
+          "server_password":"secret-pass",
+          "hysteria2_obfs_type":"salamander", "hysteria2_obfs_password":"obfs-pw",
+          "up_mbps":"100", "down_mbps":"50",
+          "hysteria2_masquerade":"https://www.example.com",
+          "brutal_debug":"1", "network":"tcp",
+          "security":"tls", "tls_server_name":"hy2.example.com" };
+printf("%J", ob.build_constructor_for(s, "hysteria2"));
+'
+)
+if [ "$actual_hy2" = "$golden_hy2" ]; then
+	echo "  PASS: hysteria2 parity (full)"
+else
+	echo "FAIL: hysteria2 parity (full)"
+	echo "  expected: $golden_hy2"
+	echo "  actual:   $actual_hy2"
+	exit 1
+fi
+
+# D1.5 minimal variant: confirms all conditional branches skip cleanly.
+echo "-- hysteria2 descriptor parity minimal (D1.5 golden)"
+golden_hy2_min='{ "type": "hysteria2", "tag": "hy2min", "server": "hy2.example.com", "server_port": 8443, "password": "secret-pass", "tls": { "enabled": true, "server_name": "hy2.example.com" } }'
+actual_hy2_min=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"hy2min", "server":"hy2.example.com", "server_port":"8443",
+          "server_password":"secret-pass",
+          "security":"tls", "tls_server_name":"hy2.example.com" };
+printf("%J", ob.build_constructor_for(s, "hysteria2"));
+'
+)
+if [ "$actual_hy2_min" = "$golden_hy2_min" ]; then
+	echo "  PASS: hysteria2 parity (minimal)"
+else
+	echo "FAIL: hysteria2 parity (minimal)"
+	echo "  expected: $golden_hy2_min"
+	echo "  actual:   $actual_hy2_min"
+	exit 1
+fi
+
 echo "OK"
