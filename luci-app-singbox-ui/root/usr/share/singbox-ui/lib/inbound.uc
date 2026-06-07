@@ -1,6 +1,12 @@
 // lib/inbound.uc — sing-box `inbounds` array, built from `inbound` UCI sections.
 // Protocol IS the kind; mode/inbound_json are legacy and silently ignored. Pure: no I/O.
 
+// Shadowsocks inbound ss_user format limitation: each entry is "name:password"
+// with `:` as the FIRST-colon separator. A password containing a literal colon
+// is truncated at the second colon — operators must base64-encode it or pick a
+// colon-free passphrase. Mirrored in docs/uci-schema.md → inbound shadowsocks
+// section. (C2.1.15 guard — keep this comment even after full descriptor migration.)
+
 // D1.5: eagerly load descriptor modules so their register() calls fire at
 // module load. Inbound descriptors land incrementally in D1.5.2-D1.5.8;
 // each require() is wrapped so an absent module never breaks the legacy
@@ -191,38 +197,6 @@ function build_one(s) {
 		if (length(addr)) ob.address = addr;
 		if (s_bool(s, "auto_route"))   ob.auto_route = true;
 		if (s_bool(s, "strict_route")) ob.strict_route = true;
-	} else if (proto === "shadowsocks") {
-		ob = {
-			type: "shadowsocks", tag: tag, listen: listen, listen_port: port,
-			method: s_opt(s, "shadowsocks_method") || "aes-128-gcm",
-		};
-		let users = [];
-		let entries = as_array(s.ss_user);
-		// Limitation: the on-the-wire entry format is `name:password`, with
-		// `:` as the sole field separator. A password containing a literal
-		// colon is split at the FIRST colon — anything after the second
-		// colon is silently dropped. Operators who need ':' in a password
-		// must base64-encode it (and document the encoding alongside the
-		// section) or pick a colon-free passphrase. A future migration to
-		// a TSV / JSON entry format would lift this restriction. Mirrored
-		// in docs/uci-schema.md → inbound shadowsocks section.
-		for (let entry in entries) {
-			let colon = index(entry, ":");
-			if (colon < 1) continue;  // malformed (empty name or no colon)
-			let name = substr(entry, 0, colon);
-			let pw   = substr(entry, colon + 1);
-			if (!length(name) || !length(pw)) continue;
-			push(users, { name: name, password: pw });
-		}
-		if (length(users)) {
-			ob.users = users;
-		} else if (length(s_opt(s, "server_password"))) {
-			ob.password = s.server_password;
-		}
-		let net = s_opt(s, "network");
-		if (net === "udp" || net === "tcp") ob.network = net;
-		let mux = build_multiplex(s);
-		if (mux) ob.multiplex = mux;
 	} else if (proto === "vless" || proto === "vmess" || proto === "hysteria2") {
 		ob = { type: proto, tag: tag, listen: listen, listen_port: port };
 		// vmess/vless support a `list inbound_user` multi-user mode. When
