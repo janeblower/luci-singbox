@@ -106,6 +106,118 @@ grep -q 'nftables.uc remove' "$UCODE_LOG" \
 	|| fail "C2.1.12: defensive 'nftables.uc remove' missing from start_service"
 pass "C2.1.12: defensive nft remove before apply"
 
+# ---- G4: apply failure is captured and logged ----
+echo "-- G4: nft apply non-zero rc is logged via logger -t singbox-ui"
+rm -f /tmp/singbox-ui.json
+: >"$UCODE_LOG"; : >"$LOGGER_LOG"; : >"$PROCD_LOG"
+# Stub that:
+#   1. creates the config so we pass the fail-fast gate
+#   2. returns "1" for the `needed` subcommand so apply runs
+#   3. exits 1 for the `apply` subcommand so the new rc path is exercised
+cat >"$TMPDIR/bin/ucode" <<'EOF'
+#!/bin/sh
+echo "ucode $*" >>"$UCODE_LOG"
+for _arg in "$@"; do
+    case "$_arg" in
+        */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json; exit 0 ;;
+    esac
+done
+for _arg in "$@"; do
+    case "$_arg" in
+        needed)  echo 1; exit 0 ;;
+        apply)   exit 1 ;;
+    esac
+done
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/ucode"
+PATH="$TMPDIR/bin:$PATH" sh -c "
+    . '$PWD/$INIT'
+    start_service
+" || true
+grep -q 'nft apply failed' "$LOGGER_LOG" \
+    || { echo "FAIL: G4 logger not invoked on apply failure"; cat "$LOGGER_LOG"; exit 1; }
+pass "G4: apply rc=1 logged"
+
+echo "-- G4: nft apply rc=0 does NOT log a failure"
+rm -f /tmp/singbox-ui.json
+: >"$UCODE_LOG"; : >"$LOGGER_LOG"; : >"$PROCD_LOG"
+cat >"$TMPDIR/bin/ucode" <<'EOF'
+#!/bin/sh
+echo "ucode $*" >>"$UCODE_LOG"
+for _arg in "$@"; do
+    case "$_arg" in
+        */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json; exit 0 ;;
+    esac
+done
+for _arg in "$@"; do
+    case "$_arg" in
+        needed)  echo 1; exit 0 ;;
+    esac
+done
+# `apply` and `remove` succeed silently.
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/ucode"
+PATH="$TMPDIR/bin:$PATH" sh -c "
+    . '$PWD/$INIT'
+    start_service
+"
+grep -q 'nft apply failed' "$LOGGER_LOG" \
+    && { echo "FAIL: G4 false-positive failure log on rc=0"; cat "$LOGGER_LOG"; exit 1; }
+pass "G4: apply rc=0 does not log failure"
+
+# Restore the original happy-path ucode stub for any subsequent blocks.
+cat >"$TMPDIR/bin/ucode" <<'EOF'
+#!/bin/sh
+echo "ucode $*" >>"$UCODE_LOG"
+echo "SINGBOX_BOOT_FETCH=$SINGBOX_BOOT_FETCH" >>"$UCODE_LOG"
+for _arg in "$@"; do
+    case "$_arg" in
+        */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json; break ;;
+    esac
+done
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/ucode"
+
+# ---- G7: stop_service silences stderr from `remove` ----
+echo "-- G7: stop_service silences stderr from nftables.uc remove"
+rm -f /tmp/singbox-ui.json
+: >"$UCODE_LOG"; : >"$LOGGER_LOG"
+# Stub that prints to stderr on every invocation. After stop_service the
+# captured stderr must be empty (the redirection in init.d swallowed it).
+cat >"$TMPDIR/bin/ucode" <<'EOF'
+#!/bin/sh
+echo "noisy ucode stderr" 1>&2
+echo "ucode $*" >>"$UCODE_LOG"
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/ucode"
+err=$(PATH="$TMPDIR/bin:$PATH" sh -c "
+    . '$PWD/$INIT'
+    stop_service
+" 2>&1 >/dev/null) || true
+echo "$err" | grep -q 'noisy ucode stderr' \
+    && { echo "FAIL: G7 stop_service leaks stderr from remove"; echo "$err"; exit 1; }
+grep -q 'nftables.uc remove' "$UCODE_LOG" \
+    || { echo "FAIL: G7 stop_service didn't call remove"; cat "$UCODE_LOG"; exit 1; }
+pass "G7: stop_service stderr suppressed"
+
+# Restore the noisy-OK stub for the fail-fast block below.
+cat >"$TMPDIR/bin/ucode" <<'EOF'
+#!/bin/sh
+echo "ucode $*" >>"$UCODE_LOG"
+echo "SINGBOX_BOOT_FETCH=$SINGBOX_BOOT_FETCH" >>"$UCODE_LOG"
+for _arg in "$@"; do
+    case "$_arg" in
+        */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json; break ;;
+    esac
+done
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/ucode"
+
 # ---- fail-fast branch ----
 echo "-- start_service refuses to start when config is empty"
 rm -f /tmp/singbox-ui.json
