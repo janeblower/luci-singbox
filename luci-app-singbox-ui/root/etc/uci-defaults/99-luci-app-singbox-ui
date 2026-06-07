@@ -26,9 +26,11 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
 # Reload rpcd so the new ACL JSON is picked up.
 /etc/init.d/rpcd reload >/dev/null 2>&1
 
-# Install cron entry: refresh subscriptions+rulesets every 30 minutes.
+# Install cron entry: refresh subscriptions+rulesets on a fixed interval.
 # Per-section update_interval / sub_interval is honoured by subscription.uc itself.
-CRON_LINE='*/30 * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh all >/dev/null 2>&1'
+# Single source of truth for the cadence — bump CRON_INTERVAL_MIN to change it.
+CRON_INTERVAL_MIN=30  # how often subscription/ruleset refresh runs (minutes)
+CRON_LINE="*/${CRON_INTERVAL_MIN} * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh all >/dev/null 2>&1"
 CRON_FILE=/etc/crontabs/root
 mkdir -p "$(dirname "$CRON_FILE")"
 touch "$CRON_FILE"

@@ -1,0 +1,9 @@
+.build
+dist
+.claude
+.claude-flow
+.swarm
+.mcp.json
+CLAUDE.md
+ruvector.db
+docs/superpowers
