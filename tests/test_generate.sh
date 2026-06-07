@@ -29,6 +29,25 @@ check() {
 	echo "  PASS: $desc"
 }
 
+# Hand the freshly-generated config to the actual sing-box daemon's
+# config validator. Catches the "shape looks right but sing-box rejects
+# it" class of bugs that grep-substring assertions miss (the canonical
+# example is the DNS-detour-to-implicit-direct crash). Skipped when
+# sing-box isn't installed (e.g. plain host runs); always available in
+# the Docker test env that CI uses.
+sb_check() {
+	desc="$1"; cfg="$2"
+	command -v sing-box >/dev/null 2>&1 || return 0
+	if ! sing-box check -c "$cfg" >"$TMPDIR/sb.err" 2>&1; then
+		echo "FAIL: sing-box check rejected $desc"
+		cat "$TMPDIR/sb.err"
+		echo "--- generated config ---"
+		cat "$cfg"
+		exit 1
+	fi
+	echo "  PASS: sing-box check accepts $desc"
+}
+
 write_cfg() { printf '%s\n' "$1" > "$TMPDIR/singbox-ui"; }
 
 # Sandbox dir for sub_*.txt and the output config — keeps tests independent
@@ -70,6 +89,10 @@ check "listen_port 7893"  '"listen_port": 7893'           "$TMPDIR/out.json"
 grep -q '"inet4_range":\s*\[' "$TMPDIR/out.json" \
 	&& { echo "FAIL: inet4_range must be a string, not an array"; cat "$TMPDIR/out.json"; exit 1; }
 echo "  PASS: inet4_range is not an array"
+# NOTE: bare fakeip scenario is intentionally minimal for shape-testing
+# and is NOT a valid sing-box config on its own (no upstream DNS). The
+# sb_check assertions are placed on scenarios that build complete
+# daemon-runnable configs.
 
 # Phase C2 (atomic publish): no .tmp.* siblings of the final config should
 # remain after a successful generate. The implementation writes to
@@ -762,5 +785,71 @@ echo "  PASS: clash_api absent when disabled"
 orphans_final=$(find "$SANDBOX_DIR" -name "$(basename "$SANDBOX_CONFIG").tmp.*" 2>/dev/null | wc -l)
 [ "$orphans_final" -eq 0 ] || { echo "FAIL: $orphans_final orphan tmpfiles after full run"; find "$SANDBOX_DIR" -name "$(basename "$SANDBOX_CONFIG").tmp.*"; exit 1; }
 echo "  PASS: no orphan tmpfiles after full test run"
+
+# Phase C2.3.2: final defensive layer. The substring assertions above
+# can miss "shape looks right but daemon rejects it" bugs (canonical
+# example: the DNS-detour-to-implicit-direct startup crash).
+#
+# Most of the scenarios above use synthetic test fixtures (short UUIDs,
+# minimal-but-incomplete configs) that exercise generator emission
+# without producing a daemon-valid result. So instead of bolting
+# sb_check onto each, we build one explicitly-complete config that
+# exercises the full pipeline — DNS, route, ruleset, real-shaped UUID
+# proxy outbound, tproxy inbound with hijack — and hand THAT to
+# sing-box check. This catches the "shape right, daemon rejects" class
+# of bugs at a known-complete checkpoint.
+echo "-- sing-box check end-to-end on a complete config"
+# Mirrors the shape of the shipped default (test_defaults.sh) so the
+# config is known-daemon-valid: non-fakeip server listed first, dns.final
+# pins the upstream, real-shaped vless UUID, complete tproxy + ruleset
+# wiring. Any future generator regression that breaks this end-to-end
+# shape will be caught by sing-box check here, even if the substring
+# assertions above still pass.
+write_cfg "
+config dns_server 'google'
+	option enabled '1'
+	option type 'https'
+	option server '8.8.8.8'
+	option server_port '443'
+	option path '/dns-query'
+
+config dns_server 'fakeip'
+	option enabled '1'
+	option type 'fakeip'
+	option inet4_range '198.18.0.0/15'
+	option inet6_range 'fc00::/18'
+
+config dns 'dns'
+	option final 'google'
+	option strategy 'prefer_ipv4'
+
+config inbound 'tproxy_in'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
+	option hijack_dns '1'
+
+config outbound 'my_vless'
+	option enabled '1'
+	option type 'url'
+	option proxy_url 'vless://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee@vless.example.com:443?security=tls&sni=vless.example.com'
+
+config ruleset 'geosite_cn'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/geosite-cn.srs'
+	option format 'binary'
+
+config route_rule 'rule_cn'
+	option enabled '1'
+	list ruleset 'geosite_cn'
+	option action 'outbound'
+	option outbound 'my_vless'
+
+config route_default 'route_default'
+	option final 'my_vless'
+"
+run_gen
+sb_check "complete config (dns+fakeip+tproxy+vless+route)" "$TMPDIR/out.json"
 
 echo "OK"

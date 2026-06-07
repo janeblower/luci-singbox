@@ -32,63 +32,23 @@ echo "=============================================================="
 exit 0
 endef
 
+# Install file set is driven from ../scripts/install-manifest.txt (single
+# source of truth, shared with scripts/build-apk.sh). Adding a new file
+# means editing one place; tests/test_install_lists_match.sh asserts the
+# invariant. The PO → LMO step is handled separately below because po2lmo
+# is a host tool invoked at install time, not a static copy.
+INSTALL_MANIFEST := $(CURDIR)/../scripts/install-manifest.txt
+
 define Package/$(PKG_NAME)/install
-	$(INSTALL_DIR) $(1)/etc/config
-	$(INSTALL_CONF) ./root/etc/config/singbox-ui $(1)/etc/config/singbox-ui
-
-	$(INSTALL_DIR) $(1)/etc/uci-defaults
-	$(INSTALL_BIN) ./root/etc/uci-defaults/99-luci-app-singbox-ui \
-	  $(1)/etc/uci-defaults/99-luci-app-singbox-ui
-
-	$(INSTALL_DIR) $(1)/etc/init.d
-	$(INSTALL_BIN) ./root/etc/init.d/singbox-ui $(1)/etc/init.d/singbox-ui
-
-	$(INSTALL_DIR) $(1)/usr/libexec/rpcd
-	$(INSTALL_BIN) ./root/usr/libexec/rpcd/singbox-ui $(1)/usr/libexec/rpcd/singbox-ui
-
-	$(INSTALL_DIR) $(1)/usr/share/luci/menu.d
-	$(INSTALL_DATA) ./root/usr/share/luci/menu.d/luci-app-singbox-ui.json \
-	  $(1)/usr/share/luci/menu.d/luci-app-singbox-ui.json
-
-	$(INSTALL_DIR) $(1)/usr/share/rpcd/acl.d
-	$(INSTALL_DATA) ./root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json \
-	  $(1)/usr/share/rpcd/acl.d/luci-app-singbox-ui.json
-
-	$(INSTALL_DIR) $(1)/usr/share/singbox-ui
-	$(INSTALL_DATA) ./root/usr/share/singbox-ui/generate.uc \
-	  $(1)/usr/share/singbox-ui/generate.uc
-	$(INSTALL_DATA) ./root/usr/share/singbox-ui/subscription.uc \
-	  $(1)/usr/share/singbox-ui/subscription.uc
-	$(INSTALL_DATA) ./root/usr/share/singbox-ui/nftables.uc \
-	  $(1)/usr/share/singbox-ui/nftables.uc
-	$(INSTALL_DATA) ./root/usr/share/singbox-ui/export_section.uc \
-	  $(1)/usr/share/singbox-ui/export_section.uc
-
-	$(INSTALL_DIR) $(1)/usr/share/singbox-ui/lib
-	$(foreach f,$(wildcard ./root/usr/share/singbox-ui/lib/*.uc), \
-	  $(INSTALL_DATA) $(f) $(1)/usr/share/singbox-ui/lib/$(notdir $(f));)
-
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui
-	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/main.js \
-	  $(1)/www/luci-static/resources/view/singbox-ui/main.js
-	$(INSTALL_DATA) ./htdocs/luci-static/resources/view/singbox-ui/style.css \
-	  $(1)/www/luci-static/resources/view/singbox-ui/style.css
-
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/lib
-	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/lib/*.js), \
-	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/lib/$(notdir $(f));)
-
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/importers
-	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/importers/*.js), \
-	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/importers/$(notdir $(f));)
-
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/tabs
-	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/tabs/*.js), \
-	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/tabs/$(notdir $(f));)
-
-	$(INSTALL_DIR) $(1)/www/luci-static/resources/view/singbox-ui/widgets
-	$(foreach f,$(wildcard ./htdocs/luci-static/resources/view/singbox-ui/widgets/*.js), \
-	  $(INSTALL_DATA) $(f) $(1)/www/luci-static/resources/view/singbox-ui/widgets/$(notdir $(f));)
+	@while IFS="$$(printf '\t')" read -r src dst mode; do \
+	    case "$$src" in '#'*|'') continue ;; esac ; \
+	    install -d "$(1)/$$(dirname "$$dst")" ; \
+	    case "$$mode" in \
+	        bin)  install -m 0755 "./$$src" "$(1)/$$dst" ;; \
+	        conf) install -m 0644 "./$$src" "$(1)/$$dst" ;; \
+	        *)    install -m 0644 "./$$src" "$(1)/$$dst" ;; \
+	    esac ; \
+	done < $(INSTALL_MANIFEST)
 
 	if [ -f $(PO_DIR)/ru/luci-app-singbox-ui.po ]; then \
 		$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n; \
