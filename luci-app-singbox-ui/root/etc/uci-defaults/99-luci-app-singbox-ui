@@ -373,4 +373,6 @@ uci -q set singbox-ui._meta='_meta'
 uci -q set singbox-ui._meta.schema_version="$CURRENT_SCHEMA"
 uci commit singbox-ui
 
+logger -t singbox-ui "event=migration.completed ts=$(date +%s) schema_version=$CURRENT_SCHEMA"
+
 exit 0

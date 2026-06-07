@@ -154,7 +154,10 @@ function list_files_with_mtime(dir, prefix, suffix) {
 function call_generate() {
 	drain_stdin();
 	if (run(["ucode", "-L", UCODE_LIB, GENERATE_UC])) emit_ok();
-	else emit_err("generate.uc failed");
+	else {
+		try { require("log").log_event("error", "rpc.generate.failed", {}); } catch (_) {}
+		emit_err("generate.uc failed");
+	}
 }
 
 function call_nftables() {
