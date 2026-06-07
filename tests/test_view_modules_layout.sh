@@ -177,6 +177,33 @@ else
     echo "PASS depends-type/protocol guard (no per-proxy-protocol chains in tabs)"
 fi
 
+# D3.7 reveal-token layout guards.
+#
+# Guard 1: reveal token must NEVER be persisted to localStorage / sessionStorage
+# (router-global token survives browser refresh trivially via the file on disk;
+# any client-side persistence would extend the attack window beyond the 5-min TTL).
+storage_hits=$(grep -rnE 'localStorage|sessionStorage' \
+    luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/ \
+    2>/dev/null | grep -vE '/widgets/monitoring\.js|test_' || true)
+# (Filter known-OK files: monitoring tab's filter persistence is unrelated.
+# If it doesn't actually exist in this codebase, the filter is a no-op.)
+if echo "$storage_hits" | grep -qiE 'singboxUiRevealToken|revealToken|token'; then
+    echo "FAIL reveal token referenced near *Storage — must live in window memory only"
+    echo "$storage_hits" | grep -iE 'singboxUiRevealToken|revealToken|token'
+    fail=1
+else
+    echo "PASS reveal-token not in *Storage"
+fi
+
+# Guard 2: action-bar exposes Show secrets button.
+if grep -q 'Show secrets' \
+    luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js; then
+    echo "PASS Show secrets button present"
+else
+    echo "FAIL Show secrets button missing from action-bar.js"
+    fail=1
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi
