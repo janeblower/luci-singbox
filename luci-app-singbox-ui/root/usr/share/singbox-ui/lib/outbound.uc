@@ -152,6 +152,7 @@ function build_constructor_for(s, proto) {
 		if (length(s_opt(s, "network")) && (s.network === "tcp" || s.network === "udp"))
 			ob.network = s.network;
 	}
+	// shadowsocks: no TLS in the protocol itself.
 	// trojan: descriptor-owned (D1.1) — fallback must not double-emit tls.
 	if (proto !== "shadowsocks" && proto !== "trojan") {
 		let tls = build_tls_client(s, proto);

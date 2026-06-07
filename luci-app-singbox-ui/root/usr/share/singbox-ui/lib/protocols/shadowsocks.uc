@@ -17,6 +17,8 @@ reg.register({
 		  validate: "port", group: "basic" },
 		{ name: "server_password",    type: "string", required: true,
 		  secret: true, group: "credentials", ui_label: "Password" },
+		// "none" is for plugin-chain setups; plugin/plugin_opts themselves
+		// are out-of-scope (see docs/protocol-coverage.md).
 		{ name: "shadowsocks_method", type: "enum",
 		  values: ["aes-128-gcm", "aes-256-gcm", "chacha20-ietf-poly1305",
 		           "2022-blake3-aes-128-gcm", "2022-blake3-aes-256-gcm",
