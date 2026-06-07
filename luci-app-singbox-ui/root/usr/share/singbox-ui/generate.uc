@@ -14,6 +14,7 @@ let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 let fs  = require("fs");
 
+let helpers      = require("helpers");
 let log_mod      = require("log");
 let dns_mod      = require("dns");
 let inbound_mod  = require("inbound");
@@ -22,6 +23,13 @@ let route_mod    = require("route");
 let ruleset_mod  = require("ruleset");
 let cache_mod    = require("cache");
 let clash_mod    = require("clash");
+
+// Wipe the iface→netdev memoisation table held inside lib/helpers.uc. A
+// long-lived ucode process (e.g. rpcd worker that imports this module once
+// and re-invokes it across config reloads) would otherwise serve stale
+// mappings if /etc/config/network was edited between runs. The cost is
+// negligible — the table is small and re-populated lazily on demand.
+helpers.reset_iface_cache();
 
 let config = {};
 

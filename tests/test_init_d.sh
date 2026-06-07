@@ -99,6 +99,13 @@ grep -q 'nftables.uc apply' "$UCODE_LOG" \
 	&& fail "nft apply should be skipped when 'needed' returns empty"
 pass "nft apply gated by 'needed'"
 
+# C2.1.12: start_service must defensively `remove` any stale nft rules before
+# deciding whether to (re)apply, so a config flipping from tproxy-required to
+# direct-only no longer leaves a stranded table until the next stop.
+grep -q 'nftables.uc remove' "$UCODE_LOG" \
+	|| fail "C2.1.12: defensive 'nftables.uc remove' missing from start_service"
+pass "C2.1.12: defensive nft remove before apply"
+
 # ---- fail-fast branch ----
 echo "-- start_service refuses to start when config is empty"
 rm -f /tmp/singbox-ui.json

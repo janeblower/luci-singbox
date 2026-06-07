@@ -100,3 +100,29 @@ if [ "$fail" = "1" ]; then
 fi
 
 echo "PASS: field-level schema coverage"
+
+# ---------------------------------------------------------------------------
+# C2.1.14: helpers.uc exports reset_iface_cache AND generate.uc invokes it.
+# Each generate.uc run must wipe the module-scope iface→device cache so
+# subscription reloads see fresh netdev mappings instead of stale entries
+# left over from a prior generate within the same long-lived process.
+# ---------------------------------------------------------------------------
+HELPERS_UC="$LIB/helpers.uc"
+GENERATE_UC="luci-app-singbox-ui/root/usr/share/singbox-ui/generate.uc"
+grep -q 'reset_iface_cache' "$HELPERS_UC" \
+	|| { echo "FAIL: C2.1.14: helpers.uc must export reset_iface_cache"; exit 1; }
+grep -q 'reset_iface_cache' "$GENERATE_UC" \
+	|| { echo "FAIL: C2.1.14: generate.uc must call helpers.reset_iface_cache()"; exit 1; }
+echo "PASS: C2.1.14: reset_iface_cache wired"
+
+# ---------------------------------------------------------------------------
+# C2.1.15: shadowsocks ss_user format limitation (colon-truncated passwords)
+# must be flagged both in production code (lib/inbound.uc) and in the schema
+# (docs/uci-schema.md → inbound shadowsocks section) so operators are not
+# silently bitten by ':'-in-password.
+# ---------------------------------------------------------------------------
+grep -qiE 'colon|truncat' "$LIB/inbound.uc" \
+	|| { echo "FAIL: C2.1.15: ss_user colon-truncation comment missing from lib/inbound.uc"; exit 1; }
+grep -qiE 'colon|truncat' "$SCHEMA" \
+	|| { echo "FAIL: C2.1.15: ss_user colon-truncation note missing from $SCHEMA"; exit 1; }
+echo "PASS: C2.1.15: ss_user limitation documented"

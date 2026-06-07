@@ -69,4 +69,37 @@ NO_FAKEIP_SRV="    option storage 'ram'
     option store_fakeip '1'"
 run_case fakeip_no_srv "/tmp/singbox-ui-cache.db"  no  "$NO_FAKEIP_SRV"
 
+# ---------------------------------------------------------------------------
+# C2.1.13: clash.uc external_controller bracketing
+# ---------------------------------------------------------------------------
+# IPv6 listen addresses must be wrapped in [brackets] so sing-box parses
+# `external_controller` as host+port rather than mis-reading ':::9090' as
+# port-of-empty-host. IPv4 must remain unbracketed for backwards compatibility.
+run_clash_case() {
+	label="$1"; listen="$2"; port="$3"; expect="$4"
+	mkdir -p "$TMPDIR/cfg"
+	cat >"$TMPDIR/cfg/singbox-ui" <<UCI
+config clash_api 'clash_api'
+    option enabled '1'
+    option listen '$listen'
+    option port '$port'
+UCI
+	cat >"$TMPDIR/run.uc" <<'UCODE'
+let uci = require("uci");
+let clash = require("clash");
+let cur = uci.cursor(getenv("UCI_CONFIG_DIR"));
+let out = clash.build_clash_api(cur);
+print(out.external_controller);
+UCODE
+	# shellcheck disable=SC2086
+	actual=$(UCI_CONFIG_DIR="$TMPDIR/cfg" "$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/run.uc")
+	[ "$actual" = "$expect" ] \
+		|| { echo "FAIL [$label]: expected '$expect', got '$actual'"; exit 1; }
+	echo "ok [$label]"
+}
+
+run_clash_case clash_ipv4_unbracketed "127.0.0.1" "9090" "127.0.0.1:9090"
+run_clash_case clash_ipv6_bracketed   "::1"       "9090" "[::1]:9090"
+run_clash_case clash_ipv6_any_bracketed "::"      "9090" "[::]:9090"
+
 echo "OK"
