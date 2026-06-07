@@ -223,7 +223,7 @@ function build_one(s) {
 		if (net === "udp" || net === "tcp") ob.network = net;
 		let mux = build_multiplex(s);
 		if (mux) ob.multiplex = mux;
-	} else if (proto === "vless" || proto === "vmess" || proto === "trojan" || proto === "hysteria2") {
+	} else if (proto === "vless" || proto === "vmess" || proto === "hysteria2") {
 		ob = { type: proto, tag: tag, listen: listen, listen_port: port };
 		// vmess/vless support a `list inbound_user` multi-user mode. When
 		// non-empty, the section-level single-user fields (server_uuid,

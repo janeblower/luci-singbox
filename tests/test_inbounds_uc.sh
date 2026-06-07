@@ -526,4 +526,27 @@ nocheck "no malformed no-colon-here" '"name": "no-colon-here"'
 nocheck "no malformed missing-name"  '"name": ""'
 nocheck "no malformed empty uuid"    '"uuid": ""'
 
+# D1.5.2: trojan inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- trojan inbound descriptor parity (D1.5.2 golden)"
+golden='{ "type": "trojan", "tag": "in_t1", "listen": "::", "listen_port": 443, "users": [ { "name": "in_t1", "password": "pw" } ], "tls": { "enabled": true, "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"in_t1", "protocol":"trojan", "listen":"::", "listen_port":"443",
+          "server_password":"pw", "security":"tls",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: trojan inbound parity"
+else
+	echo "FAIL: trojan inbound parity"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
 echo "OK"
