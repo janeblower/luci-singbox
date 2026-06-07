@@ -133,72 +133,100 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 ## Outbound protocols
 
 ### vless outbound (`build_constructor_for`, `lib/outbound.uc:74`)
-| Field | Status |
-|---|---|
-| `server`, `server_port`, `uuid` | есть |
-| `flow` (`xtls-rprx-vision`) | есть |
-| `tls`, `transport`, `multiplex` | есть |
-| `network` (`tcp`/`udp`) | нет (Phase 4 add as shared outbound field) |
-| `packet_encoding` | out-of-scope |
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `uuid` | `server_uuid` | n/a | есть | — |
+| `flow` (`xtls-rprx-vision`) | `vless_flow` | n/a | есть | — |
+| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | — |
+| `network` (`tcp`/`udp`) | — | n/a | нет (Phase 4) | — |
+| `packet_encoding` | — | n/a | out-of-scope | — |
 
 ### vmess outbound (`lib/outbound.uc:82`)
-| Field | Status |
-|---|---|
-| `server`, `server_port`, `uuid` | есть |
-| `alter_id` | есть (JSON key matches doc: `alter_id`) |
-| `security` | есть |
-| `tls`, `transport`, `multiplex` | есть |
-| `network` | нет |
-| `global_padding`, `authenticated_length` | out-of-scope |
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `uuid` | `server_uuid` | n/a | есть | — |
+| `alter_id` | `vmess_alter_id` | n/a | есть | — |
+| `security` | `vmess_security` | n/a | есть | — |
+| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | — |
+| `network` | — | n/a | нет | — |
+| `global_padding`, `authenticated_length` | — | n/a | out-of-scope | — |
 
 ### trojan outbound (`lib/outbound.uc:77`)
-| Field | Status |
-|---|---|
-| `server`, `server_port`, `password` | есть |
-| `tls`, `transport`, `multiplex` | есть |
-| `network` | нет |
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `password` | `server_password` | n/a | есть | — |
+| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | — |
+| `network` | — | n/a | нет | — |
 
 ### hysteria2 outbound (`lib/outbound.uc:88`)
-| Field | Status |
-|---|---|
-| `server`, `server_port`, `password` | есть |
-| `tls` (forced) | есть |
-| `obfs.type`, `obfs.password` | есть |
-| `up_mbps`, `down_mbps` | есть |
-| `masquerade` (server-side concept; ignored in outbound) | есть as field, but no-op |
-| `brutal_debug` | есть | — |
-| `network` (`tcp`/`udp`) | есть | — |
-| `server_ports[]`, `hop_interval`, `hop_interval_max` | out-of-scope (multi-port hop is 1.14+ feature) |
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `password` | `server_password` | n/a | есть | — |
+| `tls` (forced) | (see Shared TLS block) | n/a | есть | — |
+| `obfs.type` | `hysteria2_obfs_type` | n/a | есть | — |
+| `obfs.password` | `hysteria2_obfs_password` | n/a | есть | — |
+| `up_mbps` | `up_mbps` | n/a | есть | — |
+| `down_mbps` | `down_mbps` | n/a | есть | — |
+| `masquerade` (server-side concept; ignored in outbound) | `hysteria2_masquerade` | n/a | есть (no-op) | — |
+| `brutal_debug` | `brutal_debug` | n/a | есть | — |
+| `network` (`tcp`/`udp`) | `network` | n/a | есть | — |
+| `server_ports[]`, `hop_interval`, `hop_interval_max` | — | n/a | out-of-scope (1.14+ feature) | — |
 
 ### shadowsocks outbound (`lib/outbound.uc:77,86`)
-| Field | Status |
-|---|---|
-| `server`, `server_port`, `password`, `method` | есть |
-| `network` | нет |
-| `multiplex` | нет (currently only enabled for vless/vmess/trojan in `build_constructor_for`:101) |
-| `plugin`, `plugin_opts` | out-of-scope (legacy SIP022 plugin chaining) |
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `password` | `server_password` | n/a | есть | — |
+| `method` | `shadowsocks_method` | n/a | есть | — |
+| `network` | — | n/a | нет | — |
+| `multiplex` | — | n/a | нет (vless/vmess/trojan only) | — |
+| `plugin`, `plugin_opts` | — | n/a | out-of-scope (legacy SIP022) | — |
 
 ### tuic outbound (`lib/outbound.uc`, tuic branch)
-| Field | Status |
-|---|---|
-| `server`, `server_port`, `uuid`, `password` | есть | — |
-| `congestion_control` | есть | — |
-| `udp_relay_mode` | есть | — |
-| `udp_over_stream` (mutually exclusive with `udp_relay_mode`) | есть | — |
-| `zero_rtt_handshake` | есть | — |
-| `heartbeat` | есть | — |
-| `network` (`tcp`/`udp`) | есть | — |
-| `tls` (required) | есть | — |
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `uuid` | `server_uuid` | n/a | есть | — |
+| `password` | `server_password` | n/a | есть | — |
+| `congestion_control` | `tuic_congestion` | n/a | есть | — |
+| `udp_relay_mode` | `tuic_udp_relay_mode` | n/a | есть | — |
+| `udp_over_stream` (mutually exclusive with `udp_relay_mode`) | `tuic_udp_over_stream` | n/a | есть | — |
+| `zero_rtt_handshake` | `tuic_zero_rtt` | n/a | есть | — |
+| `heartbeat` | `tuic_heartbeat` | n/a | есть | — |
+| `network` (`tcp`/`udp`) | `network` | n/a | есть | — |
+| `tls` (required) | (see Shared TLS block) | n/a | есть | — |
 
 ### anytls outbound (`lib/outbound.uc`, anytls branch — Since 1.12.0)
-| Field | Status |
-|---|---|
-| `server`, `server_port`, `password` | есть | — |
-| `idle_session_check_interval` (default `30s`) | есть | — |
-| `idle_session_timeout` (default `30s`) | есть | — |
-| `min_idle_session` (default `0`) | есть | — |
-| `tls` (required) | есть | — |
-| transport / multiplex | **out-of-scope** (AnyTLS has no v2ray-transport) |
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `password` | `server_password` | n/a | есть | — |
+| `idle_session_check_interval` (default `30s`) | `anytls_idle_check_interval` | n/a | есть | — |
+| `idle_session_timeout` (default `30s`) | `anytls_idle_timeout` | n/a | есть | — |
+| `min_idle_session` (default `0`) | `anytls_min_idle_session` | n/a | есть | — |
+| `tls` (required) | (see Shared TLS block) | n/a | есть | — |
+| transport / multiplex | — | n/a | out-of-scope (AnyTLS has no v2ray-transport) | — |
+
+### ssh outbound (`lib/protocols/ssh.uc` — Since 1.12.0)
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| `server` | `server` | n/a | есть | — |
+| `server_port` | `server_port` | n/a | есть | — |
+| `user` | `user` | n/a | есть | — |
+| `password` | `password` | n/a | есть | — |
+| `private_key_path` | `private_key_path` | n/a | есть | — |
+| `host_key[]` | `host_key` (list) | n/a | есть | — |
 
 ### interface outbound (`lib/outbound.uc:202`)
 Maps to sing-box `direct` with `bind_interface`. Status: **есть**, no further fields planned.
