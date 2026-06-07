@@ -141,4 +141,47 @@ echo "$out" | grep -qE '^[[:space:]]*set rs_[a-f0-9]{8}_0_v4' \
 rm -f /tmp/singbox-ui/rs_${long_name}.json
 pass "long name hashed"
 
+# ---- C2.1.4: listen_port validation in emit path ----
+# emit accepts PORT on argv; an out-of-range/non-int value must be rejected
+# rather than baked into a broken `tproxy ip to 127.0.0.1:<garbage>` line.
+echo "-- C2.1.4: listen_port out of range (99999) is rejected"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 99999 "198.18.0.0/15" "" "br-lan" 2>&1) || true
+echo "$out" | grep -q '127\.0\.0\.1:99999' \
+    && { echo "FAIL: out-of-range port made it through to nft"; echo "$out"; exit 1; }
+pass "out-of-range listen_port rejected"
+
+echo "-- C2.1.4: listen_port non-integer (abc) is rejected"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit abc "198.18.0.0/15" "" "br-lan" 2>&1) || true
+echo "$out" | grep -q '127\.0\.0\.1:abc' \
+    && { echo "FAIL: non-integer port made it through to nft"; echo "$out"; exit 1; }
+pass "non-integer listen_port rejected"
+
+echo "-- C2.1.4: listen_port zero is rejected"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 0 "198.18.0.0/15" "" "br-lan" 2>&1) || true
+echo "$out" | grep -q '127\.0\.0\.1:0\b' \
+    && { echo "FAIL: zero port made it through to nft"; echo "$out"; exit 1; }
+pass "zero listen_port rejected"
+
+echo "-- C2.1.4: listen_port in-range (1234) still works"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 1234 "198.18.0.0/15" "" "br-lan")
+echo "$out" | grep -q '127\.0\.0\.1:1234' \
+    || { echo "FAIL: valid in-range port 1234 missing"; echo "$out"; exit 1; }
+pass "in-range listen_port accepted"
+
+# ---- C2.1.7: nft delete table uses argv form, not shell-string form ----
+# Matches the file-wide convention (line ~296 uses system(["nft", "-f", tmp])).
+# Keeps inputs from being reparsed by /bin/sh — defense-in-depth even though
+# TABLE is a compile-time constant today.
+echo "-- C2.1.7: nft_delete_table_quiet uses argv-form system()"
+grep -E 'system\(\["nft",[[:space:]]*"delete"' "$SCRIPT" >/dev/null \
+    || { echo "FAIL: nftables.uc still uses string-form system() for nft delete"; \
+         grep -n 'nft delete table' "$SCRIPT"; exit 1; }
+grep -F 'system(`nft delete table' "$SCRIPT" >/dev/null \
+    && { echo "FAIL: shell-string form of nft delete table still present"; exit 1; }
+pass "nft delete in argv form"
+
 echo "OK"

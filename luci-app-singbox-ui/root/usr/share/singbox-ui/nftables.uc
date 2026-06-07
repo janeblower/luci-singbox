@@ -140,8 +140,57 @@ function emit_rs_rule(name, idx, family, l4, port_e) {
 	return `\t\t${ip_kw} daddr @${set_name} ${l4}${port_e} ct state new meta mark set 0x1\n`;
 }
 
+// safe_iface(name) — return name unchanged if it matches the conservative
+// nft-safe character class, else null. The shell-allowed netdev charset is
+// actually wider (kernel only enforces no '/' or NUL and a 15-byte cap), but
+// real-world OpenWrt interfaces never use anything beyond [A-Za-z0-9_.@-]:
+// "br-lan", "eth0", "eth0.100", "br-lan@if5", "pppoe-wan", "wg_home". Any
+// character outside this set in a UCI option is overwhelmingly a typo or an
+// injection attempt — both must be rejected before being baked into the
+// `iifname "..."` string literal, which has no escape sequences.
+function safe_iface(name) {
+	if (name == null || name === "") return null;
+	return match(name, /^[A-Za-z0-9_.@\-]+$/) ? name : null;
+}
+
+// filter_ifaces(ifaces) — drop entries that fail safe_iface() with a warning.
+// Centralised so both cmd_apply (UCI source) and cmd_emit (CLI argv source)
+// share the same guarantee before the list reaches the nft string.
+function filter_ifaces(ifaces) {
+	let out = [];
+	for (let n in ifaces) {
+		let s = safe_iface(n);
+		if (s != null) push(out, s);
+		else log_err(sprintf("nftables: invalid iface name %s, skipped", n));
+	}
+	return out;
+}
+
+// validate_port(p) — return integer in 1..65535 or null. Accepts strings
+// ("7893"), bare ints (7893), and rejects "", null, "abc", "99999", "0",
+// negative numbers. Callers must treat null as "skip tproxy emission".
+// Mirrors lib/outbound.uc::safe_port so both code paths agree on the rule.
+function validate_port(p) {
+	if (p == null || p === "") return null;
+	let n = (type(p) === "int") ? p : +p;
+	if (type(n) !== "int" || n < 1 || n > 65535) return null;
+	return n;
+}
+
 function build_ruleset(port, v4, v6, ifaces) {
-	// ifaces is an array of interface names.
+	// ifaces is an array of interface names. Filter once at the entrypoint
+	// so neither iface_expr below nor any future caller can leak an
+	// unsanitised name into the nft string.
+	ifaces = filter_ifaces(ifaces);
+
+	// Validate listen_port: emitting `tproxy ... :abc` or `:99999` produces
+	// an nft script that fails to load on apply. We'd rather skip the
+	// tproxy chain (and log) than poison the whole ruleset transaction.
+	let port_n = validate_port(port);
+	if (port_n == null) {
+		log_err(sprintf("nftables: invalid listen_port %s (need int 1..65535), skipping tproxy chain", port));
+	}
+
 	let iface_expr;
 	if (length(ifaces) === 0)      iface_expr = null;
 	else if (length(ifaces) === 1) iface_expr = sprintf('iifname "%s"', ifaces[0]);
@@ -182,8 +231,13 @@ function build_ruleset(port, v4, v6, ifaces) {
 
 	push(buf, "\tchain prerouting_tproxy {\n");
 	push(buf, "\t\ttype filter hook prerouting priority -149; policy accept;\n\n");
-	push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip  to 127.0.0.1:${port}\n`);
-	push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip6 to [::1]:${port}\n`);
+	// Only emit tproxy rules when the port validated. An empty chain still
+	// hooks prerouting but performs no action — safer than syntactically
+	// broken `tproxy ... :<garbage>` that aborts the whole nft transaction.
+	if (port_n != null) {
+		push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip  to 127.0.0.1:${port_n}\n`);
+		push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip6 to [::1]:${port_n}\n`);
+	}
 	push(buf, "\t}\n");
 
 	push(buf, "}\n");
@@ -198,11 +252,19 @@ function cmd_emit(port, v4, v6, iface_str) {
 // cmd_apply / cmd_remove come after build_ruleset because ucode does not
 // hoist function declarations (unlike JavaScript) — forward references
 // fail at call time with "left-hand side is not a function".
-// nft_delete_table_quiet() — drops the table if present; redirects stderr to
-// /dev/null so the "No such file or directory" noise from a missing table
-// doesn't reach procd logs / rpcd JSON output.
+// nft_delete_table_quiet() — drops the table if present.
+//
+// Uses argv form to match the file-wide convention (see system(["nft", "-f", tmp])
+// in cmd_apply) and avoid passing TABLE through /bin/sh re-parsing. The argv
+// form bypasses shell so the "2>/dev/null" suppression trick the old string
+// form used is no longer available: on first install nft will print
+// "Error: Could not process rule: No such file or directory" to stderr.
+// That message is benign (the whole point of this call is "best-effort
+// delete"), and procd / rpcd handlers already ignore stderr from helper
+// commands. Trading a single line of harmless noise for shell-injection
+// safety is the right call.
 function nft_delete_table_quiet() {
-	system(`nft delete table inet ${TABLE} 2>/dev/null`);
+	system(["nft", "delete", "table", "inet", TABLE]);
 }
 
 function cmd_remove() { nft_delete_table_quiet(); }
