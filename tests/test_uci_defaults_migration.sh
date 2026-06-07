@@ -405,4 +405,79 @@ uci -q get singbox-ui.ob_json.proxy_json >/dev/null 2>&1 \
 	&& { echo "FAIL: proxy_json should be absent after migration"; uci show singbox-ui.ob_json; exit 1; }
 echo "  PASS: proxy_json absent"
 
+# ---------------------------------------------------------------------------
+# Phase C2.1.2 — schema_version sentinel + idempotent re-run.
+# After any successful migration run, _meta.schema_version is set to the
+# script's CURRENT_SCHEMA. Re-running on the same config is a clean no-op
+# (sentinel doesn't drift, no crash).
+# ---------------------------------------------------------------------------
+echo "-- C2.1.2: schema_version sentinel set + idempotent re-run"
+ver=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
+[ "$ver" -ge 1 ] 2>/dev/null \
+    || { echo "FAIL: _meta.schema_version not set (got '$ver')"; uci show singbox-ui._meta 2>/dev/null; exit 1; }
+echo "  PASS: _meta.schema_version=$ver"
+
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+    >"$log" 2>&1 || { echo "FAIL: re-run crashed"; cat "$log"; exit 1; }
+ver2=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
+[ "$ver" = "$ver2" ] \
+    || { echo "FAIL: schema_version drifted on re-run: $ver -> $ver2"; exit 1; }
+echo "  PASS: migration is idempotent (schema_version stable on re-run)"
+
+# ---------------------------------------------------------------------------
+# Phase C2.1.3 — exactly one `uci commit singbox-ui` in the migration script.
+# All migrations must be in-memory edits; the single commit at the end is
+# crash-safe (no partial-state UCI files if SIGKILL hits mid-migration).
+# File-grep is more robust than runtime instrumentation against this build
+# of uci/busybox.
+# ---------------------------------------------------------------------------
+echo "-- C2.1.3: single uci commit in migration script"
+commits_in_file=$(grep -Ec '^[[:space:]]*uci[[:space:]]+(-q[[:space:]]+)?commit[[:space:]]+singbox-ui' \
+    luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui)
+[ "$commits_in_file" -eq 1 ] \
+    || { echo "FAIL: expected exactly 1 'uci commit singbox-ui' in script, got $commits_in_file"; exit 1; }
+echo "  PASS: single 'uci commit singbox-ui' in script ($commits_in_file)"
+
+# ---------------------------------------------------------------------------
+# Phase C2.1.2 — fresh install (no existing config) gets _meta initialised.
+# ---------------------------------------------------------------------------
+echo "-- C2.1.2: fresh install (no existing config) initialises _meta"
+rm -f "$CONFIG"
+touch "$CONFIG"
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+    >"$log" 2>&1 || { echo "FAIL: fresh-install migration crashed"; cat "$log"; exit 1; }
+ver_fresh=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
+[ "$ver_fresh" -ge 1 ] 2>/dev/null \
+    || { echo "FAIL: fresh install did not set _meta.schema_version (got '$ver_fresh')"; exit 1; }
+echo "  PASS: fresh install sets _meta.schema_version=$ver_fresh"
+
+# ---------------------------------------------------------------------------
+# Phase C2.1.2 — install already at CURRENT_SCHEMA: script exits early.
+# Seed schema_version=999 (well above any real CURRENT_SCHEMA); verify the
+# script does NOT touch the data (no legacy migrations fire, no commits).
+# ---------------------------------------------------------------------------
+echo "-- C2.1.2: install at-or-above CURRENT_SCHEMA exits early"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config _meta '_meta'
+	option schema_version '999'
+
+config fakeip 'fakeip'
+	option enabled '1'
+	list inet4_range '198.18.0.0/15'
+	list inet4_range '198.30.0.0/15'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+    >"$log" 2>&1 || { echo "FAIL: future-schema rerun crashed"; cat "$log"; exit 1; }
+# fakeip should NOT have been migrated to dns_server (it should still be a
+# fakeip section with a list inet4_range), proving early-exit fired.
+sec_type=$(uci -q get singbox-ui.fakeip 2>/dev/null || echo '')
+[ "$sec_type" = "fakeip" ] \
+    || { echo "FAIL: early-exit failed — fakeip section type is '$sec_type' (expected 'fakeip')"; uci show singbox-ui; exit 1; }
+echo "  PASS: schema_version >= CURRENT short-circuits all migrations"
+ver_kept=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
+[ "$ver_kept" = "999" ] \
+    || { echo "FAIL: schema_version was rewritten from 999 to '$ver_kept'"; exit 1; }
+echo "  PASS: schema_version (999) preserved on early-exit"
+
 echo "OK"
