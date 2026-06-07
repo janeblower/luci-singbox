@@ -16,8 +16,10 @@ reg.register({
 		  validate: "port", group: "basic" },
 		{ name: "server_password", type: "string", required: true,
 		  secret: true, group: "credentials", ui_label: "Password" },
-		// tls_* / transport_* / multiplex_* fields are surfaced via shared
-		// UI tabs and emitted via shared helpers in lib/outbound.uc.
+		// NOTE: tls_* / transport_* / multiplex_* fields are intentionally
+		// absent here. They are emitted by emit() via shared helpers in
+		// lib/outbound.uc, and will be merged into schema_dump() output in D2.
+		// Until then, reg.get("outbound","trojan").fields under-reports.
 	],
 	emit: function(s) {
 		let ob = require("outbound");
