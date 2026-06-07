@@ -375,6 +375,32 @@ sub-phase entries as work lands.
   infrastructure types `tproxy` / `tun` / `direct` plus the default
   warn-and-skip. Invariant documented in-line.
 
+### Added (Phase D — D2)
+
+- `singbox-ui::protocol_schema` RPC (read ACL) — returns the descriptor
+  projection from `lib/protocols/schema_dump.uc`. Response shape:
+  `{status, version:1, schema:{outbound:{...}, inbound:{...}}}`.
+  `emit` functions are explicitly dropped via a whitelist of declarative
+  keys (`name`, `type`, `required`, `default`, `validate`, `group`,
+  `ui_label`, `secret`, `values`, `item`).
+- `htdocs/.../lib/descriptor_form.js` — pure helper `applyDescriptor(s, kind, protoName, descriptor)`
+  that creates LuCI `s.taboption()` widgets from descriptor metadata and
+  wires depends on the right UCI key (`type` for outbound, `protocol` for inbound).
+- `tests/test_protocol_schema_rpc.sh`, `tests/test_descriptor_form_js.sh` —
+  RPC response shape + JS form-helper unit tests (node SKIP-aware).
+
+### Changed (Phase D — D2)
+
+- `tabs/outbounds.js` (-255 lines) and `tabs/inbounds.js` (-250 lines)
+  no longer hand-code per-protocol `depends('type'|'protocol', '<proto>')`
+  chains for descriptor-owned types. Each tab keeps its 6 `s.tab(...)`
+  declarations, its discriminator ListValue, and the non-proxy infrastructure
+  blocks; descriptor-owned fields come from a single `applyDescriptor` loop.
+- `main.js` augmented to call `protocol_schema` RPC in the `load()` phase
+  and populate `window.singboxUiSchemaCache` before render.
+- `test_view_modules_layout.sh` extended with depends-count guard: zero
+  hand-coded depends for any descriptor-owned proto allowed in either tab.
+
 ---
 
 ## [v0.1.0] — 2026-06-06
