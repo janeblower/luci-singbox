@@ -604,4 +604,177 @@ for keep in 'vl.example.com' 'out-rc' '443'; do
 done
 echo "  PASS: read_config preserves non-secret fields"
 
+# === D3.3: read RPCs honour reveal token ===
+# Set up a shared token store in a temp path so we control its content.
+reveal_tmp=$(mktemp)
+trap 'rm -f "$reveal_tmp"; rm -rf "$tmpdir"' EXIT
+
+# Helper: write a fresh valid token entry into the reveal store and echo the token.
+write_valid_token() {
+	tok=$(dd if=/dev/urandom bs=16 count=1 2>/dev/null | \
+		ucode -e 'let fs=require("fs"); let b=fs.stdin.read(16); let s=""; for(let i=0;i<length(b);i++) s+=sprintf("%02x",ord(b,i)); print(s);')
+	now_ts=$(date +%s)
+	printf '{"token":"%s","issued_ts":%s,"issued_by":null}\n' "$tok" "$now_ts" >"$reveal_tmp"
+	printf '%s' "$tok"
+}
+
+# Helper: write an expired token entry (issued_ts=1 → always expired).
+write_expired_token() {
+	printf '{"token":"abcabcabcabcabcabcabcabcabcabcab","issued_ts":1,"issued_by":null}\n' >"$reveal_tmp"
+	printf 'abcabcabcabcabcabcabcabcabcabcab'
+}
+
+echo "-- D3.3: list advertises token field for read_config / export_section / preview_config"
+list_out=$(run_h list)
+printf '%s\n' "$list_out" | je 'd.read_config.token != null' \
+	|| { echo "FAIL: list missing read_config.token; out=$list_out"; exit 1; }
+printf '%s\n' "$list_out" | je 'd.export_section.token != null' \
+	|| { echo "FAIL: list missing export_section.token; out=$list_out"; exit 1; }
+printf '%s\n' "$list_out" | je 'd.preview_config.token != null' \
+	|| { echo "FAIL: list missing preview_config.token; out=$list_out"; exit 1; }
+echo "  PASS: list advertises token field"
+
+# Shared secret config fixture.
+cat >"$tmpdir/reveal-test-config.json" <<'EOF'
+{
+  "outbounds": [{
+    "type": "vless",
+    "tag": "reveal-test",
+    "server": "reveal.example.com",
+    "server_port": 443,
+    "uuid": "11111111-2222-3333-4444-reveal-secret"
+  }]
+}
+EOF
+
+# --- read_config: no token → scrubbed ---
+echo "-- D3.3: read_config no token → scrubbed"
+out=$(printf '{}' | SINGBOX_CONFIG="$tmpdir/reveal-test-config.json" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call read_config)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: read_config no-token not ok; out=$out"; exit 1; }
+content=$(printf '%s\n' "$out" | jval 'd.content')
+printf '%s\n' "$content" | grep -q 'reveal-secret' && \
+	{ echo "FAIL: read_config no-token leaked secret"; exit 1; }
+printf '%s\n' "$content" | grep -Eq '"uuid"[[:space:]]*:[[:space:]]*"\*\*\*"' \
+	|| { echo "FAIL: read_config no-token missing *** marker"; exit 1; }
+echo "  PASS: read_config no token → scrubbed"
+
+# --- read_config: valid token → unscrubbed ---
+echo "-- D3.3: read_config valid token → unscrubbed"
+valid_tok=$(write_valid_token)
+out=$(printf '{"token":"%s"}' "$valid_tok" | SINGBOX_CONFIG="$tmpdir/reveal-test-config.json" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call read_config)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: read_config valid-token not ok; out=$out"; exit 1; }
+content=$(printf '%s\n' "$out" | jval 'd.content')
+printf '%s\n' "$content" | grep -q 'reveal-secret' \
+	|| { echo "FAIL: read_config valid-token secret not present; content=$content"; exit 1; }
+printf '%s\n' "$content" | grep -q '"uuid".*"\*\*\*"' && \
+	{ echo "FAIL: read_config valid-token still scrubbed; content=$content"; exit 1; } || true
+echo "  PASS: read_config valid token → unscrubbed"
+
+# --- read_config: expired/garbage token → scrubbed ---
+echo "-- D3.3: read_config expired token → scrubbed"
+stale_tok=$(write_expired_token)
+out=$(printf '{"token":"%s"}' "$stale_tok" | SINGBOX_CONFIG="$tmpdir/reveal-test-config.json" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call read_config)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: read_config expired-token not ok; out=$out"; exit 1; }
+content=$(printf '%s\n' "$out" | jval 'd.content')
+printf '%s\n' "$content" | grep -q 'reveal-secret' && \
+	{ echo "FAIL: read_config expired-token leaked secret"; exit 1; }
+printf '%s\n' "$content" | grep -Eq '"uuid"[[:space:]]*:[[:space:]]*"\*\*\*"' \
+	|| { echo "FAIL: read_config expired-token missing *** marker"; exit 1; }
+echo "  PASS: read_config expired token → scrubbed"
+
+# --- export_section: no token → scrubbed ---
+echo "-- D3.3: export_section no token → scrubbed"
+out=$(printf '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" \
+	EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call export_section)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: export_section no-token not ok; out=$out"; exit 1; }
+printf '%s\n' "$out" | je 'd.section.password == "***"' \
+	|| { echo "FAIL: export_section no-token secret not scrubbed; out=$out"; exit 1; }
+echo "  PASS: export_section no token → scrubbed"
+
+# --- export_section: valid token → unscrubbed ---
+echo "-- D3.3: export_section valid token → unscrubbed"
+valid_tok=$(write_valid_token)
+out=$(printf '{"kind":"inbound","name":"in_ss","token":"%s"}' "$valid_tok" | \
+	UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" \
+	EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call export_section)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: export_section valid-token not ok; out=$out"; exit 1; }
+printf '%s\n' "$out" | je 'd.section.password == "mysecret123"' \
+	|| { echo "FAIL: export_section valid-token secret still masked; out=$out"; exit 1; }
+echo "  PASS: export_section valid token → unscrubbed"
+
+# --- export_section: expired token → scrubbed ---
+echo "-- D3.3: export_section expired token → scrubbed"
+stale_tok=$(write_expired_token)
+out=$(printf '{"kind":"inbound","name":"in_ss","token":"%s"}' "$stale_tok" | \
+	UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" \
+	EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call export_section)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: export_section expired-token not ok; out=$out"; exit 1; }
+printf '%s\n' "$out" | je 'd.section.password == "***"' \
+	|| { echo "FAIL: export_section expired-token secret not scrubbed; out=$out"; exit 1; }
+echo "  PASS: export_section expired token → scrubbed"
+
+# --- preview_config: no token → scrubbed ---
+echo "-- D3.3: preview_config no token → scrubbed"
+# Stub ucode to write a config with secrets.
+cat >"$tmpdir/ucode" <<'EOF'
+#!/bin/sh
+: "${SINGBOX_CONFIG:?SINGBOX_CONFIG not set}"
+cat >"$SINGBOX_CONFIG" <<'JSON'
+{"outbounds":[{"type":"vless","tag":"prev-test","server":"prev.example.com","server_port":443,"uuid":"preview-secret-uuid"}]}
+JSON
+exit 0
+EOF
+chmod +x "$tmpdir/ucode"
+out=$(printf '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call preview_config)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: preview_config no-token not ok; out=$out"; exit 1; }
+content=$(printf '%s\n' "$out" | jval 'd.content')
+printf '%s\n' "$content" | grep -q 'preview-secret-uuid' && \
+	{ echo "FAIL: preview_config no-token leaked secret"; exit 1; }
+printf '%s\n' "$content" | grep -Eq '"uuid"[[:space:]]*:[[:space:]]*"\*\*\*"' \
+	|| { echo "FAIL: preview_config no-token missing *** marker"; exit 1; }
+echo "  PASS: preview_config no token → scrubbed"
+
+# --- preview_config: valid token → unscrubbed ---
+echo "-- D3.3: preview_config valid token → unscrubbed"
+valid_tok=$(write_valid_token)
+out=$(printf '{"token":"%s"}' "$valid_tok" | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call preview_config)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: preview_config valid-token not ok; out=$out"; exit 1; }
+content=$(printf '%s\n' "$out" | jval 'd.content')
+printf '%s\n' "$content" | grep -q 'preview-secret-uuid' \
+	|| { echo "FAIL: preview_config valid-token secret not present; content=$content"; exit 1; }
+echo "  PASS: preview_config valid token → unscrubbed"
+
+# --- preview_config: expired token → scrubbed ---
+echo "-- D3.3: preview_config expired token → scrubbed"
+stale_tok=$(write_expired_token)
+out=$(printf '{"token":"%s"}' "$stale_tok" | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" \
+	REVEAL_TOKEN_PATH="$reveal_tmp" run_h call preview_config)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: preview_config expired-token not ok; out=$out"; exit 1; }
+content=$(printf '%s\n' "$out" | jval 'd.content')
+printf '%s\n' "$content" | grep -q 'preview-secret-uuid' && \
+	{ echo "FAIL: preview_config expired-token leaked secret"; exit 1; }
+printf '%s\n' "$content" | grep -Eq '"uuid"[[:space:]]*:[[:space:]]*"\*\*\*"' \
+	|| { echo "FAIL: preview_config expired-token missing *** marker"; exit 1; }
+echo "  PASS: preview_config expired token → scrubbed"
+
 echo "OK"
