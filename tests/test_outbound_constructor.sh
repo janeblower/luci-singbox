@@ -631,4 +631,51 @@ else
 	exit 1
 fi
 
+# D1.7: anytls descriptor migration parity guard — byte-equal golden assertion.
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- anytls descriptor parity at1 full (D1.7 golden)"
+golden_at1='{ "type": "anytls", "tag": "at1", "server": "a.example.com", "server_port": 8443, "password": "secret", "idle_session_check_interval": "30s", "idle_session_timeout": "60s", "min_idle_session": 5, "tls": { "enabled": true, "server_name": "a.example.com" } }'
+actual_at1=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"at1", "server":"a.example.com", "server_port":"8443",
+          "server_password":"secret",
+          "anytls_idle_check_interval":"30s", "anytls_idle_timeout":"60s",
+          "anytls_min_idle_session":"5",
+          "security":"tls", "tls_server_name":"a.example.com" };
+printf("%J", ob.build_constructor_for(s, "anytls"));
+'
+)
+if [ "$actual_at1" = "$golden_at1" ]; then
+	echo "  PASS: anytls parity (full)"
+else
+	echo "FAIL: anytls parity (full)"
+	echo "  expected: $golden_at1"
+	echo "  actual:   $actual_at1"
+	exit 1
+fi
+
+# D1.7 minimal variant: confirms all idle_* conditionals skip and min_idle_session is absent.
+echo "-- anytls descriptor parity at2 minimal (D1.7 golden)"
+golden_at2='{ "type": "anytls", "tag": "at2", "server": "a.example.com", "server_port": 8443, "password": "secret", "tls": { "enabled": true, "server_name": "a.example.com" } }'
+actual_at2=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let ob = require("outbound");
+let s = { ".name":"at2", "server":"a.example.com", "server_port":"8443",
+          "server_password":"secret",
+          "security":"tls", "tls_server_name":"a.example.com" };
+printf("%J", ob.build_constructor_for(s, "anytls"));
+'
+)
+if [ "$actual_at2" = "$golden_at2" ]; then
+	echo "  PASS: anytls parity (minimal)"
+else
+	echo "FAIL: anytls parity (minimal)"
+	echo "  expected: $golden_at2"
+	echo "  actual:   $actual_at2"
+	exit 1
+fi
+
 echo "OK"

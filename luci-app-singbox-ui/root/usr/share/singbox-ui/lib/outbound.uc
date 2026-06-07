@@ -15,6 +15,7 @@ try { require("protocols.vless"); } catch (_) {}
 try { require("protocols.vmess"); } catch (_) {}
 try { require("protocols.hysteria2"); } catch (_) {}
 try { require("protocols.tuic"); } catch (_) {}
+try { require("protocols.anytls"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -107,15 +108,6 @@ function build_constructor_for(s, proto) {
 
 	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
 
-	if (proto === "anytls") {
-		if (length(s_opt(s, "server_password"))) ob.password = s.server_password;
-		if (length(s_opt(s, "anytls_idle_check_interval")))
-			ob.idle_session_check_interval = s.anytls_idle_check_interval;
-		if (length(s_opt(s, "anytls_idle_timeout")))
-			ob.idle_session_timeout = s.anytls_idle_timeout;
-		let m = s_num(s.anytls_min_idle_session);
-		if (m > 0) ob.min_idle_session = m;
-	}
 	// shadowsocks: no TLS in the protocol itself.
 	// trojan: descriptor-owned (D1.1) — fallback must not double-emit tls.
 	if (proto !== "shadowsocks" && proto !== "trojan") {
