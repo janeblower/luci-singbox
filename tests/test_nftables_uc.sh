@@ -136,10 +136,10 @@ echo "$out" | awk '/^[[:space:]]*set rs_/ {print $2}' | while read -r nm; do
         exit 1
     fi
 done
-echo "$out" | grep -qE '^[[:space:]]*set rs_[a-f0-9]{8}_0_v4' \
-    || { echo "FAIL: long name not hashed"; echo "$out"; exit 1; }
+echo "$out" | grep -qE '^[[:space:]]*set rs_[a-f0-9]{16}_0_v4' \
+    || { echo "FAIL: long name hash not 16 hex chars (G8)"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_${long_name}.json
-pass "long name hashed"
+pass "long name hashed (G8: 16-hex)"
 
 # ---- C2.1.4: listen_port validation in emit path ----
 # emit accepts PORT on argv; an out-of-range/non-int value must be rejected
@@ -183,5 +183,123 @@ grep -E 'system\(\["nft",[[:space:]]*"delete"' "$SCRIPT" >/dev/null \
 grep -F 'system(`nft delete table' "$SCRIPT" >/dev/null \
     && { echo "FAIL: shell-string form of nft delete table still present"; exit 1; }
 pass "nft delete in argv form"
+
+# ---- G6: no shell-invoked mktemp ----
+# fs.popen() in OpenWrt's ucode only accepts a shell string (argv form
+# returns null), so the consistency fix is to drop mktemp entirely and
+# compose the temp file path on the ucode side via /dev/urandom.
+echo "-- G6: tmp filename composed on the ucode side, no shell-invoked mktemp"
+grep -E 'fs\.popen.*mktemp' "$SCRIPT" >/dev/null \
+    && { echo "FAIL: G6 still spawns mktemp via fs.popen"; \
+         grep -n mktemp "$SCRIPT"; exit 1; }
+grep -F 'system(`mktemp' "$SCRIPT" >/dev/null \
+    && { echo "FAIL: G6 still spawns mktemp via shell-string system()"; exit 1; }
+pass "G6: no shell-invoked mktemp"
+
+# ---- G1: fakeip range injection via cmd_emit V4/V6 argv ----
+# log_err echoes the rejected input to stderr — we only care about stdout
+# (the nft script that `nft -f` would consume), so 2>/dev/null is intentional.
+echo "-- G1: malicious v4 fakeip range is sanitised away"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 \
+    '198.18.0.0/15 }; chain x { type filter hook prerouting priority 0;}; #' \
+    "" "br-lan" 2>/dev/null) || true
+echo "$out" | grep -q 'chain x' \
+    && { echo "FAIL: G1 v4 injection produced extra chain in nft script"; echo "$out"; exit 1; }
+echo "$out" | grep -F '}; chain' >/dev/null \
+    && { echo "FAIL: G1 poisoned daddr line in nft script"; echo "$out"; exit 1; }
+echo "$out" | grep -F 'daddr {' >/dev/null \
+    && { echo "FAIL: G1 daddr clause should be entirely omitted when v4 invalid"; echo "$out"; exit 1; }
+pass "G1: malicious v4 fakeip rejected"
+
+echo "-- G1: malicious v6 fakeip range is sanitised away"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "" \
+    'fc00::/7 }; insert rule inet filter forward drop; #' "br-lan" 2>/dev/null) || true
+echo "$out" | grep -q 'insert rule' \
+    && { echo "FAIL: G1 v6 injection produced extra rule in nft script"; echo "$out"; exit 1; }
+pass "G1: malicious v6 fakeip rejected"
+
+echo "-- G1: clean v4 fakeip range still works"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
+echo "$out" | grep -q "daddr { 198.18.0.0/15 }" || fail "G1: clean v4 broken"
+pass "G1: clean v4 fakeip preserved"
+
+echo "-- G1: comma-separated CIDR list still works"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 \
+    "198.18.0.0/15, 10.0.0.0/8" "" "br-lan")
+echo "$out" | grep -q "daddr { 198.18.0.0/15, 10.0.0.0/8 }" \
+    || { echo "FAIL: G1 comma-list broken"; echo "$out"; exit 1; }
+pass "G1: comma-separated CIDRs accepted"
+
+# ---- G2: rs_*.json ip_cidr injection ----
+echo "-- G2: malicious ip_cidr in rs_*.json is dropped"
+cat >/tmp/singbox-ui/rs_uctest_g2.json <<'JSON'
+{ "rules": [ { "ip_cidr": ["1.1.1.0/24 }; insert rule inet filter forward drop; #"] } ] }
+JSON
+out=$(emit)
+echo "$out" | grep -q 'insert rule' \
+    && { echo "FAIL: G2 nft injection via ip_cidr"; echo "$out"; exit 1; }
+echo "$out" | grep -F '}; insert' >/dev/null \
+    && { echo "FAIL: G2 poisoned elements body"; echo "$out"; exit 1; }
+rm /tmp/singbox-ui/rs_uctest_g2.json
+pass "G2: malicious ip_cidr rejected"
+
+echo "-- G2: clean CIDRs in rs_*.json still emitted"
+cat >/tmp/singbox-ui/rs_uctest_g2clean.json <<'JSON'
+{ "rules": [ { "ip_cidr": ["1.1.1.0/24", "8.8.8.8/32"] } ] }
+JSON
+out=$(emit)
+echo "$out" | grep -q "elements = { 1.1.1.0/24,8.8.8.8/32 }" \
+    || { echo "FAIL: G2 clean elements broken"; echo "$out"; exit 1; }
+rm /tmp/singbox-ui/rs_uctest_g2clean.json
+pass "G2: clean ip_cidr preserved"
+
+# ---- G3: warn when more than one enabled tproxy inbound is present ----
+echo "-- G3: multiple enabled tproxy inbounds produce a warning"
+UCI_DIR="$TMPDIR/uci-g3-multi"
+mkdir -p "$UCI_DIR"
+# Provide a stub nft on PATH so cmd_apply doesn't fail before the warning.
+mkdir -p "$TMPDIR/bin-g3"
+cat >"$TMPDIR/bin-g3/nft" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$TMPDIR/bin-g3/nft"
+cat >"$UCI_DIR/singbox-ui" <<'EOF'
+config inbound 'tp1'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
+
+config inbound 'tp2'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7894'
+EOF
+# shellcheck disable=SC2086
+PATH="$TMPDIR/bin-g3:$PATH" UCI_CONFIG_DIR="$UCI_DIR" \
+    "$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply 2>"$TMPDIR/g3-multi.err" || true
+grep -q 'multiple enabled tproxy' "$TMPDIR/g3-multi.err" \
+    || { echo "FAIL: G3 missing multi-tproxy warning"; cat "$TMPDIR/g3-multi.err"; exit 1; }
+pass "G3: multi-tproxy warning emitted"
+
+echo "-- G3: a single enabled tproxy inbound does not warn"
+UCI_DIR="$TMPDIR/uci-g3-one"
+mkdir -p "$UCI_DIR"
+cat >"$UCI_DIR/singbox-ui" <<'EOF'
+config inbound 'tp1'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen_port '7893'
+EOF
+# shellcheck disable=SC2086
+PATH="$TMPDIR/bin-g3:$PATH" UCI_CONFIG_DIR="$UCI_DIR" \
+    "$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply 2>"$TMPDIR/g3-one.err" || true
+grep -q 'multiple enabled tproxy' "$TMPDIR/g3-one.err" \
+    && { echo "FAIL: G3 false-positive on single tproxy"; cat "$TMPDIR/g3-one.err"; exit 1; }
+pass "G3: single tproxy does not warn"
 
 echo "OK"

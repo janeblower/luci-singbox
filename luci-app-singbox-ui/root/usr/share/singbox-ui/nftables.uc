@@ -23,14 +23,23 @@ function log_err(msg) { warn(msg + "\n"); }
 // so there is exactly one implementation. See lib/helpers.uc for the body.
 const fnv1a32 = helpers.fnv1a32;
 
+// name_hash16(name) — 16-hex composite of two fnv1a32 digests over
+// independent inputs (the raw name and a salted form). Cuts the
+// pigeon-hole collision probability of the prior 8-hex form from
+// ~2^-32 to ~2^-64 — a 4-billion-fold safety margin, eliminating
+// realistic same-set-name collisions across renamed rulesets.
+function name_hash16(name) {
+	return fnv1a32(name) + fnv1a32(`g8|${name}`);
+}
+
 // set_name_for(name, idx, family) — nft set names are capped at 31 bytes.
 // When the canonical `rs_${name}_${idx}_${family}` exceeds that, replace
-// the user-provided name segment with an 8-hex-char FNV-1a hash. The hash
-// is deterministic so set names stay stable across runs.
+// the user-provided name segment with a 16-hex-char composite FNV-1a
+// hash. The hash is deterministic so set names stay stable across runs.
 function set_name_for(name, idx, family) {
 	let canon = `rs_${name}_${idx}_${family}`;
 	if (length(canon) <= 31) return canon;
-	return `rs_${fnv1a32(name)}_${idx}_${family}`;
+	return `rs_${name_hash16(name)}_${idx}_${family}`;
 }
 
 // read_json(path) — parse a JSON file. Returns null on missing file or parse
@@ -49,6 +58,43 @@ function read_json(path) {
 function classify_cidr(c) {
 	if (c == null || c === "") return null;
 	return index(c, ":") >= 0 ? "v6" : "v4";
+}
+
+// safe_cidr(family, v) — return v unchanged if it parses as a syntactically
+// valid CIDR (or bare address) in the requested family, else null. Conservative
+// regex: rejects ANY character that could escape the `{ … }` element body
+// in the emitted nft script — braces, semicolons, hashes, backslashes,
+// quotes, whitespace inside the literal. Centralised so both the fakeip
+// path (UCI dns_server.inet[46]_range, see G1) and the rule-set path
+// (rs_*.json ip_cidr entries, see G2) share one validator.
+function safe_cidr(family, v) {
+	if (v == null) return null;
+	let t = trim(`${v}`);
+	if (t === "") return null;
+	if (family === "v4")
+		return match(t, /^[0-9]{1,3}(\.[0-9]{1,3}){3}(\/[0-9]{1,2})?$/) ? t : null;
+	if (family === "v6")
+		return match(t, /^[0-9A-Fa-f:]+(\/[0-9]{1,3})?$/) ? t : null;
+	return null;
+}
+
+// safe_cidr_list(family, csv) — sanitise a comma-separated CIDR list from
+// the UCI dns_server.inet[46]_range option. Each element is independently
+// validated; anything that fails safe_cidr is dropped with a log_err. The
+// returned string is interpolated verbatim into `daddr { … }`, so the
+// rejoin uses ", " to preserve the existing test-asserted output shape.
+function safe_cidr_list(family, csv) {
+	if (csv == null) return "";
+	let s = trim(`${csv}`);
+	if (s === "") return "";
+	let parts = split(s, ",");
+	let out = [];
+	for (let p in parts) {
+		let safe = safe_cidr(family, p);
+		if (safe) push(out, safe);
+		else log_err(sprintf("nftables: dropping invalid %s CIDR %s", family, p));
+	}
+	return join(", ", out);
 }
 
 // load_rs_rules() — scan /tmp/singbox-ui/rs_*.json and return a list of
@@ -81,8 +127,17 @@ function load_rs_rules() {
 			let v6 = [];
 			for (let c in helpers.as_array(rule.ip_cidr)) {
 				let fam = classify_cidr(c);
-				if (fam === "v4") push(v4, c);
-				else if (fam === "v6") push(v6, c);
+				if (fam == null) continue;
+				// G2: validate each CIDR before it lands in `elements = { … }`.
+				// A poisoned rs_*.json (MITM-able download) could otherwise
+				// inject arbitrary nft via `…/24 }; insert rule …; #`.
+				let safe = safe_cidr(fam, c);
+				if (safe == null) {
+					log_err(sprintf("nftables: dropping invalid %s CIDR %s in rs_%s.json", fam, c, name));
+					continue;
+				}
+				if (fam === "v4") push(v4, safe);
+				else push(v6, safe);
 			}
 			let network = rule.network ?? "";
 			let ports = [];
@@ -182,6 +237,14 @@ function build_ruleset(port, v4, v6, ifaces) {
 	// so neither iface_expr below nor any future caller can leak an
 	// unsanitised name into the nft string.
 	ifaces = filter_ifaces(ifaces);
+
+	// G1: sanitise fakeip CIDR ranges before they are interpolated into
+	// `daddr { … }`. Source is `dns_server.inet[46]_range` which the LuCI
+	// UI marks as cidr4/cidr6 but UCI bypasses client-side validation.
+	// Apply here so both cmd_apply (UCI source) and cmd_emit (CLI argv
+	// source) share one guarantee — mirrors the safe_iface convention.
+	v4 = safe_cidr_list("v4", v4);
+	v6 = safe_cidr_list("v6", v6);
 
 	// Validate listen_port: emitting `tproxy ... :abc` or `:99999` produces
 	// an nft script that fails to load on apply. We'd rather skip the
@@ -283,6 +346,22 @@ function first_nft_tproxy(cur) {
 	return found;
 }
 
+// count_nft_tproxy(cur) — number of enabled inbounds qualifying for the
+// nft tproxy chain. Used by cmd_apply to warn when the user has more
+// than one such inbound: the nft chain points at `first_nft_tproxy`'s
+// port only, so any extras silently lose TPROXY traffic even though
+// sing-box itself binds their listen_port.
+function count_nft_tproxy(cur) {
+	let n = 0;
+	cur.foreach("singbox-ui", "inbound", function(s) {
+		if (s.enabled === "0") return;
+		if (s.protocol !== "tproxy") return;
+		if (s.nft_rules === "0") return;
+		n++;
+	});
+	return n;
+}
+
 // any_nft_transparent(cur) — true if a tproxy or tun inbound requests nft rules.
 function any_nft_transparent(cur) {
 	let yes = false;
@@ -309,7 +388,49 @@ function first_fakeip(cur) {
 	return r;
 }
 
+// rand_hex(n) — n random bytes from /dev/urandom, hex-encoded. Returns
+// null when /dev/urandom is unavailable (containers/test envs without
+// the device). Pure file I/O, no shell.
+function rand_hex(n) {
+	let fd = fs.open("/dev/urandom", "r");
+	if (!fd) return null;
+	let raw = fd.read(n);
+	fd.close();
+	if (!raw || length(raw) === 0) return null;
+	let h = "";
+	for (let i = 0; i < length(raw); i++) h += sprintf("%02x", ord(raw, i));
+	return h;
+}
+
+// make_nft_tmp() — compose a unique tmp path inside TMPDIR without
+// invoking mktemp via fs.popen. fs.popen() in OpenWrt's ucode does not
+// accept argv-form (probed; returns null), so the only way to drop
+// the shell from this path is to generate the name ourselves. Prefers
+// /dev/urandom for collision resistance; falls back to time()+slot
+// when the device is missing (test envs).
+function make_nft_tmp() {
+	fs.mkdir(TMPDIR, 0o755);
+	let suffix = rand_hex(6);
+	if (suffix != null) return `${TMPDIR}/nftables.${suffix}`;
+	let base = time();
+	for (let i = 0; i < 64; i++) {
+		let p = sprintf("%s/nftables.%d.%d", TMPDIR, base, i);
+		if (fs.stat(p) == null) return p;
+	}
+	return null;
+}
+
 function cmd_apply(cur) {
+	// G3: warn if more than one enabled tproxy inbound asks for nft
+	// rules — only the first contributes to the tproxy chain, any
+	// extras silently lose TPROXY traffic. We don't drop the extras
+	// (sing-box still binds their ports); the warning surfaces the
+	// inconsistency to the operator.
+	let n_tp = count_nft_tproxy(cur);
+	if (n_tp > 1) {
+		log_err(sprintf("nftables: %d enabled tproxy inbounds with nft_rules set; using only the first — multiple enabled tproxy inbounds are unsupported", n_tp));
+	}
+
 	let tp = first_nft_tproxy(cur);
 	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : "7893";
 	let ifaces = tp ? helpers.as_array(tp.interface) : [];
@@ -328,22 +449,10 @@ function cmd_apply(cur) {
 
 	let ruleset = build_ruleset(port, v4, v6, ifaces);
 
-	// Atomic replace handled inside the emitted ruleset (add+delete+table).
-	// Write to a temp file and `nft -f path`. Avoids fs.popen write-mode
-	// quirks across ucode versions.
-	fs.mkdir(TMPDIR, 0o755);
-
-	// Use mktemp so concurrent applies (cron + UI button) don't clobber
-	// each other's scratch file mid-write.
-	let proc = fs.popen(`mktemp -p ${TMPDIR} nftables.XXXXXX`, "r");
-	if (!proc) {
-		log_err("nftables: mktemp failed to spawn");
-		return 1;
-	}
-	let tmp = trim(proc.read("all") || "");
-	proc.close();
-	if (length(tmp) === 0) {
-		log_err("nftables: mktemp returned empty path");
+	// G6: tmp file path composed on the ucode side — no shell, no mktemp.
+	let tmp = make_nft_tmp();
+	if (tmp == null) {
+		log_err("nftables: could not allocate a tmp file path");
 		return 1;
 	}
 
