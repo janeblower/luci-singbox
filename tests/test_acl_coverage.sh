@@ -21,7 +21,7 @@ fi
 #   - scrubs secrets on any returned config/section content (via lib/scrub.uc)
 # If you add a new RPC method to read.ubus, also add it here and prove the
 # above invariants hold in the handler.
-SAFE_READ_METHODS="status status_detail read_config clash_get export_section preview_config"
+SAFE_READ_METHODS="status status_detail read_config clash_get export_section preview_config protocol_schema"
 
 # Whitelist of methods expected in write.ubus.
 EXPECTED_WRITE_METHODS="generate nftables restart refresh clash_mutate"
