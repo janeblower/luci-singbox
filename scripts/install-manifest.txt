@@ -39,6 +39,7 @@ root/usr/share/singbox-ui/lib/protocols/shadowsocks.uc	usr/share/singbox-ui/lib/
 root/usr/share/singbox-ui/lib/protocols/ssh.uc	usr/share/singbox-ui/lib/protocols/ssh.uc	data
 root/usr/share/singbox-ui/lib/protocols/trojan.uc	usr/share/singbox-ui/lib/protocols/trojan.uc	data
 root/usr/share/singbox-ui/lib/protocols/vless.uc	usr/share/singbox-ui/lib/protocols/vless.uc	data
+root/usr/share/singbox-ui/lib/protocols/vmess.uc	usr/share/singbox-ui/lib/protocols/vmess.uc	data
 root/usr/share/singbox-ui/lib/route.uc	usr/share/singbox-ui/lib/route.uc	data
 root/usr/share/singbox-ui/lib/ruleset.uc	usr/share/singbox-ui/lib/ruleset.uc	data
 root/usr/share/singbox-ui/lib/scrub.uc	usr/share/singbox-ui/lib/scrub.uc	data
