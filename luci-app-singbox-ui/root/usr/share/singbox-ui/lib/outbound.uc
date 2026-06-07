@@ -96,25 +96,13 @@ function build_multiplex(s) {
 }
 
 function build_constructor_for(s, proto) {
-	// C3.1: consult protocol registry first. If a descriptor is registered
-	// for ("outbound", proto), use its emit() and skip the legacy switch
-	// entirely. Wrapped in try/catch so registry loading errors never
-	// break the legacy code path.
-	try {
-		let reg = require("protocols.registry");
-		let d = reg.get("outbound", proto);
-		if (d != null) return d.emit(s);
-	} catch (_) { /* registry not available — fall through to legacy switch */ }
-
-	let ob = { type: proto, tag: s[".name"], server: s_opt(s, "server"), server_port: s_num(s.server_port) };
-
-	// shadowsocks: no TLS in the protocol itself.
-	// trojan: descriptor-owned (D1.1) — fallback must not double-emit tls.
-	if (proto !== "shadowsocks" && proto !== "trojan") {
-		let tls = build_tls_client(s, proto);
-		if (tls) ob.tls = tls;
-	}
-	return ob;
+	// D1.8: all proxy outbounds are descriptor-owned (lib/protocols/*.uc).
+	// Reaching the error path means proto is unknown — config invalid.
+	let reg = require("protocols.registry");
+	let d = reg.get("outbound", proto);
+	if (d != null) return d.emit(s);
+	require("log").log_event("error", "outbound.unknown_proto", { proto: proto });
+	return { type: proto, tag: s[".name"] };  // sing-box check rejects this
 }
 
 // drop_ctrl(s) — drop bytes < 0x20 from a string. Used to scrub already-

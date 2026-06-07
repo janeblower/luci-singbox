@@ -126,6 +126,20 @@ if ! grep -q 'style\.css' scripts/install-manifest.txt; then
   fail=1
 fi
 
+# D1.8: build_constructor_for must remain dispatcher-only.
+# Count total lines from `function build_constructor_for` to the next `^function`.
+OUTBOUND_UC="luci-app-singbox-ui/root/usr/share/singbox-ui/lib/outbound.uc"
+end_marker=$(grep -n '^function ' "$OUTBOUND_UC" | \
+             awk -F: '$2 ~ /build_constructor_for/{found=1; next} found{print $1; exit}')
+start=$(grep -n '^function build_constructor_for' "$OUTBOUND_UC" | cut -d: -f1)
+total=$((end_marker - start))
+if [ "$total" -gt 14 ]; then
+  echo "FAIL build_constructor_for region too large ($total lines, expected ≤14)"
+  fail=1
+else
+  echo "PASS build_constructor_for dispatcher region size ($total lines)"
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi
