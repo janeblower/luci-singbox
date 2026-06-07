@@ -9,7 +9,6 @@
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.lib.rpc as SbRpc';
 
-var loadOutboundList = SbCommon.loadOutboundList;
 var addRenameField   = SbCommon.addRenameField;
 
 var SB_INBOUND_PROTOCOLS = [
@@ -326,16 +325,12 @@ function buildInboundsMap() {
 	o.depends({ protocol: 'trojan', security: 'tls' });
 	o.depends('protocol', 'hysteria2');
 	o.validate = function (sid, value) {
-		// LuCI DynamicList passes either the current scalar input or, when
-		// the user has typed nothing, an empty string. Treat empty input as
-		// pending edit (allow) — only block when there are committed values
-		// and *all* are blank. The list value array lives on this.formvalue.
+		// Per spec C2.2.3: empty ALPN is valid (sing-box picks defaults).
+		// We only validate the protocol identifiers; LuCI DynamicList passes
+		// the current scalar input here — read the list off this.formvalue.
 		var fv;
 		try { fv = this.formvalue(sid); } catch (e) { fv = value; }
-		if (fv === null || fv === undefined) return true;
-		if (Array.isArray(fv) && fv.length === 0) return true;
-		if (typeof fv === 'string' && fv === '') return true;
-		return SbValidators.isAlpnNonEmpty(fv);
+		return SbValidators.validateAlpn(fv);
 	};
 
 	// Reality specifics (vless)
@@ -359,10 +354,17 @@ function buildInboundsMap() {
 	o.depends('protocol', 'vless');
 	o.depends('protocol', 'vmess');
 	o.depends('protocol', 'trojan');
+	// Transport-typed fields must depend on BOTH the inbound protocol AND
+	// the transport selection — otherwise they leaked onto protocols that
+	// don't expose a transport field (spec C2.2.2).
 	o = s.option(form.Value, 'transport_path', _('Transport path'));
 	o.modalonly = true; o.placeholder = '/';
-	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
-	o.depends({ transport: 'xhttp' }); o.depends({ transport: 'http' });
+	['vless','vmess','trojan'].forEach(function (p) {
+		o.depends({ protocol: p, transport: 'ws' });
+		o.depends({ protocol: p, transport: 'httpupgrade' });
+		o.depends({ protocol: p, transport: 'xhttp' });
+		o.depends({ protocol: p, transport: 'http' });
+	});
 	o.validate = function (sid, value) {
 		// Only ws transport mandates a non-empty path; the validator returns
 		// true for every other transport. Read the live transport selection
@@ -374,10 +376,15 @@ function buildInboundsMap() {
 	};
 	o = s.option(form.Value, 'transport_host', _('Transport host'));
 	o.modalonly = true;
-	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
+	['vless','vmess','trojan'].forEach(function (p) {
+		o.depends({ protocol: p, transport: 'ws' });
+		o.depends({ protocol: p, transport: 'httpupgrade' });
+	});
 	o = s.option(form.Value, 'transport_service_name', _('gRPC service name'));
 	o.modalonly = true;
-	o.depends({ transport: 'grpc' });
+	['vless','vmess','trojan'].forEach(function (p) {
+		o.depends({ protocol: p, transport: 'grpc' });
+	});
 
 	o = s.option(form.ListValue, 'transport_xhttp_mode', _('XHTTP mode'));
 	o.modalonly = true;

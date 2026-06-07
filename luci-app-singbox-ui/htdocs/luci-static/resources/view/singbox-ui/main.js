@@ -77,7 +77,10 @@ return view.extend({
 				generalNode
 			]);
 
-			setTimeout(function () {
+			// Defer tab wiring until after the DOM is attached. A microtask
+			// (Promise.resolve().then) runs before the next macrotask without
+			// the 0-delay flicker setTimeout introduced (spec C2.2.10).
+			Promise.resolve().then(function () {
 				SbCommon.wireTabs(root, '.sb-subtab-header', {
 					outbounds:  outboundsNode,
 					rulesets:   rulesetsNode,
@@ -98,7 +101,7 @@ return view.extend({
 					});
 				});
 				SbStatusPanel.renderStatusPanel(statusHolder);
-			}, 0);
+			});
 
 			return root;
 		});
