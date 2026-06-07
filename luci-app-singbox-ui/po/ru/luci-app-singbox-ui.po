@@ -4,7 +4,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-07 18:45+0700\n"
+"POT-Creation-Date: 2026-06-07 18:49+0700\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
@@ -288,13 +288,11 @@ msgstr "TLS"
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:36
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:109
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:364
 msgid "Transport"
 msgstr "Транспорт"
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:37
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:110
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:420
 msgid "Multiplex"
 msgstr "Мультиплекс"
 
@@ -489,231 +487,72 @@ msgstr "Протокол"
 msgid "Listen address"
 msgstr "Адрес прослушивания"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:159
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:154
 msgid "Listen port"
 msgstr "Порт прослушивания"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:174
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:164
 msgid "Network"
 msgstr "Сеть"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:176
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:166
 msgid "Both (tcp+udp)"
 msgstr "Оба (tcp+udp)"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:182
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:192
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:171
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:181
 msgid "Hijack DNS"
 msgstr "Перехват DNS"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:186
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:175
 msgid "Auto-emits a hijack-dns route rule for this inbound."
 msgstr ""
 "Автоматически создаёт правило маршрутизации hijack-dns для этого inbound."
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:189
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:178
 msgid "Interfaces (nft)"
 msgstr "Интерфейсы (nft)"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:195
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:184
 msgid "TCP Fast Open"
 msgstr "TCP Fast Open"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:198
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:187
 msgid "UDP fragment"
 msgstr "UDP-фрагментация"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:203
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:192
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:42
 msgid "Create nftables rules"
 msgstr "Создавать правила nftables"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:209
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:198
 msgid "TUN interface name"
 msgstr "Имя TUN-интерфейса"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:212
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:201
 msgid "IPv4 address"
 msgstr "Адрес IPv4"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:215
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:204
 msgid "IPv6 address"
 msgstr "Адрес IPv6"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:218
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:207
 msgid "MTU"
 msgstr "MTU"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:221
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:210
 msgid "Stack"
 msgstr "Стек"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:225
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:214
 msgid "Auto route"
 msgstr "Автомаршрутизация"
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:228
+#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:217
 msgid "Strict route"
 msgstr "Строгая маршрутизация"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:233
-msgid "Method"
-msgstr "Метод"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:242
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:276
-msgid "Users"
-msgstr "Пользователи"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:245
-msgid ""
-"Multi-user shadowsocks. One entry per user, formatted as \"name:password\". "
-"When non-empty, the single-user password above is ignored."
-msgstr ""
-"Многопользовательский shadowsocks. По одной записи на пользователя в формате "
-"\"name:password\". Если список не пуст, одиночный пароль выше игнорируется."
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:250
-msgid "UUID"
-msgstr "UUID"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:258
-msgid "Password"
-msgstr "Пароль"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:263
-msgid "Flow"
-msgstr "Flow"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:264
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:291
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:306
-msgid "None"
-msgstr "Нет"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:267
-msgid "Alter ID"
-msgstr "Alter ID"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:279
-msgid ""
-"Multi-user list. Each entry colon-separated: VMess \"name:uuid\" or \"name:"
-"uuid:alterId\"; VLESS \"name:uuid\" or \"name:uuid:flow\" (use \"none\" or "
-"omit to skip flow). When non-empty, the single-user UUID / Alter ID / Flow "
-"above are ignored."
-msgstr ""
-"Список пользователей. Записи через двоеточие: VMess \"name:uuid\" или \"name:"
-"uuid:alterId\"; VLESS \"name:uuid\" или \"name:uuid:flow\" (укажите \"none\" "
-"или опустите, чтобы пропустить flow). Если список не пуст, одиночные UUID / "
-"Alter ID / Flow выше игнорируются."
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:290
-msgid "Obfuscation"
-msgstr "Обфускация"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:294
-msgid "Obfs password"
-msgstr "Пароль obfs"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:297
-msgid "Up Mbps"
-msgstr "Восх. Мбит/с"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:300
-msgid "Down Mbps"
-msgstr "Нисх. Мбит/с"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:305
-msgid "Security"
-msgstr "Безопасность"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:311
-msgid "TLS server name"
-msgstr "TLS server name (SNI)"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:322
-msgid "Certificate path"
-msgstr "Путь к сертификату"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:328
-msgid "Key path"
-msgstr "Путь к ключу"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:334
-msgid "ALPN"
-msgstr "ALPN"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:350
-msgid "Reality private key"
-msgstr "Приватный ключ reality"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:353
-msgid "Reality short ID"
-msgstr "Reality short ID"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:356
-msgid "Handshake server"
-msgstr "Сервер handshake"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:359
-msgid "Handshake server port"
-msgstr "Порт сервера handshake"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:373
-msgid "Transport path"
-msgstr "Путь транспорта"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:390
-msgid "Transport host"
-msgstr "Host транспорта"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:396
-msgid "gRPC service name"
-msgstr "Имя сервиса gRPC"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:402
-msgid "XHTTP mode"
-msgstr "Режим XHTTP"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:413
-msgid "HTTP hosts"
-msgstr "HTTP-хосты"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:427
-msgid "Multiplex protocol"
-msgstr "Протокол мультиплекса"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:433
-msgid "Multiplex max connections"
-msgstr "Макс. соединений мультиплекса"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:437
-msgid "Multiplex min streams"
-msgstr "Мин. потоков мультиплекса"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:441
-msgid "Multiplex max streams"
-msgstr "Макс. потоков мультиплекса"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:445
-msgid "Multiplex padding"
-msgstr "Padding мультиплекса"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:450
-msgid "Masquerade URL"
-msgstr "URL маскировки"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:457
-msgid "Cipher"
-msgstr "Шифр"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:464
-msgid "TLS insecure (skip verify)"
-msgstr "TLS insecure (без проверки сертификата)"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:471
-msgid "uTLS fingerprint"
-msgstr "Отпечаток uTLS"
 
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:10
 msgid "Remote (.srs/.json) or local rule-sets, referenced by route rules."
@@ -980,6 +819,127 @@ msgstr "Неизвестное значение congestion_control:"
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:102
 msgid "sing-box may reject it at runtime."
 msgstr "sing-box может отклонить его во время выполнения."
+
+#~ msgid "Method"
+#~ msgstr "Метод"
+
+#~ msgid "Users"
+#~ msgstr "Пользователи"
+
+#~ msgid ""
+#~ "Multi-user shadowsocks. One entry per user, formatted as \"name:"
+#~ "password\". When non-empty, the single-user password above is ignored."
+#~ msgstr ""
+#~ "Многопользовательский shadowsocks. По одной записи на пользователя в "
+#~ "формате \"name:password\". Если список не пуст, одиночный пароль выше "
+#~ "игнорируется."
+
+#~ msgid "UUID"
+#~ msgstr "UUID"
+
+#~ msgid "Password"
+#~ msgstr "Пароль"
+
+#~ msgid "Flow"
+#~ msgstr "Flow"
+
+#~ msgid "None"
+#~ msgstr "Нет"
+
+#~ msgid "Alter ID"
+#~ msgstr "Alter ID"
+
+#~ msgid ""
+#~ "Multi-user list. Each entry colon-separated: VMess \"name:uuid\" or "
+#~ "\"name:uuid:alterId\"; VLESS \"name:uuid\" or \"name:uuid:flow\" (use "
+#~ "\"none\" or omit to skip flow). When non-empty, the single-user UUID / "
+#~ "Alter ID / Flow above are ignored."
+#~ msgstr ""
+#~ "Список пользователей. Записи через двоеточие: VMess \"name:uuid\" или "
+#~ "\"name:uuid:alterId\"; VLESS \"name:uuid\" или \"name:uuid:"
+#~ "flow\" (укажите \"none\" или опустите, чтобы пропустить flow). Если "
+#~ "список не пуст, одиночные UUID / Alter ID / Flow выше игнорируются."
+
+#~ msgid "Obfuscation"
+#~ msgstr "Обфускация"
+
+#~ msgid "Obfs password"
+#~ msgstr "Пароль obfs"
+
+#~ msgid "Up Mbps"
+#~ msgstr "Восх. Мбит/с"
+
+#~ msgid "Down Mbps"
+#~ msgstr "Нисх. Мбит/с"
+
+#~ msgid "Security"
+#~ msgstr "Безопасность"
+
+#~ msgid "TLS server name"
+#~ msgstr "TLS server name (SNI)"
+
+#~ msgid "Certificate path"
+#~ msgstr "Путь к сертификату"
+
+#~ msgid "Key path"
+#~ msgstr "Путь к ключу"
+
+#~ msgid "ALPN"
+#~ msgstr "ALPN"
+
+#~ msgid "Reality private key"
+#~ msgstr "Приватный ключ reality"
+
+#~ msgid "Reality short ID"
+#~ msgstr "Reality short ID"
+
+#~ msgid "Handshake server"
+#~ msgstr "Сервер handshake"
+
+#~ msgid "Handshake server port"
+#~ msgstr "Порт сервера handshake"
+
+#~ msgid "Transport path"
+#~ msgstr "Путь транспорта"
+
+#~ msgid "Transport host"
+#~ msgstr "Host транспорта"
+
+#~ msgid "gRPC service name"
+#~ msgstr "Имя сервиса gRPC"
+
+#~ msgid "XHTTP mode"
+#~ msgstr "Режим XHTTP"
+
+#~ msgid "HTTP hosts"
+#~ msgstr "HTTP-хосты"
+
+#~ msgid "Multiplex protocol"
+#~ msgstr "Протокол мультиплекса"
+
+#~ msgid "Multiplex max connections"
+#~ msgstr "Макс. соединений мультиплекса"
+
+#~ msgid "Multiplex min streams"
+#~ msgstr "Мин. потоков мультиплекса"
+
+#~ msgid "Multiplex max streams"
+#~ msgstr "Макс. потоков мультиплекса"
+
+#~ msgid "Multiplex padding"
+#~ msgstr "Padding мультиплекса"
+
+#~ msgid "Masquerade URL"
+#~ msgstr "URL маскировки"
+
+#~ msgid "Cipher"
+#~ msgstr "Шифр"
+
+#~ msgid "TLS insecure (skip verify)"
+#~ msgstr "TLS insecure (без проверки сертификата)"
+
+#~ msgid "uTLS fingerprint"
+#~ msgstr "Отпечаток uTLS"
 
 #~ msgid "Allow insecure"
 #~ msgstr "Разрешить небезопасное соединение"

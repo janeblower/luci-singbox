@@ -7,7 +7,7 @@
 'require view.singbox-ui.lib.validators as SbValidators';
 'require view.singbox-ui.importers.inbound as SbImpInbound';
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
-'require view.singbox-ui.lib.rpc as SbRpc';
+'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 
 var addRenameField   = SbCommon.addRenameField;
 
@@ -150,34 +150,23 @@ function buildInboundsMap() {
 	o.modalonly = true; o.placeholder = '::';
 	o.depends('protocol', 'direct');
 	o.depends('protocol', 'tproxy');
-	o.depends('protocol', 'shadowsocks');
-	o.depends('protocol', 'vless');
-	o.depends('protocol', 'vmess');
-	o.depends('protocol', 'trojan');
-	o.depends('protocol', 'hysteria2');
 
 	o = s.taboption('basic', form.Value, 'listen_port', _('Listen port'));
 	o.modalonly = true; o.datatype = 'port'; o.placeholder = '7893';
 	o.depends('protocol', 'direct');
 	o.depends('protocol', 'tproxy');
-	o.depends('protocol', 'shadowsocks');
-	o.depends('protocol', 'vless');
-	o.depends('protocol', 'vmess');
-	o.depends('protocol', 'trojan');
-	o.depends('protocol', 'hysteria2');
 	o.validate = function (sid, value) {
 		if (value === null || value === undefined || value === '') return true;
 		return SbValidators.isPort(value);
 	};
 
-	// direct / shadowsocks
+	// direct only (shadowsocks network is descriptor-owned)
 	o = s.taboption('basic', form.ListValue, 'network', _('Network'));
 	o.modalonly = true;
 	o.value('', _('Both (tcp+udp)'));
 	o.value('tcp', 'tcp');
 	o.value('udp', 'udp');
 	o.depends('protocol', 'direct');
-	o.depends('protocol', 'shadowsocks');
 
 	o = s.taboption('basic', form.Flag, 'dns_listener', _('Hijack DNS'));
 	o.modalonly = true;
@@ -229,251 +218,12 @@ function buildInboundsMap() {
 	o.modalonly = true; o.default = '0';
 	o.depends('protocol', 'tun');
 
-	// shadowsocks
-	o = s.taboption('credentials', form.ListValue, 'shadowsocks_method', _('Method'));
-	['aes-128-gcm', 'aes-256-gcm', 'chacha20-ietf-poly1305',
-	 '2022-blake3-aes-128-gcm', '2022-blake3-aes-256-gcm'].forEach(function (v) { o.value(v, v); });
-	o.modalonly = true; o.default = 'aes-128-gcm';
-	o.depends('protocol', 'shadowsocks');
-
-	// Shadowsocks multi-user. Each entry: name:password.
-	// When at least one valid entry is present, top-level server_password
-	// is dropped and sing-box receives a users[] block.
-	o = s.taboption('credentials', form.DynamicList, 'ss_user', _('Users'));
-	o.modalonly = true;
-	o.placeholder = 'alice:password';
-	o.description = _('Multi-user shadowsocks. One entry per user, formatted as ' +
-		'"name:password". When non-empty, the single-user password above is ignored.');
-	o.depends('protocol', 'shadowsocks');
-
-	// users (vless/vmess/trojan/hysteria2)
-	o = s.taboption('credentials', form.Value, 'server_uuid', _('UUID'));
-	o.modalonly = true; o.password = true;
-	o.depends('protocol', 'vless');
-	o.depends('protocol', 'vmess');
-	o.validate = function (sid, value) {
-		if (value === null || value === undefined || value === '') return true;
-		return SbValidators.isUuid(value);
-	};
-	o = s.taboption('credentials', form.Value, 'server_password', _('Password'));
-	o.modalonly = true; o.password = true;
-	o.depends('protocol', 'shadowsocks');
-	o.depends('protocol', 'trojan');
-	o.depends('protocol', 'hysteria2');
-	o = s.taboption('credentials', form.ListValue, 'vless_flow', _('Flow'));
-	o.value('none', _('None')); o.value('xtls-rprx-vision', 'xtls-rprx-vision');
-	o.modalonly = true; o.default = 'none';
-	o.depends('protocol', 'vless');
-	o = s.taboption('credentials', form.Value, 'vmess_alter_id', _('Alter ID'));
-	o.modalonly = true; o.datatype = 'uinteger'; o.placeholder = '0';
-	o.depends('protocol', 'vmess');
-
-	// Multi-user vmess/vless. Each entry is colon-separated:
-	//   VMess: name:uuid          or name:uuid:alterId
-	//   VLESS: name:uuid          or name:uuid:flow
-	// When non-empty, the section-level server_uuid / vmess_alter_id /
-	// vless_flow are dropped (sing-box rejects both at once).
-	o = s.taboption('credentials', form.DynamicList, 'inbound_user', _('Users'));
-	o.modalonly = true;
-	o.placeholder = 'alice:550e8400-e29b-41d4-a716-446655440000';
-	o.description = _('Multi-user list. Each entry colon-separated: ' +
-		'VMess "name:uuid" or "name:uuid:alterId"; VLESS "name:uuid" or ' +
-		'"name:uuid:flow" (use "none" or omit to skip flow). ' +
-		'When non-empty, the single-user UUID / Alter ID / Flow above are ignored.');
-	o.depends('protocol', 'vmess');
-	o.depends('protocol', 'vless');
-
-	// hysteria2 specifics — obfuscation + bandwidth tuning live in the
-	// advanced tab per spec C2.2.7 (basic/credentials/tls/transport/multiplex
-	// have richer common semantics; bandwidth caps and obfs belong with the
-	// other protocol-specific knobs).
-	o = s.taboption('advanced', form.ListValue, 'hysteria2_obfs_type', _('Obfuscation'));
-	o.value('none', _('None')); o.value('salamander', 'salamander');
-	o.modalonly = true; o.default = 'none';
-	o.depends('protocol', 'hysteria2');
-	o = s.taboption('advanced', form.Value, 'hysteria2_obfs_password', _('Obfs password'));
-	o.modalonly = true; o.password = true;
-	o.depends({ protocol: 'hysteria2', hysteria2_obfs_type: 'salamander' });
-	o = s.taboption('advanced', form.Value, 'up_mbps', _('Up Mbps'));
-	o.modalonly = true; o.datatype = 'uinteger';
-	o.depends('protocol', 'hysteria2');
-	o = s.taboption('advanced', form.Value, 'down_mbps', _('Down Mbps'));
-	o.modalonly = true; o.datatype = 'uinteger';
-	o.depends('protocol', 'hysteria2');
-
-	// TLS (vless/vmess/trojan/hysteria2)
-	o = s.taboption('tls', form.ListValue, 'security', _('Security'));
-	o.value('none', _('None')); o.value('tls', 'TLS'); o.value('reality', 'Reality');
-	o.modalonly = true; o.default = 'none';
-	o.depends('protocol', 'vless');
-	o.depends('protocol', 'vmess');
-	o.depends('protocol', 'trojan');
-	o = s.taboption('tls', form.Value, 'tls_server_name', _('TLS server name'));
-	o.modalonly = true;
-	o.depends({ protocol: 'vless', security: 'tls' });
-	o.depends({ protocol: 'vless', security: 'reality' });
-	o.depends({ protocol: 'vmess', security: 'tls' });
-	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends('protocol', 'hysteria2');
-	o.validate = function (sid, value) {
-		if (value === null || value === undefined || value === '') return true;
-		return SbValidators.isHost(value);
-	};
-	o = s.taboption('tls', form.Value, 'tls_certificate_path', _('Certificate path'));
-	o.modalonly = true; o.placeholder = '/etc/ssl/cert.pem';
-	o.depends({ protocol: 'vless', security: 'tls' });
-	o.depends({ protocol: 'vmess', security: 'tls' });
-	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends('protocol', 'hysteria2');
-	o = s.taboption('tls', form.Value, 'tls_key_path', _('Key path'));
-	o.modalonly = true; o.placeholder = '/etc/ssl/key.pem';
-	o.depends({ protocol: 'vless', security: 'tls' });
-	o.depends({ protocol: 'vmess', security: 'tls' });
-	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends('protocol', 'hysteria2');
-	o = s.taboption('tls', form.DynamicList, 'tls_alpn', _('ALPN'));
-	o.modalonly = true; o.placeholder = 'h2';
-	o.depends({ protocol: 'vless', security: 'tls' });
-	o.depends({ protocol: 'vmess', security: 'tls' });
-	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends('protocol', 'hysteria2');
-	o.validate = function (sid, value) {
-		// Per spec C2.2.3: empty ALPN is valid (sing-box picks defaults).
-		// We only validate the protocol identifiers; LuCI DynamicList passes
-		// the current scalar input here — read the list off this.formvalue.
-		var fv;
-		try { fv = this.formvalue(sid); } catch (e) { fv = value; }
-		return SbValidators.validateAlpn(fv);
-	};
-
-	// Reality specifics (vless) — grouped under the TLS tab per spec C2.2.7.
-	o = s.taboption('tls', form.Value, 'reality_private_key', _('Reality private key'));
-	o.modalonly = true; o.password = true;
-	o.depends({ protocol: 'vless', security: 'reality' });
-	o = s.taboption('tls', form.Value, 'reality_short_id', _('Reality short ID'));
-	o.modalonly = true;
-	o.depends({ protocol: 'vless', security: 'reality' });
-	o = s.taboption('tls', form.Value, 'reality_handshake_server', _('Handshake server'));
-	o.modalonly = true; o.placeholder = 'www.example.com';
-	o.depends({ protocol: 'vless', security: 'reality' });
-	o = s.taboption('tls', form.Value, 'reality_handshake_server_port', _('Handshake server port'));
-	o.modalonly = true; o.datatype = 'port'; o.placeholder = '443';
-	o.depends({ protocol: 'vless', security: 'reality' });
-
-	// transport (vless/vmess/trojan)
-	o = s.taboption('transport', form.ListValue, 'transport', _('Transport'));
-	['none', 'ws', 'grpc', 'httpupgrade', 'xhttp', 'http'].forEach(function (v) { o.value(v, v); });
-	o.modalonly = true; o.default = 'none';
-	o.depends('protocol', 'vless');
-	o.depends('protocol', 'vmess');
-	o.depends('protocol', 'trojan');
-	// Transport-typed fields must depend on BOTH the inbound protocol AND
-	// the transport selection — otherwise they leaked onto protocols that
-	// don't expose a transport field (spec C2.2.2).
-	o = s.taboption('transport', form.Value, 'transport_path', _('Transport path'));
-	o.modalonly = true; o.placeholder = '/';
-	['vless','vmess','trojan'].forEach(function (p) {
-		o.depends({ protocol: p, transport: 'ws' });
-		o.depends({ protocol: p, transport: 'httpupgrade' });
-		o.depends({ protocol: p, transport: 'xhttp' });
-		o.depends({ protocol: p, transport: 'http' });
+	// D2: descriptor-driven UI for the 5 proxy inbound types. tproxy/tun/direct
+	// are infrastructure types and keep their hand-coded blocks above.
+	var inboundSchema = (window.singboxUiSchemaCache || {}).inbound || {};
+	Object.keys(inboundSchema).forEach(function(protoName) {
+		descriptor_form.applyDescriptor(s, 'inbound', protoName, inboundSchema[protoName]);
 	});
-	o.validate = function (sid, value) {
-		// Only ws transport mandates a non-empty path; the validator returns
-		// true for every other transport. Read the live transport selection
-		// off the section so the check follows the form state.
-		var transport;
-		try { transport = this.section.formvalue(sid, 'transport'); }
-		catch (e) { transport = null; }
-		return SbValidators.requiresWsPath(transport, value || '');
-	};
-	o = s.taboption('transport', form.Value, 'transport_host', _('Transport host'));
-	o.modalonly = true;
-	['vless','vmess','trojan'].forEach(function (p) {
-		o.depends({ protocol: p, transport: 'ws' });
-		o.depends({ protocol: p, transport: 'httpupgrade' });
-	});
-	o = s.taboption('transport', form.Value, 'transport_service_name', _('gRPC service name'));
-	o.modalonly = true;
-	['vless','vmess','trojan'].forEach(function (p) {
-		o.depends({ protocol: p, transport: 'grpc' });
-	});
-
-	o = s.taboption('transport', form.ListValue, 'transport_xhttp_mode', _('XHTTP mode'));
-	o.modalonly = true;
-	o.value('auto', 'auto');
-	o.value('packet-up', 'packet-up');
-	o.value('stream-up', 'stream-up');
-	o.value('stream-one', 'stream-one');
-	o.default = 'auto';
-	o.depends({ protocol: 'vless', transport: 'xhttp' });
-	o.depends({ protocol: 'vmess', transport: 'xhttp' });
-	o.depends({ protocol: 'trojan', transport: 'xhttp' });
-
-	o = s.taboption('transport', form.DynamicList, 'transport_hosts', _('HTTP hosts'));
-	o.modalonly = true;
-	o.depends({ protocol: 'vless', transport: 'http' });
-	o.depends({ protocol: 'vmess', transport: 'http' });
-	o.depends({ protocol: 'trojan', transport: 'http' });
-
-	// Multiplex
-	o = s.taboption('multiplex', form.Flag, 'multiplex_enabled', _('Multiplex'));
-	o.modalonly = true;
-	o.depends('protocol', 'vless');
-	o.depends('protocol', 'vmess');
-	o.depends('protocol', 'trojan');
-	o.depends('protocol', 'shadowsocks');
-
-	o = s.taboption('multiplex', form.ListValue, 'multiplex_protocol', _('Multiplex protocol'));
-	o.modalonly = true;
-	['smux','yamux','h2mux'].forEach(function (v) { o.value(v, v); });
-	o.default = 'smux';
-	o.depends('multiplex_enabled', '1');
-
-	o = s.taboption('multiplex', form.Value, 'multiplex_max_connections', _('Multiplex max connections'));
-	o.modalonly = true; o.datatype = 'uinteger';
-	o.depends('multiplex_enabled', '1');
-
-	o = s.taboption('multiplex', form.Value, 'multiplex_min_streams', _('Multiplex min streams'));
-	o.modalonly = true; o.datatype = 'uinteger';
-	o.depends('multiplex_enabled', '1');
-
-	o = s.taboption('multiplex', form.Value, 'multiplex_max_streams', _('Multiplex max streams'));
-	o.modalonly = true; o.datatype = 'uinteger';
-	o.depends('multiplex_enabled', '1');
-
-	o = s.taboption('multiplex', form.Flag, 'multiplex_padding', _('Multiplex padding'));
-	o.modalonly = true;
-	o.depends('multiplex_enabled', '1');
-
-	// Hysteria2 masquerade — protocol-specific, belongs in advanced per spec.
-	o = s.taboption('advanced', form.Value, 'hysteria2_masquerade', _('Masquerade URL'));
-	o.modalonly = true;
-	o.placeholder = 'https://www.example.com';
-	o.depends('protocol', 'hysteria2');
-
-	// vmess cipher — listed under "advanced" per spec C2.2.7 (could arguably
-	// belong to credentials, but spec puts vmess_security under advanced).
-	o = s.taboption('advanced', form.ListValue, 'vmess_security', _('Cipher'));
-	o.modalonly = true;
-	['auto','none','aes-128-gcm','chacha20-poly1305'].forEach(function (v) { o.value(v, v); });
-	o.default = 'auto';
-	o.depends('protocol', 'vmess');
-
-	// TLS extras
-	o = s.taboption('tls', form.Flag, 'tls_insecure', _('TLS insecure (skip verify)'));
-	o.modalonly = true;
-	o.depends({ protocol: 'vless', security: 'tls' });
-	o.depends({ protocol: 'vmess', security: 'tls' });
-	o.depends({ protocol: 'trojan', security: 'tls' });
-	o.depends('protocol', 'hysteria2');
-
-	o = s.taboption('tls', form.Value, 'utls_fingerprint', _('uTLS fingerprint'));
-	o.modalonly = true;
-	o.placeholder = 'chrome';
-	o.depends({ protocol: 'vless', security: 'tls' });
-	o.depends({ protocol: 'vmess', security: 'tls' });
-	o.depends({ protocol: 'trojan', security: 'tls' });
 
 	return m;
 }
