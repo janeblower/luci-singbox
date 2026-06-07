@@ -356,6 +356,25 @@ sub-phase entries as work lands.
 - `docs/protocol-coverage.md`: 7 per-protocol outbound sections now have
   explicit UCI field columns; new ssh outbound section added.
 
+### Added (Phase D — D1.5)
+
+- Inbound descriptors appended to `lib/protocols/{trojan,shadowsocks,vless,vmess,hysteria2}.uc`.
+  Each protocol module now registers BOTH outbound and inbound sides of
+  the registry. Multi-user inbound modes (`ss_user` for shadowsocks,
+  `inbound_user` for vless/vmess) preserved with first-colon split parsing
+  identical to legacy. tuic / anytls inbound are out-of-scope per
+  `docs/protocol-coverage.md` (not implemented in legacy either).
+- `lib/inbound.uc` exports shared emit helpers (`build_user`,
+  `build_inbound_users`, `build_tls`, `build_transport`, `build_multiplex`,
+  `build_one`) so descriptors can call them.
+
+### Changed (Phase D — D1.5)
+
+- `lib/inbound.uc::build_one` now consults the protocol registry first
+  (keyed on `s_opt(s, "protocol")`); legacy switch retains only
+  infrastructure types `tproxy` / `tun` / `direct` plus the default
+  warn-and-skip. Invariant documented in-line.
+
 ---
 
 ## [v0.1.0] — 2026-06-06
