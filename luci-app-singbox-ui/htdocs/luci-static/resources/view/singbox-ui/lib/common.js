@@ -23,6 +23,21 @@ function addRenameField(s) {
 	o.rmempty   = false;
 	o.datatype  = 'and(minlength(1), uciname)';
 	o.cfgvalue  = function (section_id) { return section_id; };
+	// Reject duplicate names within the same section kind — sing-box
+	// section ids must be unique and the rename silently collides
+	// otherwise (spec C2.2.12).
+	o.validate = function (section_id, value) {
+		if (!value) return _('Name must not be empty');
+		if (value === section_id) return true;
+		var kind = s.sectiontype;
+		var siblings = uci.sections('singbox-ui', kind) || [];
+		for (var i = 0; i < siblings.length; i++) {
+			var name = siblings[i] && siblings[i]['.name'];
+			if (name === value && name !== section_id)
+				return _('Name already in use by another') + ' ' + kind;
+		}
+		return true;
+	};
 	o.write     = function (section_id, value) {
 		if (value && value !== section_id)
 			uci.rename('singbox-ui', section_id, value);

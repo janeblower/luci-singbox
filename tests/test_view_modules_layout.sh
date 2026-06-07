@@ -53,6 +53,35 @@ if grep -RnE 'window\.location\.reload\b|[^a-zA-Z_$]location\.reload\b' "$ROOT" 
   fail=1
 fi
 
+# C2 D.1: the loadOutboundList alias was dead in inbounds/outbounds — it was
+# imported but never called. Removing it shrinks the require graph and makes
+# the next refactor easier.
+if grep -nE 'var[[:space:]]+loadOutboundList[[:space:]]*=[[:space:]]*SbCommon\.loadOutboundList' \
+   "$ROOT/tabs/inbounds.js" "$ROOT/tabs/outbounds.js" >/dev/null 2>&1; then
+  echo "FAIL: dead loadOutboundList alias still present in inbounds/outbounds"
+  grep -nE 'var[[:space:]]+loadOutboundList[[:space:]]*=[[:space:]]*SbCommon\.loadOutboundList' \
+    "$ROOT/tabs/inbounds.js" "$ROOT/tabs/outbounds.js"
+  fail=1
+fi
+
+# C2 D.4: main.js must not schedule wireTabs via setTimeout(fn, 0) — a
+# microtask is enough and avoids the visible flicker.
+if grep -nE 'setTimeout\(.*,[[:space:]]*0[[:space:]]*\)' "$ROOT/main.js" >/dev/null 2>&1; then
+  echo "FAIL: setTimeout(fn, 0) still present in main.js (use Promise.resolve().then)"
+  grep -nE 'setTimeout\(.*,[[:space:]]*0[[:space:]]*\)' "$ROOT/main.js"
+  fail=1
+fi
+
+# C2 D.7: rulesets.js nft_rules flag must have a description.
+if ! awk '/o = s\.option\(form\.Flag, .nft_rules./{found=1} found && /o\.description/{print; exit 0} END{exit found?1:1}' \
+   "$ROOT/tabs/rulesets.js" >/dev/null 2>&1; then
+  # Fall back to a simpler grep: description string anywhere after nft_rules.
+  if ! grep -nA5 "'nft_rules'" "$ROOT/tabs/rulesets.js" | grep -q 'o\.description'; then
+    echo "FAIL: rulesets.js nft_rules form.Flag missing description"
+    fail=1
+  fi
+fi
+
 if [ "$fail" -eq 0 ]; then
   echo "PASS: view layout"
 fi

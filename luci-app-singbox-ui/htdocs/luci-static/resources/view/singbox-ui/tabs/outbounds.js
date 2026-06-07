@@ -8,7 +8,6 @@
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
 
-var loadOutboundList    = SbCommon.loadOutboundList;
 var addRenameField      = SbCommon.addRenameField;
 var openJsonImportModal = SbTabInbounds.openJsonImportModal;
 
@@ -183,12 +182,10 @@ function buildOutboundsMap() {
 	o.depends({ type: 'trojan', security: 'tls' });
 	o.depends('type', 'hysteria2');
 	o.validate = function (sid, value) {
+		// Per spec C2.2.3: empty ALPN is valid; only validates protocol IDs.
 		var fv;
 		try { fv = this.formvalue(sid); } catch (e) { fv = value; }
-		if (fv === null || fv === undefined) return true;
-		if (Array.isArray(fv) && fv.length === 0) return true;
-		if (typeof fv === 'string' && fv === '') return true;
-		return SbValidators.isAlpnNonEmpty(fv);
+		return SbValidators.validateAlpn(fv);
 	};
 	o = s.option(form.ListValue, 'utls_fingerprint', _('uTLS fingerprint'));
 	['','chrome','firefox','safari','edge','random'].forEach(function (v) { o.value(v, v || _('None')); });
@@ -211,10 +208,17 @@ function buildOutboundsMap() {
 	o.depends('type', 'vless');
 	o.depends('type', 'vmess');
 	o.depends('type', 'trojan');
+	// Transport-typed fields must depend on BOTH the outbound type AND the
+	// transport selection. Without the type bind, e.g. transport_path leaked
+	// onto outbound types that don't expose a transport field (spec C2.2.2).
 	o = s.option(form.Value, 'transport_path', _('Transport path'));
 	o.modalonly = true; o.placeholder = '/';
-	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
-	o.depends({ transport: 'xhttp' }); o.depends({ transport: 'http' });
+	['vless','vmess','trojan'].forEach(function (p) {
+		o.depends({ type: p, transport: 'ws' });
+		o.depends({ type: p, transport: 'httpupgrade' });
+		o.depends({ type: p, transport: 'xhttp' });
+		o.depends({ type: p, transport: 'http' });
+	});
 	o.validate = function (sid, value) {
 		var transport;
 		try { transport = this.section.formvalue(sid, 'transport'); }
@@ -223,10 +227,15 @@ function buildOutboundsMap() {
 	};
 	o = s.option(form.Value, 'transport_host', _('Transport host'));
 	o.modalonly = true;
-	o.depends({ transport: 'ws' }); o.depends({ transport: 'httpupgrade' });
+	['vless','vmess','trojan'].forEach(function (p) {
+		o.depends({ type: p, transport: 'ws' });
+		o.depends({ type: p, transport: 'httpupgrade' });
+	});
 	o = s.option(form.Value, 'transport_service_name', _('gRPC service name'));
 	o.modalonly = true;
-	o.depends({ transport: 'grpc' });
+	['vless','vmess','trojan'].forEach(function (p) {
+		o.depends({ type: p, transport: 'grpc' });
+	});
 
 	o = s.option(form.ListValue, 'transport_xhttp_mode', _('XHTTP mode'));
 	o.modalonly = true;

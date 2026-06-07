@@ -57,19 +57,27 @@ function isHost(v) {
 	return _('Must be a valid IPv4 address, IPv6 address, or hostname');
 }
 
-function isAlpnNonEmpty(list) {
+// validateAlpn — per spec C2.2.3, an empty ALPN list is valid in sing-box
+// (the server picks a default). Only validate the *shape* of each entry:
+// every non-blank token must be a known protocol identifier.
+function validateAlpn(list) {
+	var known = { 'http/1.1': 1, 'h2': 1, 'h3': 1 };
 	var arr;
-	if (Array.isArray(list))
+	if (list === null || list === undefined)
+		arr = [];
+	else if (Array.isArray(list))
 		arr = list;
 	else if (typeof list === 'string')
 		arr = list.split(/[,\s]+/);
 	else
 		arr = [];
-	var nonEmpty = arr.filter(function (s) {
-		return typeof s === 'string' && s.length > 0;
-	});
-	if (!nonEmpty.length)
-		return _('ALPN must contain at least one protocol');
+	for (var i = 0; i < arr.length; i++) {
+		var s = arr[i];
+		if (typeof s !== 'string' || s.length === 0) continue; // blank entries OK
+		if (!known[s])
+			return _('Unknown ALPN protocol:') + ' ' + s +
+			       ' (' + _('expected http/1.1, h2, or h3') + ')';
+	}
 	return true;
 }
 
@@ -82,10 +90,20 @@ function requiresWsPath(transportType, path) {
 }
 
 function softWarnCongestion(v) {
-	var known = ['cubic', 'new_reno', 'bbr'];
+	var known = ['cubic', 'new_reno', 'bbr', 'brutal'];
 	if (typeof v === 'string' && v.length && known.indexOf(v) < 0) {
-		if (typeof console !== 'undefined' && console.warn)
+		// Surface the warning in the LuCI UI when available so the user
+		// sees it (spec C2.2.8). Fall back to console.warn under the node
+		// test harness where L/E/_ are mocked or absent.
+		if (typeof L !== 'undefined' && L.ui && typeof L.ui.addNotification === 'function' &&
+		    typeof E !== 'undefined') {
+			L.ui.addNotification(null,
+				E('p', {}, _('Unknown congestion_control value:') + ' ' + String(v) +
+				          '. ' + _('sing-box may reject it at runtime.')),
+				'warning');
+		} else if (typeof console !== 'undefined' && console.warn) {
 			console.warn('singbox-ui: unknown congestion_control value: ' + v);
+		}
 	}
 	// Always non-blocking — see spec B6 / Phase 8 "warn but allow".
 	return true;
@@ -95,7 +113,7 @@ return L.Class.extend({
 	isPort:             isPort,
 	isUuid:             isUuid,
 	isHost:             isHost,
-	isAlpnNonEmpty:     isAlpnNonEmpty,
+	validateAlpn:       validateAlpn,
 	requiresWsPath:     requiresWsPath,
 	softWarnCongestion: softWarnCongestion,
 });

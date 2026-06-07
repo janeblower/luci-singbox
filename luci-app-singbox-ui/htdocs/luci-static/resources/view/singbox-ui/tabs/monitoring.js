@@ -14,6 +14,18 @@ function buildMonitoring() {
 	};
 	var root = E('div', { 'class': 'sb-monitoring' });
 
+	// Per-keystroke repaint stalls the whole connection table on big lists
+	// (spec C2.2.11). Buffer search input for 200 ms so the user can type
+	// before the filter re-runs.
+	var searchTimer = null;
+	function debouncedSearch(value, cb) {
+		if (searchTimer) clearTimeout(searchTimer);
+		searchTimer = setTimeout(function () {
+			searchTimer = null;
+			cb(value);
+		}, 200);
+	}
+
 	function fmtBytes(n) {
 		n = n || 0; var u = ['B','KB','MB','GB','TB']; var i = 0;
 		while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
@@ -79,6 +91,12 @@ function buildMonitoring() {
 		var devices = {};
 		conns.forEach(function (c) { var s = c.metadata && c.metadata.sourceIP; if (s) devices[s] = true; });
 
+		// Preserve scroll across the destructive innerHTML='' (spec C2.2.11).
+		// The relevant scroll lives on the scrolling container — root in the
+		// embedded view, or window when root expands beyond the viewport.
+		var prevRootScroll = root.scrollTop;
+		var prevWinScroll  = (typeof window !== 'undefined') ? (window.scrollY || 0) : 0;
+
 		root.innerHTML = '';
 		root.appendChild(E('div', { 'style': 'display:flex;gap:1em;flex-wrap:wrap;align-items:center;margin:.5em 0' }, [
 			E('button', { 'class': 'btn cbi-button' + (state.tab === 'active' ? ' cbi-button-action' : ''),
@@ -86,7 +104,13 @@ function buildMonitoring() {
 			E('button', { 'class': 'btn cbi-button' + (state.tab === 'closed' ? ' cbi-button-action' : ''),
 				'click': function () { state.tab = 'closed'; repaint(data); } }, _('Closed') + ' ' + state.closed.length),
 			E('input', { 'type': 'search', 'placeholder': _('Search'), 'value': state.search,
-				'keyup': function (ev) { state.search = ev.target.value; repaint(data); } }),
+				'keyup': function (ev) {
+					var v = ev.target.value;
+					debouncedSearch(v, function (val) {
+						state.search = val;
+						repaint(data);
+					});
+				} }),
 			(function () {
 				var opts = [ E('option', { 'value': 'all' }, _('All devices')) ];
 				Object.keys(devices).forEach(function (ip) {
@@ -104,6 +128,13 @@ function buildMonitoring() {
 				'  (' + _('total') + ' ↓' + fmtBytes(down) + ' ↑' + fmtBytes(up) + ')')
 		]));
 		root.appendChild(renderTable(state.tab === 'active' ? conns : state.closed));
+
+		// Restore scroll. root.scrollTop is a no-op when root is not the
+		// scroll container; the window assignment covers the embedded case.
+		if (prevRootScroll) root.scrollTop = prevRootScroll;
+		if (prevWinScroll && typeof window !== 'undefined' &&
+		    typeof window.scrollTo === 'function')
+			window.scrollTo(0, prevWinScroll);
 	}
 
 	function poll() {

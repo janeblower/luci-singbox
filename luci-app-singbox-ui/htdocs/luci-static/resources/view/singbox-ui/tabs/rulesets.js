@@ -40,8 +40,10 @@ function buildRulesetsMap() {
 	// and generate.uc (.srs → binary, .json → source). No UI field.
 
 	o = s.option(form.Flag, 'nft_rules', _('Create nftables rules'));
-	o.modalonly = true;
-	o.default   = '0';
+	o.modalonly   = true;
+	o.default     = '0';
+	o.description = _('Emit nftables rules for this ruleset so it participates ' +
+		'in routing decisions via sing-box rule_set + nft tables.');
 
 	o = s.option(form.Value, 'update_interval', _('Update interval (s)'));
 	o.modalonly   = true;
