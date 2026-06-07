@@ -690,4 +690,54 @@ else
 	exit 1
 fi
 
+# D1.5.6: hysteria2 inbound descriptor parity (golden).
+# Must pass both before (legacy) and after (descriptor) the migration.
+echo "-- hysteria2 inbound descriptor parity: full (D1.5.6 golden)"
+golden='{ "type": "hysteria2", "tag": "h2_in1", "listen": "::", "listen_port": 443, "users": [ { "name": "h2_in1", "password": "pw" } ], "obfs": { "type": "salamander", "password": "obfspw" }, "up_mbps": 100, "down_mbps": 200, "masquerade": "https://example.com", "brutal_debug": true, "ignore_client_bandwidth": true, "tls": { "enabled": true, "server_name": "h2.example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"h2_in1", "protocol":"hysteria2", "listen_port":"443",
+          "server_password":"pw",
+          "hysteria2_obfs_type":"salamander", "hysteria2_obfs_password":"obfspw",
+          "up_mbps":"100", "down_mbps":"200",
+          "hysteria2_masquerade":"https://example.com",
+          "brutal_debug":"1", "ignore_client_bandwidth":"1",
+          "tls_server_name":"h2.example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: hysteria2 inbound parity (full)"
+else
+	echo "FAIL: hysteria2 inbound parity (full)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
+echo "-- hysteria2 inbound descriptor parity: minimal (D1.5.6 golden)"
+golden='{ "type": "hysteria2", "tag": "h2_in2", "listen": "::", "listen_port": 443, "users": [ { "name": "h2_in2", "password": "pw" } ], "tls": { "enabled": true, "server_name": "h2.example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
+actual=$(
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+let inb = require("inbound");
+let s = { ".name":"h2_in2", "protocol":"hysteria2", "listen_port":"443",
+          "server_password":"pw",
+          "tls_server_name":"h2.example.com",
+          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
+printf("%J", inb.build_one(s));
+'
+)
+if [ "$actual" = "$golden" ]; then
+	echo "  PASS: hysteria2 inbound parity (minimal)"
+else
+	echo "FAIL: hysteria2 inbound parity (minimal)"
+	echo "  expected: $golden"
+	echo "  actual:   $actual"
+	exit 1
+fi
+
 echo "OK"
