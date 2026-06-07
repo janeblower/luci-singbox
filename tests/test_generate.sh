@@ -71,6 +71,42 @@ grep -q '"inet4_range":\s*\[' "$TMPDIR/out.json" \
 	&& { echo "FAIL: inet4_range must be a string, not an array"; cat "$TMPDIR/out.json"; exit 1; }
 echo "  PASS: inet4_range is not an array"
 
+# Phase C2 (atomic publish): no .tmp.* siblings of the final config should
+# remain after a successful generate. The implementation writes to
+# <CONFIG_OUT>.tmp.<time>.<n> and fs.renames atomically.
+final_dir=$(dirname "$SANDBOX_CONFIG")
+final_base=$(basename "$SANDBOX_CONFIG")
+orphans=$(find "$final_dir" -maxdepth 1 -name "${final_base}.tmp.*" 2>/dev/null | wc -l)
+[ "$orphans" -eq 0 ] || { echo "FAIL: $orphans orphan tmpfiles after generate"; ls -la "$final_dir"; exit 1; }
+echo "  PASS: no orphan tmpfiles after happy-path generate"
+
+# Atomic publish also requires the implementation actually use a tmp+rename
+# pattern (not a direct write that would trivially produce no .tmp.* orphans).
+# Assert generate.uc references publish_atomic / fs.rename so a future refactor
+# that drops atomicity is caught immediately.
+grep -q 'fs.rename' "$GENERATE_UC" \
+	|| { echo "FAIL: generate.uc must use fs.rename for atomic publish"; exit 1; }
+grep -q 'publish_atomic\|\.tmp\.' "$GENERATE_UC" \
+	|| { echo "FAIL: generate.uc must use a tmp-suffixed publish path"; exit 1; }
+echo "  PASS: generate.uc uses atomic publish (fs.rename + tmp path)"
+
+# Phase C2: write failure must not leak a tmpfile. We force fs.open(tmp,'w')
+# to fail by pointing SINGBOX_CONFIG at a path under a non-existent parent
+# directory. generate.uc must exit non-zero AND leave nothing behind.
+echo "-- atomic publish: no tmp leak when cannot open tmpfile"
+bad_dir="$TMPDIR/does-not-exist/sub"
+# shellcheck disable=SC2086
+UCI_CONFIG_DIR="$TMPDIR" \
+SINGBOX_TMPDIR="$SANDBOX_DIR/subs" \
+SINGBOX_CONFIG="$bad_dir/config.json" \
+"$UCODE_BIN" $UCODE_LIB_FLAGS "$GENERATE_UC" >"$TMPDIR/gen-fail.stderr" 2>&1 \
+	&& { echo "FAIL: expected non-zero exit when tmpfile parent missing"; exit 1; }
+# bad_dir itself was never created, so anything matching .tmp.* there would be
+# a real bug. Search broadly under TMPDIR to catch any rogue writes.
+leaked=$(find "$TMPDIR" -name 'config.json.tmp.*' 2>/dev/null | wc -l)
+[ "$leaked" -eq 0 ] || { echo "FAIL: $leaked tmpfile(s) leaked on failed generate"; find "$TMPDIR" -name 'config.json.tmp.*'; exit 1; }
+echo "  PASS: no tmpfile leaked on failed generate"
+
 # ---- proxy via interface ----
 echo "-- proxy via interface"
 write_cfg "
@@ -719,5 +755,12 @@ run_gen
 grep -q '"clash_api":' "$TMPDIR/out.json" \
 	&& { echo "FAIL: clash_api emitted while disabled"; exit 1; }
 echo "  PASS: clash_api absent when disabled"
+
+# Phase C2 final sweep: after the full battery of generate runs, the sandbox
+# dir must contain no orphan tmpfiles. A single leaked tmpfile from any
+# successful or failed scenario above would fail this.
+orphans_final=$(find "$SANDBOX_DIR" -name "$(basename "$SANDBOX_CONFIG").tmp.*" 2>/dev/null | wc -l)
+[ "$orphans_final" -eq 0 ] || { echo "FAIL: $orphans_final orphan tmpfiles after full run"; find "$SANDBOX_DIR" -name "$(basename "$SANDBOX_CONFIG").tmp.*"; exit 1; }
+echo "  PASS: no orphan tmpfiles after full test run"
 
 echo "OK"
