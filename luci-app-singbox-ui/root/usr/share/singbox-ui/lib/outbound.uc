@@ -545,9 +545,7 @@ function build_outbounds(cur) {
 		} else if (kind === "url") {
 			let parsed = parse_proxy_url(section.proxy_url ?? "");
 			if (parsed) { parsed.tag = name; outbound = parsed; }
-		} else if (kind === "vless" || kind === "vmess" || kind === "trojan"
-		           || kind === "hysteria2" || kind === "shadowsocks"
-		           || kind === "tuic" || kind === "anytls") {
+		} else if (helpers.is_outbound_proxy_kind(kind)) {
 			outbound = build_constructor_for(section, kind);
 		} else if (kind === "subscription") {
 			let urls = read_subscription_urls(name);

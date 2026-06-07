@@ -535,4 +535,46 @@ grep -qE 'fs\.unlink\(raw_path\)' "$SUB_UC" \
 	|| fail "subscription.uc: missing fs.unlink(raw_path) cleanup in local branch"
 pass "subscription.uc: local cp-failure cleans up raw_path"
 
+# ---- C2.3.11: detect_rs_format strips URL query/fragment before suffix check ----
+# Anchor: lib/helpers.uc detect_rs_format. URLs with ?ver=N or #frag must still
+# be recognised by their underlying .srs / .json suffix; without the strip the
+# suffix check sees "...srs?ver=1" and falls through to the default.
+echo "-- C2.3.11: detect_rs_format strips URL query before suffix check"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+    let h = require("helpers");
+    printf("%s\n", h.detect_rs_format("https://x/y.srs?ver=1", null));
+    printf("%s\n", h.detect_rs_format("https://x/y.json?token=abc", null));
+    printf("%s\n", h.detect_rs_format("https://x/y.srs#frag", null));
+')
+[ "$out" = "binary
+source
+binary" ] && pass "query/fragment stripped" || \
+    { echo "FAIL: got [$out]"; exit 1; }
+
+# ---- C2.3.12: OUTBOUND_PROXY_KINDS single constant ----
+# Anchor: lib/helpers.uc exports is_outbound_proxy_kind(t). export_section.uc
+# and lib/outbound.uc::build_outbounds() use it instead of open-coded chained
+# string compares.
+echo "-- C2.3.12: OUTBOUND_PROXY_KINDS single constant"
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+    let h = require("helpers");
+    printf("%s\n", h.is_outbound_proxy_kind("vless"));
+    printf("%s\n", h.is_outbound_proxy_kind("interface"));
+')
+[ "$out" = "true
+false" ] && pass "is_outbound_proxy_kind works" || { echo "FAIL: [$out]"; exit 1; }
+
+# Membership coverage — every kind the dispatch branches once enumerated.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+    let h = require("helpers");
+    let want = ["vless","vmess","trojan","hysteria2","shadowsocks","tuic","anytls"];
+    let ok = true;
+    for (let t in want) if (!h.is_outbound_proxy_kind(t)) ok = false;
+    printf("%s\n", ok ? "all-covered" : "missing");
+')
+[ "$out" = "all-covered" ] && pass "all 7 kinds present" || { echo "FAIL"; exit 1; }
+
 echo "OK"
