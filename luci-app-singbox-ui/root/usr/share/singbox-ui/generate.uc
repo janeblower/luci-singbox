@@ -155,4 +155,6 @@ if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 	exit(1);
 }
 
+try { log_mod.log_event("info", "config.generated", {}); } catch (_) {}
+
 print("OK\n");
