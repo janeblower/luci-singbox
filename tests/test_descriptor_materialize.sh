@@ -1,0 +1,95 @@
+#!/bin/sh
+# tests/test_descriptor_materialize.sh
+# Validates registry.materialize(kind, type): field union (protocol + shared
+# blocks gated by flags), per-tab _show_advanced_<tab> injection, and
+# rejection of malformed descriptors (missing tab, unknown shared key).
+set -eu
+cd "$(dirname "$0")/.."
+
+UCODE_BIN="${UCODE_BIN:-ucode}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+
+if ! command -v "$UCODE_BIN" >/dev/null 2>&1; then
+    echo "SKIP test_descriptor_materialize (ucode missing)"; exit 0
+fi
+
+# Test 1: register + materialize on a minimal descriptor with one shared block.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
+    let reg = require("protocols.registry");
+    reg.register({
+        kind: "outbound", type: "demo", sing_box_type: "demo",
+        shared: { tls: { enabled_field: "tls_enabled" } },
+        fields: [
+            { name: "server", type: "string", tab: "basic", required: true },
+        ],
+        emit: function(s) { return { type: "demo" }; },
+    });
+    let m = reg.materialize("outbound", "demo");
+    print(sprintf("tabs=%s fields=%d", join(",", m.tabs), length(m.fields)));
+')
+case "$out" in
+    "tabs=basic,tls fields="*) echo "PASS: materialize union ($out)" ;;
+    *) echo "FAIL: materialize union [$out]"; exit 1 ;;
+esac
+
+# Test 2: descriptor with missing tab on a field is rejected.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
+    let reg = require("protocols.registry");
+    try {
+        reg.register({
+            kind: "outbound", type: "badtab", sing_box_type: "x",
+            fields: [ { name: "foo", type: "string" } ],
+            emit: function(s) { return {}; },
+        });
+        print("REGISTERED");
+    } catch (e) { print("REJECTED: " + e); }
+' 2>&1)
+case "$out" in
+    "REJECTED:"*) echo "PASS: missing tab rejected" ;;
+    *) echo "FAIL: missing-tab not rejected [$out]"; exit 1 ;;
+esac
+
+# Test 3: unknown shared key rejected.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
+    let reg = require("protocols.registry");
+    try {
+        reg.register({
+            kind: "outbound", type: "badshared", sing_box_type: "x",
+            shared: { wat: true },
+            fields: [ { name: "f", type: "string", tab: "basic" } ],
+            emit: function(s) { return {}; },
+        });
+        print("REGISTERED");
+    } catch (e) { print("REJECTED"); }
+' 2>&1)
+case "$out" in
+    "REJECTED") echo "PASS: unknown shared key rejected" ;;
+    *) echo "FAIL: bad shared key not rejected [$out]"; exit 1 ;;
+esac
+
+# Test 4: _show_advanced_<tab> auto-injected for tabs with any advanced:true field.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
+    let reg = require("protocols.registry");
+    reg.register({
+        kind: "outbound", type: "advdemo", sing_box_type: "x",
+        fields: [
+            { name: "basic_f", type: "string", tab: "basic" },
+            { name: "adv_f",   type: "string", tab: "basic", advanced: true },
+        ],
+        emit: function(s) { return {}; },
+    });
+    let m = reg.materialize("outbound", "advdemo");
+    let names = [];
+    for (let f in m.fields) push(names, f.name);
+    print(join(",", names));
+')
+case "$out" in
+    *"_show_advanced_basic"*) echo "PASS: advanced toggle auto-injected" ;;
+    *) echo "FAIL: missing _show_advanced_basic [$out]"; exit 1 ;;
+esac
+
+echo "ALL PASS: test_descriptor_materialize"
