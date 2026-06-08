@@ -55,29 +55,13 @@ function emit_list() {
 		refresh:        { what: "string" },
 		status:         {},
 		status_detail:  {},
-		read_config:    { token: "string" },
+		read_config:    {},
 		clash_get:      { path: "string" },
 		clash_mutate:   { method: "string", path: "string", body: "string" },
-		export_section:    { kind: "string", name: "string", token: "string" },
-		preview_config:    { token: "string" },
-		protocol_schema:   {},
-		reveal_token_grant:  {},
-		reveal_token_revoke: {}
+		export_section: { kind: "string", name: "string" },
+		preview_config: {},
+		protocol_schema: {}
 	});
-}
-
-// maybe_unscrub(obj, args) — if args carries a valid reveal token, return obj
-// unscrubbed; otherwise fall through to scrub.scrub_secrets(obj).
-// require("reveal") is attempted inside so the caller need not import it.
-function maybe_unscrub(obj, args) {
-	let token = (args != null && type(args) === "object") ? args.token : null;
-	if (!length(token)) {
-		return require("scrub").scrub_secrets(obj);
-	}
-	let rv;
-	try { rv = require("reveal"); }
-	catch (e) { return require("scrub").scrub_secrets(obj); }
-	return rv.validate(token) ? obj : require("scrub").scrub_secrets(obj);
 }
 
 // sq(s) — single-quote escape for /bin/sh.
@@ -278,27 +262,18 @@ function call_protocol_schema() {
 }
 
 function call_read_config() {
-	let args = parse_args();
+	drain_stdin();
 	let fd = fs.open(CONFIG_JSON, "r");
 	if (!fd) { emit_err("config not generated yet"); return; }
 	let content = fd.read("all") || "";
 	fd.close();
 
-	// Phase C2: same scrub treatment as preview_config / export_section —
-	// read-ACL users should not see verbatim credentials in the on-disk
-	// config. Pattern mirrors call_preview_config (try/catch around
-	// require("scrub") + json(), re-serialize via sprintf("%.4J", …)).
-	// Phase D3.3: maybe_unscrub honours a valid reveal token from args.
-	let scrub;
-	try { scrub = require("scrub"); }
-	catch (e) { emit_err("require(scrub) failed"); return; }
-
+	// Phase E1: scrub removed — read_config returns plain JSON.
 	let obj;
 	try { obj = json(content); }
 	catch (e) { emit_err("config not valid JSON"); return; }
 
-	let scrubbed = sprintf("%.4J", maybe_unscrub(obj, args));
-	emit({ status: "ok", content: scrubbed });
+	emit({ status: "ok", content: sprintf("%.4J", obj) });
 }
 
 // clash_params() — env overrides (tests) win, else read the clash_api UCI section.
@@ -330,22 +305,11 @@ function call_export_section() {
 		return;
 	}
 	if (!length(name)) { emit_err("missing name"); return; }
-	// Phase D3.3: validate token here (in handler process) and pass REVEAL_TOKEN
-	// env to subprocess so export_section.uc can skip scrub when token is valid.
-	let token = (type(args.token) === "string" && length(args.token)) ? args.token : null;
-	let reveal_env = {};
-	if (token != null) {
-		let rv;
-		try { rv = require("reveal"); } catch (_) { rv = null; }
-		if (rv && rv.validate(token)) reveal_env.REVEAL_TOKEN = token;
-	}
-	// run_capture doesn't support env injection; build env prefix via sq() manually.
-	let env_prefix = "";
-	for (let k, v in reveal_env) env_prefix += k + "=" + "'" + replace(v, "'", "'\\''") + "' ";
+	// Phase E1: no REVEAL_TOKEN — scrubbing removed.
 	let quoted = [];
 	for (let a in ["ucode", "-L", UCODE_LIB, EXPORT_SECTION_UC, kind, name])
 		push(quoted, "'" + replace(a, "'", "'\\''") + "'");
-	let shcmd = env_prefix + join(" ", quoted) + " 2>/dev/null";
+	let shcmd = join(" ", quoted) + " 2>/dev/null";
 	let p = fs.popen(shcmd, "r");
 	let body = null;
 	if (p) { body = p.read("all") ?? ""; p.close(); }
@@ -382,7 +346,8 @@ function preview_tmp() {
 // tmpfile before returning the error, so a partial write never lingers on
 // disk.
 function call_preview_config() {
-	let args = parse_args();
+	drain_stdin();
+	// Phase E1: scrub removed — preview returns plain JSON.
 	let tmp = preview_tmp();
 	if (tmp == null) { emit_err("cannot create preview tmpfile"); return; }
 	let ok = run_env(["ucode", "-L", UCODE_LIB, GENERATE_UC],
@@ -401,23 +366,13 @@ function call_preview_config() {
 	f.close();
 	try { fs.unlink(tmp); } catch (_) {}
 
-	// Scrub secrets from the generated config before exposing to read-ACL
-	// callers (spec C1.2). require("scrub") may fail in misconfigured installs;
-	// surface that as a clean RPC error instead of a raw stack trace. Pattern
-	// mirrors export_section.uc:48 (try/catch around require).
-	// Phase D3.3: maybe_unscrub honours a valid reveal token from args.
-	let scrub;
-	try { scrub = require("scrub"); }
-	catch (e) { emit_err("require(scrub) failed"); return; }
-
 	let obj;
 	try { obj = json(body); }
 	catch (e) { emit_err("preview output not valid JSON"); return; }
 
 	// Match generate.uc:102 pretty-print indent (%.4J) so the wire format the
 	// UI sees here is byte-identical to what `generate` would write to disk.
-	let scrubbed_body = sprintf("%.4J", maybe_unscrub(obj, args));
-	emit({ status: "ok", content: scrubbed_body });
+	emit({ status: "ok", content: sprintf("%.4J", obj) });
 }
 
 // clash_proxy(method, path, body) — shared low-level curl proxy. Inputs MUST
@@ -466,27 +421,6 @@ function call_clash_mutate() {
 	clash_proxy(method, path, args.body);
 }
 
-function call_reveal_token_grant() {
-	let rv;
-	try { rv = require("reveal"); }
-	catch (e) { emit_err("require(reveal) failed"); return; }
-	let issuer = getenv("LUCI_USER") || null;
-	let r = rv.grant(issuer);
-	try {
-		require("log").log_event("info", "reveal.granted",
-			{ user: (issuer || "?"), expires_ts: r.expires_ts });
-	} catch (_) {}
-	emit({ status: "ok", token: r.token, expires_ts: r.expires_ts });
-}
-
-function call_reveal_token_revoke() {
-	let rv;
-	try { rv = require("reveal"); }
-	catch (e) { emit_err("require(reveal) failed"); return; }
-	rv.revoke();
-	emit({ status: "ok" });
-}
-
 let argv   = ARGV;
 let cmd    = argv[0] || "";
 let method = argv[1] || "";
@@ -510,8 +444,6 @@ if (cmd === "call") {
 	case "export_section": call_export_section(); break;
 	case "preview_config": call_preview_config(); break;
 	case "protocol_schema": call_protocol_schema(); break;
-	case "reveal_token_grant":  call_reveal_token_grant();  break;
-	case "reveal_token_revoke": call_reveal_token_revoke(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);

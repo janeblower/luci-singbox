@@ -10,7 +10,7 @@
 		"write": {
 			"uci": [ "singbox-ui" ],
 			"ubus": {
-				"singbox-ui": [ "generate", "nftables", "restart", "refresh", "clash_mutate", "reveal_token_grant", "reveal_token_revoke" ]
+				"singbox-ui": [ "generate", "nftables", "restart", "refresh", "clash_mutate" ]
 			}
 		}
 	}
