@@ -78,15 +78,10 @@ function buildOutboundsMap() {
 	};
 	addRenameField(s);
 
-	// C2.2.7: group the ~50 modal options into topical tabs so the modal
-	// stops scrolling forever. Tab assignment is purely visual — the
-	// depends()/validate()/write()/cfgvalue() chains below are unchanged.
-	s.tab('basic',       _('Basic'));
-	s.tab('credentials', _('Credentials'));
-	s.tab('tls',         _('TLS'));
-	s.tab('transport',   _('Transport'));
-	s.tab('multiplex',   _('Multiplex'));
-	s.tab('advanced',    _('Advanced'));
+	// E2: only the basic tab here. TLS/Transport/Multiplex/Dial tabs are
+	// created on demand by descriptor_form.applyMaterialized after the
+	// per-protocol fields are attached (see inbounds.js note).
+	s.tab('basic', _('Basic'));
 
 	var origRenderSectionAddOut = s.renderSectionAdd;
 	s.renderSectionAdd = function () {

@@ -99,15 +99,12 @@ function buildInboundsMap() {
 	};
 	addRenameField(s);
 
-	// C2.2.7: group the ~50 modal options into topical tabs so the modal
-	// stops scrolling forever. Tab assignment is purely visual — the
-	// depends()/validate()/write()/cfgvalue() chains below are unchanged.
-	s.tab('basic',       _('Basic'));
-	s.tab('credentials', _('Credentials'));
-	s.tab('tls',         _('TLS'));
-	s.tab('transport',   _('Transport'));
-	s.tab('multiplex',   _('Multiplex'));
-	s.tab('advanced',    _('Advanced'));
+	// E2: register only the basic tab here. Shared tabs (TLS/Transport/
+	// Multiplex/Dial) are created on demand by descriptor_form.applyMaterialized
+	// AFTER fields are attached, so LuCI's tab-disabled heuristic (which fires
+	// at tab-creation time based on then-known field set) doesn't lock them
+	// disabled before fields arrive.
+	s.tab('basic', _('Basic'));
 
 	var origRenderSectionAdd = s.renderSectionAdd;
 	s.renderSectionAdd = function () {
