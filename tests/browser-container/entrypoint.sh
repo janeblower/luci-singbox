@@ -67,7 +67,6 @@ STUB
 # Launch the stack — must be ONE shell session. `docker exec -d` style
 # detachment kills the children with the exec frame.
 ubusd -A /usr/share/acl.d &
-UBUSD_PID=$!
 
 # Wait for ubus socket (max 5s). BusyBox sleep is integer-only.
 # OpenWrt 25.x ships ubus 2024-x which defaults to /var/run/ubus/ubus.sock.
@@ -75,11 +74,22 @@ UBUS_SOCK=/var/run/ubus/ubus.sock
 i=0; while [ ! -S "$UBUS_SOCK" ] && [ $i -lt 5 ]; do
     i=$((i+1)); sleep 1
 done
-[ -S "$UBUS_SOCK" ] || { echo "ERROR: ubusd socket failed to appear"; exit 1; }
+[ -S "$UBUS_SOCK" ] || { echo "ERROR: ubusd socket failed to appear" >&2; exit 1; }
 
 rpcd &
-RPCD_PID=$!
-sleep 1
+
+# Wait for rpcd to register the `system` ubus object (max 5s). Without
+# this, uhttpd may serve LuCI's bootstrap before rpcd answers `system
+# board` → HTTP 500 on the first request.
+i=0; while ! ubus list 2>/dev/null | grep -q '^system$' && [ $i -lt 5 ]; do
+    i=$((i+1)); sleep 1
+done
+ubus list 2>/dev/null | grep -q '^system$' \
+    || { echo "ERROR: rpcd did not register 'system' within 5s" >&2; exit 1; }
 
 # uhttpd in foreground = PID 1 of the process group from docker's view.
-exec uhttpd -f -p 0.0.0.0:80 -h /www -c /etc/config/uhttpd
+# `-p` is the bind source of truth when invoking uhttpd directly. The UCI
+# file at /etc/config/uhttpd is consumed only by /etc/init.d/uhttpd, which
+# we don't run; passing -c here would silently parse it as legacy
+# httpd.conf format (which it isn't) and yield zero listen sockets.
+exec uhttpd -f -p 0.0.0.0:80 -h /www
