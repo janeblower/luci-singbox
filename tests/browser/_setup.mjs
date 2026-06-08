@@ -7,11 +7,15 @@
 
 import puppeteer from 'puppeteer';
 
-export const VM_HOST = process.env.VM_HOST || '192.168.100.145';
-export const VM_USER = process.env.VM_USER || 'root';
-export const VM_PASS = process.env.VM_PASS || 'admin';
-export const LUCI_URL = `http://${VM_HOST}/cgi-bin/luci`;
-export const PAGE_URL = `${LUCI_URL}/admin/services/singbox-ui`;
+// BROWSER_URL is set by tests/test_browser.sh after launching the Docker
+// container, e.g. http://127.0.0.1:34567/cgi-bin/luci. LUCI_USER/PASS
+// default to the container-seeded root:admin.
+export const BROWSER_URL = process.env.BROWSER_URL
+    || 'http://127.0.0.1:8080/cgi-bin/luci';
+export const LUCI_USER = process.env.LUCI_USER || 'root';
+export const LUCI_PASS = process.env.LUCI_PASS || 'admin';
+export const LUCI_URL  = BROWSER_URL;
+export const PAGE_URL  = `${BROWSER_URL}/admin/services/singbox-ui`;
 
 // Open a fresh headless Chrome and an authenticated page. Returns:
 //   { browser, page, errors, close() }
@@ -28,14 +32,15 @@ export async function newPage() {
     const loginRes = await fetch(LUCI_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: `luci_username=${VM_USER}&luci_password=${VM_PASS}`,
+        body: `luci_username=${LUCI_USER}&luci_password=${LUCI_PASS}`,
         redirect: 'manual',
     });
     const m = (loginRes.headers.get('set-cookie') || '').match(/sysauth_http=([^;]+)/);
     if (!m) throw new Error('login failed (no sysauth_http cookie)');
+    const cookieDomain = new URL(LUCI_URL).hostname;
     await page.setCookie({
         name: 'sysauth_http', value: m[1],
-        domain: VM_HOST, path: '/cgi-bin/luci/', httpOnly: true,
+        domain: cookieDomain, path: '/cgi-bin/luci/', httpOnly: true,
     });
     return { browser, page, errors, close: () => browser.close() };
 }
