@@ -1,0 +1,13 @@
+{
+  "name": "luci-app-singbox-ui-browser-tests",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "description": "Headless-Chrome integration tests for the LuCI singbox-ui modal builder.",
+  "scripts": {
+    "test": "for t in [0-9]*.mjs; do echo \"-- $t --\"; node \"$t\" || exit 1; done"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0"
+  }
+}

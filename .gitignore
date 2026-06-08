@@ -7,3 +7,5 @@ dist
 CLAUDE.md
 ruvector.db
 docs/superpowers
+tests/browser/node_modules
+tests/browser/package-lock.json

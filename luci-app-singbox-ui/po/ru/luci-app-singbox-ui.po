@@ -4,7 +4,7 @@
 msgid ""
 msgstr ""
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-09 02:23+0700\n"
+"POT-Creation-Date: 2026-06-09 03:18+0700\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
@@ -158,9 +158,10 @@ msgstr "Ошибка RPC: "
 
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:13
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js:10
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:147
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:182
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:196
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:138
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:156
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:192
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:206
 msgid "(none)"
 msgstr "(нет)"
 
@@ -179,8 +180,8 @@ msgstr "DNS-сервер"
 # Common fields
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:34
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:64
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:116
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:128
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:111
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:125
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:20
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:42
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:21
@@ -188,7 +189,7 @@ msgid "Enable"
 msgstr "Включить"
 
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:35
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:145
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:140
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:24
 msgid "Type"
 msgstr "Тип"
@@ -290,7 +291,7 @@ msgid "Imported. Press \"Save & Apply\" to commit."
 msgstr "Импортировано. Нажмите «Save & Apply» чтобы зафиксировать."
 
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:56
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:110
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:105
 msgid "Import share-link"
 msgstr "Импорт share-link"
 
@@ -326,91 +327,63 @@ msgid "Outbound"
 msgstr "Outbound"
 
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:84
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:105
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:107
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:18
 msgid "Basic"
 msgstr "Основное"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:85
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:106
-msgid "Credentials"
-msgstr "Учётные данные"
-
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:86
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:107
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:19
-msgid "TLS"
-msgstr "TLS"
-
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:87
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:108
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:20
-msgid "Transport"
-msgstr "Транспорт"
-
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:88
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:109
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:21
-msgid "Multiplex"
-msgstr "Мультиплекс"
-
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:89
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:110
-msgid "Advanced"
-msgstr "Дополнительно"
-
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:101
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:96
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:76
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:122
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:119
 msgid "Import JSON"
 msgstr "Импорт JSON"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:123
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:134
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:118
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:131
 msgid "JSON"
 msgstr "JSON"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:126
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:137
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:121
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:134
 msgid "Export"
 msgstr "Экспорт"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:133
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:148
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:128
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:145
 msgid "Address"
 msgstr "Адрес"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:146
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:141
 msgid "Direct (interface bind)"
 msgstr "Прямой (привязка к интерфейсу)"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:151
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:165
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:146
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:160
 msgid "Subscription URL"
 msgstr "URL подписки"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:171
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:166
 msgid "Update via"
 msgstr "Обновлять через"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:177
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:172
 msgid "Direct (WAN)"
 msgstr "Напрямую (WAN)"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:185
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:180
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:48
 msgid "Update interval (s)"
 msgstr "Интервал обновления (с)"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:191
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:186
 msgid "Expand to selector"
 msgstr "Развернуть в selector"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:196
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:191
 msgid "Selector type"
 msgstr "Тип селектора"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:203
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:198
 msgid "URL-test URL"
 msgstr "URL для url-test"
 
@@ -505,7 +478,7 @@ msgstr ""
 msgid "Inbound"
 msgstr "Inbound"
 
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:144
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:141
 msgid "Protocol"
 msgstr "Протокол"
 
@@ -545,8 +518,8 @@ msgid ""
 "Emit nftables rules for this ruleset so it participates in routing decisions "
 "via sing-box rule_set + nft tables."
 msgstr ""
-"Генерировать правила nftables для этого набора правил, чтобы он участвовал "
-"в решениях маршрутизации через sing-box rule_set + nft tables."
+"Генерировать правила nftables для этого набора правил, чтобы он участвовал в "
+"решениях маршрутизации через sing-box rule_set + nft tables."
 
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:7
 msgid "Global sing-box settings: cache file, log."
@@ -763,6 +736,18 @@ msgstr ""
 msgid "View"
 msgstr "Просмотр"
 
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:19
+msgid "TLS"
+msgstr "TLS"
+
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:20
+msgid "Transport"
+msgstr "Транспорт"
+
+#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:21
+msgid "Multiplex"
+msgstr "Мультиплекс"
+
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:22
 msgid "Dial"
 msgstr "Исходящее подключение"
@@ -779,10 +764,6 @@ msgstr "Показать"
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:60
 msgid "Hide"
 msgstr "Скрыть"
-
-#: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:103
-msgid "Show advanced"
-msgstr "Показать расширенные"
 
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:22
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:25
@@ -820,6 +801,15 @@ msgstr "Неизвестное значение congestion_control:"
 #: luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:102
 msgid "sing-box may reject it at runtime."
 msgstr "sing-box может отклонить его во время выполнения."
+
+#~ msgid "Credentials"
+#~ msgstr "Учётные данные"
+
+#~ msgid "Advanced"
+#~ msgstr "Дополнительно"
+
+#~ msgid "Show advanced"
+#~ msgstr "Показать расширенные"
 
 #~ msgid "Share-link import not yet available — finish Task 18."
 #~ msgstr "Импорт share-link недоступен — завершите Task 18."
