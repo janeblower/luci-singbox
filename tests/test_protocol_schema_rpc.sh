@@ -61,16 +61,16 @@ if ! printf '%s\n' "$response" | grep -q '"schema"'; then
 fi
 echo "PASS version:1 + schema present"
 
-# 3. All 8 outbound protocols present somewhere in response
-for proto in trojan shadowsocks vless vmess hysteria2 tuic anytls ssh; do
+# 3. All 5 outbound protocols present somewhere in response
+for proto in direct shadowsocks vless trojan hysteria2; do
 	if ! printf '%s\n' "$response" | grep -q "\"$proto\""; then
 		echo "FAIL missing protocol name in response: $proto"; exit 1
 	fi
 done
-echo "PASS all 8 outbound protocol names present"
+echo "PASS all 5 outbound protocol names present"
 
 # 4. Inbound protocols present within schema.inbound (ucode-parsed check)
-for proto in trojan shadowsocks vless vmess hysteria2; do
+for proto in direct tproxy mixed shadowsocks vless trojan hysteria2; do
 	ok=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
 		let fs = require("fs");
 		let raw = fs.stdin.read("all") || "";
@@ -88,7 +88,34 @@ for proto in trojan shadowsocks vless vmess hysteria2; do
 		echo "FAIL inbound.$proto not found ($ok):"; echo "$response"; exit 1
 	fi
 done
-echo "PASS all 5 inbound descriptors present"
+echo "PASS all 7 inbound descriptors present"
+
+# 4b. Every protocol entry in schema has tabs[] array (structural assertion)
+tabs_check=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
+	let fs = require("fs");
+	let raw = fs.stdin.read("all") || "";
+	let j;
+	try { j = json(raw); } catch (_) { print("FAIL_PARSE\n"); exit(0); }
+	if (j == null || j.schema == null) { print("FAIL_NO_SCHEMA\n"); exit(0); }
+	let bad = [];
+	for (let kind in ["outbound", "inbound"]) {
+		let section = j.schema[kind];
+		if (section == null) continue;
+		for (let name in keys(section)) {
+			let entry = section[name];
+			if (type(entry.tabs) !== "array") push(bad, kind + "." + name);
+		}
+	}
+	if (length(bad)) {
+		print("FAIL_NO_TABS: " + join(",", bad) + "\n");
+	} else {
+		print("OK\n");
+	}
+')
+if [ "$tabs_check" != "OK" ]; then
+	echo "FAIL tabs[] structural assertion: $tabs_check"; exit 1
+fi
+echo "PASS every schema entry has tabs[] array"
 
 # 5. No occurrence of the literal word "function" (case-insensitive)
 # Emit functions must have been stripped by schema_dump's whitelist projection.

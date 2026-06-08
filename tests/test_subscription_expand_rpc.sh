@@ -26,7 +26,7 @@ SUB_PATH="$TMP/sub_${SUB_NAME}.txt"
 
 cat > "$SUB_PATH" <<'EOF'
 vless://aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee@1.2.3.4:443?type=tcp&security=reality&pbk=xxx&fp=chrome&sid=yyy&flow=xtls-rprx-vision#endpoint-jp
-vmess://eyJ2IjoiMiIsInBzIjoiZW5kcG9pbnQtdXMiLCJhZGQiOiI1LjYuNy44IiwicG9ydCI6IjQ0MyIsImlkIjoiYWJjZGVmZ2gtaWprbC1tbm9wLXFyc3QtdXZ3eHl6MTIzNDU2IiwiYWlkIjoiMCIsIm5ldCI6InRjcCJ9
+ss://aes-256-gcm:testpw@5.6.7.8:8388#endpoint-us
 trojan://secretpass@9.9.9.9:443#endpoint-fr
 EOF
 

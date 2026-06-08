@@ -1,22 +1,21 @@
-// lib/outbound.uc — sing-box `outbounds` builder + share-link / JSON / subscription parsers.
+// lib/outbound.uc — sing-box `outbounds` builder + share-link parsers +
+// subscription glue. After Phase E2 every UI-creatable protocol has a
+// descriptor; this file dispatches via the registry and never falls back
+// to a hand-coded switch.
 
 const TMPDIR = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 
 let fs = require("fs");
 let helpers = require("helpers");
+let reg = require("protocols.registry");
 
-// C3.1: eagerly load descriptor modules so their register() calls fire at
-// module load. Wrapped in try/catch so an absent descriptor never breaks
-// the legacy dispatcher — it just falls through to the switch-by-type below.
-try { require("protocols.ssh"); } catch (_) {}
-try { require("protocols.trojan"); } catch (_) {}
-try { require("protocols.shadowsocks"); } catch (_) {}
-try { require("protocols.vless"); } catch (_) {}
-try { require("protocols.vmess"); } catch (_) {}
-try { require("protocols.hysteria2"); } catch (_) {}
-try { require("protocols.tuic"); } catch (_) {}
-try { require("protocols.anytls"); } catch (_) {}
-try { require("protocols.direct"); } catch (_) {}
+// Eagerly load every active descriptor so register() fires. Anything not
+// listed here is permanently absent from the UI and the JSON.
+require("protocols.direct");
+require("protocols.shadowsocks");
+require("protocols.vless");
+require("protocols.trojan");
+require("protocols.hysteria2");
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -24,86 +23,16 @@ const s_num    = helpers.s_num;
 const csv_list = helpers.csv_list;
 const as_array = helpers.as_array;
 const fnv1a32  = helpers.fnv1a32;
-// Client-side TLS. null when security=none. hysteria2 forces tls.
-function build_tls_client(s, proto) {
-	let sec = s_opt(s, "security") || "none";
-	if (proto === "hysteria2") sec = "tls";
-	if (sec === "none") return null;
-	let tls = { enabled: true };
-	if (length(s_opt(s, "tls_server_name"))) tls.server_name = s.tls_server_name;
-	if (s_bool(s, "tls_insecure")) tls.insecure = true;
-	let alpn = as_array(s.tls_alpn);
-	if (length(alpn)) tls.alpn = alpn;
-	if (length(s_opt(s, "utls_fingerprint")))
-		tls.utls = { enabled: true, fingerprint: s.utls_fingerprint };
-	if (sec === "reality") {
-		let r = { enabled: true };
-		if (length(s_opt(s, "reality_public_key"))) r.public_key = s.reality_public_key;
-		if (length(s_opt(s, "reality_short_id")))   r.short_id   = s.reality_short_id;
-		tls.reality = r;
-	}
-	// ECH (client-side): config/config_path are client-only.
-	// pq_signature_schemes_enabled is deprecated in 1.12 and removed in 1.13 — never emitted.
-	if (s_bool(s, "tls_ech")) {
-		let ech = { enabled: true };
-		let cfg = as_array(s.tls_ech_config);
-		if (length(cfg)) ech.config = cfg;
-		if (length(s_opt(s, "tls_ech_config_path"))) ech.config_path = s.tls_ech_config_path;
-		tls.ech = ech;
-	}
-	// TLS fragmentation (client-only, Since sing-box 1.12). Flat fields in tls.
-	if (s_bool(s, "tls_fragment")) tls.fragment = true;
-	if (length(s_opt(s, "tls_fragment_fallback_delay")))
-		tls.fragment_fallback_delay = s.tls_fragment_fallback_delay;
-	if (s_bool(s, "tls_record_fragment")) tls.record_fragment = true;
-	return tls;
-}
 
-function build_transport(s) {
-	let t = s_opt(s, "transport") || "none";
-	if (t === "none") return null;
-	let tr = { type: t };
-	if (t === "ws") {
-		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
-		if (length(s_opt(s, "transport_host"))) tr.headers = { Host: s.transport_host };
-	} else if (t === "httpupgrade") {
-		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
-		if (length(s_opt(s, "transport_host"))) tr.host = s.transport_host;
-	} else if (t === "grpc") {
-		if (length(s_opt(s, "transport_service_name"))) tr.service_name = s.transport_service_name;
-	} else if (t === "xhttp") {
-		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
-		if (length(s_opt(s, "transport_xhttp_mode"))) tr.mode = s.transport_xhttp_mode;
-	} else if (t === "http") {
-		let hosts = as_array(s.transport_hosts);
-		if (length(hosts)) tr.host = hosts;
-		if (length(s_opt(s, "transport_path"))) tr.path = s.transport_path;
-	}
-	return tr;
-}
-
-function build_multiplex(s) {
-	if (!s_bool(s, "multiplex_enabled")) return null;
-	let m = { enabled: true };
-	if (length(s_opt(s, "multiplex_protocol"))) m.protocol = s.multiplex_protocol;
-	if (length(s_opt(s, "multiplex_max_connections")))
-		m.max_connections = s_num(s.multiplex_max_connections);
-	if (length(s_opt(s, "multiplex_min_streams")))
-		m.min_streams = s_num(s.multiplex_min_streams);
-	if (length(s_opt(s, "multiplex_max_streams")))
-		m.max_streams = s_num(s.multiplex_max_streams);
-	if (s_bool(s, "multiplex_padding")) m.padding = true;
-	return m;
-}
-
+// build_constructor_for(s, proto) — descriptor-only. Returns null if no
+// descriptor is registered for the kind/proto pair.
 function build_constructor_for(s, proto) {
-	// D1.8: all proxy outbounds are descriptor-owned (lib/protocols/*.uc).
-	// Reaching the error path means proto is unknown — config invalid.
-	let reg = require("protocols.registry");
 	let d = reg.get("outbound", proto);
-	if (d != null) return d.emit(s);
-	require("log").log_event("error", "outbound.unknown_proto", { proto: proto });
-	return { type: proto, tag: s[".name"] };  // sing-box check rejects this
+	if (d == null) {
+		warn(sprintf("outbound.uc: no descriptor for '%s'\n", proto));
+		return null;
+	}
+	return d.emit(s);
 }
 
 // drop_ctrl(s) — drop bytes < 0x20 from a string. Used to scrub already-
@@ -239,93 +168,6 @@ function b64_decode(s) {
 	return dec;
 }
 
-// parse_vmess(url) — v2rayN base64-JSON format.
-//   vmess://<base64(JSON)>
-// JSON fields (case-sensitive): v, ps, add, port, id, aid|alterId, scy,
-// net, type, host, path, tls, sni, alpn, fp.
-// Returns a sing-box vmess outbound object, or null on parse failure.
-function parse_vmess(url) {
-	let m = match(url, /^vmess:\/\/(.+)$/);
-	if (!m) return null;
-	let payload = m[1];
-	// Strip fragment if present — some clients include #name after the b64.
-	let hash = index(payload, "#");
-	if (hash >= 0) payload = substr(payload, 0, hash);
-	let decoded = b64_decode(payload);
-	if (decoded == null || !length(decoded)) return null;
-	let j = null;
-	try { j = json(decoded); } catch (e) { return null; }
-	if (type(j) !== "object") return null;
-
-	let add = safe_host(j.add);
-	let id = j.id;
-	let port = safe_port(j.port);
-	if (!add || !length(id) || !port) return null;
-
-	let name = j.ps;
-	let out = {
-		type: "vmess",
-		tag: safe_tag(length(name) ? name : add, url),
-		server: add,
-		server_port: port,
-		uuid: id,
-	};
-	// alter_id: accept `aid` or `alterId`, number or string.
-	let aid = j.aid ?? j.alterId;
-	if (aid != null) {
-		if (type(aid) === "string") aid = +aid;
-		// Only emit when set and > 0 (default 0 is implicit).
-		if (type(aid) === "int" && aid > 0) out.alter_id = aid;
-	}
-	let scy = j.scy;
-	if (length(scy) && scy !== "auto") out.security = scy;
-
-	let tls_mode = j.tls;
-	if (tls_mode === "tls" || tls_mode === "reality") {
-		let tls = { enabled: true };
-		let sni = j.sni;
-		tls.server_name = length(sni) ? sni : add;
-		let alpn = j.alpn;
-		if (length(alpn)) {
-			let list = [];
-			for (let a in split(alpn, ",")) {
-				let v = trim(a);
-				if (length(v)) push(list, v);
-			}
-			if (length(list)) tls.alpn = list;
-		}
-		if (length(j.fp)) tls.utls = { enabled: true, fingerprint: j.fp };
-		out.tls = tls;
-	}
-
-	let net = j.net;
-	if (length(net) && net !== "tcp") {
-		let tr = { type: net };
-		if (net === "ws") {
-			if (length(j.path)) tr.path = j.path;
-			if (length(j.host)) tr.headers = { Host: j.host };
-		} else if (net === "grpc") {
-			if (length(j.path)) tr.service_name = j.path;
-		} else if (net === "h2" || net === "http") {
-			tr.type = "http";
-			if (length(j.path)) tr.path = j.path;
-			if (length(j.host)) {
-				let hosts = [];
-				for (let h in split(j.host, ",")) {
-					let v = trim(h);
-					if (length(v)) push(hosts, v);
-				}
-				if (length(hosts)) tr.host = hosts;
-			}
-		} else if (net === "xhttp") {
-			if (length(j.path)) tr.path = j.path;
-			if (length(j.type) && j.type !== "none") tr.mode = j.type;
-		}
-		out.transport = tr;
-	}
-	return out;
-}
-
 // parse_ss(url) — Shadowsocks share-link.
 //   Plain:  ss://<method>:<password>@<host>:<port>[?plugin=...][#name]
 //   Legacy: ss://<base64(method:password)>@<host>:<port>[#name]
@@ -454,7 +296,6 @@ function parse_trojan(url) {
 
 function parse_proxy_url(url) {
 	if (match(url, /^vless:\/\//))     return parse_vless(url);
-	if (match(url, /^vmess:\/\//))     return parse_vmess(url);
 	if (match(url, /^ss:\/\//))        return parse_ss(url);
 	if (match(url, /^trojan:\/\//))    return parse_trojan(url);
 	if (match(url, /^hy2:\/\//) ||
@@ -551,5 +392,4 @@ function build_outbounds(cur) {
 	return outbounds;
 }
 
-return { build_outbounds, build_constructor_for, parse_proxy_url,
-         build_tls_client, build_transport, build_multiplex };
+return { build_outbounds, build_constructor_for, parse_proxy_url };

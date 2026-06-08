@@ -282,7 +282,7 @@ grep -q -- '--interface pppoe-wan' "$FAKE_CURL_LOG" \
 	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "expected --interface pppoe-wan"; }
 pass "sub_update_via resolves to pppoe-wan"
 
-# ---- share-link parsers (Phase B7): vmess://, ss://, trojan:// ----
+# ---- share-link parsers (Phase B7): ss://, trojan://, vless://, hy2:// ----
 # A small probe imports lib/outbound.uc and prints the JSON the dispatcher
 # would feed into the outbound array for a given URL.
 cat >"$TMPDIR/parse_probe.uc" <<'EOF'
@@ -296,26 +296,6 @@ run_probe() {
 	# shellcheck disable=SC2086
 	"$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/parse_probe.uc" "$1"
 }
-
-echo "-- parse_vmess: v2rayN base64-JSON form"
-# base64 of: {"v":"2","ps":"v-test","add":"v.example.com","port":443,
-#             "id":"550e8400-e29b-41d4-a716-446655440000","aid":0,"tls":"tls"}
-VMESS_OK='vmess://eyJ2IjoiMiIsInBzIjoidi10ZXN0IiwiYWRkIjoidi5leGFtcGxlLmNvbSIsInBvcnQiOjQ0MywiaWQiOiI1NTBlODQwMC1lMjliLTQxZDQtYTcxNi00NDY2NTU0NDAwMDAiLCJhaWQiOjAsInRscyI6InRscyJ9'
-out=$(run_probe "$VMESS_OK")
-echo "$out" | grep -q '"type":[[:space:]]*"vmess"'            || { echo "$out"; fail "vmess type"; }
-echo "$out" | grep -q '"server":[[:space:]]*"v.example.com"'  || { echo "$out"; fail "vmess server"; }
-echo "$out" | grep -q '"server_port":[[:space:]]*443'         || { echo "$out"; fail "vmess port"; }
-echo "$out" | grep -q '"uuid":[[:space:]]*"550e8400-e29b-41d4-a716-446655440000"' || { echo "$out"; fail "vmess uuid"; }
-echo "$out" | grep -q '"enabled":[[:space:]]*true'            || { echo "$out"; fail "vmess tls.enabled"; }
-# aid: 0 → must NOT emit alter_id
-echo "$out" | grep -q 'alter_id' && { echo "$out"; fail "vmess alter_id leaked on aid=0"; }
-pass "parse_vmess accepts v2rayN base64-JSON URL"
-
-echo "-- parse_vmess: invalid base64 → null"
-out=$(run_probe 'vmess://!!!not-base64!!!')
-# build_outbounds returns no outbound when parse fails → probe prints "null".
-echo "$out" | grep -q '^null$' || { echo "$out"; fail "vmess invalid: expected null"; }
-pass "parse_vmess rejects malformed payload"
 
 echo "-- parse_ss: plain method:password@host:port#name"
 out=$(run_probe 'ss://aes-256-gcm:test-pw@s.example.com:8388#myname')
@@ -386,23 +366,6 @@ out=$(run_probe 'trojan://pw%0aevil@h.example.com:443#san')
 echo "$out" | grep -q '"password":[[:space:]]*"pwevil"' \
 	|| { echo "$out"; fail "trojan password not scrubbed: expected 'pwevil'"; }
 pass "trojan password control chars dropped"
-
-echo "-- parse_vmess: tag with control chars is sanitized to imported-<hex>"
-# base64 of: {"v":"2","ps":"my\nevil","add":"v.example.com","port":443,
-#             "id":"550e8400-e29b-41d4-a716-446655440000","aid":0}
-VMESS_BAD_TAG='vmess://eyJ2IjoiMiIsInBzIjoibXlcbmV2aWwiLCJhZGQiOiJ2LmV4YW1wbGUuY29tIiwicG9ydCI6NDQzLCJpZCI6IjU1MGU4NDAwLWUyOWItNDFkNC1hNzE2LTQ0NjY1NTQ0MDAwMCIsImFpZCI6MH0='
-out=$(run_probe "$VMESS_BAD_TAG")
-# tag must NOT contain a literal newline; must match the fallback form.
-echo "$out" | grep -qE '"tag":[[:space:]]*"imported-[0-9a-f]{8}"' \
-	|| { echo "$out"; fail "vmess tag not sanitized to imported-<hex>"; }
-pass "vmess tag with newline replaced by imported-<hex>"
-
-echo "-- parse_vmess: server with non-host bytes → null"
-# base64 of: {"v":"2","ps":"x","add":"v.example.com\n","port":443,"id":"u","aid":0}
-VMESS_BAD_HOST='vmess://eyJ2IjoiMiIsInBzIjoieCIsImFkZCI6InYuZXhhbXBsZS5jb21cbiIsInBvcnQiOjQ0MywiaWQiOiJ1IiwiYWlkIjowfQ=='
-out=$(run_probe "$VMESS_BAD_HOST")
-echo "$out" | grep -q '^null$' || { echo "$out"; fail "vmess: bad host should return null"; }
-pass "parse_vmess rejects host with non-host bytes"
 
 echo "-- parse_hy2: port out of range → null"
 out=$(run_probe 'hy2://pw@h.example.com:99999')
@@ -566,15 +529,15 @@ out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 [ "$out" = "true
 false" ] && pass "is_outbound_proxy_kind works" || { echo "FAIL: [$out]"; exit 1; }
 
-# Membership coverage — every kind the dispatch branches once enumerated.
+# Membership coverage — every kind in the active proxy set.
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
     let h = require("helpers");
-    let want = ["vless","vmess","trojan","hysteria2","shadowsocks","tuic","anytls"];
+    let want = ["vless","trojan","hysteria2","shadowsocks"];
     let ok = true;
     for (let t in want) if (!h.is_outbound_proxy_kind(t)) ok = false;
     printf("%s\n", ok ? "all-covered" : "missing");
 ')
-[ "$out" = "all-covered" ] && pass "all 7 kinds present" || { echo "FAIL"; exit 1; }
+[ "$out" = "all-covered" ] && pass "all active proxy kinds present" || { echo "FAIL"; exit 1; }
 
 echo "OK"
