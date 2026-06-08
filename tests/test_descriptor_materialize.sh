@@ -29,7 +29,7 @@ out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
     print(sprintf("tabs=%s fields=%d", join(",", m.tabs), length(m.fields)));
 ')
 case "$out" in
-    "tabs=basic fields=1") echo "PASS: materialize union ($out)" ;;
+    "tabs=tls,basic fields=27") echo "PASS: materialize union ($out)" ;;
     *) echo "FAIL: materialize union [$out]"; exit 1 ;;
 esac
 
