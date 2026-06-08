@@ -58,8 +58,25 @@ button.cbi-button.busy {
 .sb-secret-wrap > input { flex: 1; }
 .sb-eye-toggle { min-width: 5em; }
 
-/* E1: subscription expand — read-only child rows */
-.sb-sub-child td { background: #fafafa; color: #555; font-size: 90%; }
-.sb-sub-child td:first-child { width: 30px; }
-.sb-sub-child .sb-sub-child-name { padding-left: 2em; }
-.sb-sub-child .sb-sub-child-name::before { content: '→ '; opacity: 0.6; }
+/* E2: subscription expand — read-only child rows, aligned with parent grid columns */
+.sb-sub-child td {
+    background: #fafafa;
+    color: #555;
+    font-size: 90%;
+    border-top: 1px dashed #d0d0d0;
+}
+.sb-sub-child td:first-child {
+    width: 30px;
+}
+.sb-sub-child .sb-sub-child-name {
+    padding-left: 2em;
+    font-weight: 500;
+}
+.sb-sub-child .sb-sub-child-name::before {
+    content: '→ ';
+    opacity: 0.6;
+}
+/* The 5-column grid (Enable / Name / Type / Address / JSON) — make sure
+   the child mirror cells line up by giving them explicit min-widths. */
+.sb-sub-child td:nth-child(3) { color: #888; font-style: italic; }
+.sb-sub-child td:nth-child(4) { font-family: monospace; }
