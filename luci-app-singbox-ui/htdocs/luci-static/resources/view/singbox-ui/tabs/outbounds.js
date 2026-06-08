@@ -70,6 +70,19 @@ function buildOutboundsMap() {
 		return false;
 	};
 
+	o = s.taboption('basic', form.DummyValue, '_address', _('Address'));
+	o.modalonly = false;
+	o.editable  = false;
+	o.cfgvalue  = function (section_id) {
+		var t = uci.get('singbox-ui', section_id, 'type') || '';
+		if (t === 'subscription') return uci.get('singbox-ui', section_id, 'sub_url') || '—';
+		if (t === 'url')          return uci.get('singbox-ui', section_id, 'proxy_url') ? '(share-link)' : '—';
+		if (t === 'interface')    return uci.get('singbox-ui', section_id, 'interface') || '—';
+		var srv = uci.get('singbox-ui', section_id, 'server')      || '';
+		var prt = uci.get('singbox-ui', section_id, 'server_port') || '';
+		return srv && prt ? srv + ':' + prt : (srv || '—');
+	};
+
 	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
 	o.value('vless',        'VLESS');
 	o.value('vmess',        'VMess');

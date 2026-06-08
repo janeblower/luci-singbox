@@ -146,6 +146,17 @@ function buildInboundsMap() {
 	SB_INBOUND_PROTOCOLS.forEach(function (p) { o.value(p[0], _(p[1])); });
 	o.default = 'tproxy'; o.rmempty = false;
 
+	o = s.taboption('basic', form.DummyValue, '_address', _('Address'));
+	o.modalonly = false;
+	o.editable  = false;
+	o.cfgvalue  = function (section_id) {
+		var p = uci.get('singbox-ui', section_id, 'protocol') || '';
+		if (p === 'tun') return uci.get('singbox-ui', section_id, 'interface_name') || 'singbox-tun';
+		var listen = uci.get('singbox-ui', section_id, 'listen')      || '::';
+		var port   = uci.get('singbox-ui', section_id, 'listen_port') || '—';
+		return listen + ':' + port;
+	};
+
 	o = s.taboption('basic', form.Value, 'listen', _('Listen address'));
 	o.modalonly = true; o.placeholder = '::';
 	o.depends('protocol', 'direct');
