@@ -1,0 +1,1 @@
+length(c.inbounds) == 1 && c.inbounds[0].type == "vless" && c.inbounds[0].listen_port == 443 && c.inbounds[0].users[0].uuid == "99999999-aaaa-bbbb-cccc-dddddddddddd" && c.inbounds[0].tls.enabled == true && c.inbounds[0].tls.certificate_path == "/etc/sb/fullchain.pem"

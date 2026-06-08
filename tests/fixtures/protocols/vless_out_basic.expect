@@ -1,0 +1,1 @@
+c.outbounds[0].type == "vless" && c.outbounds[0].server == "203.0.113.10" && c.outbounds[0].server_port == 443 && c.outbounds[0].uuid == "11111111-2222-3333-4444-555555555555" && c.outbounds[0].flow == "xtls-rprx-vision" && c.outbounds[0].tls.enabled == true && c.outbounds[0].tls.server_name == "cdn.example.com"

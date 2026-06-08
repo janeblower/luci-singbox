@@ -36,12 +36,14 @@ config outbound 'vl'
 	option server_port '443'
 	option server_uuid 'uuid-aaaa'
 	option vless_flow 'xtls-rprx-vision'
-	option security 'reality'
+	option tls_enabled '1'
+	option reality_enabled '1'
 	option tls_server_name 'www.microsoft.com'
+	option utls_enabled '1'
 	option utls_fingerprint 'chrome'
 	option reality_public_key 'PUBKEY'
 	option reality_short_id 'ab12'
-	option transport 'grpc'
+	option transport_type 'grpc'
 	option transport_service_name 'gun'
 "
 run_gen
@@ -155,8 +157,9 @@ config outbound 'vl'
 	option server 'a.b'
 	option server_port '443'
 	option server_uuid 'uu'
-	option security 'tls'
+	option tls_enabled '1'
 	option tls_server_name 'a.b'
+	option utls_enabled '1'
 	option utls_fingerprint 'chrome'
 	option multiplex_enabled '1'
 	option multiplex_protocol 'smux'
@@ -190,7 +193,7 @@ config outbound 'vx'
 	option server 'a.b'
 	option server_port '443'
 	option server_uuid 'uu'
-	option transport 'xhttp'
+	option transport_type 'xhttp'
 	option transport_path '/x'
 	option transport_xhttp_mode 'stream-up'
 "
@@ -234,9 +237,9 @@ config outbound 'vech'
 	option server 'ech.example.com'
 	option server_port '443'
 	option server_uuid 'uu-ech'
-	option security 'tls'
+	option tls_enabled '1'
 	option tls_server_name 'ech.example.com'
-	option tls_ech '1'
+	option tls_ech_enabled '1'
 	list   tls_ech_config '-----BEGIN ECH CONFIG-----'
 	list   tls_ech_config 'BASE64DATA'
 	list   tls_ech_config '-----END ECH CONFIG-----'
@@ -263,7 +266,7 @@ config outbound 'vplain'
 	option server 'a.b'
 	option server_port '443'
 	option server_uuid 'uu'
-	option security 'tls'
+	option tls_enabled '1'
 	option tls_server_name 'a.b'
 "
 run_gen
@@ -439,7 +442,7 @@ else
 fi
 
 # D1.3: vless descriptor migration parity guard — byte-equal golden assertion.
-# Must pass both before (legacy) and after (descriptor) the migration.
+# Updated in E2: VLESS now uses new DSL (tls_enabled instead of security=tls).
 echo "-- vless descriptor parity (D1.3 golden)"
 golden='{ "type": "vless", "tag": "vl1", "server": "vless.example.com", "server_port": 443, "uuid": "550e8400-e29b-41d4-a716-446655440000", "flow": "xtls-rprx-vision", "tls": { "enabled": true, "server_name": "vless.example.com" } }'
 actual=$(
@@ -449,7 +452,7 @@ let ob = require("outbound");
 let s = { ".name":"vl1", "server":"vless.example.com", "server_port":"443",
           "server_uuid":"550e8400-e29b-41d4-a716-446655440000",
           "vless_flow":"xtls-rprx-vision",
-          "security":"tls", "tls_server_name":"vless.example.com" };
+          "tls_enabled":"1", "tls_server_name":"vless.example.com" };
 printf("%J", ob.build_constructor_for(s, "vless"));
 '
 )
