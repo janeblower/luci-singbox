@@ -16,7 +16,7 @@ reg.register({
         { name: "listen_port", type: "number", tab: "basic", required: true,
           validate: "port", default: 7895, ui_label: "Listen port" },
         { name: "network", type: "enum", tab: "basic",
-          options: ["", "tcp", "udp"], default: "",
+          values: ["", "tcp", "udp"], default: "",
           ui_label: "Network" },
         { name: "tcp_fast_open", type: "bool", tab: "basic",
           ui_label: "TCP fast open", default: 0, advanced: true },
@@ -43,7 +43,8 @@ reg.register({
             listen:       length(s_opt(s, "listen")) ? s.listen : "::",
             listen_port:  port,
         };
-        if (length(s_opt(s, "network"))) out.network = s.network;
+        let net = s_opt(s, "network");
+        if (net == "tcp" || net == "udp") out.network = net;
         if (s_bool(s, "tcp_fast_open")) out.tcp_fast_open = true;
         if (s_bool(s, "udp_fragment"))  out.udp_fragment  = true;
         return out;
