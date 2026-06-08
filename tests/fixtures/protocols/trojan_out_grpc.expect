@@ -1,0 +1,1 @@
+c.outbounds[0].transport.type == "grpc" && c.outbounds[0].transport.service_name == "TjSvc"

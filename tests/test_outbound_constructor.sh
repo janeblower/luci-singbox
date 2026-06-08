@@ -86,7 +86,7 @@ config outbound 'tj'
 	option server 't.example.com'
 	option server_port '443'
 	option server_password 'tj-pw'
-	option security 'tls'
+	option tls_enabled '1'
 "
 run_gen
 check "trojan type"     '"type": "trojan"'
@@ -428,7 +428,7 @@ actual=$(
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 let ob = require("outbound");
 let s = { ".name":"t1", "server":"example.com", "server_port":"443",
-          "server_password":"pw", "security":"tls", "tls_server_name":"example.com" };
+          "server_password":"pw", "tls_enabled":"1", "tls_server_name":"example.com" };
 printf("%J", ob.build_constructor_for(s, "trojan"));
 '
 )

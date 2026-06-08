@@ -1,0 +1,12 @@
+config outbound 'trojan_out'
+    option enabled '1'
+    option type 'trojan'
+    option server '203.0.113.20'
+    option server_port '8443'
+    option server_password 'pw-secret'
+    option tls_enabled '1'
+    option tls_server_name 'tj.example.com'
+
+config route_default 'route'
+    option enabled '1'
+    option final 'trojan_out'

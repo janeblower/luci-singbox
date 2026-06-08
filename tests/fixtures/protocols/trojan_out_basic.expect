@@ -1,0 +1,1 @@
+c.outbounds[0].type == "trojan" && c.outbounds[0].password == "pw-secret" && c.outbounds[0].tls.server_name == "tj.example.com"

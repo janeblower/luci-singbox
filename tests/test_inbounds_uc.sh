@@ -184,7 +184,7 @@ config inbound 'tj'
 	option protocol 'trojan'
 	option listen_port '443'
 	option server_password 'trojan-pw'
-	option security 'tls'
+	option tls_enabled '1'
 	option tls_certificate_path '/c.pem'
 	option tls_key_path '/k.pem'
 "
@@ -579,7 +579,7 @@ actual=$(
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 let inb = require("inbound");
 let s = { ".name":"in_t1", "protocol":"trojan", "listen":"::", "listen_port":"443",
-          "server_password":"pw", "security":"tls",
+          "server_password":"pw", "tls_enabled":"1",
           "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
 printf("%J", inb.build_one(s));
 '
