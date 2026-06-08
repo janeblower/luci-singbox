@@ -1,0 +1,1 @@
+c.inbounds[0].type == "hysteria2" && c.inbounds[0].users[0].password == "hy2pass" && c.inbounds[0].tls.enabled == true && c.inbounds[0].tls.certificate_path == "/etc/sb/cert.pem"

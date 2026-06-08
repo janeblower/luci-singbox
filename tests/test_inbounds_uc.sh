@@ -199,8 +199,8 @@ config inbound 'hy'
 	option protocol 'hysteria2'
 	option listen_port '8443'
 	option server_password 'hy-pw'
-	option hysteria2_obfs_type 'salamander'
-	option hysteria2_obfs_password 'obfs-pw'
+	option obfs_type 'salamander'
+	option obfs_password 'obfs-pw'
 	option up_mbps '100'
 	option down_mbps '200'
 	option tls_certificate_path '/c.pem'
@@ -316,7 +316,7 @@ config inbound 'hy'
 	option server_password 'p'
 	option up_mbps '100'
 	option down_mbps '50'
-	option hysteria2_masquerade 'https://www.example.com'
+	option masquerade 'https://www.example.com'
 	option tls_server_name 'hy.example.com'
 	option tls_certificate_path '/etc/ssl/cert.pem'
 	option tls_key_path '/etc/ssl/key.pem'
@@ -699,9 +699,9 @@ actual=$(
 let inb = require("inbound");
 let s = { ".name":"h2_in1", "protocol":"hysteria2", "listen_port":"443",
           "server_password":"pw",
-          "hysteria2_obfs_type":"salamander", "hysteria2_obfs_password":"obfspw",
+          "obfs_type":"salamander", "obfs_password":"obfspw",
           "up_mbps":"100", "down_mbps":"200",
-          "hysteria2_masquerade":"https://example.com",
+          "masquerade":"https://example.com",
           "brutal_debug":"1", "ignore_client_bandwidth":"1",
           "tls_server_name":"h2.example.com",
           "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };

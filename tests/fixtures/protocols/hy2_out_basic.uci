@@ -1,0 +1,13 @@
+config outbound 'hy2_out'
+    option enabled '1'
+    option type 'hysteria2'
+    option server '203.0.113.30'
+    option server_port '443'
+    option server_password 'hy2pass'
+    option up_mbps '50'
+    option down_mbps '200'
+    option tls_server_name 'hy2.example.com'
+
+config route_default 'route'
+    option enabled '1'
+    option final 'hy2_out'
