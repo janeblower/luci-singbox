@@ -365,7 +365,10 @@ export async function fetchPreviewConfig(page) {
                 const j = await r.json();
                 if (j.error) throw new Error('ubus error: ' + JSON.stringify(j.error));
                 const payload = j.result?.[1];
-                if (!payload || payload.status !== 'success' || !payload.content)
+                // preview_config emits { status: "ok", content: "<json>" } on
+                // success; some older paths used "success" — accept both.
+                const okStatus = payload && (payload.status === 'ok' || payload.status === 'success');
+                if (!okStatus || !payload.content)
                     throw new Error('bad preview_config payload: '
                                     + JSON.stringify(payload).slice(0, 200));
                 return payload.content;
