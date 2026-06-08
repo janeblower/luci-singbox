@@ -66,14 +66,15 @@ function decorateSecretInput(opt) {
 
 function makeVirtual(opt) {
     // Virtual fields exist only in the form DOM; never written to UCI.
+    // cfgvalue must NOT call formvalue — formvalue dereferences the
+    // rendered UI element which doesn't exist during pre-render cfgvalue
+    // (`findElements` throws TypeError on undefined node). LuCI's depends()
+    // machinery reads the current value via formvalue at runtime, so we
+    // only need cfgvalue to return the initial (default) state.
     opt.write  = function () {};
     opt.remove = function () {};
-    var origCfg = opt.cfgvalue;
-    opt.cfgvalue = function (section_id) {
-        var v = this.formvalue ? this.formvalue(section_id) : null;
-        if (v != null) return v;
-        return (origCfg ? origCfg.call(this, section_id) : opt.default || '0');
-    };
+    var defVal = (opt.default != null) ? String(opt.default) : '0';
+    opt.cfgvalue = function () { return defVal; };
 }
 
 function applyMaterialized(s, kind, protoName, materialized) {
@@ -95,61 +96,65 @@ function applyMaterialized(s, kind, protoName, materialized) {
         s._sbMatRegistry['__tab__' + tab] = 1;
     });
 
-    // Inject a _show_advanced_<tab> virtual bool at the start of each tab
-    // that contains advanced fields. The field controls advanced visibility
-    // without writing to UCI.
-    var advancedTabs = {};
-    materialized.fields.forEach(function (f) {
-        if (f.advanced && f.tab) advancedTabs[f.tab] = true;
-    });
-    Object.keys(advancedTabs).forEach(function (tab) {
-        var advKey = '__adv__' + tab;
-        if (!s._sbMatRegistry[advKey]) {
-            var advOpt = s.taboption(tab, form.Flag, '_show_advanced_' + tab, _('Show advanced'));
-            advOpt.modalonly = true;
-            advOpt.default   = '0';
-            makeVirtual(advOpt);
-            s._sbMatRegistry[advKey] = { opt: advOpt };
-        }
-    });
+    // _show_advanced_<tab> virtual fields are pre-injected by
+    // registry.materialize() into materialized.fields with virtual:true and
+    // ui_label "Show advanced fields". The main field loop below registers
+    // them with makeVirtual once per (tab,name) pair — no separate pass
+    // required.
+
+    // Build the full depends arms for a (field, protoName) pair: protocol
+    // gate AND every (parent_enabled / advanced / per-value depends) clause.
+    // The same field can be declared by multiple protocols — each call must
+    // produce its own arm so the OR semantics of opt.depends() correctly
+    // gate by the right protocol AND the right advanced/parent state.
+    function depsArmsFor(f, protoName) {
+        var values = (f.depends && Array.isArray(f.depends.value))
+            ? f.depends.value
+            : (f.depends ? [f.depends.value] : [null]);
+        return values.map(function (v) {
+            var d = {};
+            d[discr] = protoName;
+            if (f.depends) d[f.depends.field] = v;
+            if (f.parent_enabled) d[f.parent_enabled] = '1';
+            if (f.advanced) d['_show_advanced_' + f.tab] = '1';
+            return d;
+        });
+    }
 
     materialized.fields.forEach(function (f) {
         var key = f.tab + '\t' + f.name;
         var registered = s._sbMatRegistry[key];
         if (registered) {
-            // Same shared field appearing for a second protocol: extend the
-            // depends() chain so the field shows for that protocol too.
-            var deps = {};
-            deps[discr] = protoName;
-            registered.opt.depends(deps);
+            // Same shared field appearing for another protocol: extend the
+            // depends() chain with the new protocol's full gate (NOT just
+            // discr=proto — that would bypass advanced/parent_enabled and
+            // make the field unconditionally visible for the new protocol).
+            depsArmsFor(f, protoName).forEach(function (d) {
+                registered.opt.depends(d);
+            });
+            if (f.type === 'enum' && Array.isArray(f.values))
+                f.values.forEach(function (v) {
+                    if (!registered.values[v]) {
+                        registered.opt.value(v, v === '' ? _('(none)') : v);
+                        registered.values[v] = 1;
+                    }
+                });
             return;
         }
         var opt = s.taboption(f.tab, widgetFor(f), f.name, _(labelFor(f)));
         opt.modalonly = true;
 
-        // Dependency chain: protocol = protoName AND (depends/parent_enabled/advanced).
-        // depends.value may be a string (single match) or an array (any-of) —
-        // LuCI ORs successive opt.depends() calls together, so emit one per
-        // accepted value.
-        var values = (f.depends && Array.isArray(f.depends.value))
-            ? f.depends.value
-            : (f.depends ? [f.depends.value] : [null]);
-        values.forEach(function (v) {
-            var deps = {};
-            deps[discr] = protoName;
-            if (f.depends) deps[f.depends.field] = v;
-            if (f.parent_enabled) deps[f.parent_enabled] = '1';
-            if (f.advanced) deps['_show_advanced_' + f.tab] = '1';
-            opt.depends(deps);
-        });
+        depsArmsFor(f, protoName).forEach(function (d) { opt.depends(d); });
 
         if (f.required)        opt.rmempty = false;
         if (f.default != null) opt.default = String(f.default);
         if (f.placeholder)     opt.placeholder = f.placeholder;
 
+        var values = {};
         if (f.type === 'enum' && Array.isArray(f.values))
             f.values.forEach(function (v) {
                 opt.value(v, v === '' ? _('(none)') : v);
+                values[v] = 1;
             });
 
         if (f.secret) {
@@ -160,7 +165,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
         if (f.virtual) makeVirtual(opt);
 
         attachValidator(opt, f.validate);
-        s._sbMatRegistry[key] = { opt: opt };
+        s._sbMatRegistry[key] = { opt: opt, values: values };
     });
 }
 
