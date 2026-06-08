@@ -52,3 +52,8 @@ button.cbi-button.busy {
 /* Monitoring tab table — closed connections fade out. */
 .sb-monitoring table         { width: 100%; }
 .sb-monitoring tr.closed td  { opacity: 0.6; }
+
+/* E1: eye-toggle for secret inputs in the descriptor-driven modal */
+.sb-secret-wrap { display: inline-flex; align-items: stretch; gap: 4px; width: 100%; }
+.sb-secret-wrap > input { flex: 1; }
+.sb-eye-toggle { min-width: 5em; }

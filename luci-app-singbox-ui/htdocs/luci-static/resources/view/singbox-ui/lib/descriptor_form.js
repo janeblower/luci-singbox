@@ -33,6 +33,29 @@ function attachValidator(opt, validateName) {
 	}
 }
 
+function decorateSecretInput(opt) {
+	var orig = opt.renderWidget;
+	opt.renderWidget = function (section_id, option_index, cfgvalue) {
+		var node = orig.call(this, section_id, option_index, cfgvalue);
+		var input = (node.tagName === 'INPUT')
+			? node
+			: (node.querySelector && node.querySelector('input[type="password"]'));
+		if (!input) return node;
+		var btn = E('button', {
+			'type': 'button',
+			'class': 'cbi-button sb-eye-toggle',
+			'aria-label': _('Toggle visibility'),
+			'click': function (ev) {
+				ev.preventDefault();
+				var shown = (input.type === 'text');
+				input.type = shown ? 'password' : 'text';
+				btn.textContent = shown ? _('Show') : _('Hide');
+			}
+		}, _('Show'));
+		return E('span', { 'class': 'sb-secret-wrap' }, [node, btn]);
+	};
+}
+
 function applyDescriptor(s, kind, protoName, descriptor) {
 	if (!descriptor || !Array.isArray(descriptor.fields)) return;
 	var discr = (kind === 'inbound') ? 'protocol' : 'type';
@@ -67,7 +90,10 @@ function applyDescriptor(s, kind, protoName, descriptor) {
 				opt.value(v, v === '' ? _('(none)') : v);
 				values[v] = 1;
 			});
-		if (f.secret) opt.password = true;
+		if (f.secret) {
+			opt.password = true;
+			decorateSecretInput(opt);
+		}
 		attachValidator(opt, f.validate);
 		s._sbDescriptorRegistry[key] = { opt: opt, values: values };
 	});
