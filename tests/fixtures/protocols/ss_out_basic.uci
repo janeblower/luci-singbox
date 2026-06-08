@@ -1,0 +1,12 @@
+config outbound 'ss_out'
+    option enabled '1'
+    option type 'shadowsocks'
+    option server '198.51.100.10'
+    option server_port '8388'
+    option shadowsocks_method '2022-blake3-aes-128-gcm'
+    option server_password 'cHc='
+    option network 'tcp'
+
+config route_default 'route'
+    option enabled '1'
+    option final 'ss_out'

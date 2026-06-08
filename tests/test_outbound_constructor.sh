@@ -400,7 +400,7 @@ nocheck "no ignored ws path"      '/should-be-ignored'
 # D1.2: shadowsocks descriptor migration parity guard — byte-equal golden assertion.
 # Must pass both before (legacy) and after (descriptor) the migration.
 echo "-- shadowsocks descriptor parity (D1.2 golden)"
-golden='{ "type": "shadowsocks", "tag": "ss1", "server": "example.com", "server_port": 8388, "password": "pw", "method": "aes-128-gcm" }'
+golden='{ "type": "shadowsocks", "tag": "ss1", "server": "example.com", "server_port": 8388, "method": "aes-128-gcm", "password": "pw" }'
 actual=$(
 	# shellcheck disable=SC2086
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '

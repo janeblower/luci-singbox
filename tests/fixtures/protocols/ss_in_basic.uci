@@ -1,0 +1,7 @@
+config inbound 'ss_in'
+    option enabled '1'
+    option protocol 'shadowsocks'
+    option listen '::'
+    option listen_port '8388'
+    option shadowsocks_method '2022-blake3-aes-128-gcm'
+    option server_password 'cHc='
