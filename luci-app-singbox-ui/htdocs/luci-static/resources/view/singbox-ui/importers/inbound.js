@@ -187,7 +187,7 @@ function openJsonExportModal(kind, name) {
 		])
 	]);
 
-	SbRpc.callExportSection(kind, name, SbRpc.withRevealToken({}).token).then(function (res) {
+	SbRpc.callExportSection(kind, name).then(function (res) {
 		if (!res || res.status !== 'ok') {
 			pre.textContent = _('Error: ') + ((res && res.message) || _('unknown error'));
 			return;
