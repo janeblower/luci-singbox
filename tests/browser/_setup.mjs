@@ -309,31 +309,43 @@ export async function fillField(page, label, value, opts = {}) {
     await wait(300);
 }
 
-// Click modal Save, then page Save (action bar). Waits for the page to
-// settle (network idle + 2s post-write reflow).
+// Click modal Save (which queues UCI changes into LuCI's in-memory uci
+// store), then directly call L.uci.save() to flush to disk via rpcd.
+// Apply (which triggers sing-box restart) is intentionally skipped — the
+// test container's /etc/init.d/sing-box is a stub, and we only want the
+// UCI write so preview_config sees the new section.
+//
+// Empirical: clicking the action-bar "Save" button spins indefinitely
+// because the modal stays open (the modal Save handler queues changes
+// but LuCI's GridSection re-renders the create row without closing the
+// modal_overlay). Calling L.uci.save() directly is the canonical API
+// path and bypasses the button-state racing entirely.
 export async function saveAndReload(page) {
-    // Modal Save. Anchor on word boundaries so we never click "Lookup",
-    // "Apply preset", etc. — only literal "Save"/"Apply"/"OK" buttons.
+    // Modal Save — positive button. Queues changes into L.uci (in-memory).
     await page.evaluate(() => {
         const ov = document.getElementById('modal_overlay');
-        const btn = ov && Array.from(ov.querySelectorAll('button'))
-            .find(b => /\b(save|apply|ok)\b/i.test(b.textContent) && !b.disabled);
-        if (!btn) throw new Error('no modal Save button');
+        const btn = ov && ov.querySelector('button.cbi-button-positive');
+        if (!btn) throw new Error('no modal Save (cbi-button-positive) button');
         btn.click();
     });
-    await wait(800);
-    // Action-bar Save (top-level Save & Apply / Save Settings).
-    await page.evaluate(() => {
-        const btn = Array.from(document.querySelectorAll('button'))
-            .find(b => /save\s*&?\s*apply|save\s+settings/i.test(b.textContent)
-                       && !b.disabled);
-        if (btn) btn.click();
+    await wait(2000);  // let the modal's async handler queue all field writes
+    // Flush queued UCI changes via the rpcd write path. L.uci.save() pushes
+    // pending in-memory changes to rpcd; L.uci.apply(0) finalises them on
+    // disk WITHOUT triggering the apply-confirm dialog (timeout=0). The
+    // stubbed /etc/init.d/sing-box swallows the post-write restart hook.
+    const res = await page.evaluate(async () => {
+        if (!window.L || !L.uci) return { err: 'no L.uci' };
+        try {
+            await L.uci.save();
+            // apply() may reject when the rollback timer expires — that's
+            // fine; the on-disk commit already happened. Swallow.
+            try { await L.uci.apply(0); } catch (_) {}
+            return { ok: true };
+        } catch (e) { return { err: String(e) }; }
     });
-    // LuCI's Apply dialog often holds an EventSource open and never
-    // reaches network-idle. Swallow the timeout — the wait(1500) below
-    // gives the post-write reflow enough time.
-    await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {});
-    await wait(1500);
+    if (res?.err) throw new Error(`saveAndReload: ${res.err}`);
+    // Give rpcd a moment to flush; preview_config retries 3× anyway.
+    await wait(1200);
 }
 
 // Call the singbox-ui preview_config RPC from the page context, parse
