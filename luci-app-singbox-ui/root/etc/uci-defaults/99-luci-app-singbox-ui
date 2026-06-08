@@ -417,7 +417,6 @@ migrate_rename_e2_keys() {
 		fi
 	done
 
-	uci -q commit singbox-ui
 	return 0
 }
 
@@ -452,7 +451,6 @@ migrate_drop_removed_protocols() {
 		esac
 	done
 
-	[ "$dropped" -gt 0 ] && uci -q commit singbox-ui
 	return 0
 }
 
