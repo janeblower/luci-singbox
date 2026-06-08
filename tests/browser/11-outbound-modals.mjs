@@ -5,7 +5,7 @@
 import {
     runTest, assert,
     openEditModalBySid, listTabs, visibleFieldsInActiveTab,
-    VM_HOST, VM_USER, VM_PASS,
+    BROWSER_URL, LUCI_USER, LUCI_PASS,
 } from './_setup.mjs';
 import { execSync } from 'node:child_process';
 
@@ -20,7 +20,7 @@ const PROTOCOLS = [
 ];
 
 function ssh(cmd) {
-    return execSync(`sshpass -p ${VM_PASS} ssh -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
+    return execSync(`sshpass -p ${LUCI_PASS} ssh -o StrictHostKeyChecking=no ${LUCI_USER}@${new URL(BROWSER_URL).hostname} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
 }
 
 for (const p of PROTOCOLS) {

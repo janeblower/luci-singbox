@@ -7,13 +7,13 @@
 // We don't drive the actual UI Save button to keep the test deterministic —
 // the UI write path is covered by 10/11/20/21 (everything before Save).
 
-import { assert, VM_HOST, VM_USER, VM_PASS } from './_setup.mjs';
+import { assert, BROWSER_URL, LUCI_USER, LUCI_PASS } from './_setup.mjs';
 import { execSync } from 'node:child_process';
 
 const SID = '_e2bt_save';
 
 function ssh(cmd) {
-    return execSync(`sshpass -p ${VM_PASS} ssh -o StrictHostKeyChecking=no ${VM_USER}@${VM_HOST} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
+    return execSync(`sshpass -p ${LUCI_PASS} ssh -o StrictHostKeyChecking=no ${LUCI_USER}@${new URL(BROWSER_URL).hostname} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
 }
 
 console.log('\n=== save-roundtrip: seed VLESS outbound and apply ===');

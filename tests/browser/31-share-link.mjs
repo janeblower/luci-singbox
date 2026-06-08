@@ -2,7 +2,6 @@
 
 import {
     runTest, assert, wait, dismissModal,
-    VM_HOST, VM_USER, VM_PASS,
 } from './_setup.mjs';
 
 await runTest('share-link: button opens modal', async ({ page }) => {
