@@ -32,7 +32,7 @@ export async function newPage() {
     const loginRes = await fetch(LUCI_URL, {
         method: 'POST',
         headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: `luci_username=${LUCI_USER}&luci_password=${LUCI_PASS}`,
+        body: `luci_username=${encodeURIComponent(LUCI_USER)}&luci_password=${encodeURIComponent(LUCI_PASS)}`,
         redirect: 'manual',
     });
     const m = (loginRes.headers.get('set-cookie') || '').match(/sysauth_http=([^;]+)/);
