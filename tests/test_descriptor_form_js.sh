@@ -350,3 +350,15 @@ console.log('OK');
 NODE
 
 node "$TMP/run.js" "$JS"
+
+# E2: applyMaterialized accepts materialized payload and creates per-tab
+# advanced toggle.
+grep -q 'applyMaterialized' "$JS" \
+    || { echo "FAIL: applyMaterialized missing"; exit 1; }
+grep -q '_show_advanced_' "$JS" \
+    || { echo "FAIL: per-tab advanced toggle missing"; exit 1; }
+grep -q 'parent_enabled' "$JS" \
+    || { echo "FAIL: parent_enabled handling missing"; exit 1; }
+grep -q 'virtual' "$JS" \
+    || { echo "FAIL: virtual field handling missing"; exit 1; }
+echo "PASS: descriptor_form E2 shape"
