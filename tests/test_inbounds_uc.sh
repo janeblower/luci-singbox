@@ -80,26 +80,6 @@ config inbound 'noport'
 run_gen
 nocheck "noport skipped" '"tag": "noport"'
 
-echo "-- tun inbound"
-write_cfg "
-config inbound 'tun0'
-	option enabled '1'
-	option mode 'constructor'
-	option protocol 'tun'
-	option interface_name 'singbox-tun'
-	option inet4_address '172.19.0.1/30'
-	option mtu '9000'
-	option stack 'mixed'
-	option auto_route '1'
-"
-run_gen
-check "tun type"        '"type": "tun"'
-check "tun ifname"      '"interface_name": "singbox-tun"'
-check "tun address"     '"172.19.0.1/30"'
-check "tun stack"       '"stack": "mixed"'
-check "tun auto_route"  '"auto_route": true'
-nocheck "tun has no listen_port" '"listen_port":'
-
 echo "-- shadowsocks inbound"
 write_cfg "
 config inbound 'ss'
@@ -144,38 +124,6 @@ nocheck "no short_id array" '"short_id": \['
 check "vless handshake"   '"server": "www.example.com"'
 check "vless transport"   '"type": "ws"'
 check "vless ws path"     '"path": "/ray"'
-
-echo "-- vmess inbound with alter_id + tls"
-write_cfg "
-config inbound 'vm'
-	option enabled '1'
-	option protocol 'vmess'
-	option listen_port '8443'
-	option server_uuid 'uuid-2222'
-	option vmess_alter_id '7'
-	option security 'tls'
-	option tls_server_name 'vm.example.com'
-	option tls_certificate_path '/etc/ssl/cert.pem'
-	option tls_key_path '/etc/ssl/key.pem'
-"
-run_gen
-check "vmess type"      '"type": "vmess"'
-check "vmess uuid"      '"uuid": "uuid-2222"'
-check "vmess alterId"   '"alterId": 7'
-nocheck "no legacy snake_case" '"alter_id"'
-check "vmess tls cert"  '"certificate_path": "/etc/ssl/cert.pem"'
-
-echo "-- vmess inbound without alter_id omits the field"
-write_cfg "
-config inbound 'vm2'
-	option enabled '1'
-	option protocol 'vmess'
-	option listen_port '8444'
-	option server_uuid 'uuid-3333'
-"
-run_gen
-nocheck "no alterId when unset" '"alterId"'
-nocheck "no per-user security on inbound" '"security"'
 
 echo "-- trojan inbound"
 write_cfg "
@@ -324,18 +272,6 @@ config inbound 'hy'
 run_gen
 check "hy2 masquerade" '"masquerade": "https://www.example.com"'
 
-echo "-- vmess_security on inbound is ignored (per-user cipher is client-side)"
-write_cfg "
-config inbound 'vm2'
-	option enabled '1'
-	option protocol 'vmess'
-	option listen_port '8443'
-	option server_uuid 'uuid-vm2'
-	option vmess_security 'chacha20-poly1305'
-"
-run_gen
-nocheck "no per-user security key" '"security":'
-
 echo "-- hysteria2 inbound with brutal_debug + ignore_client_bandwidth + limits"
 write_cfg "
 config inbound 'hy2lim'
@@ -464,30 +400,6 @@ check "ss good password"    '"password": "gp"'
 nocheck "no malformed name"  '"name": "no-colon-here"'
 nocheck "no two-parts name"  '"name": "only"'
 
-echo "-- vmess inbound multi-user via inbound_user list"
-write_cfg "
-config inbound 'vm_multi'
-	option enabled '1'
-	option protocol 'vmess'
-	option listen_port '8445'
-	option server_uuid 'should-be-ignored-uuid'
-	option vmess_alter_id '99'
-	list   inbound_user 'alice:uuid-aaa'
-	list   inbound_user 'bob:uuid-bbb:5'
-"
-run_gen
-check "vm-multi type"        '"type": "vmess"'
-check "vm-multi alice name"  '"name": "alice"'
-check "vm-multi alice uuid"  '"uuid": "uuid-aaa"'
-check "vm-multi bob name"    '"name": "bob"'
-check "vm-multi bob uuid"    '"uuid": "uuid-bbb"'
-check "vm-multi bob alterId" '"alterId": 5'
-# Section-level single-user collapsed when multi present.
-nocheck "no section uuid leak"       '"uuid": "should-be-ignored-uuid"'
-nocheck "no section alterId leak 99" '"alterId": 99'
-# No legacy alter_id casing anywhere.
-nocheck "no snake_case alter_id"     '"alter_id"'
-
 echo "-- vless inbound multi-user with per-user flow"
 write_cfg "
 config inbound 'vl_multi'
@@ -506,24 +418,6 @@ check "vl-multi alice uuid"    '"uuid": "uuid-aaa"'
 check "vl-multi bob uuid"      '"uuid": "uuid-bbb"'
 check "vl-multi carol uuid"    '"uuid": "uuid-ccc"'
 nocheck "no section single-user uuid leak" '"uuid": "section-uuid"'
-
-echo "-- vmess inbound_user skips malformed entries"
-write_cfg "
-config inbound 'vm_bad'
-	option enabled '1'
-	option protocol 'vmess'
-	option listen_port '8446'
-	list   inbound_user 'no-colon-here'
-	list   inbound_user ':missing-name:uuid-x'
-	list   inbound_user 'missing-uuid:'
-	list   inbound_user 'good:uuid-good:0'
-"
-run_gen
-check "vm-bad good user"             '"name": "good"'
-check "vm-bad good uuid"             '"uuid": "uuid-good"'
-nocheck "no malformed no-colon-here" '"name": "no-colon-here"'
-nocheck "no malformed missing-name"  '"name": ""'
-nocheck "no malformed empty uuid"    '"uuid": ""'
 
 # D1.5.3: shadowsocks inbound descriptor parity (golden).
 # Must pass both before (legacy) and after (descriptor) the migration.
@@ -634,56 +528,6 @@ if [ "$actual" = "$golden" ]; then
 	echo "  PASS: vless inbound parity (single-user)"
 else
 	echo "FAIL: vless inbound parity (single-user)"
-	echo "  expected: $golden"
-	echo "  actual:   $actual"
-	exit 1
-fi
-
-# D1.5.5: vmess inbound descriptor parity (golden).
-# Must pass both before (legacy) and after (descriptor) the migration.
-echo "-- vmess inbound descriptor parity: multi-user (D1.5.5 golden)"
-golden='{ "type": "vmess", "tag": "vm_in1", "listen": "::", "listen_port": 443, "users": [ { "name": "alice", "uuid": "11111111-1111-1111-1111-111111111111" }, { "name": "bob", "uuid": "22222222-2222-2222-2222-222222222222", "alterId": 64 } ], "tls": { "enabled": true, "server_name": "example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
-actual=$(
-	# shellcheck disable=SC2086
-	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
-let inb = require("inbound");
-let s = { ".name":"vm_in1", "protocol":"vmess", "listen":"::", "listen_port":"443",
-          "inbound_user":["alice:11111111-1111-1111-1111-111111111111",
-                          "bob:22222222-2222-2222-2222-222222222222:64"],
-          "security":"tls",
-          "tls_server_name":"example.com",
-          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
-printf("%J", inb.build_one(s));
-'
-)
-if [ "$actual" = "$golden" ]; then
-	echo "  PASS: vmess inbound parity (multi-user)"
-else
-	echo "FAIL: vmess inbound parity (multi-user)"
-	echo "  expected: $golden"
-	echo "  actual:   $actual"
-	exit 1
-fi
-
-echo "-- vmess inbound descriptor parity: single-user (D1.5.5 golden)"
-golden='{ "type": "vmess", "tag": "vm_in2", "listen": "::", "listen_port": 443, "users": [ { "name": "vm_in2", "uuid": "33333333-3333-3333-3333-333333333333", "alterId": 64 } ], "tls": { "enabled": true, "server_name": "example.com", "certificate_path": "/etc/ssl/c.pem", "key_path": "/etc/ssl/k.pem" } }'
-actual=$(
-	# shellcheck disable=SC2086
-	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
-let inb = require("inbound");
-let s = { ".name":"vm_in2", "protocol":"vmess", "listen":"::", "listen_port":"443",
-          "server_uuid":"33333333-3333-3333-3333-333333333333",
-          "vmess_alter_id":"64",
-          "security":"tls",
-          "tls_server_name":"example.com",
-          "tls_certificate_path":"/etc/ssl/c.pem", "tls_key_path":"/etc/ssl/k.pem" };
-printf("%J", inb.build_one(s));
-'
-)
-if [ "$actual" = "$golden" ]; then
-	echo "  PASS: vmess inbound parity (single-user)"
-else
-	echo "FAIL: vmess inbound parity (single-user)"
 	echo "  expected: $golden"
 	echo "  actual:   $actual"
 	exit 1

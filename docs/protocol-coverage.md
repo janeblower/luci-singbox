@@ -11,7 +11,7 @@ Each row lists the **sing-box JSON path** and the **UCI field** (when one exists
 
 ## Shared TLS block
 
-Implemented by `build_tls` (inbound, `lib/inbound.uc:31`) and `build_tls_client` (outbound, `lib/outbound.uc:14`). The two are intentionally distinct: server-side adds cert/key paths and reality handshake; client-side adds reality.public_key.
+Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distinct: server-side adds cert/key paths and reality handshake; client-side adds reality.public_key.
 
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
@@ -265,13 +265,13 @@ E2 DSL descriptor (`lib/protocols/direct.uc`). Replaces the legacy `type=interfa
 
 ## Subscription / share-link parsers
 
-`lib/outbound.uc:166` `parse_proxy_url(url)` dispatcher.
+`lib/outbound.uc` `parse_proxy_url(url)` dispatcher (Phase E2: vmess removed).
 
 | Scheme | Status | Phase |
 |---|---|---|
-| `vless://` | есть (`parse_vless`, :129) | — |
-| `hy2://`, `hysteria2://` | есть (`parse_hy2`, :150) | — |
-| `vmess://` (base64-JSON, v2rayN) | есть (`parse_vmess`) | — |
+| `vless://` | есть (`parse_vless`) | — |
+| `hy2://`, `hysteria2://` | есть (`parse_hy2`) | — |
+| `vmess://` (base64-JSON, v2rayN) | **dropped** (Phase E2 — VMess removed) | E2 |
 | `ss://` (plain + base64) | есть (`parse_ss`) | — |
 | `trojan://` | есть (`parse_trojan`) | — |
 | `tuic://` | out-of-scope (no canonical share-link spec) |

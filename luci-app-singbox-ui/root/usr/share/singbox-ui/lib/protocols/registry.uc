@@ -24,10 +24,8 @@ const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
 function validate_field(f, ctx) {
     assert(f.name != null,                        sprintf("%s: field.name required", ctx));
     assert(KNOWN_TYPES[f.type] != null,           sprintf("%s: field.type unknown: %s", ctx, f.type));
-    // Accept either `tab` (E2 DSL) or `group` (pre-E2 legacy DSL). Both must
-    // be absent for the assertion to fire. Tasks 7-13 migrate all descriptors
-    // to `tab`; until then, existing descriptors continue to register.
-    assert(f.tab != null || f.group != null,      sprintf("%s.%s: field.tab required", ctx, f.name));
+    // All descriptors use `tab` (E2 DSL). Legacy `group` fallback removed.
+    assert(f.tab != null,                         sprintf("%s.%s: field.tab required", ctx, f.name));
     if (f.depends != null) {
         assert(f.depends.field != null,           sprintf("%s.%s: depends.field required", ctx, f.name));
         assert(f.depends.value != null,           sprintf("%s.%s: depends.value required (string or array)", ctx, f.name));
