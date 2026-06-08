@@ -201,6 +201,10 @@ export async function openAddModal(page, kind) {
 // Fill a labeled field in the currently-open modal. opts.kind selects
 // the writer: 'flag' clicks a checkbox; 'select' sets value+dispatches
 // change; 'text'/'number' (default) writes to input.value+input event.
+//
+// Caller must clickTab() into the right tab first — when two tabs use
+// the same .cbi-value-title text (e.g., "Tag" on Inbound and Inbound‑TLS),
+// the first DOM match wins regardless of visibility.
 export async function fillField(page, label, value, opts = {}) {
     const kind = opts.kind || 'text';
     const r = await page.evaluate(({ label, value, kind }) => {
@@ -237,11 +241,12 @@ export async function fillField(page, label, value, opts = {}) {
 // Click modal Save, then page Save (action bar). Waits for the page to
 // settle (network idle + 2s post-write reflow).
 export async function saveAndReload(page) {
-    // Modal Save.
+    // Modal Save. Anchor on word boundaries so we never click "Lookup",
+    // "Apply preset", etc. — only literal "Save"/"Apply"/"OK" buttons.
     await page.evaluate(() => {
         const ov = document.getElementById('modal_overlay');
         const btn = ov && Array.from(ov.querySelectorAll('button'))
-            .find(b => /save|apply|ok/i.test(b.textContent) && !b.disabled);
+            .find(b => /\b(save|apply|ok)\b/i.test(b.textContent) && !b.disabled);
         if (!btn) throw new Error('no modal Save button');
         btn.click();
     });
@@ -253,20 +258,31 @@ export async function saveAndReload(page) {
                        && !b.disabled);
         if (btn) btn.click();
     });
+    // LuCI's Apply dialog often holds an EventSource open and never
+    // reaches network-idle. Swallow the timeout — the wait(1500) below
+    // gives the post-write reflow enough time.
     await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {});
     await wait(1500);
 }
 
 // Call the singbox-ui preview_config RPC from the page context, parse
 // the `content` field as JSON, return the object. Retries 3× on
-// transient errors (rpcd settling after UCI rewrite).
+// transient errors (rpcd settling after UCI rewrite); backoff schedule
+// 200/500/1250 ms covers ~1.95 s of rpcd reload jitter.
+//
+// The sysauth_http cookie is HttpOnly (newPage sets it that way to
+// mirror how LuCI itself sets it). page.evaluate runs in the page
+// context which cannot read HttpOnly cookies, so we extract the token
+// node-side via Puppeteer's cookies API and pass it into evaluate.
 export async function fetchPreviewConfig(page) {
+    const cookies = await page.cookies();
+    const tokenCookie = cookies.find(c => c.name === 'sysauth_http');
+    if (!tokenCookie) throw new Error('no sysauth_http cookie');
+    const token = tokenCookie.value;
+
     for (let attempt = 0, delay = 200; attempt < 3; attempt++, delay *= 2.5) {
         try {
-            const result = await page.evaluate(async () => {
-                const m = document.cookie.match(/sysauth_http=([^;]+)/);
-                const token = m ? m[1] : null;
-                if (!token) throw new Error('no sysauth_http cookie');
+            const result = await page.evaluate(async (token) => {
                 const r = await fetch('/cgi-bin/luci/admin/ubus', {
                     method: 'POST',
                     headers: { 'content-type': 'application/json' },
@@ -282,7 +298,7 @@ export async function fetchPreviewConfig(page) {
                     throw new Error('bad preview_config payload: '
                                     + JSON.stringify(payload).slice(0, 200));
                 return payload.content;
-            });
+            }, token);
             return JSON.parse(result);
         } catch (e) {
             if (attempt === 2) throw e;
