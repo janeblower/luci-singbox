@@ -1,0 +1,1 @@
+c.inbounds[0].type == "tproxy" && c.inbounds[0].listen_port == 7895 && c.inbounds[0].network == "tcp" && c.inbounds[0].tcp_fast_open == true

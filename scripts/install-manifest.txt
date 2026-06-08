@@ -48,6 +48,7 @@ root/usr/share/singbox-ui/lib/protocols/registry.uc	usr/share/singbox-ui/lib/pro
 root/usr/share/singbox-ui/lib/protocols/schema_dump.uc	usr/share/singbox-ui/lib/protocols/schema_dump.uc	data
 root/usr/share/singbox-ui/lib/protocols/shadowsocks.uc	usr/share/singbox-ui/lib/protocols/shadowsocks.uc	data
 root/usr/share/singbox-ui/lib/protocols/ssh.uc	usr/share/singbox-ui/lib/protocols/ssh.uc	data
+root/usr/share/singbox-ui/lib/protocols/tproxy.uc	usr/share/singbox-ui/lib/protocols/tproxy.uc	data
 root/usr/share/singbox-ui/lib/protocols/trojan.uc	usr/share/singbox-ui/lib/protocols/trojan.uc	data
 root/usr/share/singbox-ui/lib/protocols/tuic.uc	usr/share/singbox-ui/lib/protocols/tuic.uc	data
 root/usr/share/singbox-ui/lib/protocols/vless.uc	usr/share/singbox-ui/lib/protocols/vless.uc	data
