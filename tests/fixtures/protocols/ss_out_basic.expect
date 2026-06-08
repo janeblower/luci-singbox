@@ -1,0 +1,1 @@
+c.outbounds[0].type == "shadowsocks" && c.outbounds[0].method == "2022-blake3-aes-128-gcm" && c.outbounds[0].password == "cHc="

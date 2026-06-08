@@ -74,11 +74,12 @@ Implemented by `build_tls` (inbound, `lib/inbound.uc:31`) and `build_tls_client`
 | `network` (`tcp`/`udp`/empty) | есть |
 | `override_address`, `override_port` | нет (Phase 5: needed for explicit DNS hijack listener) |
 
-### shadowsocks inbound (`lib/inbound.uc:127`)
+### shadowsocks inbound (`lib/protocols/shadowsocks.uc` — E2 DSL)
 | Field | Status |
 |---|---|
-| `method`, `password` | есть (single-user) |
-| `users[]` (multi-user) | есть | — |
+| `method`, `password` | есть (single-user via `server_password`) |
+| `ss_user` (`name:method:password` per entry) | есть (multi-user, E2 format) |
+| `users[]` (multi-user, each with `name`, `method`, `password`) | есть | — |
 | `network` (`tcp`/`udp`/empty) | есть | — |
 | `multiplex` | есть | — |
 | `managed` (SSM API dynamic user) | out-of-scope |
@@ -180,16 +181,18 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 | `network` (`tcp`/`udp`) | `network` | n/a | есть | — |
 | `server_ports[]`, `hop_interval`, `hop_interval_max` | — | n/a | out-of-scope (1.14+ feature) | — |
 
-### shadowsocks outbound (`lib/outbound.uc:77,86`)
+### shadowsocks outbound (`lib/protocols/shadowsocks.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
 | `server_port` | `server_port` | n/a | есть | — |
 | `password` | `server_password` | n/a | есть | — |
 | `method` | `shadowsocks_method` | n/a | есть | — |
-| `network` | — | n/a | нет | — |
-| `multiplex` | — | n/a | нет (vless/vmess/trojan only) | — |
-| `plugin`, `plugin_opts` | — | n/a | out-of-scope (legacy SIP022) | — |
+| `network` | `network` | n/a | есть | E2 |
+| `plugin` | `plugin` | n/a | есть | E2 |
+| `plugin_opts` | `plugin_opts` | n/a | есть | E2 |
+| `udp_over_tcp` | `udp_over_tcp` | n/a | есть | E2 |
+| `multiplex` | `multiplex_*` | n/a | есть (shared block) | E2 |
 
 ### tuic outbound (`lib/outbound.uc`, tuic branch)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
