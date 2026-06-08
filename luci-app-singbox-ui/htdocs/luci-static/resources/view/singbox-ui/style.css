@@ -57,3 +57,9 @@ button.cbi-button.busy {
 .sb-secret-wrap { display: inline-flex; align-items: stretch; gap: 4px; width: 100%; }
 .sb-secret-wrap > input { flex: 1; }
 .sb-eye-toggle { min-width: 5em; }
+
+/* E1: subscription expand — read-only child rows */
+.sb-sub-child td { background: #fafafa; color: #555; font-size: 90%; }
+.sb-sub-child td:first-child { width: 30px; }
+.sb-sub-child .sb-sub-child-name { padding-left: 2em; }
+.sb-sub-child .sb-sub-child-name::before { content: '→ '; opacity: 0.6; }
