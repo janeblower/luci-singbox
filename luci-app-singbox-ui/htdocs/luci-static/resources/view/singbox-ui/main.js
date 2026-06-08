@@ -18,6 +18,7 @@
 'require view.singbox-ui.tabs.monitoring as SbTabMon';
 'require view.singbox-ui.widgets.action-bar as SbActionBar';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
+'require view.singbox-ui.lib.subscription_view as SbSubView';
 
 return view.extend({
 	load: function () {
@@ -36,6 +37,7 @@ return view.extend({
 						'warning');
 				}
 			}),
+			SbSubView.loadAllExpansions().then(function (cache) { window.singboxUiSubExpand = cache; }),
 		]);
 	},
 
@@ -129,6 +131,7 @@ return view.extend({
 					});
 				});
 				SbStatusPanel.renderStatusPanel(statusHolder);
+				SbSubView.injectChildRows(outboundsNode, window.singboxUiSubExpand || {});
 			});
 
 			return root;
