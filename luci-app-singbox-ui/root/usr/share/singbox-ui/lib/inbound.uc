@@ -19,6 +19,7 @@ try { require("protocols.hysteria2");   } catch (_) {}
 try { require("protocols.tuic");        } catch (_) {}
 try { require("protocols.anytls");      } catch (_) {}
 try { require("protocols.direct");      } catch (_) {}
+try { require("protocols.tproxy");     } catch (_) {}
 
 let helpers = require("helpers");
 const s_opt    = helpers.s_opt;
