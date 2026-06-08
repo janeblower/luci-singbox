@@ -677,27 +677,6 @@ msgstr "Блокировать"
 msgid "Final route applied to traffic that does not match any rule."
 msgstr "Финальное правило для трафика, не совпавшего ни с одним правилом."
 
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:25
-msgid "Show secrets"
-msgstr "Показать секреты"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:29
-#, javascript-format
-msgid "Hide secrets (%d:%02d)"
-msgstr "Скрыть секреты (%d:%02d)"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:75
-msgid "Reveal secrets?"
-msgstr "Раскрыть секреты?"
-
-#: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:76
-msgid ""
-"You are about to reveal credentials. They will be visible to anyone with "
-"read access to this LuCI install for the next 5 minutes."
-msgstr ""
-"Сейчас будут раскрыты учётные данные. Они будут видны всем пользователям с "
-"правом чтения этой LuCI-установки в течение следующих 5 минут."
-
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:80
 msgid "Reveal"
 msgstr "Раскрыть"
@@ -845,6 +824,27 @@ msgstr "Неизвестное значение congestion_control:"
 #: /home/ubuntu/luci-app-sing-box/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:102
 msgid "sing-box may reject it at runtime."
 msgstr "sing-box может отклонить его во время выполнения."
+
+msgid "Show"
+msgstr "Показать"
+
+msgid "Hide"
+msgstr "Скрыть"
+
+msgid "Toggle visibility"
+msgstr "Переключить видимость"
+
+msgid "View"
+msgstr "Просмотр"
+
+msgid "Address"
+msgstr "Адрес"
+
+msgid "Subscription endpoint — read-only"
+msgstr "Endpoint подписки — только для чтения"
+
+msgid "Endpoint expanded from a subscription. Edit the subscription URL itself if you need changes."
+msgstr "Endpoint развёрнут из подписки. Чтобы внести изменения, правьте URL подписки."
 
 #~ msgid "Method"
 #~ msgstr "Метод"
