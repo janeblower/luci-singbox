@@ -230,16 +230,41 @@ export async function runTest(name, fn) {
 
 // Click "Add" in the kind table and wait for the modal.
 // kind: 'inbound' or 'outbound'.
-export async function openAddModal(page, kind) {
-    const opened = await page.evaluate((kind) => {
+// name: required — LuCI's GridSection won't enable the Add button until
+//       `.cbi-section-create-name` is filled with a valid UCI section
+//       name. The helper fills it, fires the input+blur events the
+//       uciname validator listens on, then clicks Add.
+export async function openAddModal(page, kind, name) {
+    if (!name || typeof name !== 'string') {
+        throw new Error(`openAddModal: name is required (kind=${kind})`);
+    }
+    const opened = await page.evaluate((kind, name) => {
         const tbl = document.getElementById(`cbi-singbox-ui-${kind}`);
         if (!tbl) return { ok: false, reason: `no #cbi-singbox-ui-${kind}` };
-        const btn = Array.from(tbl.querySelectorAll('button'))
-            .find(b => /^\s*add\b/i.test(b.textContent));
-        if (!btn) return { ok: false, reason: 'no Add button' };
-        btn.click();
+
+        // LuCI renders a .cbi-section-create row above the table when
+        // s.addremove is true. The name input has class .cbi-section-create-name.
+        const nameInp = tbl.parentElement.querySelector('.cbi-section-create-name')
+                       || document.querySelector(`#cbi-singbox-ui-${kind} ~ .cbi-section-create .cbi-section-create-name`)
+                       || document.querySelector('.cbi-section-create-name');
+        if (!nameInp) return { ok: false, reason: 'no .cbi-section-create-name input' };
+
+        nameInp.focus();
+        nameInp.value = name;
+        nameInp.dispatchEvent(new Event('input',  { bubbles: true }));
+        nameInp.dispatchEvent(new Event('blur',   { bubbles: true }));
+        nameInp.dispatchEvent(new Event('change', { bubbles: true }));
+
+        const addBtn = nameInp.closest('.cbi-section-create')?.querySelector('.cbi-button-add')
+                    || document.querySelector('.cbi-section-create .cbi-button-add');
+        if (!addBtn) return { ok: false, reason: 'no Add button in create row' };
+
+        // The validator may still be racing; force-enable defensively.
+        addBtn.disabled = false;
+        addBtn.click();
         return { ok: true };
-    }, kind);
+    }, kind, name);
+
     if (!opened.ok) throw new Error(`openAddModal: ${opened.reason}`);
     await wait(3500);
 }
