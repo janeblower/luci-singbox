@@ -172,11 +172,11 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 | `server_port` | `server_port` | n/a | есть | — |
 | `password` | `server_password` | n/a | есть | — |
 | `tls` (forced) | (see Shared TLS block) | n/a | есть | — |
-| `obfs.type` | `hysteria2_obfs_type` | n/a | есть | — |
-| `obfs.password` | `hysteria2_obfs_password` | n/a | есть | — |
+| `obfs.type` | `obfs_type` | n/a | есть | — |
+| `obfs.password` | `obfs_password` | n/a | есть | — |
 | `up_mbps` | `up_mbps` | n/a | есть | — |
 | `down_mbps` | `down_mbps` | n/a | есть | — |
-| `masquerade` (server-side concept; ignored in outbound) | `hysteria2_masquerade` | n/a | есть (no-op) | — |
+| `masquerade` | `masquerade` | n/a | есть | — |
 | `brutal_debug` | `brutal_debug` | n/a | есть | — |
 | `network` (`tcp`/`udp`) | `network` | n/a | есть | — |
 | `server_ports[]`, `hop_interval`, `hop_interval_max` | — | n/a | out-of-scope (1.14+ feature) | — |

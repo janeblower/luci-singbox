@@ -1,0 +1,1 @@
+c.outbounds[0].type == "hysteria2" && c.outbounds[0].password == "hy2pass" && c.outbounds[0].up_mbps == 50 && c.outbounds[0].tls.enabled == true && c.outbounds[0].tls.server_name == "hy2.example.com"

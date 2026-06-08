@@ -101,8 +101,8 @@ config outbound 'hy'
 	option server 'h.example.com'
 	option server_port '8443'
 	option server_password 'hy-pw'
-	option hysteria2_obfs_type 'salamander'
-	option hysteria2_obfs_password 'obfs'
+	option obfs_type 'salamander'
+	option obfs_password 'obfs'
 	option up_mbps '50'
 	option down_mbps '100'
 "
@@ -180,7 +180,7 @@ config outbound 'hy'
 	option server_password 'p'
 	option up_mbps '100'
 	option down_mbps '50'
-	option hysteria2_masquerade 'https://www.example.com'
+	option masquerade 'https://www.example.com'
 "
 run_gen
 check "outbound hy2 masquerade" '"masquerade": "https://www.example.com"'
@@ -523,9 +523,9 @@ actual_hy2=$(
 let ob = require("outbound");
 let s = { ".name":"hy2full", "server":"hy2.example.com", "server_port":"8443",
           "server_password":"secret-pass",
-          "hysteria2_obfs_type":"salamander", "hysteria2_obfs_password":"obfs-pw",
+          "obfs_type":"salamander", "obfs_password":"obfs-pw",
           "up_mbps":"100", "down_mbps":"50",
-          "hysteria2_masquerade":"https://www.example.com",
+          "masquerade":"https://www.example.com",
           "brutal_debug":"1", "network":"tcp",
           "security":"tls", "tls_server_name":"hy2.example.com" };
 printf("%J", ob.build_constructor_for(s, "hysteria2"));
