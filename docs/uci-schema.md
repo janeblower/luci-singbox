@@ -255,8 +255,8 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 | `server_password` | string | — | yes | `protocol=hysteria2` | Authentication password. |
 | `up_mbps` | integer | Mbps | no | `protocol=hysteria2` | Upload bandwidth limit. |
 | `down_mbps` | integer | Mbps | no | `protocol=hysteria2` | Download bandwidth limit. |
-| `hysteria2_obfs_type` | enum | `none`, `salamander` | no | `protocol=hysteria2` | Obfuscation type. Omitted when `none`. |
-| `hysteria2_obfs_password` | string | — | no | `hysteria2_obfs_type=salamander` | Obfuscation password. |
+| `obfs_type` | enum | `none`, `salamander` | no | `protocol=hysteria2` | Obfuscation type. Omitted when `none`. |
+| `obfs_password` | string | — | no | `obfs_type=salamander` | Obfuscation password. |
 | `hysteria2_masquerade` | string | URL | no | `protocol=hysteria2` | Masquerade URL served to non-Hysteria2 clients. |
 | `brutal_debug` | bool | `0`/`1` | no | `protocol=hysteria2` | Emit `brutal_debug` for the Brutal congestion-control debug output. |
 | `ignore_client_bandwidth` | bool | `0`/`1` | no | `protocol=hysteria2` | Inbound-only flag — server ignores client-reported bandwidth (uses its own `up_mbps`/`down_mbps`). |
