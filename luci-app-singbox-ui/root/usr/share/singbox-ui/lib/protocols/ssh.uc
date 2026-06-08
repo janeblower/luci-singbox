@@ -8,12 +8,12 @@ reg.register({
 	type: "ssh",
 	sing_box_type: "ssh",
 	fields: [
-		{ name: "server",            type: "string", required: true,  validate: "host" },
-		{ name: "server_port",       type: "number", default: 22,     validate: "port" },
-		{ name: "user",              type: "string", required: true },
-		{ name: "password",          type: "string", secret: true },
-		{ name: "private_key_path",  type: "string" },
-		{ name: "host_key",          type: "list",   item: "string" },
+		{ name: "server",            type: "string", required: true,  validate: "host", group: "basic" },
+		{ name: "server_port",       type: "number", default: 22,     validate: "port", group: "basic" },
+		{ name: "user",              type: "string", required: true,                    group: "credentials" },
+		{ name: "password",          type: "string", secret: true,                      group: "credentials" },
+		{ name: "private_key_path",  type: "string",                                    group: "credentials" },
+		{ name: "host_key",          type: "list",   item: "string",                    group: "advanced" },
 	],
 	emit: function(s) {
 		let o = {
