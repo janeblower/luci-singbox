@@ -1,35 +1,146 @@
-// lib/protocols/registry.uc — protocol descriptor registry.
+// lib/protocols/registry.uc — protocol descriptor registry (Phase E2 DSL).
 //
-// Each protocol module (lib/protocols/<name>.uc) calls register(descriptor)
-// at load time. Descriptor shape:
-//   { kind: "outbound"|"inbound", type: <UCI type tag>, sing_box_type: <string>,
-//     fields: [{ name, type, required?, default?, validate?, secret? }, ...],
-//     emit: function(section) -> sing-box JSON object }
+// Descriptor shape:
+//   {
+//     kind:          "outbound" | "inbound",
+//     type:          <UCI type tag>,
+//     sing_box_type: <string>,
+//     shared:        { tls?: {...}, transport?: {...}, multiplex?: {...}, dial?: true },
+//     fields:        [{ name, type, tab, required?, default?, validate?, secret?,
+//                       advanced?, depends?: {field,value}, parent_enabled?,
+//                       placeholder?, values?, item?, virtual? }, ...],
+//     emit:          function(section) -> sing-box JSON object,
+//   }
 //
-// The dispatcher in lib/outbound.uc / lib/inbound.uc consults get(kind, type)
-// FIRST; if a descriptor is registered, its emit() is called. Otherwise the
-// legacy switch-by-type logic runs. This lets us introduce protocols via
-// descriptors incrementally without rewriting the existing code.
+// materialize(kind, type) returns the descriptor with shared-block fields
+// merged in and per-tab _show_advanced_<tab> flags auto-injected.
 
 let _registry = {};
+let _materialize_cache = {};
+
+const KNOWN_SHARED  = { tls: 1, transport: 1, multiplex: 1, dial: 1 };
+const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
+
+function validate_field(f, ctx) {
+    assert(f.name != null,                        sprintf("%s: field.name required", ctx));
+    assert(KNOWN_TYPES[f.type] != null,           sprintf("%s: field.type unknown: %s", ctx, f.type));
+    // Accept either `tab` (E2 DSL) or `group` (pre-E2 legacy DSL). Both must
+    // be absent for the assertion to fire. Tasks 7-13 migrate all descriptors
+    // to `tab`; until then, existing descriptors continue to register.
+    assert(f.tab != null || f.group != null,      sprintf("%s.%s: field.tab required", ctx, f.name));
+    if (f.depends != null) {
+        assert(f.depends.field != null,           sprintf("%s.%s: depends.field required", ctx, f.name));
+        assert(f.depends.value != null,           sprintf("%s.%s: depends.value required (string or array)", ctx, f.name));
+    }
+}
+
+function validate_shared(shared, ctx) {
+    if (shared == null) return;
+    for (let k in shared)
+        assert(KNOWN_SHARED[k] != null, sprintf("%s: unknown shared key '%s'", ctx, k));
+}
 
 function register(descriptor) {
-	assert(descriptor.kind != null, "descriptor.kind required");
-	assert(descriptor.type != null, "descriptor.type required");
-	assert(type(descriptor.emit) === "function", "descriptor.emit must be a function");
-	let key = sprintf("%s:%s", descriptor.kind, descriptor.type);
-	_registry[key] = descriptor;
+    assert(descriptor.kind != null,            "descriptor.kind required");
+    assert(descriptor.type != null,            "descriptor.type required");
+    assert(type(descriptor.emit) === "function", "descriptor.emit must be a function");
+    let ctx = sprintf("%s:%s", descriptor.kind, descriptor.type);
+    validate_shared(descriptor.shared, ctx);
+    for (let f in (descriptor.fields || []))
+        validate_field(f, ctx);
+    _registry[ctx] = descriptor;
+    delete _materialize_cache[ctx];
 }
 
 function get(kind, type_) {
-	return _registry[sprintf("%s:%s", kind, type_)];
+    return _registry[sprintf("%s:%s", kind, type_)];
 }
 
 function types_for_kind(kind) {
-	let out = [];
-	for (let k in _registry)
-		if (_registry[k].kind === kind) push(out, _registry[k].type);
-	return out;
+    let out = [];
+    for (let k in _registry)
+        if (_registry[k].kind === kind) push(out, _registry[k].type);
+    return out;
 }
 
-return { register, get, types_for_kind, _registry };
+// _shared_module(name) — lazy loader that returns the corresponding
+// _shared/<name>.uc module, or null if it does not exist. Wrapped in
+// try/catch so the registry remains usable during early bring-up
+// (Tasks 1–5) before all shared modules ship.
+function _shared_module(name) {
+    try { return require(sprintf("protocols._shared.%s", name)); }
+    catch (e) { return null; }
+}
+
+function _shared_fields(d) {
+    let out = [];
+    if (d.shared == null) return out;
+    for (let blk in d.shared) {
+        let mod = _shared_module(blk);
+        if (mod == null) continue;
+        let applies = mod.applies_to || { kinds: ["inbound", "outbound"] };
+        let kinds_ok = false;
+        for (let k in applies.kinds) if (k === d.kind) kinds_ok = true;
+        if (!kinds_ok) continue;
+        for (let f in (mod.fields || [])) push(out, f);
+    }
+    return out;
+}
+
+function _inject_advanced_flags(fields) {
+    let tabs_with_advanced = {};
+    for (let f in fields)
+        if (f.advanced) tabs_with_advanced[f.tab] = 1;
+    let injected = [];
+    for (let tab in tabs_with_advanced) {
+        push(injected, {
+            name: sprintf("_show_advanced_%s", tab),
+            type: "bool", tab: tab, virtual: true, default: 0,
+            ui_label: "Show advanced fields",
+        });
+    }
+    // Prepend so the toggle renders first inside its tab.
+    return [ ...injected, ...fields ];
+}
+
+function _tabs_for(fields) {
+    let seen = {}, out = [];
+    for (let f in fields) {
+        if (seen[f.tab]) continue;
+        seen[f.tab] = 1; push(out, f.tab);
+    }
+    return out;
+}
+
+function _tabs_with_shared(fields, shared) {
+    // Derive tabs from fields first, then append any declared shared block
+    // names that are not already represented (covers the early bring-up
+    // window where _shared/<name>.uc modules haven't shipped yet).
+    let tabs = _tabs_for(fields);
+    let tab_set = {};
+    for (let t in tabs) tab_set[t] = 1;
+    for (let blk in (shared || {}))
+        if (!tab_set[blk]) { push(tabs, blk); tab_set[blk] = 1; }
+    return tabs;
+}
+
+function materialize(kind, type_) {
+    let key = sprintf("%s:%s", kind, type_);
+    if (_materialize_cache[key] != null) return _materialize_cache[key];
+    let d = _registry[key];
+    if (d == null) return null;
+    let merged = [ ...(d.fields || []), ..._shared_fields(d) ];
+    let with_adv = _inject_advanced_flags(merged);
+    let result = {
+        kind: d.kind,
+        type: d.type,
+        sing_box_type: d.sing_box_type,
+        shared: d.shared || {},
+        fields: with_adv,
+        tabs: _tabs_with_shared(with_adv, d.shared),
+    };
+    _materialize_cache[key] = result;
+    return result;
+}
+
+return { register, get, types_for_kind, materialize, _registry };
