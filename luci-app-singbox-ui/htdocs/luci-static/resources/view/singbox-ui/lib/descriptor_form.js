@@ -81,13 +81,18 @@ function applyMaterialized(s, kind, protoName, materialized) {
     var discr = (kind === 'inbound') ? 'protocol' : 'type';
     s._sbMatRegistry = s._sbMatRegistry || {};
 
-    // Register every tab once. LuCI hides empty tabs automatically.
+    // Register every tab once across the whole section lifetime. LuCI's
+    // s.tab() throws "Tab already declared" if the section already has the
+    // tab — that includes manual registrations in the caller (tabs/*.js
+    // declare the standard set up front). Probe s.tabs (LuCI internal) and
+    // skip when present.
     (materialized.tabs || ['basic']).forEach(function (tab) {
-        if (!s._sbMatRegistry['__tab__' + tab]) {
-            if (typeof s.tab === 'function')
-                s.tab(tab, TAB_TITLES[tab] || tab);
-            s._sbMatRegistry['__tab__' + tab] = 1;
-        }
+        if (s._sbMatRegistry['__tab__' + tab]) return;
+        var alreadyDeclared = Array.isArray(s.tabs)
+            && s.tabs.some(function (t) { return t && t.name === tab; });
+        if (!alreadyDeclared && typeof s.tab === 'function')
+            s.tab(tab, TAB_TITLES[tab] || tab);
+        s._sbMatRegistry['__tab__' + tab] = 1;
     });
 
     // Inject a _show_advanced_<tab> virtual bool at the start of each tab
