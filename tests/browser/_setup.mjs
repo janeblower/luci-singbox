@@ -181,3 +181,112 @@ export async function runTest(name, fn) {
     }
     assert(`${name} — no pageerror`, ctx.errors.length === 0, ctx.errors.join('\n'));
 }
+
+// Click "Add" in the kind table and wait for the modal.
+// kind: 'inbound' or 'outbound'.
+export async function openAddModal(page, kind) {
+    const opened = await page.evaluate((kind) => {
+        const tbl = document.getElementById(`cbi-singbox-ui-${kind}`);
+        if (!tbl) return { ok: false, reason: `no #cbi-singbox-ui-${kind}` };
+        const btn = Array.from(tbl.querySelectorAll('button'))
+            .find(b => /^\s*add\b/i.test(b.textContent));
+        if (!btn) return { ok: false, reason: 'no Add button' };
+        btn.click();
+        return { ok: true };
+    }, kind);
+    if (!opened.ok) throw new Error(`openAddModal: ${opened.reason}`);
+    await wait(3500);
+}
+
+// Fill a labeled field in the currently-open modal. opts.kind selects
+// the writer: 'flag' clicks a checkbox; 'select' sets value+dispatches
+// change; 'text'/'number' (default) writes to input.value+input event.
+export async function fillField(page, label, value, opts = {}) {
+    const kind = opts.kind || 'text';
+    const r = await page.evaluate(({ label, value, kind }) => {
+        const ov = document.getElementById('modal_overlay');
+        const row = Array.from(ov.querySelectorAll('.cbi-value'))
+            .find(r => (r.querySelector('.cbi-value-title') || {})
+                .textContent.trim() === label);
+        if (!row) return { ok: false, reason: `no row "${label}"` };
+        if (kind === 'flag') {
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (!cb) return { ok: false, reason: `"${label}" no checkbox` };
+            if (Boolean(cb.checked) !== Boolean(Number(value))) cb.click();
+            return { ok: true };
+        }
+        if (kind === 'select') {
+            const sel = row.querySelector('select');
+            if (!sel) return { ok: false, reason: `"${label}" no select` };
+            sel.value = value;
+            sel.dispatchEvent(new Event('change', { bubbles: true }));
+            return { ok: true };
+        }
+        const inp = row.querySelector('input[type="text"], input[type="number"], input:not([type])');
+        if (!inp) return { ok: false, reason: `"${label}" no input` };
+        inp.focus();
+        inp.value = String(value);
+        inp.dispatchEvent(new Event('input',  { bubbles: true }));
+        inp.dispatchEvent(new Event('change', { bubbles: true }));
+        return { ok: true };
+    }, { label, value, kind });
+    if (!r.ok) throw new Error(`fillField("${label}"): ${r.reason}`);
+    await wait(300);
+}
+
+// Click modal Save, then page Save (action bar). Waits for the page to
+// settle (network idle + 2s post-write reflow).
+export async function saveAndReload(page) {
+    // Modal Save.
+    await page.evaluate(() => {
+        const ov = document.getElementById('modal_overlay');
+        const btn = ov && Array.from(ov.querySelectorAll('button'))
+            .find(b => /save|apply|ok/i.test(b.textContent) && !b.disabled);
+        if (!btn) throw new Error('no modal Save button');
+        btn.click();
+    });
+    await wait(800);
+    // Action-bar Save (top-level Save & Apply / Save Settings).
+    await page.evaluate(() => {
+        const btn = Array.from(document.querySelectorAll('button'))
+            .find(b => /save\s*&?\s*apply|save\s+settings/i.test(b.textContent)
+                       && !b.disabled);
+        if (btn) btn.click();
+    });
+    await page.waitForNetworkIdle({ idleTime: 800, timeout: 30000 }).catch(() => {});
+    await wait(1500);
+}
+
+// Call the singbox-ui preview_config RPC from the page context, parse
+// the `content` field as JSON, return the object. Retries 3× on
+// transient errors (rpcd settling after UCI rewrite).
+export async function fetchPreviewConfig(page) {
+    for (let attempt = 0, delay = 200; attempt < 3; attempt++, delay *= 2.5) {
+        try {
+            const result = await page.evaluate(async () => {
+                const m = document.cookie.match(/sysauth_http=([^;]+)/);
+                const token = m ? m[1] : null;
+                if (!token) throw new Error('no sysauth_http cookie');
+                const r = await fetch('/cgi-bin/luci/admin/ubus', {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({
+                        jsonrpc: '2.0', id: 1, method: 'call',
+                        params: [token, 'singbox-ui', 'preview_config', {}],
+                    }),
+                });
+                const j = await r.json();
+                if (j.error) throw new Error('ubus error: ' + JSON.stringify(j.error));
+                const payload = j.result?.[1];
+                if (!payload || payload.status !== 'success' || !payload.content)
+                    throw new Error('bad preview_config payload: '
+                                    + JSON.stringify(payload).slice(0, 200));
+                return payload.content;
+            });
+            return JSON.parse(result);
+        } catch (e) {
+            if (attempt === 2) throw e;
+            await wait(delay);
+        }
+    }
+}
