@@ -32,6 +32,15 @@ out=$(je '
 [ "$out" = "true|ex.com" ] || { echo "FAIL: minimal enabled [$out]"; exit 1; }
 echo "PASS: emit_outbound minimal enabled"
 
+# Test 2b: alpn arrives as a JSON array (guard against as_array() regressions).
+out=$(je '
+    let tls = require("protocols._shared.tls");
+    let r = tls.emit_outbound({ tls_enabled: "1", tls_alpn: ["h2", "http/1.1"] });
+    print(sprintf("%s|%d|%s", type(r.alpn), length(r.alpn), r.alpn[0]));
+')
+[ "$out" = "array|2|h2" ] || { echo "FAIL: alpn array [$out]"; exit 1; }
+echo "PASS: emit_outbound alpn is array"
+
 # Test 3: Reality client.
 out=$(je '
     let tls = require("protocols._shared.tls");
@@ -43,6 +52,31 @@ out=$(je '
 ')
 [ "$out" = "true|pk|00ff" ] || { echo "FAIL: Reality client [$out]"; exit 1; }
 echo "PASS: emit_outbound Reality client"
+
+# Regression guard: tls.reality.short_id must be a string, not an array (Phase B fix).
+out=$(je '
+    let tls = require("protocols._shared.tls");
+    let r = tls.emit_outbound({
+        tls_enabled: "1", reality_enabled: "1",
+        reality_public_key: "pk", reality_short_id: "00ff"
+    });
+    print(type(r.reality.short_id));
+')
+[ "$out" = "string" ] || { echo "FAIL: short_id type [$out]"; exit 1; }
+echo "PASS: emit_outbound Reality short_id is string not array"
+
+# Test 3b: inbound Reality — private_key + handshake server.
+out=$(je '
+    let tls = require("protocols._shared.tls");
+    let r = tls.emit_inbound({
+        tls_enabled: "1", reality_enabled: "1",
+        reality_private_key: "pkv", reality_short_id: "00ff",
+        reality_handshake_server: "h.example", reality_handshake_server_port: "443",
+    });
+    print(sprintf("%s|%s|%s|%d", r.reality.enabled, r.reality.private_key, r.reality.handshake.server, r.reality.handshake.server_port));
+')
+[ "$out" = "true|pkv|h.example|443" ] || { echo "FAIL: Reality inbound [$out]"; exit 1; }
+echo "PASS: emit_inbound Reality server"
 
 # Test 4: uTLS client.
 out=$(je '

@@ -1,9 +1,4 @@
-// lib/protocols/_shared/tls.uc — shared TLS field set + JSON emit.
-//
-// UI fields render in the "tls" tab. Gate field is tls_enabled; sub-toggles
-// for Reality (reality_enabled) and uTLS (utls_enabled) live inside the
-// same tab. Hysteria2 forces tls enabled via the second argument to
-// emit_*(s, { force_enabled: true }).
+// lib/protocols/_shared/tls.uc
 
 let helpers = require("helpers");
 const s_opt   = helpers.s_opt;
@@ -11,10 +6,6 @@ const s_bool  = helpers.s_bool;
 const s_num   = helpers.s_num;
 const as_array = helpers.as_array;
 
-// Helper: build the common "enabled, server_name, insecure, alpn, versions,
-// cipher_suites, utls, fragment, record_fragment, ech, reality" payload that
-// both inbound and outbound share. Caller adds inbound-only or outbound-only
-// keys after.
 function _common_payload(s) {
     let tls = { enabled: true };
     if (length(s_opt(s, "tls_server_name")))
@@ -109,8 +100,6 @@ function emit_inbound(s, opts) {
     return tls;
 }
 
-// UI field surface. Basic = the 3 fields the user almost always touches.
-// Advanced = everything else. parent_enabled gates fields on tls_enabled=1.
 return {
     applies_to: { kinds: [ "inbound", "outbound" ] },
 
@@ -142,7 +131,6 @@ return {
           ui_label: "Server key path",
           parent_enabled: "tls_enabled", advanced: true },
 
-        // uTLS sub-toggle (outbound/client only).
         { name: "utls_enabled", type: "bool", tab: "tls",
           ui_label: "Enable uTLS fingerprint",
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
@@ -152,7 +140,7 @@ return {
           default: "chrome",
           parent_enabled: "utls_enabled", advanced: true },
 
-        // Fragment (outbound/client only, Since sing-box 1.12).
+        // Since sing-box 1.12: fragment applies to outbound/client only.
         { name: "tls_fragment", type: "bool", tab: "tls",
           ui_label: "Fragment ClientHello",
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
@@ -164,7 +152,6 @@ return {
           ui_label: "Record fragment",
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
 
-        // ECH sub-toggle.
         { name: "tls_ech_enabled", type: "bool", tab: "tls",
           ui_label: "Enable ECH",
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
@@ -181,7 +168,6 @@ return {
           ui_label: "ECH key path (server)",
           parent_enabled: "tls_ech_enabled", advanced: true },
 
-        // Reality sub-toggle.
         { name: "reality_enabled", type: "bool", tab: "tls",
           ui_label: "Enable Reality",
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
