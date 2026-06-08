@@ -42,6 +42,8 @@ function validate_shared(shared, ctx) {
 
 function register(descriptor) {
     assert(descriptor.kind != null,            "descriptor.kind required");
+    assert(descriptor.kind === "inbound" || descriptor.kind === "outbound",
+        "descriptor.kind must be 'inbound' or 'outbound'");
     assert(descriptor.type != null,            "descriptor.type required");
     assert(type(descriptor.emit) === "function", "descriptor.emit must be a function");
     let ctx = sprintf("%s:%s", descriptor.kind, descriptor.type);
@@ -90,7 +92,7 @@ function _shared_fields(d) {
 function _inject_advanced_flags(fields) {
     let tabs_with_advanced = {};
     for (let f in fields)
-        if (f.advanced) tabs_with_advanced[f.tab] = 1;
+        if (f.advanced && f.tab != null) tabs_with_advanced[f.tab] = 1;
     let injected = [];
     for (let tab in tabs_with_advanced) {
         push(injected, {
@@ -112,18 +114,6 @@ function _tabs_for(fields) {
     return out;
 }
 
-function _tabs_with_shared(fields, shared) {
-    // Derive tabs from fields first, then append any declared shared block
-    // names that are not already represented (covers the early bring-up
-    // window where _shared/<name>.uc modules haven't shipped yet).
-    let tabs = _tabs_for(fields);
-    let tab_set = {};
-    for (let t in tabs) tab_set[t] = 1;
-    for (let blk in (shared || {}))
-        if (!tab_set[blk]) { push(tabs, blk); tab_set[blk] = 1; }
-    return tabs;
-}
-
 function materialize(kind, type_) {
     let key = sprintf("%s:%s", kind, type_);
     if (_materialize_cache[key] != null) return _materialize_cache[key];
@@ -137,7 +127,7 @@ function materialize(kind, type_) {
         sing_box_type: d.sing_box_type,
         shared: d.shared || {},
         fields: with_adv,
-        tabs: _tabs_with_shared(with_adv, d.shared),
+        tabs: _tabs_for(with_adv),
     };
     _materialize_cache[key] = result;
     return result;

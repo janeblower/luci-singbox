@@ -29,7 +29,7 @@ out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
     print(sprintf("tabs=%s fields=%d", join(",", m.tabs), length(m.fields)));
 ')
 case "$out" in
-    "tabs=basic,tls fields="*) echo "PASS: materialize union ($out)" ;;
+    "tabs=basic fields=1") echo "PASS: materialize union ($out)" ;;
     *) echo "FAIL: materialize union [$out]"; exit 1 ;;
 esac
 
@@ -70,7 +70,7 @@ case "$out" in
     *) echo "FAIL: bad shared key not rejected [$out]"; exit 1 ;;
 esac
 
-# Test 4: _show_advanced_<tab> auto-injected for tabs with any advanced:true field.
+# Test 4: _show_advanced_<tab> auto-injected and prepended first.
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
     let reg = require("protocols.registry");
@@ -83,13 +83,11 @@ out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
         emit: function(s) { return {}; },
     });
     let m = reg.materialize("outbound", "advdemo");
-    let names = [];
-    for (let f in m.fields) push(names, f.name);
-    print(join(",", names));
+    print(m.fields[0].name);
 ')
 case "$out" in
-    *"_show_advanced_basic"*) echo "PASS: advanced toggle auto-injected" ;;
-    *) echo "FAIL: missing _show_advanced_basic [$out]"; exit 1 ;;
+    "_show_advanced_basic") echo "PASS: advanced toggle prepended" ;;
+    *) echo "FAIL: not prepended, first field=[$out]"; exit 1 ;;
 esac
 
 echo "ALL PASS: test_descriptor_materialize"
