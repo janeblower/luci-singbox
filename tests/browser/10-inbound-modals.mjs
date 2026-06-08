@@ -5,9 +5,8 @@
 import {
     runTest, assert, wait,
     openEditModalBySid, setProtocolInModal, listTabs, visibleFieldsInActiveTab,
+    containerExec,
 } from './_setup.mjs';
-import { execSync } from 'node:child_process';
-import { BROWSER_URL, LUCI_USER, LUCI_PASS } from './_setup.mjs';
 
 const SID = '_e2bt_in';  // unique per-run section name; cleaned by snapshot/restore
 
@@ -21,13 +20,9 @@ const PROTOCOLS = [
     { proto: 'hysteria2',   mustHaveBasic: ['Listen address', 'Listen port', 'Uplink Mbps', 'Downlink Mbps'],                mustHaveTabs: ['basic', 'tls'] },
 ];
 
-function ssh(cmd) {
-    return execSync(`sshpass -p ${LUCI_PASS} ssh -o StrictHostKeyChecking=no ${LUCI_USER}@${new URL(BROWSER_URL).hostname} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
-}
-
 for (const p of PROTOCOLS) {
     // Seed via UCI so the modal opens with the right protocol selected.
-    ssh(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=inbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.protocol=${p.proto}; uci set singbox-ui.${SID}.listen_port=12345; uci commit singbox-ui`);
+    containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=inbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.protocol=${p.proto}; uci set singbox-ui.${SID}.listen_port=12345; uci commit singbox-ui`);
 
     await runTest(`inbound modal — ${p.proto}`, async ({ page }) => {
         await openEditModalBySid(page, 'inbound', SID);
@@ -46,5 +41,5 @@ for (const p of PROTOCOLS) {
 }
 
 // Cleanup at the end.
-ssh(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
 console.log('\ndone: 10-inbound-modals');

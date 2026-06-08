@@ -4,17 +4,12 @@
 import {
     runTest, assert, wait,
     openEditModalBySid, clickTab, toggleAdvanced, visibleFieldsInActiveTab,
-    BROWSER_URL, LUCI_USER, LUCI_PASS,
+    containerExec,
 } from './_setup.mjs';
-import { execSync } from 'node:child_process';
 
 const SID = '_e2bt_adv';
 
-function ssh(cmd) {
-    return execSync(`sshpass -p ${LUCI_PASS} ssh -o StrictHostKeyChecking=no ${LUCI_USER}@${new URL(BROWSER_URL).hostname} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
-}
-
-ssh(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci set singbox-ui.${SID}.tls_enabled=1; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci set singbox-ui.${SID}.tls_enabled=1; uci commit singbox-ui`);
 
 await runTest('advanced toggle on TLS tab (VLESS outbound)', async ({ page }) => {
     await openEditModalBySid(page, 'outbound', SID);
@@ -50,5 +45,5 @@ await runTest('advanced toggle on Dial tab (VLESS outbound)', async ({ page }) =
     assert('Dial advanced shown — Connect timeout', after.includes('Connect timeout'), { after });
 });
 
-ssh(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
 console.log('\ndone: 20-advanced-toggle');

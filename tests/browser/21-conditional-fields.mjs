@@ -7,17 +7,12 @@
 import {
     runTest, assert, wait,
     openEditModalBySid, clickTab, toggleAdvanced, visibleFieldsInActiveTab,
-    BROWSER_URL, LUCI_USER, LUCI_PASS,
+    containerExec,
 } from './_setup.mjs';
-import { execSync } from 'node:child_process';
 
 const SID = '_e2bt_cond';
 
-function ssh(cmd) {
-    return execSync(`sshpass -p ${LUCI_PASS} ssh -o StrictHostKeyChecking=no ${LUCI_USER}@${new URL(BROWSER_URL).hostname} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
-}
-
-ssh(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci commit singbox-ui`);
 
 async function setSelectByLabel(page, label, value) {
     await page.evaluate(({ label, value }) => {
@@ -101,5 +96,5 @@ await runTest('VLESS outbound: reality_enabled → public_key + short_id', async
         fields.includes('Reality short ID'), { fields });
 });
 
-ssh(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
 console.log('\ndone: 21-conditional-fields');

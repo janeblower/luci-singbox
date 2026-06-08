@@ -6,6 +6,7 @@
 // trigger `FAIL: <label>` via assert().
 
 import puppeteer from 'puppeteer';
+import { execSync } from 'node:child_process';
 
 // BROWSER_URL is set by tests/test_browser.sh after launching the Docker
 // container, e.g. http://127.0.0.1:34567/cgi-bin/luci. LUCI_USER/PASS
@@ -16,6 +17,26 @@ export const LUCI_USER = process.env.LUCI_USER || 'root';
 export const LUCI_PASS = process.env.LUCI_PASS || 'admin';
 export const LUCI_URL  = BROWSER_URL;
 export const PAGE_URL  = `${BROWSER_URL}/admin/services/singbox-ui`;
+// DOCKER_NAME is set by tests/test_browser.sh; used by containerExec() to
+// run UCI/ubus/nft commands inside the test container (the container has no
+// sshd, so the legacy sshpass path is unusable).
+export const DOCKER_NAME = process.env.DOCKER_NAME || '';
+
+// Execute a shell command inside the test container and return stdout. The
+// container exposes BusyBox + uci/ubus/nft/logread; this is the seam tests
+// use to seed UCI fixtures and probe runtime state.
+//
+// The command is passed via stdin so callers don't need to escape single
+// quotes, embedded $vars, etc. — execSync's `input` channel handles arbitrary
+// bytes safely.
+export function containerExec(cmd) {
+    if (!DOCKER_NAME) throw new Error('containerExec: DOCKER_NAME env var not set');
+    return execSync(`docker exec -i ${DOCKER_NAME} sh`, {
+        input: cmd,
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+    });
+}
 
 // Open a fresh headless Chrome and an authenticated page. Returns:
 //   { browser, page, errors, close() }
@@ -29,12 +50,26 @@ export async function newPage() {
     const errors = [];
     page.on('pageerror', err => errors.push(`[pageerror] ${err.message}`));
 
-    const loginRes = await fetch(LUCI_URL, {
-        method: 'POST',
-        headers: { 'content-type': 'application/x-www-form-urlencoded' },
-        body: `luci_username=${encodeURIComponent(LUCI_USER)}&luci_password=${encodeURIComponent(LUCI_PASS)}`,
-        redirect: 'manual',
-    });
+    // The first HTTP request to a freshly-launched uhttpd is sometimes RST'd
+    // (ECONNRESET) — uhttpd accepts the socket before its request thread is
+    // fully wired. Retry the login fetch 3× with 500/1000 ms backoff; any
+    // non-network error (4xx/5xx, missing cookie) is surfaced on the last
+    // attempt.
+    let loginRes;
+    for (let attempt = 0, delay = 500; attempt < 3; attempt++, delay *= 2) {
+        try {
+            loginRes = await fetch(LUCI_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'application/x-www-form-urlencoded' },
+                body: `luci_username=${encodeURIComponent(LUCI_USER)}&luci_password=${encodeURIComponent(LUCI_PASS)}`,
+                redirect: 'manual',
+            });
+            break;
+        } catch (e) {
+            if (attempt === 2) throw e;
+            await wait(delay);
+        }
+    }
     const m = (loginRes.headers.get('set-cookie') || '').match(/sysauth_http=([^;]+)/);
     if (!m) throw new Error('login failed (no sysauth_http cookie)');
     const cookieDomain = new URL(LUCI_URL).hostname;

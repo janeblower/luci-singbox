@@ -3,20 +3,15 @@
 
 import {
     runTest, assert, wait,
-    BROWSER_URL, LUCI_USER, LUCI_PASS,
+    containerExec,
 } from './_setup.mjs';
-import { execSync } from 'node:child_process';
 
 const SID = '_e2bt_sub';
 // A working subscription URL would be a flaky external dependency; we just
 // verify that injectChildRows runs by stubbing the cache in window.
 // (The actual RPC fetch path is covered by test_subscription_expand_rpc.sh.)
 
-function ssh(cmd) {
-    return execSync(`sshpass -p ${LUCI_PASS} ssh -o StrictHostKeyChecking=no ${LUCI_USER}@${new URL(BROWSER_URL).hostname} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
-}
-
-ssh(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=subscription; uci set singbox-ui.${SID}.sub_url='https://example.invalid/sub'; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=subscription; uci set singbox-ui.${SID}.sub_url='https://example.invalid/sub'; uci commit singbox-ui`);
 
 await runTest('subscription: render-hook is wired in outbounds.js', async ({ page }) => {
     // Inject a fake cache + force re-run injectChildRows by clicking out and
@@ -66,5 +61,5 @@ await runTest('subscription: action-bar Refresh button present', async ({ page }
     assert('Refresh subscriptions button visible', r.found, r);
 });
 
-ssh(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
 console.log('\ndone: 30-subscription');

@@ -5,9 +5,8 @@
 import {
     runTest, assert,
     openEditModalBySid, listTabs, visibleFieldsInActiveTab,
-    BROWSER_URL, LUCI_USER, LUCI_PASS,
+    containerExec,
 } from './_setup.mjs';
-import { execSync } from 'node:child_process';
 
 const SID = '_e2bt_out';
 
@@ -19,12 +18,8 @@ const PROTOCOLS = [
     { type: 'hysteria2',   mustHaveBasic: ['Server', 'Server port', 'Password', 'Uplink Mbps', 'Downlink Mbps'], mustHaveTabs: ['basic', 'tls', 'dial'] },
 ];
 
-function ssh(cmd) {
-    return execSync(`sshpass -p ${LUCI_PASS} ssh -o StrictHostKeyChecking=no ${LUCI_USER}@${new URL(BROWSER_URL).hostname} ${JSON.stringify(cmd)}`, { encoding: 'utf8' });
-}
-
 for (const p of PROTOCOLS) {
-    ssh(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=${p.type}; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci commit singbox-ui`);
+    containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=${p.type}; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci commit singbox-ui`);
 
     await runTest(`outbound modal — ${p.type}`, async ({ page }) => {
         await openEditModalBySid(page, 'outbound', SID);
@@ -42,5 +37,5 @@ for (const p of PROTOCOLS) {
     });
 }
 
-ssh(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
+containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
 console.log('\ndone: 11-outbound-modals');
