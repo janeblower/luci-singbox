@@ -1,0 +1,87 @@
+config inbound 'tproxy_in'
+	option enabled '1'
+	option protocol 'tproxy'
+	option listen '::'
+	option listen_port '7893'
+	list   interface 'br-lan'
+	option hijack_dns '1'
+	option nft_rules '1'
+
+config ruleset 'russia_inside'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://github.com/itdoginfo/allow-domains/releases/latest/download/russia_inside.srs'
+	option nft_rules '0'
+	option update_interval '86400'
+
+config ruleset 'discord'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://github.com/itdoginfo/allow-domains/releases/latest/download/discord.srs'
+	option nft_rules '1'
+	option update_interval '86400'
+
+config outbound 'direct_wan'
+	option enabled '1'
+	option type 'interface'
+	option interface 'wan'
+
+config route_rule 'defaults_direct'
+	option enabled '1'
+	list   ruleset 'russia_inside'
+	list   ruleset 'discord'
+	option action 'outbound'
+	option outbound 'direct_wan'
+
+config route_default 'route_default'
+	option action 'direct'
+
+config inbound 'dns_in'
+	option enabled '1'
+	option protocol 'direct'
+	option listen '127.0.0.53'
+	option listen_port '53'
+	option network 'udp'
+	option dns_listener '1'
+
+config dns_server 'fakeip'
+	option enabled '1'
+	option type 'fakeip'
+	option inet4_range '198.18.0.0/15'
+	option inet6_range 'fc00::/18'
+
+config dns_server 'google'
+	option enabled '1'
+	option type 'https'
+	# Numeric server avoids a chicken-and-egg bootstrap (no DNS-to-resolve-DNS).
+	# Detour intentionally unset: pointing at the auto-injected `direct`
+	# outbound is rejected by sing-box 1.12 ("detour to an empty direct
+	# outbound makes no sense"). Users who want this query pinned to a
+	# specific WAN should set `detour` to a user-defined outbound.
+	option server '8.8.8.8'
+	option server_port '443'
+	option path '/dns-query'
+
+config dns_rule 'defaults_fakeip'
+	option enabled '1'
+	list   ruleset 'russia_inside'
+	list   ruleset 'discord'
+	option server 'fakeip'
+
+config dns 'dns'
+	option final 'google'
+	option strategy 'prefer_ipv4'
+
+config log 'log'
+	option enabled '1'
+	option level 'info'
+
+config cache 'cache'
+	option enabled '1'
+	option storage 'ram'
+	option store_fakeip '1'
+
+config clash_api 'clash_api'
+	option enabled '0'
+	option listen '127.0.0.1'
+	option port '9090'
