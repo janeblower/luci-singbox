@@ -40,7 +40,8 @@ reg.register({
             server_port: s_num(s.server_port),
         };
         if (length(s_opt(s, "server_uuid"))) out.uuid = s.server_uuid;
-        if (length(s_opt(s, "vless_flow"))) out.flow = s.vless_flow;
+        if (length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
+            out.flow = s.vless_flow;
         let net = s_opt(s, "network") || "tcp";
         if (net !== "tcp") out.network = net;
         if (net === "udp" && length(s_opt(s, "packet_encoding")))
