@@ -92,8 +92,88 @@ function jsonExportOutbound(name) {
 	return SbImpInbound.jsonExportOutbound(name);
 }
 
+// E2: share-link import wrapper.
+// Pure-JS parsing for client-side pre-fill; ucode parse_proxy_url is the
+// source of truth at config-generation time (rpcd/build path).
+// Both parsers must agree on field names so UCI sections emit correctly.
+function shareLinkImport(url) {
+	var schemes = ['vless', 'shadowsocks', 'trojan', 'hysteria2'];
+	var scheme = (url.split(':')[0] || '').toLowerCase();
+	if (scheme === 'ss')  scheme = 'shadowsocks';
+	if (scheme === 'hy2') scheme = 'hysteria2';
+	if (schemes.indexOf(scheme) === -1)
+		return { ok: false, errors: [_('Unsupported scheme: ') + scheme] };
+
+	var match;
+	if (scheme === 'vless') {
+		match = url.match(/^vless:\/\/([^@]+)@([^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		if (!match) return { ok: false, errors: [_('Cannot parse vless URL')] };
+		var params = {};
+		if (match[4]) match[4].split('&').forEach(function(p) {
+			var kv = p.split('='); params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+		});
+		var f = {
+			type: 'vless',
+			server: match[2], server_port: +match[3],
+			server_uuid: decodeURIComponent(match[1]),
+		};
+		if (params.sni)         f.tls_server_name = params.sni;
+		if (params.flow)        f.vless_flow       = params.flow;
+		if (params.security)    f.security         = params.security;
+		if (params.fp)          f.utls_fingerprint = params.fp;
+		if (params.pbk)         f.reality_public_key = params.pbk;
+		if (params.sid)         f.reality_short_id   = params.sid;
+		if (params.type)        f.transport        = params.type;
+		if (params.path)        f.transport_path   = params.path;
+		if (params.serviceName) f.transport_service_name = params.serviceName;
+		return { ok: true, fields: f };
+	}
+	if (scheme === 'trojan') {
+		match = url.match(/^trojan:\/\/([^@]+)@([^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		if (!match) return { ok: false, errors: [_('Cannot parse trojan URL')] };
+		return { ok: true, fields: {
+			type: 'trojan',
+			server: match[2], server_port: +match[3],
+			server_password: decodeURIComponent(match[1]),
+		} };
+	}
+	if (scheme === 'hysteria2') {
+		match = url.match(/^(?:hysteria2|hy2):\/\/([^@]+)@([^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		if (!match) return { ok: false, errors: [_('Cannot parse hysteria2 URL')] };
+		var hparams = {};
+		if (match[4]) match[4].split('&').forEach(function(p) {
+			var kv = p.split('='); hparams[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+		});
+		var hf = {
+			type: 'hysteria2',
+			server: match[2], server_port: +match[3],
+			server_password: decodeURIComponent(match[1]),
+		};
+		if (hparams.sni) hf.tls_server_name = hparams.sni;
+		if (hparams.obfs === 'salamander') {
+			hf.hysteria2_obfs_type     = 'salamander';
+			hf.hysteria2_obfs_password = hparams['obfs-password'] || '';
+		}
+		return { ok: true, fields: hf };
+	}
+	if (scheme === 'shadowsocks') {
+		match = url.match(/^ss:\/\/(?:([^@#]+)@)?([^:#]+):(\d+)(?:#(.*))?$/);
+		if (!match) return { ok: false, errors: [_('Cannot parse shadowsocks URL')] };
+		var userinfo = match[1] ? decodeURIComponent(match[1]) : '';
+		var mp = userinfo.split(':');
+		return { ok: true, fields: {
+			type: 'shadowsocks',
+			server: match[2], server_port: +match[3],
+			shadowsocks_method:  mp[0] || '2022-blake3-aes-128-gcm',
+			server_password:     mp.slice(1).join(':'),
+		} };
+	}
+	return { ok: false, errors: [_('Internal: unhandled scheme')] };
+}
+
 return L.Class.extend({
     SB_OUTBOUND_KNOWN:  SB_OUTBOUND_KNOWN,
     jsonImportOutbound: jsonImportOutbound,
     jsonExportOutbound: jsonExportOutbound,
+    shareLinkImport:    shareLinkImport,
 });

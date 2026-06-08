@@ -33,10 +33,6 @@ function openShareLinkModal(m) {
 
 	function onImport() {
 		err.textContent = '';
-		if (typeof SbImpOutbound.shareLinkImport !== 'function') {
-			err.textContent = _('Share-link import not yet available — finish Task 18.');
-			return;
-		}
 		var url = (ta.value || '').trim();
 		if (!url) { err.textContent = _('Empty URL'); return; }
 		var res = SbImpOutbound.shareLinkImport(url);
