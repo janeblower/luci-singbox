@@ -51,28 +51,28 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 
 ## Inbound protocols
 
-### tproxy (`lib/inbound.uc:110`)
+### tproxy (`lib/protocols/tproxy.uc` — E2 DSL)
 | Field | Status |
 |---|---|
-| `tag`, `listen`, `listen_port` | есть |
+| `listen`, `listen_port` | есть |
 | `tcp_fast_open`, `udp_fragment` | есть |
-| Routing meta (`network`, `sniff_*`) | нет (Phase 2+: shared inbound fields) |
+| `hijack_dns` (UI-only, controls nftables DNS-hijack rule) | есть |
+| `interface` (UI-only list, controls nftables interface set) | есть |
+| `nft_rules` (UI-only, enables nftables rule generation) | есть |
 
-### tun (`lib/inbound.uc:114`)
+### mixed inbound (`lib/protocols/mixed.uc` — E2 DSL)
 | Field | Status |
 |---|---|
-| `interface_name`, `mtu`, `stack` | есть |
-| `address[]` (inet4 + inet6) | есть |
-| `auto_route`, `strict_route` | есть |
-| `inet4_route_address[]`, `inet6_route_address[]` | нет (out-of-scope unless requested) |
-| `endpoint_independent_nat`, `udp_timeout` | нет |
+| `listen`, `listen_port` | есть |
+| `mixed_user` (`username:password` per entry, optional auth list) | есть |
 
-### direct (DNS listener pattern, `lib/inbound.uc:153`)
+### direct inbound (DNS listener, `lib/protocols/direct.uc` — E2 DSL)
 | Field | Status |
 |---|---|
-| `tag`, `listen`, `listen_port` | есть |
+| `listen`, `listen_port` | есть |
 | `network` (`tcp`/`udp`/empty) | есть |
-| `override_address`, `override_port` | нет (Phase 5: needed for explicit DNS hijack listener) |
+| `override_address`, `override_port` | есть (E2) |
+| `dns_listener` (UI-only flag for auto route-rule) | есть |
 
 ### shadowsocks inbound (`lib/protocols/shadowsocks.uc` — E2 DSL)
 | Field | Status |
@@ -84,94 +84,74 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `multiplex` | есть | — |
 | `managed` (SSM API dynamic user) | out-of-scope |
 
-### vless inbound (`lib/inbound.uc:133`)
+### vless inbound (`lib/protocols/vless.uc` — E2 DSL)
 | Field | Status |
 |---|---|
-| `users[0].name`, `users[0].uuid` | есть (single-user) |
-| `users[0].flow` (per-user `xtls-rprx-vision`) | есть (single-user) |
-| `users[]` multi-user | есть (Phase 7: `list inbound_user 'name:uuid[:flow]'`) |
-| `tls`, `transport`, `multiplex` | есть |
+| `listen`, `listen_port` | есть |
+| `server_uuid` (single-user) | есть |
+| `vless_flow` (single-user `xtls-rprx-vision`) | есть |
+| `inbound_user` (`list name:uuid[:flow]`, multi-user) | есть |
+| `tls_enabled`, `reality_enabled`, TLS block | есть (E2 shared block) |
+| `transport_type`, transport block | есть (E2 shared block) |
+| `multiplex_enabled`, multiplex block | есть (E2 shared block) |
 
-### vmess inbound (`lib/inbound.uc:133`)
-| Field | Status | Notes |
-|---|---|---|
-| `users[0].name`, `users[0].uuid` | есть | single-user |
-| `users[0].alterId` | есть | emitted as `alterId` (camelCase, corrected in Phase 7) |
-| `users[]` multi-user | есть | Phase 7: `list inbound_user 'name:uuid[:alterId]'` |
-| `tls`, `transport`, `multiplex` | есть | |
-
-### trojan inbound (`lib/inbound.uc:133`)
+### trojan inbound (`lib/protocols/trojan.uc` — E2 DSL)
 | Field | Status |
 |---|---|
-| `users[0].name`, `users[0].password` | есть |
-| `users[]` multi-user | нет (Phase 7 optional) |
-| `tls`, `transport`, `multiplex` | есть |
+| `listen`, `listen_port` | есть |
+| `server_password` (single-user) | есть |
+| `inbound_user` (multi-user, `name:password`) | нет (Phase 7 optional) |
+| `tls_enabled`, TLS block | есть (E2 shared block) |
+| `transport_type`, transport block | есть (E2 shared block) |
+| `multiplex_enabled`, multiplex block | есть (E2 shared block) |
 | `fallback`, `fallback_for_alpn` | out-of-scope (rare) |
 
-### hysteria2 inbound (`lib/inbound.uc:133`, hysteria2 branch :136)
+### hysteria2 inbound (`lib/protocols/hysteria2.uc` — E2 DSL)
 | Field | Status |
 |---|---|
-| `users[0]` (single) | есть |
-| `tls` (forced) | есть |
-| `obfs.type` (only `salamander` in 1.12) | есть |
-| `obfs.password` | есть |
+| `listen`, `listen_port` | есть |
+| `server_password` (single-user) | есть |
+| `inbound_user` (`name:password`, multi-user) | есть |
+| `tls_enabled` (forced), TLS block | есть (E2 shared block) |
+| `obfs_type` (only `salamander` in 1.12) | есть |
+| `obfs_password` | есть |
 | `up_mbps`, `down_mbps` | есть |
+| `ignore_client_bandwidth` | есть |
 | `masquerade` | есть |
-| `brutal_debug` | есть | — |
-| `ignore_client_bandwidth` | есть | — |
-| `users[]` multi-user | нет (Phase 7 optional, low priority — hy2 typically single auth) |
-
-### tuic inbound
-| Field | Status |
-|---|---|
-| All TUIC inbound fields | **нет** (entire protocol unsupported on inbound) | out-of-scope (rare in OpenWrt deployments) |
-
-### mixed / socks / http inbound
-Not present as distinct UCI types. The spec lists them under "scope" but in practice they map to direct/vless/etc. — flagging as **out-of-scope** unless a concrete request appears.
+| `brutal_debug` | есть |
 
 ---
 
 ## Outbound protocols
 
-### vless outbound (`build_constructor_for`, `lib/outbound.uc:74`)
+### vless outbound (`lib/protocols/vless.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
 | `server_port` | `server_port` | n/a | есть | — |
 | `uuid` | `server_uuid` | n/a | есть | — |
 | `flow` (`xtls-rprx-vision`) | `vless_flow` | n/a | есть | — |
-| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | — |
-| `network` (`tcp`/`udp`) | — | n/a | нет (Phase 4) | — |
-| `packet_encoding` | — | n/a | out-of-scope | — |
+| `network` | `network` | n/a | есть | E2 |
+| `packet_encoding` | `packet_encoding` | n/a | есть | E2 |
+| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | E2 |
+| Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 
-### vmess outbound (`lib/outbound.uc:82`)
-| sing-box JSON | UCI | Inbound | Outbound | Phase |
-|---|---|---|---|---|
-| `server` | `server` | n/a | есть | — |
-| `server_port` | `server_port` | n/a | есть | — |
-| `uuid` | `server_uuid` | n/a | есть | — |
-| `alter_id` | `vmess_alter_id` | n/a | есть | — |
-| `security` | `vmess_security` | n/a | есть | — |
-| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | — |
-| `network` | — | n/a | нет | — |
-| `global_padding`, `authenticated_length` | — | n/a | out-of-scope | — |
-
-### trojan outbound (`lib/outbound.uc:77`)
+### trojan outbound (`lib/protocols/trojan.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
 | `server_port` | `server_port` | n/a | есть | — |
 | `password` | `server_password` | n/a | есть | — |
-| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | — |
-| `network` | — | n/a | нет | — |
+| `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | E2 |
+| Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 
-### hysteria2 outbound (`lib/outbound.uc:88`)
+### hysteria2 outbound (`lib/protocols/hysteria2.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
 | `server_port` | `server_port` | n/a | есть | — |
 | `password` | `server_password` | n/a | есть | — |
-| `tls` (forced) | (see Shared TLS block) | n/a | есть | — |
+| `tls` (forced) | (see Shared TLS block) | n/a | есть | E2 |
 | `obfs.type` | `obfs_type` | n/a | есть | — |
 | `obfs.password` | `obfs_password` | n/a | есть | — |
 | `up_mbps` | `up_mbps` | n/a | есть | — |
@@ -179,6 +159,7 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 | `masquerade` | `masquerade` | n/a | есть | — |
 | `brutal_debug` | `brutal_debug` | n/a | есть | — |
 | `network` (`tcp`/`udp`) | `network` | n/a | есть | — |
+| Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 | `server_ports[]`, `hop_interval`, `hop_interval_max` | — | n/a | out-of-scope (1.14+ feature) | — |
 
 ### shadowsocks outbound (`lib/protocols/shadowsocks.uc` — E2 DSL)
@@ -193,46 +174,9 @@ Not present as distinct UCI types. The spec lists them under "scope" but in prac
 | `plugin_opts` | `plugin_opts` | n/a | есть | E2 |
 | `udp_over_tcp` | `udp_over_tcp` | n/a | есть | E2 |
 | `multiplex` | `multiplex_*` | n/a | есть (shared block) | E2 |
+| Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 
-### tuic outbound (`lib/outbound.uc`, tuic branch)
-| sing-box JSON | UCI | Inbound | Outbound | Phase |
-|---|---|---|---|---|
-| `server` | `server` | n/a | есть | — |
-| `server_port` | `server_port` | n/a | есть | — |
-| `uuid` | `server_uuid` | n/a | есть | — |
-| `password` | `server_password` | n/a | есть | — |
-| `congestion_control` | `tuic_congestion` | n/a | есть | — |
-| `udp_relay_mode` | `tuic_udp_relay_mode` | n/a | есть | — |
-| `udp_over_stream` (mutually exclusive with `udp_relay_mode`) | `tuic_udp_over_stream` | n/a | есть | — |
-| `zero_rtt_handshake` | `tuic_zero_rtt` | n/a | есть | — |
-| `heartbeat` | `tuic_heartbeat` | n/a | есть | — |
-| `network` (`tcp`/`udp`) | `network` | n/a | есть | — |
-| `tls` (required) | (see Shared TLS block) | n/a | есть | — |
-
-### anytls outbound (`lib/outbound.uc`, anytls branch — Since 1.12.0)
-| sing-box JSON | UCI | Inbound | Outbound | Phase |
-|---|---|---|---|---|
-| `server` | `server` | n/a | есть | — |
-| `server_port` | `server_port` | n/a | есть | — |
-| `password` | `server_password` | n/a | есть | — |
-| `idle_session_check_interval` (default `30s`) | `anytls_idle_check_interval` | n/a | есть | — |
-| `idle_session_timeout` (default `30s`) | `anytls_idle_timeout` | n/a | есть | — |
-| `min_idle_session` (default `0`) | `anytls_min_idle_session` | n/a | есть | — |
-| `tls` (required) | (see Shared TLS block) | n/a | есть | — |
-| transport / multiplex | — | n/a | out-of-scope (AnyTLS has no v2ray-transport) | — |
-
-### ssh outbound (`lib/protocols/ssh.uc` — Since 1.12.0)
-| sing-box JSON | UCI | Inbound | Outbound | Phase |
-|---|---|---|---|---|
-| `server` | `server` | n/a | есть | — |
-| `server_port` | `server_port` | n/a | есть | — |
-| `user` | `user` | n/a | есть | — |
-| `password` | `password` | n/a | есть | — |
-| `private_key_path` | `private_key_path` | n/a | есть | — |
-| `host_key[]` | `host_key` (list) | n/a | есть | — |
-
-### interface outbound (`lib/outbound.uc:202`)
-Maps to sing-box `direct` with `bind_interface`. Status: **есть**, no further fields planned.
+> **Dropped in E2:** `tuic`, `anytls`, `ssh`, and `interface` outbound types are removed from the UI surface. Existing UCI sections are hard-deleted by migration `drop-removed-protocols-e2`.
 
 ### selector outbound (standalone)
 | Field | Status |
@@ -295,22 +239,21 @@ E2 DSL descriptor (`lib/protocols/direct.uc`). Replaces the legacy `type=interfa
 | Validator | Status | Phase |
 |---|---|---|
 | `isPort` (1-65535) | есть (`lib/validators.js`, wired on `listen_port` / `server_port`) | Phase 8 (B6) |
-| `isUuid` | есть (wired on `server_uuid` in inbounds/outbounds) | Phase 8 |
+| `isUuid` | есть (wired on `server_uuid` in vless inbound/outbound) | Phase 8 |
 | `isHost` (IP or domain) | есть (wired on `server`, `tls_server_name`) | Phase 8 |
 | `isAlpnNonEmpty` | есть (wired on `tls_alpn` DynamicList) | Phase 8 |
-| `requiresWsPath` (transport=ws ⇒ path required) | есть (wired on `transport_path`) | Phase 8 |
-| `softWarnCongestion` (warn-not-block for unknown congestion_control) | есть (wired on `tuic_congestion`) | Phase 8 |
+| `requiresWsPath` (transport_type=ws ⇒ path required) | есть (wired on `transport_path`) | Phase 8 |
 
 ---
 
 ## Migration notes
 
-1. **`block`/`dns` outbound deprecation (1.11 → 1.13):** sing-box removes these outbound kinds in 1.13. The plugin already does not emit them. Phase B documents the migration path; explicit migration to rule-actions belongs to a later phase if user reports surface.
+1. **`block`/`dns` outbound deprecation (1.11 → 1.13):** sing-box removes these outbound kinds in 1.13. The plugin already does not emit them. Explicit migration to rule-actions belongs to a later phase if user reports surface.
 2. **`tls.ech.pq_signature_schemes_enabled` and `tls.ech.dynamic_record_sizing_disabled`:** deprecated in 1.12 and removed in 1.13 — never implemented, never will be.
-3. **Reality `short_id` array bug:** `lib/inbound.uc:48` emits `r.short_id = [ s.reality_short_id ]` (an array). Per sing-box docs for 1.12.x, `tls.reality.short_id` is a **single string** of 0-8 hex chars. The outbound side (`lib/outbound.uc:28`) is already correct. Phase 2 fixes the inbound emission; a UCI migration is not required (the wire field changes shape, but the UCI schema already stores a single string).
-4. **VMess `alterId` casing:** `lib/inbound.uc:24` and `lib/outbound.uc:83` emit `alter_id` (snake_case). The sing-box 1.12 schema accepts both, but the documented canonical name is `alterId` for vmess users. Phase 7 aligns inbound emission with the documented camelCase for the users array; outbound legacy field can stay (single-user trim).
-5. **AnyTLS new in 1.12:** Phase 6 adds full coverage; UCI section `outbound` gets new fields `idle_session_check_interval`, `idle_session_timeout`, `min_idle_session`.
+3. **Reality `short_id` scalar (fixed in Phase 2):** `tls.reality.short_id` is a **single string** of 0-8 hex chars, not an array. Both inbound and outbound DSL descriptors emit a scalar.
+4. **Phase E2 UCI key renames (`migrate_rename_e2_keys`):** `transport` → `transport_type`; `tls_ech` → `tls_ech_enabled`; `security=tls` → `tls_enabled=1`; `security=reality` → `tls_enabled=1` + `reality_enabled=1`; `utls_fingerprint` non-empty → sets `utls_enabled=1`. Run automatically on upgrade.
+5. **Phase E2 protocol drop (`drop-removed-protocols-e2`):** UCI sections with `protocol ∈ {tun, vmess}` (inbound) or `type ∈ {vmess, tuic, anytls, ssh, interface}` (outbound) are hard-deleted on upgrade. Users must reconfigure any inbound/outbound that used these types.
 
 ---
 
-*Last updated: 2026-06-06. Update this file every time `lib/inbound.uc` or `lib/outbound.uc` gains a new field or protocol case.*
+*Last updated: 2026-06-09. Update this file every time a protocol descriptor or shared block gains a new field.*
