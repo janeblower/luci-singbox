@@ -219,13 +219,125 @@ if (opts2.length === 1 &&
 // ---------------------------------------------------------------------------
 let threw = false;
 try {
-	applyDescriptor(s, 'outbound', 'vless', null);
-	applyDescriptor(s, 'outbound', 'vless', { sing_box_type: 'vless' });
+	const { s: sNull } = makeSection();
+	applyDescriptor(sNull, 'outbound', 'vless', null);
+	applyDescriptor(sNull, 'outbound', 'vless', { sing_box_type: 'vless' });
 } catch (e) {
 	threw = true;
 	fail('null/missing descriptor guard', e.message);
 }
 if (!threw) pass('null/missing descriptor handled without throw');
+
+// ---------------------------------------------------------------------------
+// Test 10: Dedup — shared field across two protocols → one taboption, two depends.
+// ---------------------------------------------------------------------------
+{
+	const { s: sDedup, opts: optsDedup } = makeSection();
+	applyDescriptor(sDedup, 'outbound', 'protoA',
+		{ fields: [{ name: 'shared', type: 'string', group: 'basic' }] });
+	applyDescriptor(sDedup, 'outbound', 'protoB',
+		{ fields: [{ name: 'shared', type: 'string', group: 'basic' }] });
+
+	// Only one taboption call for 'shared'
+	const sharedCalls = optsDedup.filter(o => o._name === 'shared');
+	if (sharedCalls.length === 1) {
+		pass('shared field deduped to one taboption');
+	} else {
+		fail('shared field deduped to one taboption',
+			'expected 1, got ' + sharedCalls.length);
+	}
+
+	// The single option has depends from both protocols
+	const opt = sharedCalls[0];
+	if (opt && opt._depends.length === 2) {
+		pass('shared has depends from both protocols');
+	} else {
+		fail('shared has depends from both protocols',
+			'expected 2, got ' + (opt && opt._depends.length));
+	}
+
+	const dep0 = opt && opt._depends[0];
+	if (dep0 && dep0[0] === 'type' && dep0[1] === 'protoA') {
+		pass('first depends is protoA');
+	} else {
+		fail('first depends is protoA', JSON.stringify(dep0));
+	}
+
+	const dep1 = opt && opt._depends[1];
+	if (dep1 && dep1[0] === 'type' && dep1[1] === 'protoB') {
+		pass('second depends is protoB');
+	} else {
+		fail('second depends is protoB', JSON.stringify(dep1));
+	}
+
+	// modalonly should be set on descriptor fields
+	if (opt && opt.modalonly === true) {
+		pass('descriptor fields default to modalonly');
+	} else {
+		fail('descriptor fields default to modalonly',
+			'shared.modalonly = ' + (opt && opt.modalonly));
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 11: Enum-merge overlap — two protocols declare same field with
+// different enum values; merged option should have union of values, no dups.
+// ---------------------------------------------------------------------------
+{
+	const { s: sEnumMerge, opts: optsEnumMerge } = makeSection();
+	applyDescriptor(sEnumMerge, 'outbound', 'protoA',
+		{ fields: [{ name: 'mode', type: 'enum', values: ['', 'x', 'y'], group: 'basic' }] });
+	applyDescriptor(sEnumMerge, 'outbound', 'protoB',
+		{ fields: [{ name: 'mode', type: 'enum', values: ['y', 'z'], group: 'basic' }] });
+
+	// Only one taboption call for 'mode'
+	const modeCalls = optsEnumMerge.filter(o => o._name === 'mode');
+	if (modeCalls.length === 1) {
+		pass('enum field deduped to one taboption');
+	} else {
+		fail('enum field deduped to one taboption',
+			'expected 1, got ' + modeCalls.length);
+	}
+
+	const modeOpt = modeCalls[0];
+
+	// The single option has depends from both protocols
+	if (modeOpt && modeOpt._depends.length === 2) {
+		pass('enum mode has depends from both protocols');
+	} else {
+		fail('enum mode has depends from both protocols',
+			'expected 2, got ' + (modeOpt && modeOpt._depends.length));
+	}
+
+	// Values should be union of all seen values: ['', 'x', 'y', 'z'] (no duplicates)
+	if (modeOpt && modeOpt._values.length === 4) {
+		pass('enum merge: _values.length === 4 (union of [], [x, y], [y, z])');
+	} else {
+		fail('enum merge: _values.length === 4',
+			'expected 4, got ' + (modeOpt && modeOpt._values.length));
+	}
+
+	// Verify the actual values are correct (order: '', 'x', 'y' from protoA, then 'z' from protoB)
+	const valueKeys = modeOpt && modeOpt._values.map(v => v[0]);
+	const expectedKeys = ['', 'x', 'y', 'z'];
+	let valuesMatch = true;
+	if (!valueKeys || valueKeys.length !== expectedKeys.length) {
+		valuesMatch = false;
+	} else {
+		for (let i = 0; i < expectedKeys.length; i++) {
+			if (valueKeys[i] !== expectedKeys[i]) {
+				valuesMatch = false;
+				break;
+			}
+		}
+	}
+	if (valuesMatch) {
+		pass('enum merge: values are [, x, y, z] (no duplicates)');
+	} else {
+		fail('enum merge: values are [, x, y, z]',
+			'expected [, x, y, z], got ' + JSON.stringify(valueKeys));
+	}
+}
 
 // ---------------------------------------------------------------------------
 // Done.

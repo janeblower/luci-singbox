@@ -35,24 +35,41 @@ function attachValidator(opt, validateName) {
 
 function applyDescriptor(s, kind, protoName, descriptor) {
 	if (!descriptor || !Array.isArray(descriptor.fields)) return;
+	var discr = (kind === 'inbound') ? 'protocol' : 'type';
+	s._sbDescriptorRegistry = s._sbDescriptorRegistry || {};
 	descriptor.fields.forEach(function(f) {
-		var group  = f.group || 'advanced';
-		var Widget = widgetFor(f);
-		var label  = labelFor(f);
-		var opt    = s.taboption(group, Widget, f.name, _(label));
-		// Inbound uses `protocol` as the discriminator UCI field;
-		// outbound uses `type`. The caller's tab must declare a
-		// ListValue for whichever name it uses; here we always
-		// attach depends to BOTH so the same loop works on either
-		// page without the caller having to thread the discriminator.
-		opt.depends(kind === 'inbound' ? 'protocol' : 'type', protoName);
-		if (f.required)         opt.rmempty  = false;
-		if (f.default != null)  opt.default  = String(f.default);
-		if (f.type === 'enum' && Array.isArray(f.values)) {
-			f.values.forEach(function(v) { opt.value(v, v === '' ? _('(none)') : v); });
+		var key = f.name;
+		var registered = s._sbDescriptorRegistry[key];
+		if (registered) {
+			// First-descriptor-wins for required/default/secret/validate/widget.
+			// Descriptors that share a UCI key (e.g., server, server_port,
+			// server_uuid, network) must agree on these attributes; the
+			// registry only accumulates depends() and enum values across
+			// repeat declarations.
+			registered.opt.depends(discr, protoName);
+			if (f.type === 'enum' && Array.isArray(f.values))
+				f.values.forEach(function(v) {
+					if (!registered.values[v]) {
+						registered.opt.value(v, v === '' ? _('(none)') : v);
+						registered.values[v] = 1;
+					}
+				});
+			return;
 		}
+		var opt = s.taboption(f.group || 'advanced', widgetFor(f), f.name, _(labelFor(f)));
+		opt.modalonly = true;
+		opt.depends(discr, protoName);
+		if (f.required)        opt.rmempty = false;
+		if (f.default != null) opt.default = String(f.default);
+		var values = {};
+		if (f.type === 'enum' && Array.isArray(f.values))
+			f.values.forEach(function(v) {
+				opt.value(v, v === '' ? _('(none)') : v);
+				values[v] = 1;
+			});
 		if (f.secret) opt.password = true;
 		attachValidator(opt, f.validate);
+		s._sbDescriptorRegistry[key] = { opt: opt, values: values };
 	});
 }
 
