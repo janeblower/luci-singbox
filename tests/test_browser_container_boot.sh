@@ -26,7 +26,7 @@ while :; do
     i=$((i+1))
     if [ $i -gt 30 ]; then
         echo "FAIL: container not responding after 30s"
-        docker logs "$CNAME"
+        docker logs "$CNAME" >&2
         exit 1
     fi
     sleep 1
