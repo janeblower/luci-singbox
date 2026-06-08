@@ -9,7 +9,7 @@
 # this is the canonical idempotency guarantee. (Individual data-shape guards
 # inside each migration_*() are kept as defence-in-depth.)
 # ---------------------------------------------------------------------------
-CURRENT_SCHEMA=16
+CURRENT_SCHEMA=18
 
 cur_ver=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
 case "$cur_ver" in
@@ -361,6 +361,102 @@ migrate_outbound_type() {
 	done
 }
 migrate_outbound_type
+
+# ---------------------------------------------------------------------------
+# Phase E2 (migration A): rename UCI keys on surviving protocols so the new
+# descriptors (T7–T13) can read them. Idempotent: each rename only fires
+# while the old key is still set.
+# ---------------------------------------------------------------------------
+migrate_rename_e2_keys() {
+	local sid section_type kind
+
+	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=(inbound|outbound)$/ {print $2}'); do
+		section_type=$(uci -q get "singbox-ui.$sid" 2>/dev/null || true)
+
+		# transport → transport_type
+		local tv=$(uci -q get "singbox-ui.$sid.transport" 2>/dev/null || true)
+		if [ -n "$tv" ] && [ -z "$(uci -q get singbox-ui.$sid.transport_type 2>/dev/null || true)" ]; then
+			uci -q set "singbox-ui.$sid.transport_type=$tv"
+			uci -q delete "singbox-ui.$sid.transport"
+			# httpupgrade host key split
+			if [ "$tv" = "httpupgrade" ]; then
+				local hv=$(uci -q get "singbox-ui.$sid.transport_host" 2>/dev/null || true)
+				if [ -n "$hv" ]; then
+					uci -q set "singbox-ui.$sid.transport_host_httpupgrade=$hv"
+					uci -q delete "singbox-ui.$sid.transport_host"
+				fi
+			fi
+		fi
+
+		# tls_ech → tls_ech_enabled
+		local ev=$(uci -q get "singbox-ui.$sid.tls_ech" 2>/dev/null || true)
+		if [ -n "$ev" ] && [ -z "$(uci -q get singbox-ui.$sid.tls_ech_enabled 2>/dev/null || true)" ]; then
+			uci -q set "singbox-ui.$sid.tls_ech_enabled=$ev"
+			uci -q delete "singbox-ui.$sid.tls_ech"
+		fi
+
+		# security → tls_enabled + reality_enabled
+		local sec=$(uci -q get "singbox-ui.$sid.security" 2>/dev/null || true)
+		if [ -n "$sec" ]; then
+			case "$sec" in
+				tls)
+					uci -q set "singbox-ui.$sid.tls_enabled=1"
+					;;
+				reality)
+					uci -q set "singbox-ui.$sid.tls_enabled=1"
+					uci -q set "singbox-ui.$sid.reality_enabled=1"
+					;;
+			esac
+			uci -q delete "singbox-ui.$sid.security"
+		fi
+
+		# utls_fingerprint set → utls_enabled=1 (preserve the value)
+		local uf=$(uci -q get "singbox-ui.$sid.utls_fingerprint" 2>/dev/null || true)
+		if [ -n "$uf" ] && [ -z "$(uci -q get singbox-ui.$sid.utls_enabled 2>/dev/null || true)" ]; then
+			uci -q set "singbox-ui.$sid.utls_enabled=1"
+		fi
+	done
+
+	uci -q commit singbox-ui
+	return 0
+}
+
+migrate_rename_e2_keys
+
+# ---------------------------------------------------------------------------
+# Phase E2 (migration B): drop UCI sections for protocols that are no longer
+# supported by the UI (TUN/VMess inbound; VMess/TUIC/AnyTLS/SSH/interface
+# outbound). Spec: docs/superpowers/specs/2026-06-08-protocol-builder-rewrite-design.md
+# ---------------------------------------------------------------------------
+migrate_drop_removed_protocols() {
+	local sid kind val
+	local dropped=0
+
+	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=inbound$/ {print $2}'); do
+		val=$(uci -q get "singbox-ui.$sid.protocol" 2>/dev/null || true)
+		case "$val" in
+			tun|vmess)
+				uci -q delete "singbox-ui.$sid" && dropped=$((dropped+1))
+				logger -t singbox-ui "E2 migration: dropped inbound $sid (protocol=$val)"
+				;;
+		esac
+	done
+
+	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=outbound$/ {print $2}'); do
+		val=$(uci -q get "singbox-ui.$sid.type" 2>/dev/null || true)
+		case "$val" in
+			vmess|tuic|anytls|ssh|interface)
+				uci -q delete "singbox-ui.$sid" && dropped=$((dropped+1))
+				logger -t singbox-ui "E2 migration: dropped outbound $sid (type=$val)"
+				;;
+		esac
+	done
+
+	[ "$dropped" -gt 0 ] && uci -q commit singbox-ui
+	return 0
+}
+
+migrate_drop_removed_protocols
 
 # ---------------------------------------------------------------------------
 # Finalise (Phase C2.1.3): set the schema version sentinel and commit ONCE.

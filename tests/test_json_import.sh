@@ -179,33 +179,8 @@ expect('hysteria2 outbound with obfs',
 		hysteria2_obfs_type: 'salamander', hysteria2_obfs_password: 'op',
 	}});
 
-// vmess alterId: camelCase is canonical per sing-box 1.12 docs; legacy
-// snake_case alter_id is still accepted for paste-compat with older configs.
-expect('vmess inbound alterId camelCase',
-	fn({ type: 'vmess', listen: '::', listen_port: 8443,
-	     users: [{ uuid: 'u1', alterId: 7 }] }),
-	{ ok: true, errors: [], fields: {
-		protocol: 'vmess', listen: '::', listen_port: 8443,
-		server_uuid: 'u1', vmess_alter_id: '7',
-	}});
-expect('vmess inbound legacy alter_id still accepted',
-	fn({ type: 'vmess', listen: '::', listen_port: 8443,
-	     users: [{ uuid: 'u1', alter_id: 4 }] }),
-	{ ok: true, errors: [], fields: {
-		protocol: 'vmess', listen: '::', listen_port: 8443,
-		server_uuid: 'u1', vmess_alter_id: '4',
-	}});
-
-// vmess/vless multi-user: when users[] has >1 entry, importer emits a
-// `list inbound_user` and drops section-level server_uuid/vmess_alter_id.
-expect('vmess inbound multi-user',
-	fn({ type: 'vmess', listen: '::', listen_port: 8443,
-	     users: [ { name: 'alice', uuid: 'uuid-a' },
-	              { name: 'bob',   uuid: 'uuid-b', alterId: 5 } ] }),
-	{ ok: true, errors: [], fields: {
-		protocol: 'vmess', listen: '::', listen_port: 8443,
-		inbound_user: [ 'alice:uuid-a', 'bob:uuid-b:5' ],
-	}});
+// vless multi-user: when users[] has >1 entry, importer emits a
+// `list inbound_user` and drops section-level server_uuid.
 expect('vless inbound multi-user with per-user flow',
 	fn({ type: 'vless', listen: '::', listen_port: 4443,
 	     users: [ { name: 'alice', uuid: 'uuid-a', flow: 'xtls-rprx-vision' },

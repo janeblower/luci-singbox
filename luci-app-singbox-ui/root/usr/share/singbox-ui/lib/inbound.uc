@@ -31,7 +31,7 @@ const as_array = helpers.as_array;
 function build_user(s) {
 	let proto = s.protocol;
 	let u = { name: s[".name"] };
-	if (proto === "vless" || proto === "vmess") {
+	if (proto === "vless") {
 		if (length(s_opt(s, "server_uuid"))) u.uuid = s.server_uuid;
 	}
 	if (proto === "trojan" || proto === "hysteria2") {

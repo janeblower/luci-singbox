@@ -123,17 +123,14 @@ function resolve_iface_device(iface) {
 function reset_iface_cache() { _iface_dev_cache = {}; }
 
 // OUTBOUND_PROXY_KINDS — the set of outbound `type` values that are real
-// proxy protocols (as opposed to interface / url / subscription / direct /
-// block / dns / selector / urltest). Single source for membership checks
-// across export_section.uc and lib/outbound.uc::build_outbounds() dispatch
-// branches — when a new protocol is added, only this list (and the
-// build_constructor_for switch) needs touching.
-//
-// Note: a *different*, shorter list exists at outbound.uc:144 covering
-// only user-credential proxies (vless/vmess/trojan) for transport+multiplex
-// emission. That subset is semantically distinct and is NOT merged here.
+// proxy protocols supported in E2 (as opposed to interface / url /
+// subscription / direct / block / dns / selector / urltest). Single source
+// for membership checks across export_section.uc and
+// lib/outbound.uc::build_outbounds() dispatch branches — when a new
+// protocol is added, only this list (and the build_constructor_for switch)
+// needs touching. Dropped in E2: vmess, tuic, anytls.
 const OUTBOUND_PROXY_KINDS = [
-	"vless", "vmess", "trojan", "hysteria2", "shadowsocks", "tuic", "anytls",
+	"vless", "trojan", "hysteria2", "shadowsocks",
 ];
 
 function is_outbound_proxy_kind(t) {
