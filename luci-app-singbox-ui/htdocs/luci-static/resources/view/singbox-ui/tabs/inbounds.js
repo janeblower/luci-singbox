@@ -14,10 +14,9 @@ var addRenameField   = SbCommon.addRenameField;
 var SB_INBOUND_PROTOCOLS = [
 	['direct',      'Direct (DNS / port-forward)'],
 	['tproxy',      'TProxy (transparent)'],
-	['tun',         'TUN'],
+	['mixed',       'Mixed (HTTP + SOCKS5)'],
 	['shadowsocks', 'Shadowsocks'],
 	['vless',       'VLESS'],
-	['vmess',       'VMess'],
 	['trojan',      'Trojan'],
 	['hysteria2',   'Hysteria2']
 ];
@@ -157,83 +156,15 @@ function buildInboundsMap() {
 		return listen + ':' + port;
 	};
 
-	o = s.taboption('basic', form.Value, 'listen', _('Listen address'));
-	o.modalonly = true; o.placeholder = '::';
-	o.depends('protocol', 'direct');
-	o.depends('protocol', 'tproxy');
-
-	o = s.taboption('basic', form.Value, 'listen_port', _('Listen port'));
-	o.modalonly = true; o.datatype = 'port'; o.placeholder = '7893';
-	o.depends('protocol', 'direct');
-	o.depends('protocol', 'tproxy');
-	o.validate = function (sid, value) {
-		if (value === null || value === undefined || value === '') return true;
-		return SbValidators.isPort(value);
-	};
-
-	// direct only (shadowsocks network is descriptor-owned)
-	o = s.taboption('basic', form.ListValue, 'network', _('Network'));
-	o.modalonly = true;
-	o.value('', _('Both (tcp+udp)'));
-	o.value('tcp', 'tcp');
-	o.value('udp', 'udp');
-	o.depends('protocol', 'direct');
-
-	o = s.taboption('basic', form.Flag, 'dns_listener', _('Hijack DNS'));
-	o.modalonly = true;
-	o.default = '1';
-	o.depends('protocol', 'direct');
-	o.description = _('Auto-emits a hijack-dns route rule for this inbound.');
-
-	// tproxy
-	o = s.taboption('basic', widgets.DeviceSelect, 'interface', _('Interfaces (nft)'));
-	o.modalonly = true; o.noaliases = true; o.multiple = true; o.placeholder = 'br-lan';
-	o.depends('protocol', 'tproxy');
-	o = s.taboption('basic', form.Flag, 'hijack_dns', _('Hijack DNS'));
-	o.modalonly = true; o.default = '0';
-	o.depends('protocol', 'tproxy');
-	o = s.taboption('basic', form.Flag, 'tcp_fast_open', _('TCP Fast Open'));
-	o.modalonly = true; o.default = '0';
-	o.depends('protocol', 'tproxy');
-	o = s.taboption('basic', form.Flag, 'udp_fragment', _('UDP fragment'));
-	o.modalonly = true; o.default = '0';
-	o.depends('protocol', 'tproxy');
-
-	// tproxy + tun: nft rules
-	o = s.taboption('basic', form.Flag, 'nft_rules', _('Create nftables rules'));
-	o.modalonly = true;
-	o.depends('protocol', 'tproxy');
-	o.depends('protocol', 'tun');
-
-	// tun
-	o = s.taboption('basic', form.Value, 'interface_name', _('TUN interface name'));
-	o.modalonly = true; o.placeholder = 'singbox-tun';
-	o.depends('protocol', 'tun');
-	o = s.taboption('basic', form.Value, 'inet4_address', _('IPv4 address'));
-	o.modalonly = true; o.datatype = 'cidr4'; o.placeholder = '172.19.0.1/30';
-	o.depends('protocol', 'tun');
-	o = s.taboption('basic', form.Value, 'inet6_address', _('IPv6 address'));
-	o.modalonly = true; o.datatype = 'cidr6';
-	o.depends('protocol', 'tun');
-	o = s.taboption('basic', form.Value, 'mtu', _('MTU'));
-	o.modalonly = true; o.datatype = 'uinteger'; o.placeholder = '9000';
-	o.depends('protocol', 'tun');
-	o = s.taboption('basic', form.ListValue, 'stack', _('Stack'));
-	['system', 'gvisor', 'mixed'].forEach(function (v) { o.value(v, v); });
-	o.modalonly = true; o.default = 'mixed';
-	o.depends('protocol', 'tun');
-	o = s.taboption('basic', form.Flag, 'auto_route', _('Auto route'));
-	o.modalonly = true; o.default = '1';
-	o.depends('protocol', 'tun');
-	o = s.taboption('basic', form.Flag, 'strict_route', _('Strict route'));
-	o.modalonly = true; o.default = '0';
-	o.depends('protocol', 'tun');
-
-	// D2: descriptor-driven UI for the 5 proxy inbound types. tproxy/tun/direct
-	// are infrastructure types and keep their hand-coded blocks above.
+	// E2: all inbound types are now descriptor-driven via applyMaterialized().
+	// The hand-coded TUN / TProxy / Direct blocks have been removed — their
+	// fields live in protocols/tun.uc, protocols/tproxy.uc, protocols/direct.uc
+	// and are served by the protocol_schema RPC.
 	var inboundSchema = (window.singboxUiSchemaCache || {}).inbound || {};
-	Object.keys(inboundSchema).forEach(function(protoName) {
-		descriptor_form.applyDescriptor(s, 'inbound', protoName, inboundSchema[protoName]);
+	SB_INBOUND_PROTOCOLS.forEach(function (entry) {
+		var protoName = entry[0];
+		var mat = inboundSchema[protoName];
+		if (mat) descriptor_form.applyMaterialized(s, 'inbound', protoName, mat);
 	});
 
 	return m;

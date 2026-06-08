@@ -65,7 +65,8 @@ echo "-- references new outbound types (merged type field)"
 OUTBOUNDS_TAB=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
 grep -q "'vless'"                "$OUTBOUNDS_TAB" || { echo "FAIL: no type=vless (checked tabs/outbounds.js)"; exit 1; }
 grep -q "'subscription'"         "$OUTBOUNDS_TAB" || { echo "FAIL: no type=subscription (checked tabs/outbounds.js)"; exit 1; }
-grep -q "proxy_url"              "$OUTBOUNDS_TAB" || { echo "FAIL: no proxy_url field (checked tabs/outbounds.js)"; exit 1; }
+# E2: proxy_url (share-link URL type) replaced by openShareLinkModal import button.
+grep -q "openShareLinkModal"     "$OUTBOUNDS_TAB" || { echo "FAIL: no openShareLinkModal (checked tabs/outbounds.js)"; exit 1; }
 grep -q "sub_url"                "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_url field (checked tabs/outbounds.js)"; exit 1; }
 grep -q "sub_update_via"         "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_update_via field (checked tabs/outbounds.js)"; exit 1; }
 grep -q "sub_interval"           "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_interval field (checked tabs/outbounds.js)"; exit 1; }
