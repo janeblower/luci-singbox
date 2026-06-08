@@ -52,8 +52,8 @@ out=$(je '
 out=$(je '
     let t = require("protocols._shared.transport");
     let r = t.emit({ transport_type: "http", transport_hosts: ["a.example","b.example"], transport_path: "/h" });
-    print(sprintf("%s|%d|%s", r.type, length(r.host), r.path));
+    print(sprintf("%s|%d|%s|%s|%s", r.type, length(r.host), r.host[0], r.host[1], r.path));
 ')
-[ "$out" = "http|2|/h" ] || { echo "FAIL: http [$out]"; exit 1; }
+[ "$out" = "http|2|a.example|b.example|/h" ] || { echo "FAIL: http [$out]"; exit 1; }
 
 echo "ALL PASS: test_shared_transport"

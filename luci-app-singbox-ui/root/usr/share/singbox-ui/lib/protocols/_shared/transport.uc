@@ -1,4 +1,4 @@
-// lib/protocols/_shared/transport.uc — v2ray transport field set + emit.
+// lib/protocols/_shared/transport.uc
 
 let helpers = require("helpers");
 const s_opt   = helpers.s_opt;
