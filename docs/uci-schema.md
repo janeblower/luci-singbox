@@ -153,6 +153,39 @@ Source file: `luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui`.
 
 ---
 
+### Migration: `migrate_rename_e2_keys`
+
+**What:** Rename legacy UCI option keys on inbound and outbound sections so the Phase E2 DSL descriptors can read them correctly.
+
+**Effect:** For every `inbound` and `outbound` section:
+- `transport` → `transport_type` (the field was renamed in E2 to avoid a ucode keyword clash). When `transport=httpupgrade`, also splits `transport_host` → `transport_host_httpupgrade`.
+- `tls_ech` → `tls_ech_enabled` (aligned with the descriptor boolean-gate naming convention).
+- `security=tls` → sets `tls_enabled=1`, then deletes `security`.
+- `security=reality` → sets `tls_enabled=1` and `reality_enabled=1`, then deletes `security`.
+- `utls_fingerprint` non-empty → sets `utls_enabled=1` (the value is preserved unchanged).
+
+**Idempotent:** yes — each rename fires only while the old key is present and the new key is absent.
+
+**Introduced:** Phase E2, commit implementing T15 migrations.
+
+---
+
+### Migration: `drop-removed-protocols-e2`
+
+**What:** Hard-delete UCI sections whose protocol/type was removed from the E2 UI surface.
+
+**Effect:**
+- Deletes every `inbound` section where `protocol ∈ {tun, vmess}`.
+- Deletes every `outbound` section where `type ∈ {vmess, tuic, anytls, ssh, interface}`.
+
+Deletions are logged via `logger -t singbox-ui`. A final `uci commit` is issued only when at least one section was deleted.
+
+**Idempotent:** yes — deleting a non-existent section is a no-op.
+
+**Introduced:** Phase E2, commit implementing T15 migrations.
+
+---
+
 ## `inbound`
 
 UCI section type: `inbound`. Describes an incoming listener for sing-box.
@@ -165,7 +198,7 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `enabled` | bool | `0`/`1` | yes | — | Disabled sections (`enabled=0`) are skipped by `build_inbounds`. |
-| `protocol` | enum | `direct`, `tproxy`, `tun`, `shadowsocks`, `vless`, `vmess`, `trojan`, `hysteria2` | yes | — | Selects the protocol branch in `build_one`. Defaults to `tproxy` if absent. Legacy field `mode` is silently ignored. |
+| `protocol` | enum | `direct`, `tproxy`, `mixed`, `shadowsocks`, `vless`, `trojan`, `hysteria2` | yes | — | Selects the protocol branch in `build_one`. `tun` and `vmess` are dropped in E2 — existing sections are deleted by migration `drop-removed-protocols-e2`. Defaults to `tproxy` if absent. Legacy field `mode` is silently ignored. |
 | `listen` | string | IP address or `::` | no | all except `tun` | Bind address. Defaults to `::` if empty. |
 | `listen_port` | integer | valid port | yes (except tun) | all except `tun` | Listen port. Missing/zero causes the section to be skipped with a warning. |
 
@@ -186,18 +219,15 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 | `interface` | string (list) | device names | no | `protocol=tproxy` | UI-only: selects network interfaces for nftables rules. **Not read by `inbound.uc`**. |
 | `nft_rules` | bool | `0`/`1` | no | `protocol=tproxy` or `tun` | UI-only: controls nftables rule generation. **Not read by `inbound.uc`**. |
 
-### `tun` protocol fields
+### `mixed` protocol fields
+
+`mixed` is a combined HTTP/SOCKS5 inbound listener. Authentication is optional — when `mixed_user` is empty, all connections are accepted without credentials.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `interface_name` | string | e.g. `singbox-tun` | no | `protocol=tun` | TUN device name. Defaults to `singbox-tun` if absent. |
-| `inet4_address` | string | CIDR4 | no | `protocol=tun` | IPv4 address/prefix for the TUN interface, e.g. `172.19.0.1/30`. |
-| `inet6_address` | string | CIDR6 | no | `protocol=tun` | IPv6 address/prefix for the TUN interface. |
-| `mtu` | integer | e.g. `9000` | no | `protocol=tun` | MTU of the TUN device. |
-| `auto_route` | bool | `0`/`1` | no | `protocol=tun` | Enables automatic route injection for the TUN device. |
-| `strict_route` | bool | `0`/`1` | no | `protocol=tun` | Enables strict routing (requires `auto_route=1`). |
-| `stack` | enum | `system`, `gvisor`, `mixed` | no | `protocol=tun` | Network stack implementation. |
-| `nft_rules` | bool | `0`/`1` | no | `protocol=tproxy` or `tun` | UI-only: controls nftables rule generation. **Not read by `inbound.uc`**. |
+| `listen` | string | IP address or `::` | no | `protocol=mixed` | Bind address. Defaults to `::` if empty. |
+| `listen_port` | integer | valid port | yes | `protocol=mixed` | Listen port. Missing/zero causes the section to be skipped with a warning. |
+| `mixed_user` | list | `"username:password"` per entry | no | `protocol=mixed` | Optional user list. Each entry colon-separates the username from the password. When non-empty, only authenticated clients are accepted. Empty list → open listener (no auth). |
 
 ### `shadowsocks` protocol fields
 
@@ -209,16 +239,14 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 
 > **Limitation — colon-in-password:** the `ss_user` entry format uses `:` as the sole field separator, so the parser splits at the **first** colon only. A password that itself contains a literal `:` will be silently truncated at that first colon (anything after it is dropped). Use a colon-free passphrase, or base64-encode the password and document the encoding alongside the section, until a richer entry format (TSV / JSON) lands.
 
-### User credential fields (vless / vmess / trojan)
+### User credential fields (vless / trojan)
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `server_uuid` | string | UUID | yes (single-user) | `protocol=vless` or `vmess` | UUID for the single-user entry. Ignored when `inbound_user` is non-empty (multi-user `users[]` takes precedence). |
+| `server_uuid` | string | UUID | yes (single-user) | `protocol=vless` | UUID for the single-user entry. Ignored when `inbound_user` is non-empty (multi-user `users[]` takes precedence). |
 | `server_password` | string | — | yes | `protocol=trojan` | Password for the single user entry (also used by `hysteria2`). |
 | `vless_flow` | enum | `none`, `xtls-rprx-vision` | no | `protocol=vless` | VLESS flow control. Omitted when `none`. Ignored when `inbound_user` is non-empty (per-user flow comes from each entry). |
-| `vmess_alter_id` | integer | `0`+ | no | `protocol=vmess` | VMess alter ID. Read by `build_user`; emitted as `users[].alterId` (camelCase, per sing-box 1.12 docs). Ignored when `inbound_user` is non-empty. |
-| `inbound_user` | list | `name:uuid` or `name:uuid:alterId` (vmess) / `name:uuid:flow` (vless) | no | `protocol=vmess` or `vless` | Multi-user list. When non-empty, emits `users[]` and ignores section-level `server_uuid` / `vmess_alter_id` / `vless_flow`. Malformed entries (missing name or uuid) are silently skipped. Existing single-user configs continue to work unchanged; no UCI migration is required. |
-| `vmess_security` | enum | `auto`, `none`, `aes-128-gcm`, `chacha20-poly1305` | no | `protocol=vmess` | UI-only: cipher hint written to UCI. **Not read by `inbound.uc`** (inbound VMess does not accept a per-user security field; cipher is client-selected). |
+| `inbound_user` | list | `name:uuid[:flow]` (vless) | no | `protocol=vless` | Multi-user list. When non-empty, emits `users[]` and ignores section-level `server_uuid` / `vless_flow`. Malformed entries (missing name or uuid) are silently skipped. Existing single-user configs continue to work unchanged; no UCI migration is required. |
 
 ### `hysteria2` protocol fields
 
@@ -235,43 +263,51 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 
 ### TLS fields
 
-Applies to `vless`, `vmess`, `trojan` (selectable), and `hysteria2` (always TLS).
+Applies to `vless`, `trojan` (selectable via `tls_enabled`/`reality_enabled`), and `hysteria2` (always TLS). The E2 descriptor model replaces the old `security` enum with explicit boolean gates.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `security` | enum | `none`, `tls`, `reality` | no | `protocol=vless/vmess/trojan` | TLS mode. Hysteria2 always forces TLS regardless of this field. |
-| `tls_server_name` | string | hostname | no | `security=tls/reality` or `protocol=hysteria2` | TLS SNI / server name. |
-| `tls_certificate_path` | string | file path | no | `security=tls` or `protocol=hysteria2` | Path to PEM certificate file. |
-| `tls_key_path` | string | file path | no | `security=tls` or `protocol=hysteria2` | Path to PEM private key file. |
-| `tls_alpn` | list | e.g. `h2`, `http/1.1` | no | `security=tls` or `protocol=hysteria2` | ALPN protocols. UCI list type; stored as repeated option values. |
-| `tls_insecure` | bool | `0`/`1` | no | `security=tls/reality` or `protocol=hysteria2` | Allow insecure TLS certificates. Read by `build_tls` in `inbound.uc`. |
-| `utls_fingerprint` | enum | `chrome`, `firefox`, `safari`, `edge`, `random`, `""` | no | `security=tls/reality` | uTLS client fingerprint. Empty/absent omits uTLS block. Read by `build_tls`. |
-| `reality_private_key` | string | — | no | `security=reality` | Reality server private key. |
-| `reality_handshake_server` | string | hostname | no | `security=reality` | Reality handshake server address. |
-| `reality_handshake_server_port` | integer | port | no | `security=reality` | Reality handshake server port. |
-| `reality_short_id` | string | hex (0-8 chars) | no | `security=reality` | Reality short ID. Single string per sing-box 1.12 docs (`tls.reality.short_id`). |
-| `tls_ech` | bool | `0`/`1` | no | `security=tls/reality` or `protocol=hysteria2` | Enable ECH (Encrypted ClientHello). Emits `tls.ech.enabled`. |
-| `tls_ech_key` | list | PEM lines | no | `tls_ech=1` | Inline ECH key (server-side). UCI list type; emitted as `tls.ech.key[]`. |
-| `tls_ech_key_path` | string | file path | no | `tls_ech=1` | Path to ECH key file. Emitted as `tls.ech.key_path`. |
+| `tls_enabled` | bool | `0`/`1` | no | `protocol=vless/trojan` | Enables TLS. Renamed from `security=tls` by migration `migrate_rename_e2_keys`. Hysteria2 always forces TLS regardless of this field. |
+| `tls_server_name` | string | hostname | no | `tls_enabled=1` or `protocol=hysteria2` | TLS SNI / server name. |
+| `tls_certificate_path` | string | file path | no | `tls_enabled=1` or `protocol=hysteria2` | Path to PEM certificate file (server-side). |
+| `tls_key_path` | string | file path | no | `tls_enabled=1` or `protocol=hysteria2` | Path to PEM private key file (server-side). |
+| `tls_alpn` | list | e.g. `h2`, `http/1.1` | no | `tls_enabled=1` or `protocol=hysteria2` | ALPN protocols. UCI list type; stored as repeated option values. |
+| `tls_insecure` | bool | `0`/`1` | no | `tls_enabled=1` or `protocol=hysteria2` | Allow insecure TLS certificates. |
+| `tls_min_version` | enum | `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"` | no | `tls_enabled=1` | Minimum TLS version. Empty/absent omits the field (sing-box default). |
+| `tls_max_version` | enum | `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"` | no | `tls_enabled=1` | Maximum TLS version. Empty/absent omits the field. |
+| `tls_cipher_suites` | list | TLS cipher suite names | no | `tls_enabled=1` | Cipher suites. UCI list type; emitted as `tls.cipher_suites[]`. |
+| `utls_enabled` | bool | `0`/`1` | no | `tls_enabled=1` (inbound: server-side, n/a for inbound) | Sub-gate for uTLS. Renamed by migration; uTLS is client-only so inbound ignores this field. |
+| `utls_fingerprint` | enum | `chrome`, `firefox`, `safari`, `edge`, `random`, `""` | no | `utls_enabled=1` | uTLS client fingerprint. Empty/absent omits uTLS block. |
+| `reality_enabled` | bool | `0`/`1` | no | `tls_enabled=1` | Enables Reality mode. Renamed from `security=reality` by migration `migrate_rename_e2_keys`. |
+| `reality_private_key` | string | — | no | `reality_enabled=1` | Reality server private key (inbound-side). |
+| `reality_handshake_server` | string | hostname | no | `reality_enabled=1` | Reality handshake server address. |
+| `reality_handshake_server_port` | integer | port | no | `reality_enabled=1` | Reality handshake server port. |
+| `reality_short_id` | string | hex (0-8 chars) | no | `reality_enabled=1` | Reality short ID. Single string per sing-box 1.12 docs (`tls.reality.short_id`). |
+| `tls_ech_enabled` | bool | `0`/`1` | no | `tls_enabled=1` or `protocol=hysteria2` | Enable ECH (Encrypted ClientHello). Renamed from `tls_ech` by migration `migrate_rename_e2_keys`. Emits `tls.ech.enabled`. |
+| `tls_ech_key` | list | PEM lines | no | `tls_ech_enabled=1` | Inline ECH key (server-side). UCI list type; emitted as `tls.ech.key[]`. |
+| `tls_ech_key_path` | string | file path | no | `tls_ech_enabled=1` | Path to ECH key file. Emitted as `tls.ech.key_path`. |
 
 > **Note:** sing-box 1.12 also defines `tls.ech.pq_signature_schemes_enabled` and `tls.ech.dynamic_record_sizing_disabled`, but both are deprecated in 1.12 and removed in 1.13 — never emitted by this package.
 
 ### Transport fields
 
-Applies to `vless`, `vmess`, `trojan`.
+Applies to `vless`, `trojan` (inbound). The field `transport` was renamed to `transport_type` by migration `migrate_rename_e2_keys`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `transport` | enum | `none`, `ws`, `grpc`, `httpupgrade`, `xhttp`, `http` | no | `protocol=vless/vmess/trojan` | Transport layer. Defaults to `none`. |
-| `transport_path` | string | URL path | no | `transport=ws/httpupgrade/xhttp/http` | HTTP path for the transport. |
-| `transport_host` | string | hostname | no | `transport=ws/httpupgrade` | HTTP Host header override (single value). |
-| `transport_hosts` | list | hostnames | no | `transport=http` | HTTP host list. UCI list type. |
-| `transport_service_name` | string | — | no | `transport=grpc` | gRPC service name. |
-| `transport_xhttp_mode` | enum | `auto`, `packet-up`, `stream-up`, `stream-one` | no | `transport=xhttp` | XHTTP operating mode. Defaults to `auto`. |
+| `transport_type` | enum | `none`, `ws`, `grpc`, `httpupgrade`, `xhttp`, `http` | no | `protocol=vless/trojan` | Transport layer. Renamed from `transport` in E2. Defaults to `none`. |
+| `transport_path` | string | URL path | no | `transport_type=ws/httpupgrade/xhttp/http` | HTTP path for the transport. |
+| `transport_host` | string | hostname | no | `transport_type=ws` | HTTP Host header override for WebSocket (single value). |
+| `transport_host_httpupgrade` | string | hostname | no | `transport_type=httpupgrade` | HTTP Host header override for HTTPUpgrade. Split from `transport_host` in E2. |
+| `transport_hosts` | list | hostnames | no | `transport_type=http` | HTTP host list. UCI list type. |
+| `transport_service_name` | string | — | no | `transport_type=grpc` | gRPC service name. |
+| `transport_xhttp_mode` | enum | `auto`, `packet-up`, `stream-up`, `stream-one` | no | `transport_type=xhttp` | XHTTP operating mode. Defaults to `auto`. |
+| `transport_max_early_data` | integer | bytes | no | `transport_type=ws/httpupgrade/xhttp` | Maximum TLS early data size. |
+| `transport_early_data_header_name` | string | header name | no | `transport_max_early_data` set | HTTP header name for early data. |
 
 ### Multiplex fields
 
-Applies to `vless`, `vmess`, `trojan`, `shadowsocks` when `multiplex_enabled=1`.
+Applies to `vless`, `trojan`, `shadowsocks` (inbound) when `multiplex_enabled=1`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
@@ -296,11 +332,11 @@ UI write: `tabs/outbounds.js` — `buildOutboundsMap()`.
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `enabled` | bool | `0`/`1` | yes | — | Disabled sections (`enabled=0`) are skipped by `build_outbounds`. Also checked by `subscription.uc` before fetching. |
-| `type` | enum | `vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`, `tuic`, `anytls`, `interface`, `url`, `subscription` | yes | — | Selects the outbound dispatch branch. Sections with an empty `type` are skipped. |
+| `type` | enum | `vless`, `trojan`, `hysteria2`, `shadowsocks`, `direct`, `url`, `subscription` | yes | — | Selects the outbound dispatch branch. Sections with an empty `type` are skipped. `vmess`, `tuic`, `anytls`, `ssh`, `interface` are dropped in E2 — existing sections are deleted by migration `drop-removed-protocols-e2`. |
 
 ### Proxy-constructor common fields
 
-Applies to `type=vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`.
+Applies to `type=vless`, `trojan`, `hysteria2`, `shadowsocks`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
@@ -311,103 +347,116 @@ Applies to `type=vless`, `vmess`, `trojan`, `hysteria2`, `shadowsocks`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `server_uuid` | string | UUID | yes | `type=vless` or `vmess` | Connection UUID. |
+| `server_uuid` | string | UUID | yes | `type=vless` | Connection UUID. |
 | `server_password` | string | — | yes | `type=trojan`, `hysteria2`, `shadowsocks` | Authentication password or pre-shared key. |
 | `vless_flow` | enum | `none`, `xtls-rprx-vision` | no | `type=vless` | VLESS flow control. Omitted when `none`. |
-| `vmess_alter_id` | integer | `0`+ | no | `type=vmess` | VMess alter ID. |
-| `vmess_security` | enum | `auto`, `none`, `aes-128-gcm`, `chacha20-poly1305` | no | `type=vmess` | VMess cipher. Read by `build_constructor_for` via `s_opt(s, "vmess_security")`. |
 
 ### Shadowsocks fields
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `shadowsocks_method` | enum | e.g. `aes-256-gcm`, `chacha20-ietf-poly1305` | yes | `type=shadowsocks` | Encryption cipher. |
+| `plugin` | string | e.g. `obfs-local` | no | `type=shadowsocks` | SIP003 plugin name. |
+| `plugin_opts` | string | plugin option string | no | `plugin` set | SIP003 plugin options. |
+| `udp_over_tcp` | bool | `0`/`1` | no | `type=shadowsocks` | Enables UDP-over-TCP multiplexing. |
+| `network` | enum | `""`, `tcp`, `udp` | no | `type=shadowsocks` | Restricts the dialed network. Empty or any other value omits the field. |
 
 ### `hysteria2` fields
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `hysteria2_obfs_type` | enum | `none`, `salamander` | no | `type=hysteria2` | Obfuscation type. Omitted when `none`. |
-| `hysteria2_obfs_password` | string | — | no | `hysteria2_obfs_type=salamander` | Obfuscation password. |
+| `obfs_type` | enum | `none`, `salamander` | no | `type=hysteria2` | Obfuscation type. Omitted when `none`. |
+| `obfs_password` | string | — | no | `obfs_type=salamander` | Obfuscation password. |
 | `up_mbps` | integer | Mbps | no | `type=hysteria2` | Upload bandwidth limit. |
 | `down_mbps` | integer | Mbps | no | `type=hysteria2` | Download bandwidth limit. |
-| `hysteria2_masquerade` | string | URL | no | `type=hysteria2` | Masquerade URL served to non-Hysteria2 peers. Server-side concept — emitted as a passthrough field. |
+| `masquerade` | string | URL | no | `type=hysteria2` | Masquerade URL served to non-Hysteria2 peers. |
 | `brutal_debug` | bool | `0`/`1` | no | `type=hysteria2` | Emit `brutal_debug` for Brutal CC debug output. |
-| `network` | enum | `""`, `tcp`, `udp` | no | `type=hysteria2/tuic` | Restricts the dialed network. Empty or any other value omits the field. |
-
-### TUIC fields
-
-TUIC reuses the standard `server`, `server_port`, `server_uuid`, `server_password`, `network`, and TLS block fields. TUIC always requires TLS — set `security=tls` (or `reality`) on the section. The fields below are TUIC-specific.
-
-| Field | Type | Values | Required | Depends on | Description |
-|---|---|---|---|---|---|
-| `tuic_congestion` | enum | `cubic`, `new_reno`, `bbr` | no | `type=tuic` | Congestion control algorithm. Emitted as `congestion_control`. sing-box default is `cubic` — omitted when UCI field is empty. |
-| `tuic_udp_relay_mode` | enum | `native`, `quic` | no | `type=tuic` | UDP relay mode. Emitted as `udp_relay_mode`. sing-box default is `native`. **Mutually exclusive with `tuic_udp_over_stream`**: when `tuic_udp_over_stream=1`, this field is silently dropped from the emit. |
-| `tuic_udp_over_stream` | bool | `0`/`1` | no | `type=tuic` | When `1`, emits `udp_over_stream: true` and suppresses `udp_relay_mode`. Default `0` (omitted). |
-| `tuic_zero_rtt` | bool | `0`/`1` | no | `type=tuic` | When `1`, emits `zero_rtt_handshake: true`. Default `0` (omitted). |
-| `tuic_heartbeat` | string | duration (e.g. `10s`, `15s`) | no | `type=tuic` | Heartbeat interval. sing-box default is `10s` — omitted when UCI field is empty. |
-
-### AnyTLS fields
-
-Applies to `type=anytls` outbound. AnyTLS is QUIC/TLS-only — no transport or multiplex. Reuses `server`, `server_port`, `server_password`, and the standard TLS block (`security`, `tls_server_name`, etc.).
-
-| Field | Type | Values | Required | Depends on | Description |
-|---|---|---|---|---|---|
-| `anytls_idle_check_interval` | string | duration (e.g. `30s`) | no | `type=anytls` | How often idle sessions are scanned. sing-box default `30s`. |
-| `anytls_idle_timeout` | string | duration (e.g. `30s`) | no | `type=anytls` | Idle-session timeout. sing-box default `30s`. |
-| `anytls_min_idle_session` | integer | ≥ 0 | no | `type=anytls` | Minimum idle sessions kept open after a check. Default 0. Emit only when set to a positive value. |
+| `network` | enum | `""`, `tcp`, `udp` | no | `type=hysteria2` | Restricts the dialed network. Empty or any other value omits the field. |
 
 ### TLS fields
 
-Applies to `type=vless`, `vmess`, `trojan` (selectable via `security`). Hysteria2 always uses TLS — `security` field is absent from its UI branch but `tls_server_name` and other TLS options apply.
+Applies to `type=vless`, `trojan` (selectable via `tls_enabled`/`reality_enabled`). Hysteria2 always uses TLS — `tls_enabled` is absent from its branch but `tls_server_name` and other TLS options apply. The E2 descriptor model uses explicit boolean gates instead of the old `security` enum.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `security` | enum | `none`, `tls`, `reality` | no | `type=vless/vmess/trojan` | TLS mode. Defaults to `none`. |
-| `tls_server_name` | string | hostname | no | `security=tls/reality` or `type=hysteria2` | TLS SNI. |
-| `tls_insecure` | bool | `0`/`1` | no | `security=tls/reality` or `type=hysteria2` | Allow insecure certificates. |
-| `tls_alpn` | list | e.g. `h2`, `http/1.1` | no | `security=tls` or `type=hysteria2` | ALPN protocols. UCI list type. Read as `as_array(s.tls_alpn)`. |
-| `utls_fingerprint` | enum | `chrome`, `firefox`, `safari`, `edge`, `random`, `""` | no | `security=tls/reality` | uTLS client fingerprint. Empty/absent omits uTLS block. |
-| `reality_public_key` | string | — | no | `security=reality` | Reality server public key (outbound-side; contrast inbound's `reality_private_key`). |
-| `reality_short_id` | string | hex (0-8 chars) | no | `security=reality` | Reality short ID. Single string per sing-box 1.12 docs. |
-| `tls_ech` | bool | `0`/`1` | no | `security=tls/reality` or `type=hysteria2` | Enable ECH (Encrypted ClientHello). Emits `tls.ech.enabled`. |
-| `tls_ech_config` | list | PEM lines | no | `tls_ech=1` | Inline ECH config (client-side). UCI list type; emitted as `tls.ech.config[]`. |
-| `tls_ech_config_path` | string | file path | no | `tls_ech=1` | Path to ECH config file. Emitted as `tls.ech.config_path`. |
-| `tls_fragment` | bool | `0`/`1` | no | `type=vless/vmess/trojan/hysteria2` | Enable TLS handshake fragmentation. Since sing-box 1.12. Flat field `tls.fragment`. |
+| `tls_enabled` | bool | `0`/`1` | no | `type=vless/trojan` | Enables TLS. Renamed from `security=tls` by migration `migrate_rename_e2_keys`. |
+| `tls_server_name` | string | hostname | no | `tls_enabled=1` or `type=hysteria2` | TLS SNI. |
+| `tls_insecure` | bool | `0`/`1` | no | `tls_enabled=1` or `type=hysteria2` | Allow insecure certificates. |
+| `tls_alpn` | list | e.g. `h2`, `http/1.1` | no | `tls_enabled=1` or `type=hysteria2` | ALPN protocols. UCI list type. Read as `as_array(s.tls_alpn)`. |
+| `tls_min_version` | enum | `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"` | no | `tls_enabled=1` | Minimum TLS version. |
+| `tls_max_version` | enum | `"1.0"`, `"1.1"`, `"1.2"`, `"1.3"` | no | `tls_enabled=1` | Maximum TLS version. |
+| `tls_cipher_suites` | list | TLS cipher suite names | no | `tls_enabled=1` | Cipher suites. UCI list type; emitted as `tls.cipher_suites[]`. |
+| `utls_enabled` | bool | `0`/`1` | no | `tls_enabled=1` | Sub-gate for uTLS client fingerprint emulation. |
+| `utls_fingerprint` | enum | `chrome`, `firefox`, `safari`, `edge`, `random`, `""` | no | `utls_enabled=1` | uTLS client fingerprint. Empty/absent omits uTLS block. |
+| `reality_enabled` | bool | `0`/`1` | no | `tls_enabled=1` | Enables Reality mode. Renamed from `security=reality` by migration. |
+| `reality_public_key` | string | — | no | `reality_enabled=1` | Reality server public key (outbound-side). |
+| `reality_short_id` | string | hex (0-8 chars) | no | `reality_enabled=1` | Reality short ID. Single string per sing-box 1.12 docs. |
+| `tls_ech_enabled` | bool | `0`/`1` | no | `tls_enabled=1` or `type=hysteria2` | Enable ECH (Encrypted ClientHello). Renamed from `tls_ech` by migration. Emits `tls.ech.enabled`. |
+| `tls_ech_config` | list | PEM lines | no | `tls_ech_enabled=1` | Inline ECH config (client-side). UCI list type; emitted as `tls.ech.config[]`. |
+| `tls_ech_config_path` | string | file path | no | `tls_ech_enabled=1` | Path to ECH config file. Emitted as `tls.ech.config_path`. |
+| `tls_fragment` | bool | `0`/`1` | no | `type=vless/trojan/hysteria2` | Enable TLS handshake fragmentation. Since sing-box 1.12. Flat field `tls.fragment`. |
 | `tls_fragment_fallback_delay` | string | duration (e.g. `500ms`) | no | `tls_fragment=1` | Fragment fallback delay. Defaults to `500ms` in sing-box. |
-| `tls_record_fragment` | bool | `0`/`1` | no | `type=vless/vmess/trojan/hysteria2` | Split handshake across multiple TLS records. Since sing-box 1.12. Flat field `tls.record_fragment`. |
+| `tls_record_fragment` | bool | `0`/`1` | no | `type=vless/trojan/hysteria2` | Split handshake across multiple TLS records. Since sing-box 1.12. Flat field `tls.record_fragment`. |
 
 ### Transport fields
 
-Applies to `type=vless`, `vmess`, `trojan`.
+Applies to `type=vless`, `trojan`. The field `transport` was renamed to `transport_type` by migration `migrate_rename_e2_keys`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `transport` | enum | `none`, `ws`, `grpc`, `httpupgrade`, `xhttp`, `http` | no | proxy constructor types | Transport layer. Defaults to `none`. |
-| `transport_path` | string | URL path | no | `transport=ws/httpupgrade/xhttp/http` | HTTP path. |
-| `transport_host` | string | hostname | no | `transport=ws/httpupgrade` | HTTP Host header override (single value). |
-| `transport_hosts` | list | hostnames | no | `transport=http` | HTTP host list. UCI list type. Read as `as_array(s.transport_hosts)`. |
-| `transport_service_name` | string | — | no | `transport=grpc` | gRPC service name. |
-| `transport_xhttp_mode` | enum | `auto`, `packet-up`, `stream-up`, `stream-one` | no | `transport=xhttp` | XHTTP operating mode. |
+| `transport_type` | enum | `none`, `ws`, `grpc`, `httpupgrade`, `xhttp`, `http` | no | `type=vless/trojan` | Transport layer. Renamed from `transport` in E2. Defaults to `none`. |
+| `transport_path` | string | URL path | no | `transport_type=ws/httpupgrade/xhttp/http` | HTTP path. |
+| `transport_host` | string | hostname | no | `transport_type=ws` | HTTP Host header override for WebSocket (single value). |
+| `transport_host_httpupgrade` | string | hostname | no | `transport_type=httpupgrade` | HTTP Host header override for HTTPUpgrade. Split from `transport_host` in E2. |
+| `transport_hosts` | list | hostnames | no | `transport_type=http` | HTTP host list. UCI list type. Read as `as_array(s.transport_hosts)`. |
+| `transport_service_name` | string | — | no | `transport_type=grpc` | gRPC service name. |
+| `transport_xhttp_mode` | enum | `auto`, `packet-up`, `stream-up`, `stream-one` | no | `transport_type=xhttp` | XHTTP operating mode. |
+| `transport_max_early_data` | integer | bytes | no | `transport_type=ws/httpupgrade/xhttp` | Maximum TLS early data size. |
+| `transport_early_data_header_name` | string | header name | no | `transport_max_early_data` set | HTTP header name for early data. |
 
 ### Multiplex fields
 
-Applies to `type=vless`, `vmess`, `trojan` when `multiplex_enabled=1`.
+Applies to `type=vless`, `trojan`, `shadowsocks` when `multiplex_enabled=1`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `multiplex_enabled` | bool | `0`/`1` | no | `type=vless/vmess/trojan` | Enables multiplex. |
+| `multiplex_enabled` | bool | `0`/`1` | no | `type=vless/trojan/shadowsocks` | Enables multiplex. |
 | `multiplex_protocol` | enum | `smux`, `yamux`, `h2mux` | no | `multiplex_enabled=1` | Multiplex sub-protocol. Defaults to `smux`. |
 | `multiplex_max_connections` | integer | — | no | `multiplex_enabled=1` | Maximum multiplexed connections. |
 | `multiplex_min_streams` | integer | — | no | `multiplex_enabled=1` | Minimum streams before opening a new connection. |
 | `multiplex_max_streams` | integer | — | no | `multiplex_enabled=1` | Maximum streams per connection. |
 | `multiplex_padding` | bool | `0`/`1` | no | `multiplex_enabled=1` | Enables stream padding. |
 
-### Interface outbound (`type=interface`)
+### Dial fields
+
+Shared outbound dial options emitted by `_shared/dial.uc`. Applies to all proxy outbound types and `type=direct`.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `interface` | string | device name | yes | `type=interface` | UCI logical interface name (e.g. `wan`) or real netdev. Backend resolves via `helpers.resolve_iface_device()` before binding; falls back to the value verbatim if resolution fails. |
+| `bind_interface` | string | UCI iface name or netdev | no | any outbound | Bind outgoing connections to this interface. Backend resolves via `helpers.resolve_iface_device()`. |
+| `inet4_bind_address` | string | IPv4 address | no | any outbound | Source IPv4 address for outgoing connections. |
+| `inet6_bind_address` | string | IPv6 address | no | any outbound | Source IPv6 address for outgoing connections. |
+| `routing_mark` | integer | SO_MARK value | no | any outbound | Sets the `SO_MARK` socket option on outgoing connections. |
+| `reuse_addr` | bool | `0`/`1` | no | any outbound | Enables `SO_REUSEADDR` on the dialing socket. |
+| `connect_timeout` | string | duration (e.g. `5s`) | no | any outbound | Dial timeout. Empty/absent omits the field (sing-box default). |
+| `tcp_fast_open` | bool | `0`/`1` | no | any outbound | Enables TCP Fast Open on outgoing connections. |
+| `tcp_multi_path` | bool | `0`/`1` | no | any outbound | Enables TCP multi-path (MPTCP). |
+| `udp_fragment` | bool | `0`/`1` | no | any outbound | Enables UDP fragmentation for outgoing datagrams. |
+| `domain_strategy` | enum | `""`, `prefer_ipv4`, `prefer_ipv6`, `ipv4_only`, `ipv6_only` | no | any outbound | Address resolution strategy for this outbound. |
+| `network_strategy` | enum | `""`, `default`, `hybrid`, `prefer_ipv4`, `prefer_ipv6`, `ipv4_only`, `ipv6_only` | no | any outbound | Network interface selection strategy. |
+| `fallback_delay` | string | duration | no | `domain_strategy` set | Delay before falling back to the secondary address family. |
+| `detour` | string | outbound section name | no | any outbound | Route this outbound's traffic through another outbound. |
+| `netns` | string | network namespace path or name | no | any outbound | Linux network namespace for this outbound. |
+
+### `direct` outbound fields
+
+`type=direct` replaces the old `type=interface` outbound from pre-E2. Uses `_shared/dial.uc` for the bind interface and all dial fields above.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `override_address` | string | IP or hostname | no | `type=direct` | Replaces the destination address. |
+| `override_port` | integer | port | no | `type=direct` | Replaces the destination port. |
+| `proxy_protocol` | integer | `1` or `2` | no | `type=direct` | Emits PROXY Protocol header version 1 or 2 to the downstream. |
 
 ### Share-link URL outbound (`type=url`)
 
@@ -604,8 +653,7 @@ Pure-function validators consumed by LuCI form `.validate` callbacks. Each retur
 | Validator | Wired on |
 |---|---|
 | `isPort` | `listen_port` (inbound), `server_port` (outbound) |
-| `isUuid` | `server_uuid` (inbound vless/vmess, outbound vless/vmess/tuic) |
+| `isUuid` | `server_uuid` (inbound vless, outbound vless) |
 | `isHost` | `server` (outbound), `tls_server_name` (inbound + outbound) |
 | `isAlpnNonEmpty` | `tls_alpn` DynamicList (inbound + outbound) |
-| `requiresWsPath` | `transport_path` (inbound + outbound), reads `transport` formvalue |
-| `softWarnCongestion` | `tuic_congestion` — non-blocking: emits `console.warn` for unknown values, never blocks save |
+| `requiresWsPath` | `transport_path` (inbound + outbound), reads `transport_type` formvalue |
