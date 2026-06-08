@@ -48,8 +48,8 @@ function jsonImportOutbound(o) {
 		if (o.up_mbps   != null) f.up_mbps   = String(o.up_mbps);
 		if (o.down_mbps != null) f.down_mbps = String(o.down_mbps);
 		if (o.obfs && o.obfs.type) {
-			f.hysteria2_obfs_type     = o.obfs.type;
-			f.hysteria2_obfs_password = o.obfs.password || '';
+			f.obfs_type     = o.obfs.type;
+			f.obfs_password = o.obfs.password || '';
 		}
 	}
 	if (o.tls) {
@@ -151,8 +151,8 @@ function shareLinkImport(url) {
 		};
 		if (hparams.sni) hf.tls_server_name = hparams.sni;
 		if (hparams.obfs === 'salamander') {
-			hf.hysteria2_obfs_type     = 'salamander';
-			hf.hysteria2_obfs_password = hparams['obfs-password'] || '';
+			hf.obfs_type     = 'salamander';
+			hf.obfs_password = hparams['obfs-password'] || '';
 		}
 		return { ok: true, fields: hf };
 	}
@@ -161,6 +161,14 @@ function shareLinkImport(url) {
 		if (!match) return { ok: false, errors: [_('Cannot parse shadowsocks URL')] };
 		var userinfo = match[1] ? decodeURIComponent(match[1]) : '';
 		var mp = userinfo.split(':');
+		if (mp.length < 2 && /^[A-Za-z0-9+/=_-]+$/.test(userinfo)) {
+			// SIP002 legacy: userinfo is base64(method:password). Try decode.
+			try {
+				var b64 = userinfo.replace(/-/g, '+').replace(/_/g, '/');
+				var decoded = atob(b64);
+				mp = decoded.split(':');
+			} catch (e) { /* keep plain mp */ }
+		}
 		return { ok: true, fields: {
 			type: 'shadowsocks',
 			server: match[2], server_port: +match[3],
