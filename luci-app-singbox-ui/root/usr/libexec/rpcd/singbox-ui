@@ -1,4 +1,4 @@
-#!/usr/bin/ucode
+#!/usr/bin/ucode -L/usr/share/singbox-ui/lib
 // rpcd handler for singbox-ui. Methods:
 //   generate            run /usr/share/singbox-ui/generate.uc
 //   nftables {action}   run /usr/share/singbox-ui/nftables.uc apply|remove

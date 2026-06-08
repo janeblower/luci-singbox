@@ -8,9 +8,28 @@ if [ ! -x "$H" ]; then
   echo "FAIL: $H not present or not executable"; exit 1
 fi
 
-# Locate ucode the same way the other ucode tests do. The handler's shebang
-# (#!/usr/bin/ucode) is correct for the OpenWrt target but absent on the dev
-# box, so we invoke it explicitly through $UCODE_BIN.
+# Shebang invariant: rpcd invokes the handler via its shebang on the target,
+# so `-L /usr/share/singbox-ui/lib` MUST be on the interpreter line. Without
+# it, in-handler `require("scrub")` / `require("protocols.schema_dump")` /
+# `require("reveal")` calls fail at runtime and methods like preview_config
+# and protocol_schema return `require(...) failed` (regression: shebang was
+# bare `#!/usr/bin/ucode` until this assertion was added). The Linux kernel
+# treats everything after the interpreter as a single argv string, so the
+# `-L` and its path must NOT be separated by a space — `-Lpath` form is the
+# only one getopt can parse out of a shebang.
+shebang_line=$(head -1 "$H")
+case "$shebang_line" in
+	"#!/usr/bin/ucode -L/usr/share/singbox-ui/lib")
+		echo "PASS: rpcd handler shebang sets -L/usr/share/singbox-ui/lib" ;;
+	*)
+		echo "FAIL: rpcd handler shebang must be '#!/usr/bin/ucode -L/usr/share/singbox-ui/lib' (got: $shebang_line)"
+		exit 1 ;;
+esac
+
+# Locate ucode the same way the other ucode tests do. The dev box may not have
+# ucode at the OpenWrt-target path /usr/bin/ucode, so we invoke it explicitly
+# through $UCODE_BIN with $UCODE_LIB_FLAGS rather than relying on the shebang
+# (the shebang invariant above proves the production form is correct).
 if command -v ucode >/dev/null 2>&1; then
 	# Resolve to an absolute path: this test stubs `ucode` in $tmpdir via PATH
 	# to spy on child invocations, and we mustn't let that stub catch the
