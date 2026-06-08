@@ -1,0 +1,7 @@
+config inbound 'dns_in'
+    option enabled '1'
+    option protocol 'direct'
+    option listen '::'
+    option listen_port '53'
+    option network 'udp'
+    option dns_listener '1'

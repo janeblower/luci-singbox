@@ -1,0 +1,8 @@
+config outbound 'wan_out'
+    option enabled '1'
+    option type 'direct'
+    option bind_interface 'wan'
+
+config route_default 'route'
+    option enabled '1'
+    option final 'wan_out'

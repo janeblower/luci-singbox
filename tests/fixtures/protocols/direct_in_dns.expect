@@ -1,0 +1,1 @@
+c.inbounds[0].type == "direct" && c.inbounds[0].listen_port == 53 && c.inbounds[0].network == "udp"

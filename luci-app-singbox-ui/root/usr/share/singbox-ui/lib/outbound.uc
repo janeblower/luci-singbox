@@ -16,6 +16,7 @@ try { require("protocols.vmess"); } catch (_) {}
 try { require("protocols.hysteria2"); } catch (_) {}
 try { require("protocols.tuic"); } catch (_) {}
 try { require("protocols.anytls"); } catch (_) {}
+try { require("protocols.direct"); } catch (_) {}
 
 const s_opt    = helpers.s_opt;
 const s_bool   = helpers.s_bool;
@@ -500,6 +501,11 @@ function build_outbounds(cur) {
 		} else if (kind === "url") {
 			let parsed = parse_proxy_url(section.proxy_url ?? "");
 			if (parsed) { parsed.tag = name; outbound = parsed; }
+		} else if (kind === "direct") {
+			// E2: descriptor-owned direct outbound (type=direct in UCI).
+			// Distinct from the legacy type=interface branch above which
+			// builds the same sing-box JSON but via UCI iface resolution.
+			outbound = build_constructor_for(section, kind);
 		} else if (helpers.is_outbound_proxy_kind(kind)) {
 			outbound = build_constructor_for(section, kind);
 		} else if (kind === "subscription") {

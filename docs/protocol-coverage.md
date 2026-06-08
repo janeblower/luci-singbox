@@ -244,10 +244,14 @@ Maps to sing-box `direct` with `bind_interface`. Status: **есть**, no furthe
 Same status as selector: implemented via subscriptions, no standalone UCI form. Not in Phase B scope unless a concrete request appears.
 
 ### direct outbound
+E2 DSL descriptor (`lib/protocols/direct.uc`). Replaces the legacy `type=interface` UCI outbound.
 | Field | Status |
 |---|---|
-| `bind_interface` | есть (via interface kind) |
-| Standalone `type=direct` (no bind) | нет (low priority — most users want interface bind) |
+| `bind_interface` | есть (via shared dial block) |
+| `override_address` | есть (E2) |
+| `override_port` | есть (E2) |
+| `proxy_protocol` | есть (E2) |
+| Shared dial fields (`inet4_bind_address`, `inet6_bind_address`, `routing_mark`, etc.) | есть (via shared dial block) |
 
 ### block outbound
 **Status:** нет.
