@@ -60,7 +60,8 @@ function emit_list() {
 		clash_mutate:   { method: "string", path: "string", body: "string" },
 		export_section: { kind: "string", name: "string" },
 		preview_config: {},
-		protocol_schema: {}
+		protocol_schema: {},
+		subscription_expand: { name: "string" }
 	});
 }
 
@@ -421,6 +422,22 @@ function call_clash_mutate() {
 	clash_proxy(method, path, args.body);
 }
 
+function call_subscription_expand() {
+	let args = parse_args();
+	let name = args.name;
+	if (type(name) !== "string" || length(name) > 64 || !match(name, /^[A-Za-z0-9_-]+$/)) {
+		emit_err("invalid or missing 'name'");
+		return;
+	}
+	let mod;
+	try { mod = require("subscription_expand"); }
+	catch (e) { emit_err("require(subscription_expand) failed: " + e); return; }
+	let endpoints;
+	try { endpoints = mod.expand(name); }
+	catch (e) { emit_err("expand failed: " + e); return; }
+	emit({ status: "ok", name: name, endpoints: endpoints });
+}
+
 let argv   = ARGV;
 let cmd    = argv[0] || "";
 let method = argv[1] || "";
@@ -444,6 +461,7 @@ if (cmd === "call") {
 	case "export_section": call_export_section(); break;
 	case "preview_config": call_preview_config(); break;
 	case "protocol_schema": call_protocol_schema(); break;
+	case "subscription_expand": call_subscription_expand(); break;
 	default:            emit_err(`unknown method: ${method}`); break;
 	}
 	exit(0);
