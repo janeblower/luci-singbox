@@ -366,8 +366,8 @@ uci -q get singbox-ui.ob_ctor.protocol >/dev/null 2>&1 \
 	&& { echo "FAIL: protocol should be absent after migration"; uci show singbox-ui.ob_ctor; exit 1; }
 echo "  PASS: protocol absent"
 
-echo "-- migrate_outbound_type: proxy_type=interface/url/subscription → type=<same>"
-for _pt in interface url subscription; do
+echo "-- migrate_outbound_type: proxy_type=url/subscription → type=<same>"
+for _pt in url subscription; do
 	rm -f "$CONFIG"
 	cat >"$CONFIG" <<EOF
 config outbound 'ob_${_pt}'
@@ -384,6 +384,19 @@ EOF
 		&& { echo "FAIL: proxy_type should be absent (${_pt})"; uci show "singbox-ui.ob_${_pt}"; exit 1; }
 	echo "  PASS: proxy_type absent (${_pt})"
 done
+
+echo "-- migrate_outbound_type + E2 drop: proxy_type=interface → type=interface → deleted"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config outbound 'ob_interface'
+	option enabled '1'
+	option proxy_type 'interface'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: migrate (interface) crashed"; cat "$log"; exit 1; }
+uci -q get singbox-ui.ob_interface >/dev/null 2>&1 \
+	&& { echo "FAIL: ob_interface should be deleted by E2 Migration B"; uci show "singbox-ui.ob_interface"; exit 1; }
+echo "  PASS: ob_interface deleted (E2 Migration B)"
 
 echo "-- migrate_outbound_type: proxy_type=json → enabled=0, proxy_type absent, proxy_json absent"
 rm -f "$CONFIG"
