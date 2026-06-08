@@ -1,0 +1,7 @@
+config inbound 'mixed_in'
+    option enabled '1'
+    option protocol 'mixed'
+    option listen '::'
+    option listen_port '1080'
+    list mixed_user 'alice:wonderland'
+    list mixed_user 'bob:builder'

@@ -44,6 +44,7 @@ root/usr/share/singbox-ui/lib/protocols/_shared/transport.uc	usr/share/singbox-u
 root/usr/share/singbox-ui/lib/protocols/anytls.uc	usr/share/singbox-ui/lib/protocols/anytls.uc	data
 root/usr/share/singbox-ui/lib/protocols/direct.uc	usr/share/singbox-ui/lib/protocols/direct.uc	data
 root/usr/share/singbox-ui/lib/protocols/hysteria2.uc	usr/share/singbox-ui/lib/protocols/hysteria2.uc	data
+root/usr/share/singbox-ui/lib/protocols/mixed.uc	usr/share/singbox-ui/lib/protocols/mixed.uc	data
 root/usr/share/singbox-ui/lib/protocols/registry.uc	usr/share/singbox-ui/lib/protocols/registry.uc	data
 root/usr/share/singbox-ui/lib/protocols/schema_dump.uc	usr/share/singbox-ui/lib/protocols/schema_dump.uc	data
 root/usr/share/singbox-ui/lib/protocols/shadowsocks.uc	usr/share/singbox-ui/lib/protocols/shadowsocks.uc	data

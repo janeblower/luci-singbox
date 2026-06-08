@@ -1,0 +1,1 @@
+length(c.inbounds[0].users) == 2 && c.inbounds[0].users[0].username == "alice" && c.inbounds[0].users[0].password == "wonderland"
