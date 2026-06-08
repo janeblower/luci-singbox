@@ -122,12 +122,13 @@ config inbound 'vl'
 	option listen_port '443'
 	option server_uuid 'uuid-1111'
 	option vless_flow 'xtls-rprx-vision'
-	option security 'reality'
+	option tls_enabled '1'
+	option reality_enabled '1'
 	option reality_private_key 'PRIVKEY'
 	option reality_short_id 'ab12'
 	option reality_handshake_server 'www.example.com'
 	option reality_handshake_server_port '443'
-	option transport 'ws'
+	option transport_type 'ws'
 	option transport_path '/ray'
 	option transport_host 'cdn.example.com'
 "
@@ -231,11 +232,11 @@ config inbound 'http_in'
 	option protocol 'vless'
 	option listen_port '8445'
 	option server_uuid 'uuid-9999'
-	option transport 'http'
+	option transport_type 'http'
 	option transport_path '/api'
 	list   transport_hosts 'a.example.com'
 	list   transport_hosts 'b.example.com'
-	option security 'tls'
+	option tls_enabled '1'
 	option tls_certificate_path '/c.pem'
 	option tls_key_path '/k.pem'
 	list   tls_alpn 'h2'
@@ -292,7 +293,7 @@ config inbound 'vl2'
 	option protocol 'vless'
 	option listen_port '443'
 	option server_uuid 'uuid-3'
-	option transport 'xhttp'
+	option transport_type 'xhttp'
 	option transport_path '/x'
 	option transport_xhttp_mode 'stream-up'
 	option multiplex_enabled '1'
@@ -372,11 +373,11 @@ config inbound 'vech'
 	option protocol 'vless'
 	option listen_port '4443'
 	option server_uuid 'uuid-ech'
-	option security 'tls'
+	option tls_enabled '1'
 	option tls_server_name 'ech.example.com'
 	option tls_certificate_path '/etc/ssl/cert.pem'
 	option tls_key_path '/etc/ssl/key.pem'
-	option tls_ech '1'
+	option tls_ech_enabled '1'
 	list   tls_ech_key '-----BEGIN ECH KEY-----'
 	list   tls_ech_key 'AAAA'
 	list   tls_ech_key '-----END ECH KEY-----'
@@ -398,7 +399,7 @@ config inbound 'noech'
 	option protocol 'vless'
 	option listen_port '4444'
 	option server_uuid 'uuid-noech'
-	option security 'tls'
+	option tls_enabled '1'
 	option tls_server_name 'plain.example.com'
 "
 run_gen
@@ -603,7 +604,7 @@ let inb = require("inbound");
 let s = { ".name":"v_in1", "protocol":"vless", "listen":"::", "listen_port":"443",
           "inbound_user":["alice:11111111-1111-1111-1111-111111111111",
                           "bob:22222222-2222-2222-2222-222222222222:xtls-rprx-vision"],
-          "security":"tls",
+          "tls_enabled":"1",
           "tls_certificate_path":"/etc/ssl/cert.pem", "tls_key_path":"/etc/ssl/key.pem" };
 printf("%J", inb.build_one(s));
 '
@@ -626,7 +627,7 @@ let inb = require("inbound");
 let s = { ".name":"v_in2", "protocol":"vless", "listen":"::", "listen_port":"443",
           "server_uuid":"33333333-3333-3333-3333-333333333333",
           "vless_flow":"xtls-rprx-vision",
-          "security":"tls",
+          "tls_enabled":"1",
           "tls_certificate_path":"/etc/ssl/cert.pem", "tls_key_path":"/etc/ssl/key.pem" };
 printf("%J", inb.build_one(s));
 '

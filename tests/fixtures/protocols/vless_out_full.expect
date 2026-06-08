@@ -1,0 +1,1 @@
+c.outbounds[0].packet_encoding == "xudp" && c.outbounds[0].tls.utls.fingerprint == "firefox" && c.outbounds[0].tls.reality.public_key == "pubkey" && c.outbounds[0].transport.type == "ws" && c.outbounds[0].transport.path == "/v" && c.outbounds[0].multiplex.protocol == "yamux" && c.outbounds[0].bind_interface == "wan" && c.outbounds[0].routing_mark == 100
