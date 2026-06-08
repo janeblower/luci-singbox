@@ -29,12 +29,18 @@ export const DOCKER_NAME = process.env.DOCKER_NAME || '';
 // The command is passed via stdin so callers don't need to escape single
 // quotes, embedded $vars, etc. — execSync's `input` channel handles arbitrary
 // bytes safely.
+//
+// containerExec runs a shell command inside the test container via
+// `docker exec -i ... sh`. The command is piped on stdin so we don't have
+// to quote-escape anything. Synchronous — blocks the event loop for the
+// duration; that's fine for short UCI seed/cleanup commands but use with
+// care for anything that sleeps or waits.
 export function containerExec(cmd) {
     if (!DOCKER_NAME) throw new Error('containerExec: DOCKER_NAME env var not set');
     return execSync(`docker exec -i ${DOCKER_NAME} sh`, {
         input: cmd,
         encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'],
+        stdio: ['pipe', 'pipe', 'inherit'],
     });
 }
 

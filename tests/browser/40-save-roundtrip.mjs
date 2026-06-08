@@ -2,7 +2,9 @@
 // what Save & Apply would write), trigger sing-box restart, then verify:
 //   * ubus preview_config returns valid JSON with our outbound
 //   * logread has no FATAL / panic lines
-//   * nft list shows the singbox table (sanity)
+//   * nft installation path is NOT verified here — container has no NET_ADMIN
+//     and the image stubs /etc/init.d/sing-box; the VM integration suite
+//     covers that surface.
 //
 // We don't drive the actual UI Save button to keep the test deterministic —
 // the UI write path is covered by 10/11/20/21 (everything before Save).
