@@ -7,10 +7,14 @@ const s_num  = helpers.s_num;
 
 function emit_outbound(s) {
     let out = {};
+    // Caller must resolve UCI logical iface names (e.g. "wan") to netdev names
+    // before passing — see helpers.resolve_iface_device in outbound.uc.
     if (length(s_opt(s, "bind_interface")))
         out.bind_interface = s.bind_interface;
-    if (length(s_opt(s, "bind_address")))
-        out.bind_address = s.bind_address;
+    if (length(s_opt(s, "inet4_bind_address")))
+        out.inet4_bind_address = s.inet4_bind_address;
+    if (length(s_opt(s, "inet6_bind_address")))
+        out.inet6_bind_address = s.inet6_bind_address;
     if (length(s_opt(s, "routing_mark")))
         out.routing_mark = s_num(s.routing_mark);
     if (s_bool(s, "reuse_addr"))
@@ -29,6 +33,10 @@ function emit_outbound(s) {
         out.network_strategy = s.network_strategy;
     if (length(s_opt(s, "fallback_delay")))
         out.fallback_delay = s.fallback_delay;
+    if (length(s_opt(s, "detour")))
+        out.detour = s.detour;
+    if (length(s_opt(s, "netns")))
+        out.netns = s.netns;
     return out;
 }
 
@@ -39,8 +47,10 @@ return {
         { name: "bind_interface", type: "string", tab: "dial",
           ui_label: "Bind interface", placeholder: "wan" },
 
-        { name: "bind_address", type: "string", tab: "dial",
-          ui_label: "Bind address", advanced: true },
+        { name: "inet4_bind_address", type: "string", tab: "dial",
+          ui_label: "IPv4 bind address", placeholder: "0.0.0.0", advanced: true },
+        { name: "inet6_bind_address", type: "string", tab: "dial",
+          ui_label: "IPv6 bind address", placeholder: "::", advanced: true },
         { name: "routing_mark", type: "number", tab: "dial",
           ui_label: "Routing mark (fwmark)", advanced: true },
         { name: "reuse_addr", type: "bool", tab: "dial",
@@ -54,7 +64,7 @@ return {
         { name: "udp_fragment", type: "bool", tab: "dial",
           ui_label: "UDP fragment", default: 0, advanced: true },
         { name: "domain_strategy", type: "enum", tab: "dial",
-          ui_label: "Domain strategy",
+          ui_label: "Domain strategy (deprecated 1.12)",
           values: ["", "prefer_ipv4", "prefer_ipv6", "ipv4_only", "ipv6_only"],
           advanced: true },
         { name: "network_strategy", type: "enum", tab: "dial",
@@ -63,6 +73,10 @@ return {
           advanced: true },
         { name: "fallback_delay", type: "string", tab: "dial",
           ui_label: "Fallback delay", placeholder: "300ms", advanced: true },
+        { name: "detour", type: "string", tab: "dial",
+          ui_label: "Detour outbound tag", placeholder: "another_outbound", advanced: true },
+        { name: "netns", type: "string", tab: "dial",
+          ui_label: "Network namespace", placeholder: "/var/run/netns/xx", advanced: true },
     ],
 
     emit_outbound: emit_outbound,
