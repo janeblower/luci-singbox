@@ -4,6 +4,28 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Phase E2 — Protocol Builder Rewrite (2026-06-09)
+
+### Added
+- Full sing-box 1.12 field coverage for every UI-exposed protocol via the new shared TLS / transport / multiplex / dial blocks under `lib/protocols/_shared/`.
+- Mixed inbound (HTTP + SOCKS5 on one port) with optional user/pass auth.
+- Direct outbound (interface bind via dial fields) — replaces the old `type=interface` outbound.
+- `hysteria2://` share-link parser.
+- Per-tab "Show advanced fields" toggle (TLS / Transport / Multiplex / Dial).
+- Subscription expand: child rows now render automatically on outbounds-tab load (previously required clicking action-bar Refresh).
+
+### Changed
+- Protocol descriptor DSL extended: per-field `tab`, `advanced`, `depends`, `parent_enabled`, `placeholder`, `virtual`; per-descriptor `shared` map declaring which shared blocks the protocol composes with.
+- `lib/inbound.uc` and `lib/outbound.uc` are now descriptor-only — no per-protocol switch, no hand-coded TLS/transport/multiplex helpers.
+
+### Removed
+- TUN inbound, VMess inbound/outbound, TUIC outbound, AnyTLS outbound, SSH outbound, interface outbound. Existing UCI sections of these types are hard-deleted by the `drop-removed-protocols-e2` migration on upgrade. Legacy UCI keys on surviving protocols (`transport`, `security`, `tls_ech`, `utls_fingerprint` etc.) are renamed by `migrate_rename_e2_keys`.
+
+### Fixed
+- Subscription child rows now align with the parent grid columns and have a visible nesting indicator.
+- Hysteria2 obfs UCI key parity in share-link / JSON import (`obfs_type` / `obfs_password`, not legacy `hysteria2_obfs_*`).
+- Shadowsocks SIP002 base64 userinfo decoded by the share-link import.
+
 ## Phase E1 — Grid / Builder / Subscriptions cleanup + D3 revert (2026-06-08)
 
 - Grid columns trimmed to Enable / Name / Type / Address / JSON
