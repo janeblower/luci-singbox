@@ -6,6 +6,7 @@ htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js	www/luci-stat
 htdocs/luci-static/resources/view/singbox-ui/lib/common.js	www/luci-static/resources/view/singbox-ui/lib/common.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js	www/luci-static/resources/view/singbox-ui/lib/descriptor_form.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/rpc.js	www/luci-static/resources/view/singbox-ui/lib/rpc.js	data
+htdocs/luci-static/resources/view/singbox-ui/lib/subscription_view.js	www/luci-static/resources/view/singbox-ui/lib/subscription_view.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/validators.js	www/luci-static/resources/view/singbox-ui/lib/validators.js	data
 htdocs/luci-static/resources/view/singbox-ui/main.js	www/luci-static/resources/view/singbox-ui/main.js	data
 htdocs/luci-static/resources/view/singbox-ui/style.css	www/luci-static/resources/view/singbox-ui/style.css	data

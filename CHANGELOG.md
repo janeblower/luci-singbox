@@ -4,6 +4,26 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Phase E1 — Grid / Builder / Subscriptions cleanup + D3 revert (2026-06-08)
+
+- Grid columns trimmed to Enable / Name / Type / Address / JSON
+  (`tests/test_grid_columns.sh` enforces).
+- Modal builder fixed: descriptor fields use `modalonly=true` and
+  dedupe by UCI key, so VLESS/VMess/Trojan/etc. modals show their
+  expected basic+credentials layout instead of only the Credentials/Flow
+  case caused by SSH's group-less fields.
+- SSH descriptor: explicit `group` per field.
+- Subscriptions: `subscription_expand` RPC + `lib/subscription_view.js`
+  inject read-only child rows under each subscription outbound in the
+  grid, with a View button opening a read-only modal.
+- D3 token-based reveal removed. `lib/reveal.uc`, `lib/scrub.uc`, the
+  `reveal_token_grant`/`reveal_token_revoke` RPC methods, the action-bar
+  Show/Hide secrets button, `withRevealToken`/`revealGrant`/`revealRevoke`
+  in `lib/rpc.js`, and the D3.7 storage-leak test guards — all gone.
+  Masking now lives only in the modal as `<input type="password">` +
+  a client-side eye-toggle (`decorateSecretInput` in `descriptor_form.js`).
+- Preview/read_config/export_section return plain JSON.
+
 ## [Unreleased]
 
 Phase B — completion of protocol field coverage, JSON export, form

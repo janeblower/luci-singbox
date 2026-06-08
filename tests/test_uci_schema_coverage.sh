@@ -79,6 +79,8 @@ is_whitelisted() {
     out_path|outpath|raw_path|v4|v6|timeout|user_agent) return 0 ;;
     # non-UCI transient/internal fields
     issued_ts|token) return 0 ;;
+    # outbound module exported function (not a UCI field)
+    parse_proxy_url|build_outbounds|build_constructor_for) return 0 ;;
     *) return 1 ;;
   esac
 }
