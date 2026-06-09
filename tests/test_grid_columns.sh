@@ -9,8 +9,8 @@ cd "$(dirname "$0")/.."
 WHITELIST='enabled _export _address type protocol __rename'
 
 check_file() {
-    local file=$1
-    local fail=0
+    file="$1"
+    fail=0
     line_nos=$(grep -n "s\\.taboption(.basic." "$file" | cut -d: -f1)
     for ln in $line_nos; do
         line=$(sed -n "${ln}p" "$file")
