@@ -4,7 +4,7 @@
 // Subcommands (CLI contract identical to the prior nftables.sh):
 //   apply                          — read UCI + rs_*.json, push ruleset to `nft -f -`
 //   remove                         — delete the inet singbox_ui table
-//   emit PORT V4 V6 IFACE          — print the ruleset to stdout (used by tests)
+//   emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]  — print the ruleset to stdout (used by tests)
 //
 // Two prerouting chains:
 //   prerouting_mark   (priority -150)  marks matching connections (fakeip + rs_*)
@@ -334,9 +334,12 @@ function build_ruleset(port, v4, v6, ifaces) {
 	return join("", buf);
 }
 
-function cmd_emit(port, v4, v6, iface_str) {
+function cmd_emit(port, v4, v6, iface_str, mark_raw, mask_raw, routerout_raw) {
 	let ifaces = (iface_str && length(iface_str)) ? split(iface_str, ",") : [];
-	print(build_ruleset(port, v4, v6, ifaces));
+	let mp = fwmark_pair(mark_raw, mask_raw);
+	let mark = mp[0]; let mask = mp[1];
+	let router_out = (routerout_raw === "1" || routerout_raw === 1) ? 1 : 0;
+	print(build_ruleset(port, v4, v6, ifaces, mark, mask, router_out));
 }
 
 // cmd_apply / cmd_remove come after build_ruleset because ucode does not
@@ -523,13 +526,17 @@ case "needed":
 	print(any_nft_transparent(cur) ? "1\n" : "0\n");
 	break;
 case "emit":
-	if (length(argv) !== 5) {
-		log_err("Usage: nftables.uc emit PORT V4 V6 IFACE");
+	// PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]
+	if (length(argv) < 5 || length(argv) > 8) {
+		log_err("Usage: nftables.uc emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]");
 		exit(2);
 	}
-	cmd_emit(argv[1], argv[2], argv[3], argv[4]);
+	cmd_emit(argv[1], argv[2], argv[3], argv[4],
+		length(argv) > 5 ? argv[5] : null,
+		length(argv) > 6 ? argv[6] : null,
+		length(argv) > 7 ? argv[7] : null);
 	break;
 default:
-	log_err("Usage: nftables.uc {apply|remove|needed|emit PORT V4 V6 IFACE}");
+	log_err("Usage: nftables.uc {apply|remove|needed|emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]}");
 	exit(2);
 }

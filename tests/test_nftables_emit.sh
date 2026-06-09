@@ -245,4 +245,18 @@ echo "$out" | grep -q 'br-lan@if5' \
     || { echo "FAIL: @-iface dropped (should be valid)"; echo "$out"; exit 1; }
 echo "  PASS: dotted/at-sign iface names accepted"
 
+echo "-- emit: extra fwmark/fwmask/router_out argv accepted (defaults applied when missing)"
+# shellcheck disable=SC2086
+"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7895 198.18.0.0/15 fc00::/18 br-lan \
+	>/tmp/emit-default.nft
+# shellcheck disable=SC2086
+"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7895 198.18.0.0/15 fc00::/18 br-lan 0x1 0x1 0 \
+	>/tmp/emit-explicit.nft
+diff /tmp/emit-default.nft /tmp/emit-explicit.nft || {
+	echo "FAIL: default emit differs from explicit-default emit"
+	exit 1
+}
+rm -f /tmp/emit-default.nft /tmp/emit-explicit.nft
+echo "ok"
+
 echo "OK"
