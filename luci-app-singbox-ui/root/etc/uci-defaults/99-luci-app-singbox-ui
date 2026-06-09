@@ -371,7 +371,7 @@ migrate_rename_e2_keys() {
 	local sid
 
 	for sid in $(uci -q show singbox-ui 2>/dev/null \
-		| sed -n 's/^singbox-ui\.\([^.]*\)=\(inbound\|outbound\)$/\1/p'); do
+		| sed -n 's/^singbox-ui\.\([^.]*\)=inbound$/\1/p; s/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
 
 		# transport → transport_type
 		local tv
