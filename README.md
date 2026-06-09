@@ -30,6 +30,23 @@ for details.
 See `docs/uci-schema.md`, `docs/protocol-coverage.md`, and
 `docs/release.md` for the technical reference.
 
+## Running tests
+
+```sh
+sh tests/run.sh
+```
+
+This boots a real OpenWrt 25.12.3 under QEMU/KVM via a pre-built
+Docker image (`ghcr.io/<owner>/luci-app-sing-box/openwrt-test`) and
+runs the full ucode + shell suite inside the guest. Requires
+`docker` and a writable `/dev/kvm` on the host.
+
+To override the image (e.g. local dev tag from `tests/docker/`):
+
+```sh
+SINGBOX_TEST_IMAGE=singbox-test:dev sh tests/run.sh
+```
+
 ## fwmark and `ip rule` for TPROXY
 
 The nft ruleset emitted by this package marks packets that should be
