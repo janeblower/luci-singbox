@@ -85,6 +85,35 @@ grep -q 'dropping invalid port_range' "$TMPDIR/apply.err" \
 rm -f "$RS_DIR/rs_aps_oor.json"
 echo "  PASS: S1-1 apply-path out-of-range port_range dropped + logged"
 
+# ---- S1-PERF: apply (preloaded rs list) ≡ emit (internal load), byte-identical ----
+# Task 8 made build_ruleset() take an optional preloaded `rules` list: the apply
+# path now loads /tmp/singbox-ui/rs_*.json ONCE and threads it in, while emit
+# still defaults to load_rs_rules() internally. This is a pure perf refactor —
+# both code paths must produce a byte-for-byte identical ruleset for the same
+# inputs. Characterize it by feeding ONE rs_*.json to both paths and diffing the
+# full emitted ruleset (not a grep). The UCI mock above is still the valid config
+# (tproxy port 7895, fakeip v4 198.18.0.0/15, iface br-lan, default mark/mask,
+# no router-out) — the equivalent emit argv is `7895 198.18.0.0/15 "" br-lan`.
+echo "-- S1-PERF (apply path): preloaded rs list yields the same ruleset as emit's internal load"
+cat >"$RS_DIR/rs_aps_perf.json" <<'JSON'
+{ "rules": [ { "ip_cidr": ["1.2.3.0/24"], "network": "tcp", "port_range": "80:443" } ] }
+JSON
+apply || { echo "FAIL: apply returned non-zero while building the S1-PERF ruleset"; cat "$TMPDIR/apply.err"; exit 1; }
+cp "$TMPDIR/applied.nft" "$TMPDIR/perf-apply.nft"
+# Same inputs through emit, which exercises build_ruleset's internal load_rs_rules().
+# shellcheck disable=SC2086
+"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7895 "198.18.0.0/15" "" "br-lan" > "$TMPDIR/perf-emit.nft"
+if ! cmp -s "$TMPDIR/perf-apply.nft" "$TMPDIR/perf-emit.nft"; then
+	echo "FAIL: S1-PERF apply (preloaded rules) and emit (internal load) rulesets differ"
+	diff -u "$TMPDIR/perf-emit.nft" "$TMPDIR/perf-apply.nft" || true
+	exit 1
+fi
+# Sanity: the rs_* set actually made it in, so we diffed a non-trivial ruleset.
+grep -q 'set rs_aps_perf_0_v4' "$TMPDIR/perf-apply.nft" \
+	|| { echo "FAIL: S1-PERF expected rs_aps_perf set in the captured ruleset"; cat "$TMPDIR/perf-apply.nft"; exit 1; }
+rm -f "$RS_DIR/rs_aps_perf.json"
+echo "  PASS: S1-PERF preloaded-rules apply ≡ internal-load emit (byte-identical)"
+
 echo "-- S1-2 (apply path): invalid tproxy listen_port makes apply FAIL, not silently blackhole"
 cat >"$UCI/singbox-ui" <<'EOF'
 config dns_server fakeip

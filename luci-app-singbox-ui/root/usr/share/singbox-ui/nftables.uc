@@ -332,7 +332,7 @@ function safe_port_range(p) {
 	return tok;
 }
 
-function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out) {
+function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules) {
 	// Defensive defaults so old callers (e.g., legacy tests) keep working.
 	if (mark == null) mark = 0x1;
 	if (mask == null) mask = 0x1;
@@ -347,7 +347,10 @@ function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out) {
 		log_err(sprintf("nftables: invalid listen_port %s (need int 1..65535), skipping tproxy chain", port));
 	}
 
-	let rules = load_rs_rules();
+	// S1-PERF: the apply path already loaded the rs_*.json cache and passes
+	// it in here, so we don't re-scan + re-parse every rule-set file a second
+	// time per apply. Non-apply callers (emit) pass nothing → load once.
+	if (rules == null) rules = load_rs_rules();
 
 	let buf = [];
 	// Atomic transaction: add + delete + table all in one nft -f.
@@ -641,7 +644,7 @@ function _cmd_apply_locked(cur) {
 		return 0;
 	}
 
-	let ruleset = build_ruleset(port, v4, v6, ifaces, mark, mask, router_out);
+	let ruleset = build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules);
 
 	// G6: tmp file path composed on the ucode side — no shell, no mktemp.
 	let tmp = make_nft_tmp();
