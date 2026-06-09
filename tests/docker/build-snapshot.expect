@@ -55,6 +55,18 @@ expect {
 	timeout { puts stderr "expect: no shell after activation"; exit 2 }
 }
 
+# procd-init is still running at this point — the hostname is "(none)"
+# and /etc/init.d/<svc> service commands return "Command failed: Not
+# found" because rpcd hasn't registered the service ubus object yet.
+# Block here until procd finishes (hostname becomes non-(none) and
+# ubus call system board succeeds). 60 s budget.
+send "for _ in 1 2 3 4 5 6 7 8 9 10 11 12; do \[ \"\$(uci -q get system.@system\\\[0\\\].hostname)\" = OpenWrt ] && ubus call system board >/dev/null 2>&1 && echo PROCDREADY && break; sleep 5; done\r"
+expect {
+	"PROCDREADY" { }
+	timeout      { puts stderr "expect: procd-init never reported ready"; exit 2 }
+}
+expect "# "
+
 # Set root password = admin. busybox passwd reads new + retype on
 # separate lines.
 send "passwd root\r"
@@ -94,8 +106,10 @@ expect "# "
 
 # Wait up to 30 s for the default route to appear. SLIRP's built-in
 # DHCP usually answers within 2-3 s but allow headroom for slow CI.
-send "for _ in 1 2 3 4 5 6; do ip route | grep -q ^default && break; sleep 5; done; echo --route--; ip route; echo --end--\r"
-expect "--end--"
+# Note: sentinels avoid leading "--" because expect treats "--..." as
+# an option-flag terminator and refuses bare strings starting with it.
+send "for _ in 1 2 3 4 5 6; do ip route | grep -q ^default && break; sleep 5; done; echo ROUTECHECK; ip route\r"
+expect "ROUTECHECK"
 expect "# "
 
 # Sanity probe — fail loudly here rather than 50 s into apk update.
