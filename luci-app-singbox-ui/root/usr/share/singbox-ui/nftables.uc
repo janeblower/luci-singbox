@@ -183,7 +183,7 @@ function port_expr(network, ports) {
 // emit_set(set_name, family, cidrs) → string with the nft set definition.
 function emit_set(set_name, family, cidrs) {
 	let typ = (family === "v6") ? "ipv6_addr" : "ipv4_addr";
-	let body = join(",", cidrs);
+	let body = join(", ", cidrs);
 	let lines = [
 		`\tset ${set_name} {\n`,
 		`\t\ttype ${typ}\n`,

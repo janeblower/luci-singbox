@@ -48,7 +48,7 @@ cat >/tmp/singbox-ui/rs_uctest_scalar.json <<'JSON'
 JSON
 out=$(emit)
 echo "$out" | grep -q "set rs_uctest_scalar_0_v4" || fail "scalar: set missing"
-echo "$out" | grep -q "elements = { 104.16.0.0/12 }" || fail "scalar: element body wrong"
+echo "$out" | grep -Eq "elements = \{ 104\.16\.0\.0/12 \}" || fail "scalar: element body wrong"
 echo "$out" | grep -q "ip daddr @rs_uctest_scalar_0_v4 meta l4proto { tcp, udp } ct state new ct mark set ct mark or 0x1" \
 	|| fail "scalar: marking rule wrong"
 rm /tmp/singbox-ui/rs_uctest_scalar.json
@@ -62,7 +62,7 @@ JSON
 out=$(emit)
 echo "$out" | grep -q "set rs_uctest_mixed_0_v4" || fail "mixed: v4 set missing"
 echo "$out" | grep -q "set rs_uctest_mixed_0_v6" || fail "mixed: v6 set missing"
-echo "$out" | grep -q "elements = { 1.2.3.0/24,4.5.0.0/16 }" || fail "mixed: v4 elements wrong"
+echo "$out" | grep -Eq "elements = \{ 1\.2\.3\.0/24, ?4\.5\.0\.0/16 \}" || fail "mixed: v4 elements wrong"
 echo "$out" | grep -q "elements = { fe80::/10 }" || fail "mixed: v6 elements wrong"
 echo "$out" | grep -q "ip6 daddr @rs_uctest_mixed_0_v6" || fail "mixed: v6 rule missing"
 rm /tmp/singbox-ui/rs_uctest_mixed.json
@@ -256,7 +256,7 @@ cat >/tmp/singbox-ui/rs_uctest_g2clean.json <<'JSON'
 { "rules": [ { "ip_cidr": ["1.1.1.0/24", "8.8.8.8/32"] } ] }
 JSON
 out=$(emit)
-echo "$out" | grep -q "elements = { 1.1.1.0/24,8.8.8.8/32 }" \
+echo "$out" | grep -Eq "elements = \{ 1\.1\.1\.0/24, ?8\.8\.8\.8/32 \}" \
     || { echo "FAIL: G2 clean elements broken"; echo "$out"; exit 1; }
 rm /tmp/singbox-ui/rs_uctest_g2clean.json
 pass "G2: clean ip_cidr preserved"
