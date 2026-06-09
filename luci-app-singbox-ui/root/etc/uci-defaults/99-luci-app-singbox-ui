@@ -368,19 +368,20 @@ migrate_outbound_type
 # while the old key is still set.
 # ---------------------------------------------------------------------------
 migrate_rename_e2_keys() {
-	local sid section_type kind
+	local sid
 
 	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=(inbound|outbound)$/ {print $2}'); do
-		section_type=$(uci -q get "singbox-ui.$sid" 2>/dev/null || true)
 
 		# transport → transport_type
-		local tv=$(uci -q get "singbox-ui.$sid.transport" 2>/dev/null || true)
-		if [ -n "$tv" ] && [ -z "$(uci -q get singbox-ui.$sid.transport_type 2>/dev/null || true)" ]; then
+		local tv
+		tv=$(uci -q get "singbox-ui.$sid.transport" 2>/dev/null || true)
+		if [ -n "$tv" ] && [ -z "$(uci -q get "singbox-ui.$sid.transport_type" 2>/dev/null || true)" ]; then
 			uci -q set "singbox-ui.$sid.transport_type=$tv"
 			uci -q delete "singbox-ui.$sid.transport"
 			# httpupgrade host key split
 			if [ "$tv" = "httpupgrade" ]; then
-				local hv=$(uci -q get "singbox-ui.$sid.transport_host" 2>/dev/null || true)
+				local hv
+				hv=$(uci -q get "singbox-ui.$sid.transport_host" 2>/dev/null || true)
 				if [ -n "$hv" ]; then
 					uci -q set "singbox-ui.$sid.transport_host_httpupgrade=$hv"
 					uci -q delete "singbox-ui.$sid.transport_host"
@@ -389,14 +390,16 @@ migrate_rename_e2_keys() {
 		fi
 
 		# tls_ech → tls_ech_enabled
-		local ev=$(uci -q get "singbox-ui.$sid.tls_ech" 2>/dev/null || true)
-		if [ -n "$ev" ] && [ -z "$(uci -q get singbox-ui.$sid.tls_ech_enabled 2>/dev/null || true)" ]; then
+		local ev
+		ev=$(uci -q get "singbox-ui.$sid.tls_ech" 2>/dev/null || true)
+		if [ -n "$ev" ] && [ -z "$(uci -q get "singbox-ui.$sid.tls_ech_enabled" 2>/dev/null || true)" ]; then
 			uci -q set "singbox-ui.$sid.tls_ech_enabled=$ev"
 			uci -q delete "singbox-ui.$sid.tls_ech"
 		fi
 
 		# security → tls_enabled + reality_enabled
-		local sec=$(uci -q get "singbox-ui.$sid.security" 2>/dev/null || true)
+		local sec
+		sec=$(uci -q get "singbox-ui.$sid.security" 2>/dev/null || true)
 		if [ -n "$sec" ]; then
 			case "$sec" in
 				tls)
@@ -411,8 +414,9 @@ migrate_rename_e2_keys() {
 		fi
 
 		# utls_fingerprint set → utls_enabled=1 (preserve the value)
-		local uf=$(uci -q get "singbox-ui.$sid.utls_fingerprint" 2>/dev/null || true)
-		if [ -n "$uf" ] && [ -z "$(uci -q get singbox-ui.$sid.utls_enabled 2>/dev/null || true)" ]; then
+		local uf
+		uf=$(uci -q get "singbox-ui.$sid.utls_fingerprint" 2>/dev/null || true)
+		if [ -n "$uf" ] && [ -z "$(uci -q get "singbox-ui.$sid.utls_enabled" 2>/dev/null || true)" ]; then
 			uci -q set "singbox-ui.$sid.utls_enabled=1"
 		fi
 	done
@@ -428,7 +432,7 @@ migrate_rename_e2_keys
 # outbound). Spec: docs/superpowers/specs/2026-06-08-protocol-builder-rewrite-design.md
 # ---------------------------------------------------------------------------
 migrate_drop_removed_protocols() {
-	local sid kind val
+	local sid val
 	local dropped=0
 
 	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=inbound$/ {print $2}'); do
