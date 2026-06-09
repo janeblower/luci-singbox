@@ -139,6 +139,31 @@ expect {
 }
 expect "# "
 
+# nft_socket + nft_tproxy kernel modules — required by the ctmark
+# ruleset (socket transparent fast-path + tproxy redirection). The
+# real plugin pulls these in via Makefile DEPENDS; the test snapshot
+# installs them directly so `nft -c` can resolve `socket` and
+# `tproxy` expressions without failing with "No such file or
+# directory".
+send "apk add kmod-nft-socket kmod-nft-tproxy\r"
+expect {
+	-re "OK: .* MiB in" { }
+	"# "                { }
+	timeout { puts stderr "expect: apk add nft kmods did not finish"; exit 2 }
+}
+expect "# "
+
+# Force-load now so the snapshot captures them as resident. Some
+# kmod packages on OpenWrt 25.12 don't auto-load on first install;
+# baking the load into the snapshot avoids a per-run modprobe.
+send "modprobe nft_socket && modprobe nft_tproxy && echo KMODOK || echo KMODFAIL\r"
+expect {
+	"KMODOK"   { }
+	"KMODFAIL" { puts stderr "expect: nft_socket / nft_tproxy failed to load"; exit 2 }
+	timeout    { puts stderr "expect: modprobe timed out"; exit 2 }
+}
+expect "# "
+
 # Sanity probe: sing-box is callable.
 send "sing-box version\r"
 expect {
