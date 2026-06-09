@@ -15,6 +15,7 @@
 set -euo pipefail
 
 BASE_QCOW="/var/lib/qemu/base.qcow2"
+RUN_QCOW="/tmp/run.qcow2"
 SERIAL_SOCK="/tmp/qemu-serial.sock"
 MON_SOCK="/tmp/qemu-monitor.sock"
 SSH_PORT=2222
@@ -26,19 +27,33 @@ test -w /dev/kvm   || { echo "FAIL: /dev/kvm not writable (pass --device /dev/kv
 WORK_DIR="${WORK_DIR:-/work}"
 test -d "$WORK_DIR" || { echo "FAIL: \$WORK_DIR=$WORK_DIR not a directory (pass -v \$PWD:/work or set WORK_DIR)" >&2; exit 1; }
 
-echo "==> boot qemu via loadvm (snapshot=on for disposable overlay)"
-# IMPORTANT: do NOT use `qemu-img create -b base.qcow2 run.qcow2` here.
-# qcow2 internal snapshots (saved by `savevm`) live in the metadata of
-# the file they were written to. A backing-chain overlay starts with
-# its OWN empty snapshot list — the backing file's snapshots are not
-# inherited, and `-loadvm boot-state` would fail with
-# "Snapshot 'boot-state' does not exist in one or more devices".
+echo "==> stage per-run qcow2"
+# We need three things that interact:
+#   1. The base.qcow2's internal snapshot 'boot-state' must be visible
+#      to -loadvm so we boot from memory + disk state instantly.
+#   2. The base.qcow2 must NOT be mutated by the test run — it lives
+#      inside the image layer and is reused per run.
+#   3. The VM topology (drive + nic + serial) must match what savevm
+#      saw, otherwise loadvm bails with "Unknown savevm section ..."
+#      or "Unknown ramblock ...".
 #
-# Use `snapshot=on` instead: qemu opens base.qcow2 read-only, redirects
-# all writes to an automatically-created throwaway file (typically in
-# /tmp), and reads (including the snapshot metadata) come from
-# base.qcow2. The base file is never mutated; the throwaway is discarded
-# on qemu exit.
+# What does NOT work:
+#   - `qemu-img create -f qcow2 -b base.qcow2 run.qcow2` — qcow2
+#     internal snapshots live in the metadata of one file. A
+#     backing-chain overlay has its OWN empty snapshot list, so
+#     `-loadvm boot-state` aborts with "Snapshot 'boot-state' does
+#     not exist in one or more devices".
+#   - `-drive ...,snapshot=on` — qemu opens base.qcow2 read-only,
+#     redirects writes elsewhere, but the loadvm path treats the
+#     drive as a fresh disk and refuses to find any snapshot. Same
+#     error as the backing-chain case.
+#
+# What works: copy base.qcow2 to a per-run file. cp preserves the
+# snapshot index. The run file gets mutated during the test, then
+# we delete it. ~200 MiB on a tmpfs is ~1-2 s — small price.
+cp "$BASE_QCOW" "$RUN_QCOW"
+
+echo "==> boot qemu via loadvm"
 rm -f "$SERIAL_SOCK" "$MON_SOCK"
 qemu-system-x86_64 \
 	-enable-kvm \
@@ -46,7 +61,7 @@ qemu-system-x86_64 \
 	-display none \
 	-m 512M \
 	-smp 2 \
-	-drive "file=$BASE_QCOW,if=virtio,format=qcow2,snapshot=on" \
+	-drive "file=$RUN_QCOW,if=virtio,format=qcow2" \
 	-nic "user,model=virtio,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22" \
 	-chardev "socket,id=ser0,path=$SERIAL_SOCK,server=on,wait=off" \
 	-serial chardev:ser0 \
@@ -64,10 +79,8 @@ cleanup() {
 	kill -TERM "$QEMU_PID" 2>/dev/null || true
 	# shellcheck disable=SC2317
 	wait "$QEMU_PID" 2>/dev/null || true
-	# snapshot=on auto-cleans its throwaway file when qemu exits; no
-	# RUN_QCOW to remove here. Sockets only.
 	# shellcheck disable=SC2317
-	rm -f "$SERIAL_SOCK" "$MON_SOCK"
+	rm -f "$SERIAL_SOCK" "$MON_SOCK" "$RUN_QCOW"
 }
 
 # KEEP_VM=1 disables auto-cleanup for inspection on failure.
