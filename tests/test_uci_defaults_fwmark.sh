@@ -14,6 +14,10 @@ UCI_DIR=$(mktemp -d)
 export UCI_CONFIG_DIR="$UCI_DIR"
 touch "$UCI_DIR/singbox-ui"
 
+# uci wrapper: use -c to point at our temp dir (UCI_CONFIG_DIR env var is
+# not honoured by all OpenWrt uci builds — -c flag is the portable way).
+uci() { command uci -c "$UCI_DIR" "$@"; }
+
 echo "-- first run seeds three defaults"
 sh "$SCRIPT"
 [ "$(uci get singbox-ui.@global[0].fwmark)" = "0x1" ] \

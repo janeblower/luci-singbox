@@ -266,10 +266,10 @@ echo "-- emit: extra fwmark/fwmask/router_out argv accepted (defaults applied wh
 # shellcheck disable=SC2086
 "$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7895 198.18.0.0/15 fc00::/18 br-lan 0x1 0x1 0 \
 	>/tmp/emit-explicit.nft
-diff /tmp/emit-default.nft /tmp/emit-explicit.nft || {
+if ! cmp -s /tmp/emit-default.nft /tmp/emit-explicit.nft; then
 	echo "FAIL: default emit differs from explicit-default emit"
 	exit 1
-}
+fi
 rm -f /tmp/emit-default.nft /tmp/emit-explicit.nft
 echo "ok"
 

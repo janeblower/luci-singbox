@@ -212,15 +212,20 @@ function emit_rs_decision(name, idx, family, l4, port_e, mark) {
 		ip_kw, set_name, l4, port_e, mark);
 }
 
-// emit_rs_decision_block(rules, mark, include_fakeip) — write the
+// emit_rs_decision_block(rules, mark, fakeip4_cidr, fakeip6_cidr) — write the
 // fakeip v4/v6 decisions plus one rule per rs_* set. Pulled out so
 // both the prerouting and output chains emit the same block.
-function emit_rs_decision_block(rules, mark, include_fakeip) {
+// fakeip4_cidr / fakeip6_cidr are the validated CIDR strings (empty string
+// means "not configured" — skip that family's decision rule entirely so we
+// never emit 'ip6 daddr @fakeip6' when the user left fakeip_range_v6 blank).
+function emit_rs_decision_block(rules, mark, fakeip4_cidr, fakeip6_cidr) {
 	let buf = [];
-	if (include_fakeip) {
+	if (length(fakeip4_cidr)) {
 		push(buf, sprintf(
 			"\t\tct state new iifname @wan_ifaces ip  daddr @fakeip4 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
 			mark));
+	}
+	if (length(fakeip6_cidr)) {
 		push(buf, sprintf(
 			"\t\tct state new iifname @wan_ifaces ip6 daddr @fakeip6 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
 			mark));
@@ -354,19 +359,25 @@ function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out) {
 	push(buf, "\t\tmeta mark set ct mark\n");
 
 	// (3) NEW-flow decisions: OR our bit into ct mark.
-	push(buf, emit_rs_decision_block(rules, mark, true));
+	// Pass v4/v6 so fakeip4/fakeip6 decision rules are only emitted when
+	// the respective CIDR is configured (empty string → skip that family).
+	push(buf, emit_rs_decision_block(rules, mark, v4, v6));
 
 	// (4) Propagate freshly-set ct mark into the packet mark.
 	push(buf, "\t\tmeta mark set ct mark\n");
 
 	// (5) TPROXY when the bit is set, using AND-mask (not exact eq).
+	// Pad the family keyword to 3 chars (ip → "ip ") so ip and ip6 rules
+	// align visually, and the test assertion 'tproxy ip  to' holds (the
+	// extra space comes from the format + the space before 'to').
 	if (port_n != null) {
 		for (let family in ["ip", "ip6"]) {
 			for (let proto in ["tcp", "udp"]) {
 				let target = (family === "ip") ? sprintf("127.0.0.1:%d", port_n) : sprintf("[::1]:%d", port_n);
+				let fam_padded = (family === "ip") ? "ip " : "ip6";
 				push(buf, sprintf(
 					"\t\tmeta mark and 0x%x == 0x%x meta l4proto %s tproxy %s to %s\n",
-					mask, mark, proto, family, target));
+					mask, mark, proto, fam_padded, target));
 			}
 		}
 	}
@@ -377,7 +388,7 @@ function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out) {
 		push(buf, "\n\tchain output {\n");
 		push(buf, "\t\ttype route hook output priority mangle; policy accept;\n\n");
 		push(buf, "\t\tmeta mark set ct mark\n");
-		push(buf, emit_rs_decision_block(rules, mark, true));
+		push(buf, emit_rs_decision_block(rules, mark, v4, v6));
 		push(buf, "\t\tmeta mark set ct mark\n");
 		push(buf, "\t}\n");
 	}
