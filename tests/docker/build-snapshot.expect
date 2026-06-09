@@ -14,28 +14,46 @@
 set timeout 300
 set serial_sock $env(SERIAL_SOCK)
 
+# Verbose echo of everything coming off the serial line into the
+# build log. When this script times out you want to see exactly what
+# the guest was emitting; without log_user the build log only shows
+# the failure message.
+log_user 1
+
 spawn socat - UNIX-CONNECT:$serial_sock
 
-# Wait for OpenWrt to fully boot — the login prompt appears after procd
-# finishes uci-defaults. The banner may scroll several times; we keep
-# matching the most recent prompt.
+# OpenWrt 25.12.x stock combined-squashfs is built with procd's
+# console_login on tty1 — there is no getty/login prompt.  Instead
+# the kernel emits:
+#     "Please press Enter to activate this console."
+# and on the first <CR> drops directly into a passwordless root
+# shell.  Older images used the classic `OpenWrt login: root` flow;
+# keep that branch for forward/backward compatibility.
+#
+# Send an explicit Enter even after matching the press-Enter prompt:
+# procd's console_login swallows the first byte to "activate" and
+# then starts the shell; without a second <CR> there is no prompt
+# to match below.
 expect {
+	-re "Please press Enter to activate this console\\." {
+		send "\r"
+		# Give procd a moment to spawn the shell, then nudge once
+		# more to force the prompt onto the wire.
+		sleep 1
+		send "\r"
+	}
 	"OpenWrt login:" { send "root\r" }
-	timeout { puts stderr "expect: never saw login prompt"; exit 2 }
+	timeout { puts stderr "expect: never saw console activation prompt"; exit 2 }
 }
 
-# Stock combined-squashfs has an empty root password on first boot.
-# Some 25.12.x builds skip the password prompt entirely and drop
-# straight to a shell; handle both.
+# Wait for the root shell. After `Please press Enter` and one nudge
+# we land at `#` directly. After `OpenWrt login: root` some builds
+# prompt for an (empty) password before reaching `#`.
 expect {
-	"Password:" { send "\r" }
+	"Password:" { send "\r"; exp_continue }
 	"# "        { }
-	timeout { puts stderr "expect: no shell after login"; exit 2 }
+	timeout { puts stderr "expect: no shell after activation"; exit 2 }
 }
-
-# We are now at the root shell. Wait for an idle prompt before sending
-# commands (avoids racing the MOTD).
-expect "# "
 
 # Set root password = admin. busybox passwd reads new + retype on
 # separate lines.
