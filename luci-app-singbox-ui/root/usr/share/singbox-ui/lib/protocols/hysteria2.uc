@@ -78,8 +78,15 @@ reg.register({
           ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,
           validate: "port", default: 443, ui_label: "Listen port" },
+        // ui_label is plain "Password" rather than "Password (single user)":
+        // applyMaterialized() in descriptor_form.js dedupes shared (tab,name)
+        // pairs across protocols and keeps the FIRST registered label. Both
+        // shadowsocks and trojan also register (basic, server_password) with
+        // ui_label "Password" and run earlier in SB_INBOUND_PROTOCOLS, so any
+        // parenthetical here is silently dropped. The multi-user fallback is
+        // expressed by the adjacent inbound_user list ("Users (name:password)").
         { name: "server_password", type: "string", tab: "basic", required: true,
-          secret: true, ui_label: "Password (single user)" },
+          secret: true, ui_label: "Password" },
         { name: "inbound_user", type: "list", tab: "basic", secret: true,
           ui_label: "Users (name:password)", advanced: true },
         { name: "up_mbps", type: "number", tab: "basic",
