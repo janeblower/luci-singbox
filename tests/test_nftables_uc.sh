@@ -49,7 +49,7 @@ JSON
 out=$(emit)
 echo "$out" | grep -q "set rs_uctest_scalar_0_v4" || fail "scalar: set missing"
 echo "$out" | grep -q "elements = { 104.16.0.0/12 }" || fail "scalar: element body wrong"
-echo "$out" | grep -q "ip daddr @rs_uctest_scalar_0_v4 meta l4proto { tcp, udp } ct state new meta mark set 0x1" \
+echo "$out" | grep -q "ip daddr @rs_uctest_scalar_0_v4 meta l4proto { tcp, udp } ct state new ct mark set ct mark or 0x1" \
 	|| fail "scalar: marking rule wrong"
 rm /tmp/singbox-ui/rs_uctest_scalar.json
 pass "scalar ip_cidr"
@@ -74,7 +74,7 @@ cat >/tmp/singbox-ui/rs_uctest_port.json <<'JSON'
 { "rules": [ { "ip_cidr": "10.0.0.0/8", "network": "tcp", "port_range": "80:443" } ] }
 JSON
 out=$(emit)
-echo "$out" | grep -q "ip daddr @rs_uctest_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new meta mark set 0x1" \
+echo "$out" | grep -q "ip daddr @rs_uctest_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new ct mark set ct mark or 0x1" \
 	|| { echo "$out"; fail "port: marking rule wrong"; }
 rm /tmp/singbox-ui/rs_uctest_port.json
 pass "tcp + scalar port_range"
@@ -223,15 +223,19 @@ pass "G1: malicious v6 fakeip rejected"
 echo "-- G1: clean v4 fakeip range still works"
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
-echo "$out" | grep -q "daddr { 198.18.0.0/15 }" || fail "G1: clean v4 broken"
+# New design: fakeip4 is a named set; check elements body and @fakeip4 rule.
+echo "$out" | grep -A3 'set fakeip4' | grep -q "198.18.0.0/15" || fail "G1: clean v4 broken (fakeip4 elements)"
+echo "$out" | grep -q 'daddr @fakeip4' || fail "G1: clean v4 broken (fakeip4 rule)"
 pass "G1: clean v4 fakeip preserved"
 
 echo "-- G1: comma-separated CIDR list still works"
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 \
     "198.18.0.0/15, 10.0.0.0/8" "" "br-lan")
-echo "$out" | grep -q "daddr { 198.18.0.0/15, 10.0.0.0/8 }" \
-    || { echo "FAIL: G1 comma-list broken"; echo "$out"; exit 1; }
+echo "$out" | grep -A3 'set fakeip4' | grep -q "198.18.0.0/15" \
+    || { echo "FAIL: G1 comma-list broken (first cidr)"; echo "$out"; exit 1; }
+echo "$out" | grep -A3 'set fakeip4' | grep -q "10.0.0.0/8" \
+    || { echo "FAIL: G1 comma-list broken (second cidr)"; echo "$out"; exit 1; }
 pass "G1: comma-separated CIDRs accepted"
 
 # ---- G2: rs_*.json ip_cidr injection ----

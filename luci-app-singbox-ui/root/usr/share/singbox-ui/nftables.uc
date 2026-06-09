@@ -6,9 +6,8 @@
 //   remove                         — delete the inet singbox_ui table
 //   emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]  — print the ruleset to stdout (used by tests)
 //
-// Two prerouting chains:
-//   prerouting_mark   (priority -150)  marks matching connections (fakeip + rs_*)
-//   prerouting_tproxy (priority -149)  tproxy-redirects marked connections
+// Single prerouting chain at priority mangle:
+//   prerouting  (priority mangle)  per-flow ct mark decision + tproxy redirect
 
 const TMPDIR = "/tmp/singbox-ui";
 const TABLE  = "singbox_ui";
@@ -188,11 +187,51 @@ function emit_set(set_name, family, cidrs) {
 	return join("", lines);
 }
 
-// emit_rs_rule(name, idx, family, l4, port_e) — single marking rule line.
-function emit_rs_rule(name, idx, family, l4, port_e) {
+// emit_named_set(name, type_, body, with_interval) — write a named set
+// declaration. Used by wan_ifaces, fakeip4, fakeip6, and rs_* paths.
+function emit_named_set(name, type_, body, with_interval) {
+	let lines = [`\tset ${name} {\n`, `\t\ttype ${type_}\n`];
+	if (with_interval) push(lines, "\t\tflags interval\n");
+	push(lines, `\t\telements = { ${body} }\n`, "\t}\n\n");
+	return join("", lines);
+}
+
+// emit_rs_decision(name, idx, family, l4, port_e, mark) — single
+// `ct state new …` decision rule that ORs $MARK into ct mark for a
+// per-flow decision. Replaces the old emit_rs_rule (which wrote
+// per-packet meta mark — the original bug we are fixing).
+// Rule ordering: ip-kw daddr @set l4 port ct state new ct mark set …
+// mirrors the old emit_rs_rule shape so set-lookup comes before
+// conntrack state check (cheaper on average: most packets are not
+// destined to a proxied address).
+function emit_rs_decision(name, idx, family, l4, port_e, mark) {
 	let set_name = set_name_for(name, idx, family);
 	let ip_kw = (family === "v6") ? "ip6" : "ip";
-	return `\t\t${ip_kw} daddr @${set_name} ${l4}${port_e} ct state new meta mark set 0x1\n`;
+	return sprintf(
+		"\t\t%s daddr @%s %s%s ct state new ct mark set ct mark or 0x%x\n",
+		ip_kw, set_name, l4, port_e, mark);
+}
+
+// emit_rs_decision_block(rules, mark, include_fakeip) — write the
+// fakeip v4/v6 decisions plus one rule per rs_* set. Pulled out so
+// both the prerouting and output chains emit the same block.
+function emit_rs_decision_block(rules, mark, include_fakeip) {
+	let buf = [];
+	if (include_fakeip) {
+		push(buf, sprintf(
+			"\t\tct state new iifname @wan_ifaces ip  daddr @fakeip4 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
+			mark));
+		push(buf, sprintf(
+			"\t\tct state new iifname @wan_ifaces ip6 daddr @fakeip6 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
+			mark));
+	}
+	for (let r in rules) {
+		let l4 = l4proto_expr(r.network);
+		let pe = port_expr(r.network, r.ports);
+		if (length(r.v4)) push(buf, emit_rs_decision(r.name, r.idx, "v4", l4, pe, mark));
+		if (length(r.v6)) push(buf, emit_rs_decision(r.name, r.idx, "v6", l4, pe, mark));
+	}
+	return join("", buf);
 }
 
 // safe_iface(name) — return name unchanged if it matches the conservative
@@ -259,76 +298,89 @@ function validate_port(p) {
 	return n;
 }
 
-function build_ruleset(port, v4, v6, ifaces) {
-	// ifaces is an array of interface names. Filter once at the entrypoint
-	// so neither iface_expr below nor any future caller can leak an
-	// unsanitised name into the nft string.
-	ifaces = filter_ifaces(ifaces);
+function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out) {
+	// Defensive defaults so old callers (e.g., legacy tests) keep working.
+	if (mark == null) mark = 0x1;
+	if (mask == null) mask = 0x1;
+	if (router_out == null) router_out = 0;
 
-	// G1: sanitise fakeip CIDR ranges before they are interpolated into
-	// `daddr { … }`. Source is `dns_server.inet[46]_range` which the LuCI
-	// UI marks as cidr4/cidr6 but UCI bypasses client-side validation.
-	// Apply here so both cmd_apply (UCI source) and cmd_emit (CLI argv
-	// source) share one guarantee — mirrors the safe_iface convention.
+	ifaces = filter_ifaces(ifaces);
 	v4 = safe_cidr_list("v4", v4);
 	v6 = safe_cidr_list("v6", v6);
 
-	// Validate listen_port: emitting `tproxy ... :abc` or `:99999` produces
-	// an nft script that fails to load on apply. We'd rather skip the
-	// tproxy chain (and log) than poison the whole ruleset transaction.
 	let port_n = validate_port(port);
 	if (port_n == null) {
 		log_err(sprintf("nftables: invalid listen_port %s (need int 1..65535), skipping tproxy chain", port));
 	}
 
-	let iface_expr;
-	if (length(ifaces) === 0)      iface_expr = null;
-	else if (length(ifaces) === 1) iface_expr = sprintf('iifname "%s"', ifaces[0]);
-	else {
-		let quoted = [];
-		for (let i in ifaces) push(quoted, sprintf('"%s"', i));
-		iface_expr = sprintf('iifname { %s }', join(", ", quoted));
-	}
-
 	let rules = load_rs_rules();
 
 	let buf = [];
-	// Atomic transaction: `add` is idempotent (creates the table if missing),
-	// `delete` then removes it within the same nft -f transaction, and the
-	// trailing `table {...}` re-creates it. nft applies all three atomically.
+	// Atomic transaction: add + delete + table all in one nft -f.
 	push(buf, "add table inet singbox_ui\n");
 	push(buf, "delete table inet singbox_ui\n");
 	push(buf, "table inet singbox_ui {\n");
 
+	// --- named sets ---
+	let iface_body = "";
+	if (length(ifaces)) {
+		let quoted = [];
+		for (let i in ifaces) push(quoted, sprintf('"%s"', i));
+		iface_body = join(", ", quoted);
+	}
+	push(buf, emit_named_set("wan_ifaces", "ifname", iface_body, false));
+
+	// fakeip4 / fakeip6 always emitted (empty body OK if no UCI value).
+	push(buf, emit_named_set("fakeip4", "ipv4_addr", v4 != null ? v4 : "", true));
+	push(buf, emit_named_set("fakeip6", "ipv6_addr", v6 != null ? v6 : "", true));
+
+	// rs_*_v4 / rs_*_v6 (one set per rule × family, unchanged from before).
 	for (let r in rules) {
 		if (length(r.v4)) push(buf, emit_set(set_name_for(r.name, r.idx, "v4"), "v4", r.v4));
 		if (length(r.v6)) push(buf, emit_set(set_name_for(r.name, r.idx, "v6"), "v6", r.v6));
 	}
 
-	push(buf, "\tchain prerouting_mark {\n");
-	push(buf, "\t\ttype filter hook prerouting priority -150; policy accept;\n\n");
-	if (v4 != null && v4 !== "" && iface_expr != null)
-		push(buf, `\t\t${iface_expr} ip  daddr { ${v4} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
-	if (v6 != null && v6 !== "" && iface_expr != null)
-		push(buf, `\t\t${iface_expr} ip6 daddr { ${v6} } meta l4proto { tcp, udp } meta mark set 0x1\n`);
-	for (let r in rules) {
-		let l4 = l4proto_expr(r.network);
-		let pe = port_expr(r.network, r.ports);
-		if (length(r.v4)) push(buf, emit_rs_rule(r.name, r.idx, "v4", l4, pe));
-		if (length(r.v6)) push(buf, emit_rs_rule(r.name, r.idx, "v6", l4, pe));
-	}
-	push(buf, "\t}\n\n");
+	// --- prerouting chain ---
+	push(buf, "\tchain prerouting {\n");
+	push(buf, "\t\ttype filter hook prerouting priority mangle; policy accept;\n\n");
 
-	push(buf, "\tchain prerouting_tproxy {\n");
-	push(buf, "\t\ttype filter hook prerouting priority -149; policy accept;\n\n");
-	// Only emit tproxy rules when the port validated. An empty chain still
-	// hooks prerouting but performs no action — safer than syntactically
-	// broken `tproxy ... :<garbage>` that aborts the whole nft transaction.
+	// (1) Fast-path: established TCP/UDP already handled by an
+	// IP_TRANSPARENT socket inside sing-box.
+	push(buf, sprintf(
+		"\t\tmeta l4proto tcp socket transparent 1 meta mark set 0x%x accept\n",
+		mark & mask));
+
+	// (2) Restore decision from conntrack for established / related.
+	push(buf, "\t\tmeta mark set ct mark\n");
+
+	// (3) NEW-flow decisions: OR our bit into ct mark.
+	push(buf, emit_rs_decision_block(rules, mark, true));
+
+	// (4) Propagate freshly-set ct mark into the packet mark.
+	push(buf, "\t\tmeta mark set ct mark\n");
+
+	// (5) TPROXY when the bit is set, using AND-mask (not exact eq).
 	if (port_n != null) {
-		push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip  to 127.0.0.1:${port_n}\n`);
-		push(buf, `\t\tmeta mark 0x1 meta l4proto { tcp, udp } tproxy ip6 to [::1]:${port_n}\n`);
+		for (let family in ["ip", "ip6"]) {
+			for (let proto in ["tcp", "udp"]) {
+				let target = (family === "ip") ? sprintf("127.0.0.1:%d", port_n) : sprintf("[::1]:%d", port_n);
+				push(buf, sprintf(
+					"\t\tmeta mark and 0x%x == 0x%x meta l4proto %s tproxy %s to %s\n",
+					mask, mark, proto, family, target));
+			}
+		}
 	}
 	push(buf, "\t}\n");
+
+	// --- optional output chain (router-traffic redirect) ---
+	if (router_out) {
+		push(buf, "\n\tchain output {\n");
+		push(buf, "\t\ttype route hook output priority mangle; policy accept;\n\n");
+		push(buf, "\t\tmeta mark set ct mark\n");
+		push(buf, emit_rs_decision_block(rules, mark, true));
+		push(buf, "\t\tmeta mark set ct mark\n");
+		push(buf, "\t}\n");
+	}
 
 	push(buf, "}\n");
 	return join("", buf);
