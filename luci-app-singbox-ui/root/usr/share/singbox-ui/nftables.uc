@@ -221,6 +221,33 @@ function filter_ifaces(ifaces) {
 	return out;
 }
 
+// safe_fwmark(v, fallback) — accept hex ("0x1") or decimal ("1"), return
+// the parsed uint32 in range [1, 0xffffffff], else fallback. Centralised
+// here so cmd_emit (CLI argv source) and cmd_apply (UCI source) share
+// one validator, symmetric with safe_iface / safe_cidr / validate_port.
+function safe_fwmark(v, fallback) {
+	if (v == null) return fallback;
+	let t = trim(`${v}`);
+	if (t === "") return fallback;
+	if (!match(t, /^(0x[0-9a-fA-F]{1,8}|[0-9]+)$/)) return fallback;
+	let n = (substr(t, 0, 2) === "0x") ? +`0x${substr(t, 2)}` : +t;
+	if (type(n) !== "int" || n < 1 || n > 0xffffffff) return fallback;
+	return n;
+}
+
+// fwmark_pair(mark, mask) — enforce the invariant (mark & mask) == mark;
+// log and fall back to the default 0x1/0x1 if violated. Returns a list
+// [mark, mask] of validated values.
+function fwmark_pair(mark_raw, mask_raw) {
+	let mark = safe_fwmark(mark_raw, 0x1);
+	let mask = safe_fwmark(mask_raw, 0x1);
+	if ((mark & mask) !== mark) {
+		log_err(sprintf("nftables: fwmark 0x%x outside fwmark_mask 0x%x; falling back to 0x1/0x1", mark, mask));
+		return [0x1, 0x1];
+	}
+	return [mark, mask];
+}
+
 // validate_port(p) — return integer in 1..65535 or null. Accepts strings
 // ("7893"), bare ints (7893), and rejects "", null, "abc", "99999", "0",
 // negative numbers. Callers must treat null as "skip tproxy emission".
