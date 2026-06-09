@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Unreleased — Phase E3 (browser tests, full coverage)
+
+- **infra**: rewrote `tests/test_browser.sh` to drive a Docker container
+  (`openwrt/rootfs:x86_64-25.12.3` + uhttpd + rpcd + sing-box) instead of
+  SSH-deploying to a live VM. One harness, identical locally and in CI.
+- **infra**: switched `tests/browser/` from npm to bun; `trustedDependencies`
+  controls postinstall script execution.
+- **tests**: added per-protocol matrix (7 inbound, 5 outbound) for builder
+  field surfaces and `preview_config` emit shape. Total 20 browser tests.
+- **ci**: new `browser-test` job in `.github/workflows/build.yml`.
+- **docs**: `tests/browser/README.md` for local-run / debug.
+- **fix**: `hysteria2.uc` inbound `server_password` ui_label changed from
+  `"Password (single user)"` to `"Password"` — the parenthetical was
+  silently dropped by `applyMaterialized`'s shared-key dedup (shadowsocks
+  registers `Password` first); this aligns descriptor truth with rendered UI.
+
 ## Phase E2 — Protocol Builder Rewrite (2026-06-09)
 
 ### Added
