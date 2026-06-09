@@ -17,6 +17,7 @@ else
 fi
 
 emit() {
+	# shellcheck disable=SC2086  # UCODE_LIB_FLAGS intentionally expands as multiple -L args
 	"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit "$@"
 }
 

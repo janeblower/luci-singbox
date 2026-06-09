@@ -307,6 +307,7 @@ grep -q 'multiple enabled tproxy' "$TMPDIR/g3-one.err" \
 pass "G3: single tproxy does not warn"
 
 echo "-- safe_fwmark: hex and decimal pass, fwmark within mask"
+# shellcheck disable=SC2086  # UCODE_LIB_FLAGS intentionally expands as multiple -L args
 out=$(cat <<'UCODE' | "$UCODE_BIN" $UCODE_LIB_FLAGS -
   function safe_fwmark(v, fallback) {
     if (v == null) return fallback;
@@ -329,6 +330,7 @@ echo "GOT: $out"
 [ "$out" = "1 42 57005 57005 57005" ] || { echo "FAIL: safe_fwmark output wrong"; exit 1; }
 
 echo "-- safe_fwmark + mask invariant: (mark & mask) == mark"
+# shellcheck disable=SC2086  # UCODE_LIB_FLAGS intentionally expands as multiple -L args
 out=$(cat <<'UCODE' | "$UCODE_BIN" $UCODE_LIB_FLAGS -
   function fwmark_pair(mark, mask) {
     if (!mark || !mask) return [0, 0];
@@ -376,6 +378,7 @@ config inbound tp
 	option listen_port '7895'
 	list interface 'br-lan'
 EOF
+# shellcheck disable=SC2086  # UCODE_LIB_FLAGS intentionally expands as multiple -L args
 PATH="$STUB:$PATH" UCI_CONFIG_DIR="$UCI_TEST" \
 	"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply 2>&1 \
 	| grep -v 'No such file' >/dev/null || true

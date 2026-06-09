@@ -55,12 +55,14 @@ EOF
 chmod +x "$STUB/nft"
 
 echo "-- smoke check: warns when no matching ip rule"
+# shellcheck disable=SC2086  # LIB intentionally expands as multiple -L args
 out=$(PATH="$STUB:$PATH" UCI_CONFIG_DIR="$UCI" MOCK_HAS_RULE=0 \
 	ucode $LIB "$SCRIPT" apply 2>&1)
 echo "$out" | grep -q 'no ip rule with fwmark 0x1/0x1' \
 	|| { echo "FAIL: warning missing"; echo "$out"; exit 1; }
 
 echo "-- smoke check: quiet when matching ip rule present"
+# shellcheck disable=SC2086  # LIB intentionally expands as multiple -L args
 out=$(PATH="$STUB:$PATH" UCI_CONFIG_DIR="$UCI" MOCK_HAS_RULE=1 \
 	ucode $LIB "$SCRIPT" apply 2>&1)
 echo "$out" | grep -q 'no ip rule with fwmark' \
