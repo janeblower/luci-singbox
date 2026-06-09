@@ -48,6 +48,12 @@ expect "# "
 
 # Allow password auth via dropbear (default for some 25.12 builds
 # disables it; force-on to be safe).
+#
+# Escaping: Tcl "..." string => \\ becomes one backslash; \[ becomes a
+# literal '[' (not Tcl command substitution). So `\\\[` produces the
+# two-character sequence `\[`, which is what the OpenWrt shell needs to
+# pass `[0]` to `uci` without bash glob-expansion. If you "fix" the
+# double-slashes you will silently break this.
 send "uci set dropbear.@dropbear\\\[0\\\].PasswordAuth='on'\r"
 expect "# "
 send "uci set dropbear.@dropbear\\\[0\\\].RootPasswordAuth='on'\r"

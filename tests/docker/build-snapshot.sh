@@ -84,6 +84,8 @@ echo "==> savevm + quit via monitor"
 
 # Wait for qemu to finish writing the snapshot to qcow2 and exit.
 wait "$QEMU_PID" || true
+# Reaped; null QEMU_PID so the EXIT trap does not SIGTERM a recycled pid.
+QEMU_PID=""
 
 echo "==> verify snapshot present"
 qemu-img snapshot -l "$QCOW" | grep -E "^\s*[0-9]+\s+boot-state" \

@@ -82,6 +82,7 @@ tar -czf - \
 	--exclude=node_modules \
 	--exclude=.build/sdk \
 	--exclude=.claire \
+	--exclude=.claude \
 	--exclude=.swarm \
 	--exclude=dist \
 	-C /work . \
