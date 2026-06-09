@@ -4,6 +4,30 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Phase G — Unified qemu test rig (2026-06-09)
+
+- **CI test surface unified** to a single environment: a pre-built ghcr.io
+  Docker image (`openwrt-test:openwrt-25.12.3-<sha>`) that boots real OpenWrt
+  25.12.3 under QEMU/KVM from a baked memory snapshot. The host's working
+  tree is tar-streamed into the guest; the suite runs inside.
+- **`tests/run-docker.sh` removed.** `tests/run-vm.sh` is the new long-form
+  entry; `tests/run.sh` delegates to it when ucode is not on host.
+- **Sentinel renamed:** `SINGBOX_TESTS_IN_DOCKER` → `SINGBOX_TESTS_IN_VM`.
+- **Phase 0 unblock:** `SC2086` warnings fixed in three nft tests
+  (`test_nftables_ctmark.sh`, `test_nftables_ip_rule_smoke.sh`,
+  `test_nftables_uc.sh`) using the established disable-comment pattern.
+- **New workflow** `.github/workflows/test-image.yml` builds + publishes the
+  test image on `workflow_dispatch` or on changes to `tests/docker/**`.
+- **Browser-test migration** to qemu-LuCI is intentionally **out of scope** —
+  separate follow-up plan.
+
+#### Breaking change for contributors
+
+Running `tests/run.sh` on a host without `/dev/kvm` no longer falls back to
+a host-only subset run inside `openwrt/rootfs`. Either run tests on a host
+with KVM, or set `SINGBOX_TESTS_IN_VM=1` to bypass the delegation (and
+accept the SKIPs that come with no ucode).
+
 ## Unreleased — Phase F (nftables ctmark refactor)
 
 **Breaking (integrators only):** The two-chain layout
