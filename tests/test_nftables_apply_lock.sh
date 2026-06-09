@@ -1,7 +1,8 @@
 #!/bin/sh
 # tests/test_nftables_apply_lock.sh
-# S1-4: two concurrent `apply` runs must serialize on a lock and both leave a
-# clean state (no stale lock file, both ruleset writes complete).
+# S1-4: two concurrent `apply` runs must serialize on a skip-on-contention lock —
+# exactly one wins and applies, the other is cleanly skipped (no crash), and the
+# lock file is released afterwards (no stale lock).
 set -e
 
 if command -v ucode >/dev/null 2>&1; then
@@ -47,7 +48,7 @@ run_apply() {
 		"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply >/dev/null 2>"$1"
 }
 
-echo "-- S1-4: two concurrent applies both succeed and leave no stale lock"
+echo "-- S1-4: two concurrent applies serialize — one runs, one is skipped"
 run_apply "$TMPDIR/a.err" &
 p1=$!
 run_apply "$TMPDIR/b.err" &
@@ -56,11 +57,12 @@ p2=$!
 # it as the exit of an `if` so the script keeps running and the assertions fire.
 if wait "$p1"; then rc1=0; else rc1=$?; fi
 if wait "$p2"; then rc2=0; else rc2=$?; fi
-[ "$rc1" -eq 0 ] || { echo "FAIL: first apply exit $rc1"; cat "$TMPDIR/a.err"; exit 1; }
-[ "$rc2" -eq 0 ] || { echo "FAIL: second apply exit $rc2"; cat "$TMPDIR/b.err"; exit 1; }
-[ ! -e /tmp/singbox-ui/.apply.lock ] \
-	|| { echo "FAIL: S1-4 stale lock file left behind"; exit 1; }
-echo "  PASS: S1-4 concurrent applies serialized, lock released"
+# neither crashed (signal => rc >= 128)
+[ "$rc1" -lt 128 ] && [ "$rc2" -lt 128 ] || { echo "FAIL: an apply crashed (rc1=$rc1 rc2=$rc2)"; cat "$TMPDIR/a.err" "$TMPDIR/b.err"; exit 1; }
+# exactly one acquired the lock and applied (0); the other was skipped (1)
+[ $(( rc1 + rc2 )) -eq 1 ] || { echo "FAIL: expected exactly one apply to win and one to be skipped, got rc1=$rc1 rc2=$rc2"; cat "$TMPDIR/a.err" "$TMPDIR/b.err"; exit 1; }
+[ ! -e /tmp/singbox-ui/.apply.lock ] || { echo "FAIL: S1-4 stale lock left behind"; exit 1; }
+echo "  PASS: S1-4 concurrent applies serialized (one ran, one skipped), lock released"
 
 echo "-- S1-4: a pre-existing fresh lock makes apply refuse (no race window)"
 : > /tmp/singbox-ui/.apply.lock
