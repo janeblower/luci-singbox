@@ -24,7 +24,8 @@ SSH_PASS="admin"
 
 test -f "$BASE_QCOW" || { echo "FAIL: $BASE_QCOW missing (image misbuilt)" >&2; exit 1; }
 test -w /dev/kvm   || { echo "FAIL: /dev/kvm not writable (pass --device /dev/kvm)" >&2; exit 1; }
-test -d /work      || { echo "FAIL: /work not mounted (-v \$PWD:/work)" >&2; exit 1; }
+WORK_DIR="${WORK_DIR:-/work}"
+test -d "$WORK_DIR" || { echo "FAIL: \$WORK_DIR=$WORK_DIR not a directory (pass -v \$PWD:/work or set WORK_DIR)" >&2; exit 1; }
 
 echo "==> create per-run qcow2 overlay"
 qemu-img create -f qcow2 -b "$BASE_QCOW" -F qcow2 "$RUN_QCOW" >/dev/null
@@ -85,7 +86,7 @@ tar -czf - \
 	--exclude=.claude \
 	--exclude=.swarm \
 	--exclude=dist \
-	-C /work . \
+	-C "$WORK_DIR" . \
 	| $SSH 'mkdir -p /tmp/work && tar -xzf - -C /tmp/work'
 
 echo "==> run suite inside guest"
