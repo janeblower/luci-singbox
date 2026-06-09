@@ -1,0 +1,17 @@
+#!/bin/sh
+# 90-singbox-ui-fwmark — seed defaults for the ctmark refactor on
+# existing installs. Idempotent: re-runs leave already-set values
+# alone. Runs once on first boot after the package install; OpenWrt's
+# uci-defaults framework removes the file on success.
+
+[ -f /etc/config/singbox-ui ] || exit 0
+
+uci -q get singbox-ui.@global[0] >/dev/null || uci -q add singbox-ui global >/dev/null
+uci -q get singbox-ui.@global[0].fwmark >/dev/null || \
+    uci set singbox-ui.@global[0].fwmark='0x1'
+uci -q get singbox-ui.@global[0].fwmark_mask >/dev/null || \
+    uci set singbox-ui.@global[0].fwmark_mask='0x1'
+uci -q get singbox-ui.@global[0].redirect_router_traffic >/dev/null || \
+    uci set singbox-ui.@global[0].redirect_router_traffic='0'
+uci commit singbox-ui
+exit 0
