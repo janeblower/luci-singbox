@@ -305,7 +305,15 @@ function call_export_section() {
 		emit_err("invalid kind: " + (length(kind) ? kind : "<missing>"));
 		return;
 	}
-	if (!length(name)) { emit_err("missing name"); return; }
+	// Mirror subscription_expand's contract (S1-3): a UCI section name must be
+	// a non-empty ^[A-Za-z0-9_-]+$ string of at most 64 chars. Previously only
+	// length(name) was checked, so any string was forwarded as an argv token to
+	// export_section.uc — defense-in-depth against injection/traversal.
+	if (type(name) !== "string" || length(name) === 0 || length(name) > 64
+	    || !match(name, /^[A-Za-z0-9_-]+$/)) {
+		emit_err("invalid or missing name");
+		return;
+	}
 	// Phase E1: no REVEAL_TOKEN — scrubbing removed.
 	let quoted = [];
 	for (let a in ["ucode", "-L", UCODE_LIB, EXPORT_SECTION_UC, kind, name])
@@ -376,6 +384,26 @@ function call_preview_config() {
 	emit({ status: "ok", content: sprintf("%.4J", obj) });
 }
 
+// clash_path_ok(path) — defense-in-depth allowlist for Clash API endpoints
+// the UI is allowed to reach. The read ACL already separates clash_get from
+// clash_mutate; this stops a caller from probing arbitrary Clash paths
+// (e.g. future debug endpoints) by stuffing them through the proxy. Match by
+// prefix so /proxies/<group>, /connections/<id>, /group/<name> still pass.
+function clash_path_ok(path) {
+	if (type(path) !== "string") return false;
+	if (substr(path, 0, 1) !== "/") return false;
+	// Reject traversal / NUL / whitespace outright.
+	if (!match(path, /^\/[A-Za-z0-9_\-\/.]*$/)) return false;
+	if (index(path, "..") >= 0) return false;
+	let allow = [ "/version", "/configs", "/connections", "/traffic",
+	              "/proxies", "/group", "/providers" ];
+	for (let pfx in allow) {
+		if (path === pfx) return true;
+		if (substr(path, 0, length(pfx) + 1) === pfx + "/") return true;
+	}
+	return false;
+}
+
 // clash_proxy(method, path, body) — shared low-level curl proxy. Inputs MUST
 // be pre-validated by the caller: `method` is one of the HTTP verbs accepted
 // by Clash, `path` starts with '/', and `body` is either null or a string.
@@ -401,7 +429,7 @@ function call_clash_get() {
 		return;
 	}
 	let path = args.path || "";
-	if (substr(path, 0, 1) !== "/") { emit_err("invalid path"); return; }
+	if (!clash_path_ok(path)) { emit_err("invalid path"); return; }
 	clash_proxy("GET", path, null);
 }
 
@@ -418,7 +446,7 @@ function call_clash_mutate() {
 		return;
 	}
 	let path = args.path || "";
-	if (substr(path, 0, 1) !== "/") { emit_err("invalid path"); return; }
+	if (!clash_path_ok(path)) { emit_err("invalid path"); return; }
 	clash_proxy(method, path, args.body);
 }
 

@@ -618,4 +618,34 @@ for keep in 'vl.example.com' 'out-rc' '443'; do
 done
 echo "  PASS: read_config preserves non-secret fields"
 
+echo "-- S1-3: export_section rejects a name with disallowed characters"
+out=$(echo '{"kind":"inbound","name":"in ss; rm -rf /"}' | UCI_CONFIG_DIR="$uci_dir" run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: S1-3 bad export_section name should error; out=$out"; exit 1; }
+out=$(echo '{"kind":"inbound","name":"in/../etc"}' | UCI_CONFIG_DIR="$uci_dir" run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: S1-3 slash export_section name should error; out=$out"; exit 1; }
+# A well-formed name (matching subscription_expand's regex) still works.
+out=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	run_h call export_section)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: S1-3 valid export_section name regressed; out=$out"; exit 1; }
+echo "  PASS: S1-3 export_section name allowlist"
+
+echo "-- S1-3: clash_get/clash_mutate enforce an endpoint allowlist"
+out=$(echo '{"path":"/etc/passwd"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: S1-3 off-allowlist clash_get path should error; out=$out"; exit 1; }
+out=$(echo '{"path":"/connections"}' | CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok run_h call clash_get)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: S1-3 allowlisted clash_get path regressed; out=$out"; exit 1; }
+out=$(echo '{"method":"PATCH","path":"/system/exec"}' | CLASH_CURL="$tmpdir/curl" run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "error"' \
+	|| { echo "FAIL: S1-3 off-allowlist clash_mutate path should error; out=$out"; exit 1; }
+out=$(echo '{"method":"PATCH","path":"/configs"}' | CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: S1-3 allowlisted clash_mutate path regressed; out=$out"; exit 1; }
+echo "  PASS: S1-3 clash endpoint allowlist"
+
 echo "OK"
