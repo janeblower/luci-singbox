@@ -89,6 +89,22 @@ check m_fakeip_v4_v6       7895 "198.18.0.0/15" "fc00::/18" "br-lan"
 check m_router_out_on      7895 "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1 1
 check m_multi_iface        7893 "198.18.0.0/15" ""          "br-lan,br-guest"
 
+# Invalid/empty PORT → validate_port() returns null → emit_prerouting_chain's
+# `if (port_n != null)` tproxy block is SKIPPED. The 6-scenario base matrix
+# always passed a valid port, so the tproxy-skipped branch of the refactored
+# emit_prerouting_chain was never byte-compared. An empty-string PORT is a
+# valid positional (emit only requires argv>=5: PORT V4 V6 IFACE all present),
+# so it drives the skip through the real `emit` entrypoint.
+check m_port_empty_skip    ""   "198.18.0.0/15" "fc00::/18" "br-lan"
+
+# Custom mark with mark != mask (0x40 & 0xc0 == 0x40, so fwmark_pair keeps it),
+# dual-stack + router_out. The base matrix only ever used 0x1/0x1 where
+# mark == mask, so a helper param-order slip (mark/mask swapped in
+# emit_prerouting_chain's socket-mark `mark & mask` or the tproxy
+# `mark and 0x%x == 0x%x` clause) would stay invisible. Distinct mark/mask
+# values make any such swap diverge from the golden.
+check m_mark_ne_mask_rout  7895 "198.18.0.0/15" "fc00::/18" "br-lan" 0x40 0xc0 1
+
 # rs_* set with a tcp port range — exercises emit_named_sets' rule-set loop and
 # the rs_* decision rules in both prerouting and (when router_out=1) output.
 cat >"$RS/rs_char_set.json" <<'JSON'
