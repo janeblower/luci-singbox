@@ -30,6 +30,60 @@ for details.
 See `docs/uci-schema.md`, `docs/protocol-coverage.md`, and
 `docs/release.md` for the technical reference.
 
+## fwmark and `ip rule` for TPROXY
+
+The nft ruleset emitted by this package marks packets that should be
+intercepted by sing-box's TPROXY socket. The mark value is taken from
+the `singbox-ui.@global[0].fwmark` / `fwmark_mask` UCI options
+(defaults `0x1` / `0x1`).
+
+For TPROXY to actually route those marked packets to the local socket,
+the kernel needs an `ip rule` and a routing table:
+
+```sh
+ip -4 rule add fwmark 0x1/0x1 lookup 100
+ip -4 route add local default dev lo table 100
+ip -6 rule add fwmark 0x1/0x1 lookup 100
+ip -6 route add local default dev lo table 100
+```
+
+The package does NOT install these rules — they're operator state and
+typically come from your `network` UCI config, a startup script, or a
+package like `mwan3` / `vpn-policy-routing`. After the package applies
+its ruleset it logs a warning to syslog if no matching `ip rule
+fwmark…` exists; check `logread -e singbox-ui` after enabling the
+tproxy inbound.
+
+To use a different bit (e.g., when mwan3 owns `0xff00`):
+
+```sh
+uci set singbox-ui.@global[0].fwmark='0x10000'
+uci set singbox-ui.@global[0].fwmark_mask='0x10000'
+uci commit singbox-ui
+/etc/init.d/singbox-ui restart
+```
+
+Then update `ip rule` accordingly. The invariant the validator
+enforces: `(fwmark & fwmark_mask) == fwmark`. Violating it falls back
+to `0x1 / 0x1` with a log message.
+
+## Redirecting router-originated traffic
+
+By default only LAN-originated traffic is intercepted (the `prerouting`
+chain handles it). To also route traffic originated by processes on
+the router itself (health checks, OpenVPN clients, etc.) through the
+TPROXY socket, set:
+
+```sh
+uci set singbox-ui.@global[0].redirect_router_traffic='1'
+uci commit singbox-ui
+/etc/init.d/singbox-ui restart
+```
+
+This adds an `output` chain at `priority mangle` that mirrors the
+prerouting decision logic. Disabled by default because router
+processes don't usually want to be proxied.
+
 ---
 
 (Russian section below — оригинальное описание на русском.)
