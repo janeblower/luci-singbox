@@ -312,15 +312,24 @@ function validate_port(p) {
 
 // safe_port_range(p) — sanitise ONE port_range token from rs_*.json. sing-box
 // uses ':' for ranges; nft uses '-'. We normalise, then accept only a bare
-// port or a port-port range of 1..5 digits each. Returns the nft-safe token,
-// or null (caller drops + log_err). Symmetric with safe_cidr: a poisoned
+// port or a port-port range whose every numeric part is in 1..65535 (same
+// bound as validate_port). Returns the nft-safe token, or null (caller drops +
+// log_err). The contract is BOTH injection-safe AND range-valid: a poisoned
 // rs_*.json (MITM-able download) must not escape the `dport …` clause via a
-// value like "80 }; insert rule …; #". Centralised so the only place ports
-// reach the nft string is past this gate.
+// value like "80 }; insert rule …; #", and an out-of-range part like "99999"
+// or "0" is dropped HERE rather than passing the regex and making the kernel
+// reject the whole `nft -f` ruleset (a worse, all-or-nothing failure).
+// Centralised so the only place ports reach the nft string is past this gate.
 function safe_port_range(p) {
 	if (p == null || p === "") return null;
 	let tok = replace(`${p}`, ":", "-");
-	return match(tok, /^[0-9]{1,5}(-[0-9]{1,5})?$/) ? tok : null;
+	if (!match(tok, /^[0-9]{1,5}(-[0-9]{1,5})?$/)) return null;
+	let parts = split(tok, "-");
+	for (let part in parts) {
+		let n = +part;
+		if (type(n) !== "int" || n < 1 || n > 65535) return null;
+	}
+	return tok;
 }
 
 function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out) {

@@ -16,10 +16,13 @@ else
 fi
 
 SCRIPT=$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/nftables.uc
-TMPDIR=$(mktemp -d)
 RS_DIR=/tmp/singbox-ui
-mkdir -p "$RS_DIR"
+TMPDIR=$(mktemp -d)
+# Register cleanup IMMEDIATELY after mktemp, before any command that could fail
+# under `set -e` (e.g. mkdir below) and otherwise leak the temp dir. RS_DIR is
+# defined above so the trap can reference it.
 trap 'rm -rf "$TMPDIR"; rm -f "$RS_DIR"/rs_aps_*.json' EXIT
+mkdir -p "$RS_DIR"
 rm -f "$RS_DIR"/rs_aps_*.json
 
 # Stub nft that captures the applied ruleset to a file instead of touching the
@@ -67,5 +70,19 @@ grep -q 'dropping invalid port_range' "$TMPDIR/apply.err" \
 	|| { echo "FAIL: S1-1 expected a drop log on stderr"; cat "$TMPDIR/apply.err"; exit 1; }
 rm -f "$RS_DIR/rs_aps_inj.json"
 echo "  PASS: S1-1 apply-path injection dropped + logged"
+
+echo "-- S1-1 (apply path): out-of-range port_range '99999' is dropped, not applied"
+# Passes the old [0-9]{1,5} regex but exceeds 65535; the kernel would reject the
+# WHOLE `nft -f` ruleset. safe_port_range must drop it here like any bad token.
+cat >"$RS_DIR/rs_aps_oor.json" <<'JSON'
+{ "rules": [ { "ip_cidr": "10.0.0.0/8", "network": "tcp", "port_range": "99999" } ] }
+JSON
+apply || { echo "FAIL: apply returned non-zero on a droppable out-of-range port_range"; cat "$TMPDIR/apply.err"; exit 1; }
+grep -q 'dport 99999' "$TMPDIR/applied.nft" \
+	&& { echo "FAIL: S1-1 out-of-range port reached the applied ruleset"; cat "$TMPDIR/applied.nft"; exit 1; }
+grep -q 'dropping invalid port_range' "$TMPDIR/apply.err" \
+	|| { echo "FAIL: S1-1 expected a drop log on stderr for out-of-range port"; cat "$TMPDIR/apply.err"; exit 1; }
+rm -f "$RS_DIR/rs_aps_oor.json"
+echo "  PASS: S1-1 apply-path out-of-range port_range dropped + logged"
 
 echo "OK"
