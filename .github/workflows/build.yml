@@ -33,22 +33,17 @@ jobs:
       - name: main.js syntax check (host node)
         run: sh tests/test_main_js_syntax.sh
 
-      # Everything else runs inside the OpenWrt rootfs that matches the target
-      # release: ships ucode + ucode-mod-{fs,uci,...}, uci, nft, pgrep — the
-      # exact toolset the .uc scripts and rpcd handler use in production. The
-      # suite is dependency-lean: assertions use ucode's json()/fs (no jq, no
-      # coreutils stat), so nothing extra is installed in the container.
-      #
-      # sing-box is fetched once via apk inside the wrapper so test_defaults.sh
-      # can hand the generated default config to `sing-box check` — that's the
-      # gate that catches "config validates structurally but the daemon
-      # refuses to start" regressions (e.g. dns_server detour to an empty
-      # direct outbound, which sing-box 1.12 rejects fatally).
-      #
-      # tests/run-docker.sh is the same entrypoint developers run locally, so
-      # CI and local prods stay in lockstep.
-      - name: Run tests inside OpenWrt rootfs
-        run: sh tests/run-docker.sh
+      # The shell + ucode suite runs inside a real OpenWrt 25.12.3 booted
+      # under qemu/KVM. The image at ghcr.io/.../openwrt-test:latest is
+      # pre-built by .github/workflows/test-image.yml; CI just pulls it.
+      # See docs/superpowers/specs/2026-06-09-unified-qemu-test-rig-design.md.
+      - name: Ensure /dev/kvm
+        run: |
+          sudo chmod 0666 /dev/kvm
+          ls -la /dev/kvm
+
+      - name: Run tests in OpenWrt VM
+        run: sh tests/run-vm.sh
 
       - name: shellcheck
         run: |
