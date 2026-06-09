@@ -32,7 +32,8 @@ EOF
 
 # Override SUB_TMPDIR via env so subscription_expand.uc reads from $TMP.
 # Env-vars must apply to the ucode process (right of the pipe), not to printf.
-response=$(printf '{"name":"'"$SUB_NAME"'"}' | \
+# shellcheck disable=SC2086  # UCODE_LIB_FLAGS intentionally expands as multiple -L args
+response=$(printf '{"name":"%s"}' "$SUB_NAME" | \
     env SUB_TMPDIR="$TMP" SINGBOX_UI_SUB_DIR="$TMP" \
     "$UCODE_BIN" $UCODE_LIB_FLAGS "$H" call subscription_expand 2>&1) || {
     echo "FAIL rpc invocation: $response"; exit 1; }
