@@ -169,7 +169,7 @@ JSON
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 echo "$out" | grep -q "set rs_test_scalar_0_v4" \
 	|| { echo "FAIL: scalar ip_cidr — set not emitted"; echo "$out"; exit 1; }
-echo "$out" | grep -q "elements = { 104.16.0.0/12 }" \
+echo "$out" | grep -Eq "elements = \{ 104\.16\.0\.0/12 \}" \
 	|| { echo "FAIL: scalar ip_cidr — element body wrong"; echo "$out"; exit 1; }
 echo "$out" | grep -q "ip daddr @rs_test_scalar_0_v4 meta l4proto udp udp dport 19000-20000 ct state new ct mark set ct mark or 0x1" \
 	|| { echo "FAIL: scalar port_range — marking rule wrong"; echo "$out"; exit 1; }
