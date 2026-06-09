@@ -56,9 +56,11 @@ echo "$out" | grep -q 'meta mark and 0x1 == 0x1' || { echo "FAIL: not AND-mask";
 echo "$out" | grep 'tproxy' | grep -q '^.*meta mark 0x1 meta l4proto' && { echo "FAIL: exact equality still present"; exit 1; }
 :
 
-echo "-- emit: tproxy targets present for tcp+udp, v4+v6, on the configured port"
-echo "$out" | grep -q 'tproxy ip  to 127.0.0.1:7895' || { echo FAIL v4; exit 1; }
-echo "$out" | grep -q 'tproxy ip6 to \[::1\]:7895' || { echo FAIL v6; exit 1; }
+echo "-- emit: tproxy targets present for tcp+udp, v4+v6, on the configured port (whitespace-agnostic)"
+norm=$(echo "$out" | tr -s ' ')
+echo "$norm" | grep -q 'tproxy ip to 127.0.0.1:7895'  || { echo FAIL v4; echo "$norm" | grep tproxy; exit 1; }
+echo "$norm" | grep -q 'tproxy ip6 to \[::1\]:7895'   || { echo FAIL v6; echo "$norm" | grep tproxy; exit 1; }
+# Still exactly four tproxy rules (tcp+udp × v4+v6); count is semantic, not cosmetic.
 n=$(echo "$out" | grep -c 'tproxy ip')
 [ "$n" -eq 4 ] || { echo "FAIL: expected 4 tproxy rules, got $n"; exit 1; }
 
