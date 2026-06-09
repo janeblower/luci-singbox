@@ -502,6 +502,25 @@ function make_nft_tmp() {
 	return null;
 }
 
+// ip_rule_smoke_check(mark, mask) — best-effort, log-only check that
+// the host has an `ip rule` entry whose fwmark matches what we baked
+// into the ruleset. Missing rule → warning in syslog (silent
+// blackhole otherwise). Never fails or retries — the `ip rule` setup
+// is the operator's job. We just surface a misconfiguration.
+function ip_rule_smoke_check(mark, mask) {
+	let want = (mask == 0xffffffff)
+		? sprintf("0x%x", mark)
+		: sprintf("0x%x/0x%x", mark, mask);
+	let proc = fs.popen("ip -4 rule show; ip -6 rule show");
+	if (!proc) return;
+	let raw = proc.read("all");
+	proc.close();
+	if (raw != null && index(raw, want) >= 0) return;
+	log_err(sprintf(
+		"nftables: warning: no ip rule with fwmark %s found; tproxy traffic may not reach listen_port",
+		want));
+}
+
 function cmd_apply(cur) {
 	// G3: warn if more than one enabled tproxy inbound asks for nft
 	// rules — only the first contributes to the tproxy chain, any
@@ -564,6 +583,9 @@ function cmd_apply(cur) {
 		log_err("nftables: nft -f failed");
 		return 1;
 	}
+	// Best-effort smoke check: warn (don't fail) when the host has no
+	// `ip rule` matching the fwmark/mask we baked into the ruleset.
+	ip_rule_smoke_check(mark, mask);
 	return 0;
 }
 
