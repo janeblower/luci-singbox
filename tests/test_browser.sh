@@ -8,11 +8,11 @@ set -o pipefail
 cd "$(dirname "$0")/.."
 
 # tests/run.sh globs tests/test_*.sh and runs each one inside whichever
-# environment is active — including the OpenWrt rootfs container, where
-# this suite has no business running (no bun, no nested docker). Skip
-# gracefully when the sentinel set by run-docker.sh is present.
-if [ "${SINGBOX_TESTS_IN_DOCKER:-0}" = "1" ]; then
-    echo "SKIP test_browser: not runnable inside the OpenWrt shell-test container"
+# environment is active — including the OpenWrt qemu VM, where this suite
+# has no business running (no bun, no nested docker). Skip gracefully when
+# the sentinel set by run-vm.sh is present.
+if [ "${SINGBOX_TESTS_IN_VM:-0}" = "1" ]; then
+    echo "SKIP test_browser: not runnable inside the OpenWrt qemu VM"
     exit 0
 fi
 
