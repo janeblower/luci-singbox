@@ -419,6 +419,42 @@ uci -q get singbox-ui.ob_json.proxy_json >/dev/null 2>&1 \
 echo "  PASS: proxy_json absent"
 
 # ---------------------------------------------------------------------------
+# S1-7 — section enumeration robust to '.'/'=' in option VALUES (refactor gate).
+# migrate_rename_e2_keys / migrate_drop_removed_protocols enumerate sections;
+# the enumeration was unified from `awk -F'[.=]'` onto the file's standard
+# `sed -n 's/^singbox-ui\.\([^.]*\)=<type>$/\1/p'` idiom. This is a pure
+# refactor: it must PASS identically before and after the switch. The fixture's
+# SIBLING option value 'a=b.c=d' (contains both '.' and '=') is the point —
+# neither idiom may be derailed by it (option-value lines never end in
+# =inbound/=outbound, so they are never iterated), and it must survive byte-for-
+# byte. If this flips to FAIL the rewrite changed behaviour. (A section id with
+# '.'/'=' — the only input that distinguishes the two idioms — cannot be created
+# via uci, so there is no honest red case to assert here.)
+# ---------------------------------------------------------------------------
+echo "-- S1-7: section enumeration robust to '.'/'=' in option values (refactor gate)"
+rm -f "$CONFIG"
+cat >"$CONFIG" <<'EOF'
+config inbound 'edge_in'
+	option enabled '1'
+	option protocol 'tproxy'
+	option transport 'ws'
+	option server_password 'a=b.c=d'
+EOF
+IPKG_INSTROOT='' sh luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui \
+	>"$log" 2>&1 || { echo "FAIL: S1-7 migration crashed"; cat "$log"; exit 1; }
+# migrate_rename_e2_keys renamed transport → transport_type: proves the inbound
+# section WAS enumerated despite the '.'/'='-bearing sibling value.
+[ "$(uci -q get singbox-ui.edge_in.transport_type 2>/dev/null)" = "ws" ] \
+	|| { echo "FAIL: S1-7 transport not renamed"; uci show singbox-ui.edge_in; exit 1; }
+echo "  PASS: transport renamed (section enumerated)"
+uci -q get singbox-ui.edge_in.transport >/dev/null 2>&1 \
+	&& { echo "FAIL: S1-7 old transport key not removed"; uci show singbox-ui.edge_in; exit 1; }
+echo "  PASS: old transport key removed"
+[ "$(uci -q get singbox-ui.edge_in.server_password 2>/dev/null)" = "a=b.c=d" ] \
+	|| { echo "FAIL: S1-7 sibling option value with '.'/'=' was mangled"; uci show singbox-ui.edge_in; exit 1; }
+echo "  PASS: S1-7 enumeration robust to '.'/'=' in option values"
+
+# ---------------------------------------------------------------------------
 # Phase C2.1.2 — schema_version sentinel + idempotent re-run.
 # After any successful migration run, _meta.schema_version is set to the
 # script's CURRENT_SCHEMA. Re-running on the same config is a clean no-op
