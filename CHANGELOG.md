@@ -4,6 +4,40 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Unreleased — Phase F (nftables ctmark refactor)
+
+**Breaking (integrators only):** The two-chain layout
+`prerouting_mark` (priority -150) + `prerouting_tproxy` (priority
+-149) is replaced by a single `prerouting` chain at `priority
+mangle`. If you had external nft commands or other LuCI apps that
+hooked these chain names (rare but possible), retarget them at
+`prerouting` / `output`.
+
+- **nft**: per-flow decision via `ct mark`; `meta mark` only propagates
+  the bit into the TPROXY match.
+- **nft**: `socket transparent 1` fast-path for established flows
+  (requires `kmod-nft-socket`, now an explicit package dependency).
+- **nft**: TPROXY match uses `meta mark and $MASK == $MARK` — coexists
+  with mwan3 / SQM / pbr without bit collisions.
+- **uci**: new options on `singbox-ui.@global[0]`:
+  - `fwmark` (hex, default `0x1`)
+  - `fwmark_mask` (hex, default `0x1`)
+  - `redirect_router_traffic` (`0`/`1`, default `0`)
+- **uci-defaults**: new `90-singbox-ui-fwmark` seeds the three options
+  on upgrade (defaults reproduce the prior behaviour).
+- **pkg**: depend on `+kmod-nft-socket` and explicit `+kmod-nft-tproxy`.
+- **fix**: rs_* rules now mark on a per-flow basis. Previously
+  established UDP and post-handshake TCP packets escaped the mark
+  because `ct state new` was filtering but `meta mark` was being
+  stored — this is what the refactor was triggered to fix.
+- **infra**: log-only smoke check after `nft -f` warns when no matching
+  `ip rule fwmark…` is found.
+- **tests**: new `tests/test_nftables_ctmark.sh` structural guards,
+  `tests/test_uci_defaults_fwmark.sh` migration test,
+  `tests/test_nftables_ip_rule_smoke.sh` smoke-check test.
+- **docs**: README — operator section on `ip rule` requirement and
+  router-traffic redirect.
+
 ## Unreleased — Phase E3 (browser tests, full coverage)
 
 - **infra**: rewrote `tests/test_browser.sh` to drive a Docker container
