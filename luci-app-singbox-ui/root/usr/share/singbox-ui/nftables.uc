@@ -332,33 +332,11 @@ function safe_port_range(p) {
 	return tok;
 }
 
-function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules) {
-	// Defensive defaults so old callers (e.g., legacy tests) keep working.
-	if (mark == null) mark = 0x1;
-	if (mask == null) mask = 0x1;
-	if (router_out == null) router_out = 0;
-
-	ifaces = filter_ifaces(ifaces);
-	v4 = safe_cidr_list("v4", v4);
-	v6 = safe_cidr_list("v6", v6);
-
-	let port_n = validate_port(port);
-	if (port_n == null) {
-		log_err(sprintf("nftables: invalid listen_port %s (need int 1..65535), skipping tproxy chain", port));
-	}
-
-	// S1-PERF: the apply path already loaded the rs_*.json cache and passes
-	// it in here, so we don't re-scan + re-parse every rule-set file a second
-	// time per apply. Non-apply callers (emit) pass nothing → load once.
-	if (rules == null) rules = load_rs_rules();
-
-	let buf = [];
-	// Atomic transaction: add + delete + table all in one nft -f.
-	push(buf, "add table inet singbox_ui\n");
-	push(buf, "delete table inet singbox_ui\n");
-	push(buf, "table inet singbox_ui {\n");
-
-	// --- named sets ---
+// emit_named_sets(buf, ifaces, v4, v6, rules) — wan_ifaces + fakeip4/6 + one
+// set per rs_* rule×family. Pulled out of build_ruleset (S1-QUAL): pure string
+// assembly, no behaviour change. v4/v6 are the already-sanitised CIDR strings
+// (null → empty body). fakeip4/fakeip6 are always emitted (empty body OK).
+function emit_named_sets(buf, ifaces, v4, v6, rules) {
 	let iface_body = "";
 	if (length(ifaces)) {
 		let quoted = [];
@@ -376,8 +354,13 @@ function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules) {
 		if (length(r.v4)) push(buf, emit_set(set_name_for(r.name, r.idx, "v4"), "v4", r.v4));
 		if (length(r.v6)) push(buf, emit_set(set_name_for(r.name, r.idx, "v6"), "v6", r.v6));
 	}
+}
 
-	// --- prerouting chain ---
+// emit_prerouting_chain(buf, rules, mark, mask, v4, v6, port_n) — the
+// prerouting chain: socket-transparent fast-path, ct-mark restore, NEW-flow
+// decisions, mark propagate, and the tproxy block (only when port_n != null).
+// Verbatim move of the inline block from build_ruleset (S1-QUAL).
+function emit_prerouting_chain(buf, rules, mark, mask, v4, v6, port_n) {
 	push(buf, "\tchain prerouting {\n");
 	push(buf, "\t\ttype filter hook prerouting priority mangle; policy accept;\n\n");
 
@@ -414,16 +397,49 @@ function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules) {
 		}
 	}
 	push(buf, "\t}\n");
+}
 
-	// --- optional output chain (router-traffic redirect) ---
-	if (router_out) {
-		push(buf, "\n\tchain output {\n");
-		push(buf, "\t\ttype route hook output priority mangle; policy accept;\n\n");
-		push(buf, "\t\tmeta mark set ct mark\n");
-		push(buf, emit_rs_decision_block(rules, mark, v4, v6));
-		push(buf, "\t\tmeta mark set ct mark\n");
-		push(buf, "\t}\n");
+// emit_output_chain(buf, rules, mark, v4, v6) — optional router-traffic
+// redirect chain. Verbatim move of the inline block from build_ruleset
+// (S1-QUAL); only emitted when router_out is set.
+function emit_output_chain(buf, rules, mark, v4, v6) {
+	push(buf, "\n\tchain output {\n");
+	push(buf, "\t\ttype route hook output priority mangle; policy accept;\n\n");
+	push(buf, "\t\tmeta mark set ct mark\n");
+	push(buf, emit_rs_decision_block(rules, mark, v4, v6));
+	push(buf, "\t\tmeta mark set ct mark\n");
+	push(buf, "\t}\n");
+}
+
+function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules) {
+	// Defensive defaults so old callers (e.g., legacy tests) keep working.
+	if (mark == null) mark = 0x1;
+	if (mask == null) mask = 0x1;
+	if (router_out == null) router_out = 0;
+
+	ifaces = filter_ifaces(ifaces);
+	v4 = safe_cidr_list("v4", v4);
+	v6 = safe_cidr_list("v6", v6);
+
+	let port_n = validate_port(port);
+	if (port_n == null) {
+		log_err(sprintf("nftables: invalid listen_port %s (need int 1..65535), skipping tproxy chain", port));
 	}
+
+	// S1-PERF: the apply path already loaded the rs_*.json cache and passes
+	// it in here, so we don't re-scan + re-parse every rule-set file a second
+	// time per apply. Non-apply callers (emit) pass nothing → load once.
+	if (rules == null) rules = load_rs_rules();
+
+	let buf = [];
+	// Atomic transaction: add + delete + table all in one nft -f.
+	push(buf, "add table inet singbox_ui\n");
+	push(buf, "delete table inet singbox_ui\n");
+	push(buf, "table inet singbox_ui {\n");
+
+	emit_named_sets(buf, ifaces, v4, v6, rules);
+	emit_prerouting_chain(buf, rules, mark, mask, v4, v6, port_n);
+	if (router_out) emit_output_chain(buf, rules, mark, v4, v6);
 
 	push(buf, "}\n");
 	return join("", buf);
