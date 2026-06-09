@@ -4,6 +4,14 @@ on:
   push:
     branches: [main]
     tags: ['v*']
+    # Pushes that only touch tests/docker/** trigger the test-image
+    # workflow, which republishes openwrt-test:latest. Letting Build
+    # run on that same push races: it pulls the OLD :latest while the
+    # new one is still baking. Skip — the next functional commit will
+    # exercise the freshly published image.
+    paths-ignore:
+      - 'tests/docker/**'
+      - '.github/workflows/test-image.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:
