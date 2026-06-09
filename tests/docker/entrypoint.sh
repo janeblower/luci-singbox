@@ -15,7 +15,6 @@
 set -euo pipefail
 
 BASE_QCOW="/var/lib/qemu/base.qcow2"
-RUN_QCOW="/tmp/run.qcow2"
 SERIAL_SOCK="/tmp/qemu-serial.sock"
 MON_SOCK="/tmp/qemu-monitor.sock"
 SSH_PORT=2222
@@ -27,10 +26,19 @@ test -w /dev/kvm   || { echo "FAIL: /dev/kvm not writable (pass --device /dev/kv
 WORK_DIR="${WORK_DIR:-/work}"
 test -d "$WORK_DIR" || { echo "FAIL: \$WORK_DIR=$WORK_DIR not a directory (pass -v \$PWD:/work or set WORK_DIR)" >&2; exit 1; }
 
-echo "==> create per-run qcow2 overlay"
-qemu-img create -f qcow2 -b "$BASE_QCOW" -F qcow2 "$RUN_QCOW" >/dev/null
-
-echo "==> boot qemu via loadvm"
+echo "==> boot qemu via loadvm (snapshot=on for disposable overlay)"
+# IMPORTANT: do NOT use `qemu-img create -b base.qcow2 run.qcow2` here.
+# qcow2 internal snapshots (saved by `savevm`) live in the metadata of
+# the file they were written to. A backing-chain overlay starts with
+# its OWN empty snapshot list — the backing file's snapshots are not
+# inherited, and `-loadvm boot-state` would fail with
+# "Snapshot 'boot-state' does not exist in one or more devices".
+#
+# Use `snapshot=on` instead: qemu opens base.qcow2 read-only, redirects
+# all writes to an automatically-created throwaway file (typically in
+# /tmp), and reads (including the snapshot metadata) come from
+# base.qcow2. The base file is never mutated; the throwaway is discarded
+# on qemu exit.
 rm -f "$SERIAL_SOCK" "$MON_SOCK"
 qemu-system-x86_64 \
 	-enable-kvm \
@@ -38,7 +46,7 @@ qemu-system-x86_64 \
 	-display none \
 	-m 512M \
 	-smp 2 \
-	-drive "file=$RUN_QCOW,if=virtio,format=qcow2" \
+	-drive "file=$BASE_QCOW,if=virtio,format=qcow2,snapshot=on" \
 	-nic "user,model=virtio,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22" \
 	-chardev "socket,id=ser0,path=$SERIAL_SOCK,server=on,wait=off" \
 	-serial chardev:ser0 \
@@ -56,8 +64,10 @@ cleanup() {
 	kill -TERM "$QEMU_PID" 2>/dev/null || true
 	# shellcheck disable=SC2317
 	wait "$QEMU_PID" 2>/dev/null || true
+	# snapshot=on auto-cleans its throwaway file when qemu exits; no
+	# RUN_QCOW to remove here. Sockets only.
 	# shellcheck disable=SC2317
-	rm -f "$SERIAL_SOCK" "$MON_SOCK" "$RUN_QCOW"
+	rm -f "$SERIAL_SOCK" "$MON_SOCK"
 }
 
 # KEEP_VM=1 disables auto-cleanup for inspection on failure.
