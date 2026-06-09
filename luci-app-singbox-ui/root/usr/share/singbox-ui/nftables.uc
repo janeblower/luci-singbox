@@ -643,7 +643,18 @@ let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
 
 let argv = ARGV;
 switch (argv[0]) {
-case "apply":  cmd_apply(cur); break;
+// cmd_apply returns 0 on success and 1 on every failure path (invalid
+// tproxy port, tmp-file alloc/open failure, `nft -f` non-zero). Propagate
+// that as the process exit code: ucode CLI only exits non-zero via an
+// explicit exit(), so a bare `cmd_apply(cur); break;` would discard the
+// return and always exit 0 — hiding both the S1-2 guard and real `nft -f`
+// failures from init.d (`_nft_rc=$?`) and rpcd. exit() ends the process,
+// so no `break` is needed (and the ip_rule smoke check already ran inside).
+case "apply":  exit(cmd_apply(cur));
+// remove stays a query-style success: cmd_remove() -> nft_delete_table_quiet()
+// returns null (no explicit return), so it must NOT be passed to exit().
+// Its "best-effort delete" contract is always-success, so falling through
+// to the normal exit 0 below is correct.
 case "remove": cmd_remove();   break;
 case "needed":
 	print(any_nft_transparent(cur) ? "1\n" : "0\n");
