@@ -81,6 +81,32 @@ expect "# "
 send "/etc/init.d/dropbear restart\r"
 expect "# "
 
+# Bring up DHCP on br-lan so apk can reach the OpenWrt feed via the
+# qemu SLIRP NAT. The stock combined-squashfs ships br-lan as static
+# 192.168.1.1/24 — there's no default route, so wget inside the guest
+# returns EPERM the moment apk update tries to contact downloads.
+send "uci set network.lan.proto='dhcp'\r"
+expect "# "
+send "uci commit network\r"
+expect "# "
+send "/etc/init.d/network restart\r"
+expect "# "
+
+# Wait up to 30 s for the default route to appear. SLIRP's built-in
+# DHCP usually answers within 2-3 s but allow headroom for slow CI.
+send "for _ in 1 2 3 4 5 6; do ip route | grep -q ^default && break; sleep 5; done; echo --route--; ip route; echo --end--\r"
+expect "--end--"
+expect "# "
+
+# Sanity probe — fail loudly here rather than 50 s into apk update.
+send "wget -q -O /dev/null https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/sha256sums && echo NETOK || echo NETFAIL\r"
+expect {
+	"NETOK"    { }
+	"NETFAIL"  { puts stderr "expect: guest cannot reach downloads.openwrt.org after DHCP"; exit 2 }
+	timeout    { puts stderr "expect: net probe timed out"; exit 2 }
+}
+expect "# "
+
 # Install sing-box from the OpenWrt apk feed so per-run tests don't pay
 # the download.
 send "apk update\r"
