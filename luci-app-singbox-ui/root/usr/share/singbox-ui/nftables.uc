@@ -141,9 +141,16 @@ function load_rs_rules() {
 			let network = rule.network ?? "";
 			let ports = [];
 			for (let p in helpers.as_array(rule.port_range)) {
-				if (p == null || p === "") continue;
-				// nft uses '-' for ranges; sing-box uses ':'.
-				push(ports, replace(`${p}`, ":", "-"));
+				// G2b/S1-1: validate each port_range token before it
+				// lands in the `dport …` clause. A poisoned rs_*.json
+				// could otherwise inject nft via "80 }; insert rule …; #".
+				let tok = safe_port_range(p);
+				if (tok == null) {
+					if (p != null && p !== "")
+						log_err(sprintf("nftables: dropping invalid port_range %s in rs_%s.json", p, name));
+					continue;
+				}
+				push(ports, tok);
 			}
 			push(out, { name: name, idx: idx, v4: v4, v6: v6, network: network, ports: ports });
 			idx++;
@@ -301,6 +308,19 @@ function validate_port(p) {
 	let n = (type(p) === "int") ? p : +p;
 	if (type(n) !== "int" || n < 1 || n > 65535) return null;
 	return n;
+}
+
+// safe_port_range(p) — sanitise ONE port_range token from rs_*.json. sing-box
+// uses ':' for ranges; nft uses '-'. We normalise, then accept only a bare
+// port or a port-port range of 1..5 digits each. Returns the nft-safe token,
+// or null (caller drops + log_err). Symmetric with safe_cidr: a poisoned
+// rs_*.json (MITM-able download) must not escape the `dport …` clause via a
+// value like "80 }; insert rule …; #". Centralised so the only place ports
+// reach the nft string is past this gate.
+function safe_port_range(p) {
+	if (p == null || p === "") return null;
+	let tok = replace(`${p}`, ":", "-");
+	return match(tok, /^[0-9]{1,5}(-[0-9]{1,5})?$/) ? tok : null;
 }
 
 function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out) {
