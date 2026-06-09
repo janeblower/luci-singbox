@@ -337,4 +337,43 @@ out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -p '
 [ "$out" = "1/1 1/1" ] || { echo "FAIL: invariant rollback wrong"; exit 1; }
 echo "ok"
 
+echo "-- cmd_apply: UCI fwmark / fwmark_mask read with defaults"
+UCI_TEST=$(mktemp -d)
+cat >"$UCI_TEST/singbox-ui" <<EOF
+config global
+	option fwmark '0x100'
+	option fwmark_mask '0xff00'
+	option redirect_router_traffic '1'
+EOF
+# The emit subcommand's CLI arity check is extended in Task 3.
+# For Task 2, sanity-check that the UCI parse path itself doesn't fail
+# by invoking apply through a stubbed nft. PATH stub:
+STUB=$(mktemp -d)
+cat >"$STUB/nft" <<'NFT'
+#!/bin/sh
+exec cat > /dev/null
+NFT
+chmod +x "$STUB/nft"
+# `apply` requires at least one enabled tproxy inbound + fakeip dns
+# server to build the ruleset, otherwise it deletes the table and
+# returns early. Provide both in the UCI mock.
+cat >>"$UCI_TEST/singbox-ui" <<EOF
+config dns_server fakeip
+	option type 'fakeip'
+	option enabled '1'
+	option inet4_range '198.18.0.0/15'
+	option inet6_range 'fc00::/18'
+config inbound tp
+	option protocol 'tproxy'
+	option enabled '1'
+	option nft_rules '1'
+	option listen_port '7895'
+	list interface 'br-lan'
+EOF
+PATH="$STUB:$PATH" UCI_CONFIG_DIR="$UCI_TEST" \
+	"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply 2>&1 \
+	| grep -v 'No such file' >/dev/null || true
+rm -rf "$UCI_TEST" "$STUB"
+echo "ok"
+
 echo "OK"

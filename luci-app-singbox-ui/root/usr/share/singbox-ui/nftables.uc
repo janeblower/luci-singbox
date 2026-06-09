@@ -468,13 +468,25 @@ function cmd_apply(cur) {
 	let v6 = fip.v6;
 	let rules = load_rs_rules();
 
+	// UCI-driven mark/mask + output-chain toggle. Defaults match the
+	// historical behaviour (mark=0x1, mask=0x1, no output chain) so existing
+	// installs without the new options keep working.
+	let glob = null;
+	cur.foreach("singbox-ui", "global", function(s) { if (!glob) glob = s; });
+	let mark_raw = glob ? glob.fwmark        : null;
+	let mask_raw = glob ? glob.fwmark_mask   : null;
+	let routerout_raw = glob ? glob.redirect_router_traffic : null;
+	let mp = fwmark_pair(mark_raw, mask_raw);
+	let mark = mp[0]; let mask = mp[1];
+	let router_out = (routerout_raw === "1" || routerout_raw === 1) ? 1 : 0;
+
 	if (v4 === "" && v6 === "" && !length(rules)) {
 		nft_delete_table_quiet();
 		log_err("nftables: no fakeip ranges and no ruleset rules; table removed");
 		return 0;
 	}
 
-	let ruleset = build_ruleset(port, v4, v6, ifaces);
+	let ruleset = build_ruleset(port, v4, v6, ifaces, mark, mask, router_out);
 
 	// G6: tmp file path composed on the ucode side — no shell, no mktemp.
 	let tmp = make_nft_tmp();
