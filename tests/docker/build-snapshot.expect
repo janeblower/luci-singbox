@@ -1,0 +1,89 @@
+#!/usr/bin/expect -f
+# tests/docker/build-snapshot.expect
+# Drive the OpenWrt first-boot serial console to seed the test image:
+#   - set root password = admin
+#   - enable password auth on dropbear
+#   - apk update && apk add sing-box
+#
+# Caller (build-snapshot.sh) provides $env(SERIAL_SOCK) — a unix socket
+# path connected to qemu's -serial chardev. After this script exits 0,
+# the caller takes the qemu memory snapshot via the monitor.
+#
+# Total timeout: 5 minutes (boot + apk update + apk add sing-box).
+
+set timeout 300
+set serial_sock $env(SERIAL_SOCK)
+
+spawn socat - UNIX-CONNECT:$serial_sock
+
+# Wait for OpenWrt to fully boot — the login prompt appears after procd
+# finishes uci-defaults. The banner may scroll several times; we keep
+# matching the most recent prompt.
+expect {
+	"OpenWrt login:" { send "root\r" }
+	timeout { puts stderr "expect: never saw login prompt"; exit 2 }
+}
+
+# Stock combined-squashfs has an empty root password on first boot.
+# Some 25.12.x builds skip the password prompt entirely and drop
+# straight to a shell; handle both.
+expect {
+	"Password:" { send "\r" }
+	"# "        { }
+	timeout { puts stderr "expect: no shell after login"; exit 2 }
+}
+
+# We are now at the root shell. Wait for an idle prompt before sending
+# commands (avoids racing the MOTD).
+expect "# "
+
+# Set root password = admin. busybox passwd reads new + retype on
+# separate lines.
+send "passwd root\r"
+expect "New password:"
+send "admin\r"
+expect "Retype password:"
+send "admin\r"
+expect "# "
+
+# Allow password auth via dropbear (default for some 25.12 builds
+# disables it; force-on to be safe).
+send "uci set dropbear.@dropbear\\\[0\\\].PasswordAuth='on'\r"
+expect "# "
+send "uci set dropbear.@dropbear\\\[0\\\].RootPasswordAuth='on'\r"
+expect "# "
+send "uci commit dropbear\r"
+expect "# "
+send "/etc/init.d/dropbear restart\r"
+expect "# "
+
+# Install sing-box from the OpenWrt apk feed so per-run tests don't pay
+# the download.
+send "apk update\r"
+expect {
+	-re "OK:.*distinct packages" { }
+	"# "                          { }
+	timeout { puts stderr "expect: apk update did not finish"; exit 2 }
+}
+expect "# "
+send "apk add sing-box\r"
+expect {
+	-re "Installing sing-box" { exp_continue }
+	-re "OK: .* MiB in"       { }
+	"# "                       { }
+	timeout { puts stderr "expect: apk add sing-box did not finish"; exit 2 }
+}
+expect "# "
+
+# Sanity probe: sing-box is callable.
+send "sing-box version\r"
+expect {
+	-re "sing-box version" { }
+	timeout { puts stderr "expect: sing-box not installed"; exit 2 }
+}
+expect "# "
+
+# Done. Caller drives savevm + quit via the monitor.
+send "exit\r"
+expect eof
+exit 0
