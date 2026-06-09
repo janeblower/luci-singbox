@@ -297,7 +297,7 @@ export async function fillField(page, label, value, opts = {}) {
             sel.dispatchEvent(new Event('change', { bubbles: true }));
             return { ok: true };
         }
-        const inp = row.querySelector('input[type="text"], input[type="number"], input:not([type])');
+        const inp = row.querySelector('input[type="text"], input[type="number"], input[type="password"], input:not([type])');
         if (!inp) return { ok: false, reason: `"${label}" no input` };
         inp.focus();
         inp.value = String(value);
