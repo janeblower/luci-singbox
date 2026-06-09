@@ -22,6 +22,7 @@ htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js	www/luci-st
 root/etc/capabilities/singbox-ui.json	etc/capabilities/singbox-ui.json	data
 root/etc/config/singbox-ui	etc/config/singbox-ui	conf
 root/etc/init.d/singbox-ui	etc/init.d/singbox-ui	bin
+root/etc/uci-defaults/90-singbox-ui-fwmark	etc/uci-defaults/90-singbox-ui-fwmark	bin
 root/etc/uci-defaults/99-luci-app-singbox-ui	etc/uci-defaults/99-luci-app-singbox-ui	bin
 root/usr/libexec/rpcd/singbox-ui	usr/libexec/rpcd/singbox-ui	bin
 root/usr/share/luci/menu.d/luci-app-singbox-ui.json	usr/share/luci/menu.d/luci-app-singbox-ui.json	data

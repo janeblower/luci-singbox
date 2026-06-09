@@ -48,7 +48,8 @@ echo "$out" | awk '
 
 echo "-- t_ct_mark_or_assignment"
 n=$(echo "$out" | grep -c 'ct mark set ct mark or 0x1')
-[ "$n" -ge 3 ] || { echo "FAIL: expected >=3 ct mark or decisions, got $n"; exit 1; }
+# Baseline emit (no ruleset files): fakeip4 + fakeip6 = 2 decisions.
+[ "$n" -ge 2 ] || { echo "FAIL: expected >=2 ct mark or decisions, got $n"; exit 1; }
 # No decision rule (line containing 'ct state new') may write meta mark.
 echo "$out" | grep 'ct state new' | grep -q 'meta mark set' \
 	&& { echo "FAIL: decision uses meta mark"; exit 1; }

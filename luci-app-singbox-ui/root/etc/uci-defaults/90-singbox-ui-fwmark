@@ -4,9 +4,19 @@
 # alone. Runs once on first boot after the package install; OpenWrt's
 # uci-defaults framework removes the file on success.
 
-[ -f /etc/config/singbox-ui ] || exit 0
+UCI_CFGDIR="${UCI_CONFIG_DIR:-/etc/config}"
+[ -f "$UCI_CFGDIR/singbox-ui" ] || exit 0
 
-uci -q get singbox-ui.@global[0] >/dev/null || uci -q add singbox-ui global >/dev/null
+# uci() wrapper — honour UCI_CONFIG_DIR so test environments can
+# redirect without touching /etc/config.
+uci() { command uci -c "$UCI_CFGDIR" "$@"; }
+
+# Ensure the global section exists; commit immediately so subsequent
+# get-checks can find it (uci add is only visible after commit).
+if ! uci -q get singbox-ui.@global[0] >/dev/null; then
+    uci -q add singbox-ui global >/dev/null
+    uci commit singbox-ui
+fi
 uci -q get singbox-ui.@global[0].fwmark >/dev/null || \
     uci set singbox-ui.@global[0].fwmark='0x1'
 uci -q get singbox-ui.@global[0].fwmark_mask >/dev/null || \

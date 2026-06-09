@@ -307,7 +307,7 @@ grep -q 'multiple enabled tproxy' "$TMPDIR/g3-one.err" \
 pass "G3: single tproxy does not warn"
 
 echo "-- safe_fwmark: hex and decimal pass, fwmark within mask"
-out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -p '
+out=$(cat <<'UCODE' | "$UCODE_BIN" $UCODE_LIB_FLAGS -
   function safe_fwmark(v, fallback) {
     if (v == null) return fallback;
     let t = trim(`${v}`);
@@ -323,12 +323,13 @@ out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -p '
     safe_fwmark("xyz", 0xdead),
     safe_fwmark("", 0xdead),
     safe_fwmark(null, 0xdead));
-')
+UCODE
+)
 echo "GOT: $out"
 [ "$out" = "1 42 57005 57005 57005" ] || { echo "FAIL: safe_fwmark output wrong"; exit 1; }
 
 echo "-- safe_fwmark + mask invariant: (mark & mask) == mark"
-out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -p '
+out=$(cat <<'UCODE' | "$UCODE_BIN" $UCODE_LIB_FLAGS -
   function fwmark_pair(mark, mask) {
     if (!mark || !mask) return [0, 0];
     if ((mark & mask) != mark) return [1, 1];
@@ -337,7 +338,8 @@ out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -p '
   let r1 = fwmark_pair(0x1, 0x1);
   let r2 = fwmark_pair(0x101, 0x100);
   printf("%d/%d %d/%d", r1[0], r1[1], r2[0], r2[1]);
-')
+UCODE
+)
 [ "$out" = "1/1 1/1" ] || { echo "FAIL: invariant rollback wrong"; exit 1; }
 echo "ok"
 
