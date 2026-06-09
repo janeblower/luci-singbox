@@ -524,6 +524,32 @@ function rand_hex(n) {
 	return h;
 }
 
+// APPLY_LOCK — serialization point for cmd_apply. ucode's fs has no flock,
+// so we use fs.open(path, "x") (O_CREAT|O_EXCL) as an atomic create-or-fail
+// lock primitive: two concurrent applies (cron refresh racing a manual
+// Apply) would otherwise interleave their `nft -f` calls and hit the TOCTOU
+// window in make_nft_tmp's fallback.
+const APPLY_LOCK = `${TMPDIR}/.apply.lock`;
+
+// acquire_apply_lock() — atomic O_EXCL create. Returns true on success, false
+// if another apply holds the lock. A lock older than 60s is treated as stale
+// (a crashed apply) and reclaimed, so we never wedge permanently.
+function acquire_apply_lock() {
+	fs.mkdir(TMPDIR, 0o755);
+	let fd = fs.open(APPLY_LOCK, "x");
+	if (fd) { fd.write(`${time()}\n`); fd.close(); return true; }
+	// Lock exists — check age for staleness.
+	let st = fs.stat(APPLY_LOCK);
+	if (st != null && (time() - st.mtime) > 60) {
+		fs.unlink(APPLY_LOCK);
+		let fd2 = fs.open(APPLY_LOCK, "x");
+		if (fd2) { fd2.write(`${time()}\n`); fd2.close(); return true; }
+	}
+	return false;
+}
+
+function release_apply_lock() { fs.unlink(APPLY_LOCK); }
+
 // make_nft_tmp() — compose a unique tmp path inside TMPDIR without
 // invoking mktemp via fs.popen. fs.popen() in OpenWrt's ucode does not
 // accept argv-form (probed; returns null), so the only way to drop
@@ -561,7 +587,13 @@ function ip_rule_smoke_check(mark, mask) {
 		want));
 }
 
-function cmd_apply(cur) {
+// _cmd_apply_locked(cur) — the real apply body. Every return path here
+// (S1-2 invalid-port guard, table-removed, tmp-alloc/open failure, nft -f
+// failure, success) is reached *inside* the lock held by the cmd_apply
+// wrapper below; the wrapper releases the lock on whichever rc this returns,
+// so no early return can leak the lock. Defined before cmd_apply because
+// ucode does not hoist function declarations.
+function _cmd_apply_locked(cur) {
 	// G3: warn if more than one enabled tproxy inbound asks for nft
 	// rules — only the first contributes to the tproxy chain, any
 	// extras silently lose TPROXY traffic. We don't drop the extras
@@ -636,6 +668,23 @@ function cmd_apply(cur) {
 	// `ip rule` matching the fwmark/mask we baked into the ruleset.
 	ip_rule_smoke_check(mark, mask);
 	return 0;
+}
+
+// cmd_apply(cur) — thin lock wrapper around _cmd_apply_locked. Acquiring the
+// O_EXCL lock here (and releasing it on whatever rc the inner body returns)
+// guarantees the lock is freed on *every* path — including the early-return
+// guards (S1-2 invalid port, nft -f failure) and the success path — before
+// the dispatcher's `exit(cmd_apply(cur))` ends the process. A second
+// concurrent apply that fails to acquire returns 1 (logged) instead of
+// racing.
+function cmd_apply(cur) {
+	if (!acquire_apply_lock()) {
+		log_err("nftables: another apply is in progress (lock held); skipping");
+		return 1;
+	}
+	let rc = _cmd_apply_locked(cur);
+	release_apply_lock();
+	return rc;
 }
 
 let uci_dir = getenv("UCI_CONFIG_DIR");
