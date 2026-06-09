@@ -28,6 +28,7 @@ RUN apt-get update \
         bash \
         tar \
         gzip \
+        git \
         netcat-openbsd \
  && rm -rf /var/lib/apt/lists/*
 
