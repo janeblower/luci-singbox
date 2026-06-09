@@ -85,4 +85,26 @@ grep -q 'dropping invalid port_range' "$TMPDIR/apply.err" \
 rm -f "$RS_DIR/rs_aps_oor.json"
 echo "  PASS: S1-1 apply-path out-of-range port_range dropped + logged"
 
+echo "-- S1-2 (apply path): invalid tproxy listen_port makes apply FAIL, not silently blackhole"
+cat >"$UCI/singbox-ui" <<'EOF'
+config dns_server fakeip
+	option type 'fakeip'
+	option enabled '1'
+	option inet4_range '198.18.0.0/15'
+config inbound tp
+	option protocol 'tproxy'
+	option enabled '1'
+	option nft_rules '1'
+	option listen_port '99999'
+	list interface 'br-lan'
+EOF
+if apply; then
+	echo "FAIL: S1-2 apply returned 0 on an invalid tproxy port (silent blackhole)"
+	cat "$TMPDIR/applied.nft" 2>/dev/null
+	exit 1
+fi
+grep -qi 'invalid listen_port\|tproxy' "$TMPDIR/apply.err" \
+	|| { echo "FAIL: S1-2 expected an error log about the bad tproxy port"; cat "$TMPDIR/apply.err"; exit 1; }
+echo "  PASS: S1-2 invalid tproxy port surfaces an error"
+
 echo "OK"

@@ -574,6 +574,15 @@ function cmd_apply(cur) {
 
 	let tp = first_nft_tproxy(cur);
 	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : "7893";
+	// S1-2: an invalid tproxy listen_port would make build_ruleset skip
+	// the tproxy block while still emitting the marking rules — packets
+	// get fwmarked but never redirected (silent blackhole). Surface it as
+	// an apply failure so the rpcd caller / operator sees it, instead of a
+	// 0 exit that looks like success.
+	if (validate_port(port) == null) {
+		log_err(sprintf("nftables: invalid tproxy listen_port %s (need int 1..65535); refusing to apply a marking-only ruleset", port));
+		return 1;
+	}
 	let ifaces = tp ? helpers.as_array(tp.interface) : [];
 	if (!length(ifaces)) ifaces = [ "br-lan" ];
 
