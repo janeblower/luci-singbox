@@ -157,6 +157,11 @@ function buildMonitoring() {
 		}).catch(showUnreachable);
 	}
 
+	// SPA navigation away from this view never calls stop() (main.js only
+	// stops on sub-tab clicks within the view), so the interval would poll
+	// forever (spec S2-2). The tick self-cancels once root leaves the DOM,
+	// and a pagehide listener covers full-page teardown.
+	function onPageHide() { stop(); }
 	function start() {
 		if (state.timer) return;
 		callDhcpLeases().then(function (r) {
@@ -167,10 +172,17 @@ function buildMonitoring() {
 		}).catch(function () {});
 		poll();
 		state.timer = setInterval(function () {
+			if (root.isConnected === false) { stop(); return; }
 			if (document.visibilityState === 'visible') poll();
 		}, 1500);
+		if (typeof window !== 'undefined' && window.addEventListener)
+			window.addEventListener('pagehide', onPageHide);
 	}
-	function stop() { if (state.timer) { clearInterval(state.timer); state.timer = null; } }
+	function stop() {
+		if (state.timer) { clearInterval(state.timer); state.timer = null; }
+		if (typeof window !== 'undefined' && window.removeEventListener)
+			window.removeEventListener('pagehide', onPageHide);
+	}
 
 	// `poll` is exported for the regression harness (tests/test_monitoring_js.sh);
 	// production callers use start()/stop().
