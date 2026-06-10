@@ -52,4 +52,23 @@ out=$(run_uc '
 [ "$out" = "same" ] || { echo "[$out]"; fail "S3-6: non-scheme b64 should pass through unchanged"; }
 pass "S3-6: non-scheme payload passes through"
 
+echo "-- S3-7: _set_io_for_test installs an injectable reader"
+out=$(run_uc '
+	let sub = require("subscription");
+	if (type(sub._set_io_for_test) !== "function") { print("no-setter\n"); exit(0); }
+	let seen = [];
+	sub._set_io_for_test(
+		function(specs) { push(seen, "download:" + length(specs)); return 0; },
+		function(path)  { push(seen, "read:" + path); return "vless://x@h:1\n"; }
+	);
+	// Exercise the seam: the injected reader returns our canned body.
+	print(sub._read_raw_for_test("/tmp/whatever") + "\n");
+	print(join(",", seen) + "\n");
+')
+echo "$out" | grep -q '^vless://x@h:1' \
+	|| { echo "[$out]"; fail "S3-7: injected reader not used"; }
+echo "$out" | grep -q 'read:/tmp/whatever' \
+	|| { echo "[$out]"; fail "S3-7: reader hook not invoked with path"; }
+pass "S3-7: injectable reader is wired through _set_io_for_test"
+
 echo "ALL PASS"
