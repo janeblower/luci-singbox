@@ -107,7 +107,7 @@ function _shareLinkImport(url) {
 
 	var match;
 	if (scheme === 'vless') {
-		match = url.match(/^vless:\/\/([^@]+)@([^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		match = url.match(/^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse vless URL')] };
 		var params = {};
 		if (match[4]) match[4].split('&').forEach(function(p) {
@@ -130,7 +130,7 @@ function _shareLinkImport(url) {
 		return { ok: true, fields: f };
 	}
 	if (scheme === 'trojan') {
-		match = url.match(/^trojan:\/\/([^@]+)@([^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		match = url.match(/^trojan:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse trojan URL')] };
 		return { ok: true, fields: {
 			type: 'trojan',
@@ -139,7 +139,7 @@ function _shareLinkImport(url) {
 		} };
 	}
 	if (scheme === 'hysteria2') {
-		match = url.match(/^(?:hysteria2|hy2):\/\/([^@]+)@([^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		match = url.match(/^(?:hysteria2|hy2):\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse hysteria2 URL')] };
 		var hparams = {};
 		if (match[4]) match[4].split('&').forEach(function(p) {
@@ -158,7 +158,7 @@ function _shareLinkImport(url) {
 		return { ok: true, fields: hf };
 	}
 	if (scheme === 'shadowsocks') {
-		match = url.match(/^ss:\/\/(?:([^@#]+)@)?([^:#]+):(\d+)(?:#(.*))?$/);
+		match = url.match(/^ss:\/\/(?:([^@#]+)@)?(\[[0-9a-fA-F:]+\]|[^:#]+):(\d+)(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse shadowsocks URL')] };
 		var userinfo = match[1] ? safeDecode(match[1]) : '';
 		var mp = userinfo.split(':');

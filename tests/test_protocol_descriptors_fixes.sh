@@ -132,4 +132,46 @@ out=$(je '
 [ "$out" = "0" ] || die "S4-9 rewrite_ttl=0 must stay 0" "$out"
 ok "S4-9 rewrite_ttl=0 stays 0"
 
+# ---- S4-7: IPv6-literal hosts must parse in share-links ----
+out=$(je '
+    let ob = require("outbound");
+    let r = ob.parse_proxy_url("vless://11111111-2222-3333-4444-555555555555@[2001:db8::1]:443?security=tls");
+    print(r != null ? r.server : "NULL");
+')
+[ "$out" = "[2001:db8::1]" ] || die "S4-7 vless IPv6 host must parse" "$out"
+ok "S4-7 vless IPv6 host parses"
+
+out=$(je '
+    let ob = require("outbound");
+    let r = ob.parse_proxy_url("trojan://pw@[2001:db8::2]:8443#x");
+    print(r != null ? r.server : "NULL");
+')
+[ "$out" = "[2001:db8::2]" ] || die "S4-7 trojan IPv6 host must parse" "$out"
+ok "S4-7 trojan IPv6 host parses"
+
+out=$(je '
+    let ob = require("outbound");
+    let r = ob.parse_proxy_url("hysteria2://pw@[2001:db8::3]:443");
+    print(r != null ? r.server : "NULL");
+')
+[ "$out" = "[2001:db8::3]" ] || die "S4-7 hy2 IPv6 host must parse" "$out"
+ok "S4-7 hy2 IPv6 host parses"
+
+out=$(je '
+    let ob = require("outbound");
+    let r = ob.parse_proxy_url("ss://aes-256-gcm:pw@[2001:db8::4]:8388#x");
+    print(r != null ? r.server : "NULL");
+')
+[ "$out" = "[2001:db8::4]" ] || die "S4-7 ss IPv6 host must parse" "$out"
+ok "S4-7 ss IPv6 host parses"
+
+# IPv4 share-links must still work (no regression).
+out=$(je '
+    let ob = require("outbound");
+    let r = ob.parse_proxy_url("trojan://pw@1.2.3.4:443#x");
+    print(r != null ? sprintf("%s:%d", r.server, r.server_port) : "NULL");
+')
+[ "$out" = "1.2.3.4:443" ] || die "S4-7 IPv4 trojan regression" "$out"
+ok "S4-7 IPv4 still parses"
+
 echo "ALL PASS: test_protocol_descriptors_fixes ($pass checks)"

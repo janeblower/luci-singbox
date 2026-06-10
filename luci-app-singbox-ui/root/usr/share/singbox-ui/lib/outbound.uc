@@ -109,7 +109,7 @@ function parse_query(query_string) {
 
 function parse_vless(url) {
 	// vless://uuid@host:port?params
-	let m = match(url, /^vless:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
+	let m = match(url, /^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?/);
 	if (!m) return null;
 	let uuid = url_decode(m[1]);
 	let host = safe_host(m[2]);
@@ -133,8 +133,8 @@ function parse_vless(url) {
 
 function parse_hy2(url) {
 	// hy2://password@host:port?params  (also hysteria2://)
-	let m = match(url, /^hy2:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/) ||
-	        match(url, /^hysteria2:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?/);
+	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?/) ||
+	        match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?/);
 	if (!m) return null;
 	let password = url_decode(m[1]);
 	let host = safe_host(m[2]);
@@ -191,7 +191,7 @@ function parse_ss(url) {
 		// Tail: host:port[?query]
 		let q = index(tail, "?");
 		let hp = q >= 0 ? substr(tail, 0, q) : tail;
-		let hpm = match(hp, /^([^:]+):([0-9]+)$/);
+		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)$/);
 		if (!hpm) return null;
 		host = hpm[1]; port = +hpm[2];
 
@@ -219,7 +219,7 @@ function parse_ss(url) {
 		let tail = substr(dec, dat + 1);
 		let q = index(tail, "?");
 		let hp = q >= 0 ? substr(tail, 0, q) : tail;
-		let hpm = match(hp, /^([^:]+):([0-9]+)$/);
+		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)$/);
 		if (!hpm) return null;
 		host = hpm[1]; port = +hpm[2];
 		let colon = index(userinfo, ":");
@@ -248,7 +248,7 @@ function parse_ss(url) {
 //   trojan://<password>@<host>:<port>[?sni=...&type=ws&path=...&allowInsecure=1][#name]
 // Returns a sing-box trojan outbound object, or null on parse failure.
 function parse_trojan(url) {
-	let m = match(url, /^trojan:\/\/([^@]+)@([^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let m = match(url, /^trojan:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let password = url_decode(m[1]);
 	let host = safe_host(m[2]);
