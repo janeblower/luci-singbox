@@ -52,7 +52,7 @@ run_h() { "$UCODE_BIN" $UCODE_LIB_FLAGS "$H" "$@"; }
 # je EXPR — read JSON from stdin, eval ucode boolean EXPR (parsed object bound
 # as `d`); exit 0 if truthy, 1 otherwise. Replaces `jq -e`.
 je() {
-	ucode -e '
+	"$UCODE_BIN" -e '
 		let fs = require("fs");
 		let raw = fs.stdin.read("all") || "";
 		let d;
@@ -61,9 +61,11 @@ je() {
 	'
 }
 # jval EXPR — print the value of ucode EXPR from stdin JSON (empty if null).
-# Replaces `jq -re`.
+# Replaces `jq -re`. Uses $UCODE_BIN (the absolute interpreter resolved
+# above) so PATH-stubbed `ucode` spies in individual tests can't intercept
+# the JSON assertion evaluator.
 jval() {
-	ucode -e '
+	"$UCODE_BIN" -e '
 		let fs = require("fs");
 		let d = json(fs.stdin.read("all") || "");
 		let v = ('"$1"');
