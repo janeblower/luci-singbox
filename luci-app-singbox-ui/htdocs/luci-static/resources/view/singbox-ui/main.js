@@ -19,6 +19,7 @@
 'require view.singbox-ui.widgets.action-bar as SbActionBar';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
 'require view.singbox-ui.lib.subscription_view as SbSubView';
+'require view.singbox-ui.lib.view_state as SbViewState';
 
 return view.extend({
 	load: function () {
@@ -30,14 +31,14 @@ return view.extend({
 			uci.load('singbox-ui'),
 			L.resolveDefault(callProtocolSchema(), null).then(function (r) {
 				if (r && r.status === 'ok') {
-					window.singboxUiSchemaCache = r.schema;
+					SbViewState.setSchema(r.schema);
 				} else {
 					L.ui.addNotification(null,
 						E('p', _('Failed to load protocol schema. Some forms may be incomplete; restart rpcd or reinstall package.')),
 						'warning');
 				}
 			}),
-			SbSubView.loadAllExpansions().then(function (cache) { window.singboxUiSubExpand = cache; }),
+			SbSubView.loadAllExpansions().then(function (cache) { SbViewState.setSubExpand(cache); }),
 		]);
 	},
 
@@ -131,7 +132,7 @@ return view.extend({
 					});
 				});
 				SbStatusPanel.renderStatusPanel(statusHolder);
-				SbSubView.injectChildRows(outboundsNode, window.singboxUiSubExpand || {});
+				SbSubView.injectChildRows(outboundsNode, SbViewState.getSubExpand());
 			});
 
 			return root;
