@@ -679,4 +679,28 @@ printf "%s\n" "$out" | je 'd.status == "ok"' \
 	|| { echo "FAIL: S1-3 allowlisted clash_mutate path regressed; out=$out"; exit 1; }
 echo "  PASS: S1-3 clash endpoint allowlist"
 
+echo "-- call protocol_schema dispatches and returns schema"
+out=$(echo '{}' | run_h call protocol_schema)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: protocol_schema not ok; out=$out"; exit 1; }
+printf "%s\n" "$out" | je 'd.schema != null' \
+	|| { echo "FAIL: protocol_schema missing schema; out=$out"; exit 1; }
+echo "  PASS: protocol_schema dispatches"
+
+echo "-- call subscription_expand dispatches + validates name"
+# Valid name reaches the module (require/expand may error in the test env, but
+# dispatch must NOT fall through to the generic 'unknown method' branch).
+out=$(echo '{"name":"mysub"}' | run_h call subscription_expand)
+printf "%s\n" "$out" | je 'd.status != null' \
+	|| { echo "FAIL: subscription_expand did not dispatch; out=$out"; exit 1; }
+printf "%s\n" "$out" | je 'index(d.message ?? "", "unknown method") < 0' \
+	|| { echo "FAIL: subscription_expand hit unknown-method branch; out=$out"; exit 1; }
+# Injection / traversal / empty names are rejected with error (valid_section_name).
+for bad in 'a; rm -rf /' 'a/../b' ''; do
+	out=$(printf '{"name":"%s"}' "$bad" | run_h call subscription_expand)
+	printf "%s\n" "$out" | je 'd.status == "error"' \
+		|| { echo "FAIL: subscription_expand should reject name=[$bad]; out=$out"; exit 1; }
+done
+echo "  PASS: subscription_expand dispatch + name validation"
+
 echo "OK"
