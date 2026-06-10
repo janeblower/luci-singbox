@@ -34,9 +34,12 @@ reg.register({
 		};
 		let users = [];
 		for (let u in as_array(s.mixed_user)) {
-			let parts = split(u, ":");
-			if (length(parts) >= 2)
-				push(users, { username: parts[0], password: parts[1] });
+			let c = index(u, ":");
+			if (c >= 0) {
+				let nm = substr(u, 0, c);
+				let pw = substr(u, c + 1);
+				if (length(nm)) push(users, { username: nm, password: pw });
+			}
 		}
 		if (length(users)) out.users = users;
 		return out;

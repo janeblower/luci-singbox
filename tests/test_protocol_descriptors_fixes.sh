@@ -174,4 +174,40 @@ out=$(je '
 [ "$out" = "1.2.3.4:443" ] || die "S4-7 IPv4 trojan regression" "$out"
 ok "S4-7 IPv4 still parses"
 
+# ---- S4-8: colon-bearing secrets survive name:secret splitting ----
+# hysteria2 inbound multi-user: password contains a colon.
+out=$(je '
+    let inb = require("inbound");
+    let s = { ".name":"h", "protocol":"hysteria2", "listen_port":"443",
+              "inbound_user":["alice:pa:ss:word"],
+              "tls_server_name":"h.b","tls_certificate_path":"/c","tls_key_path":"/k" };
+    let r = inb.build_one(s);
+    print(sprintf("%s|%s", r.users[0].name, r.users[0].password));
+')
+[ "$out" = "alice|pa:ss:word" ] || die "S4-8 hy2 colon password truncated" "$out"
+ok "S4-8 hy2 colon password kept"
+
+# mixed inbound: password contains a colon.
+out=$(je '
+    let inb = require("inbound");
+    let s = { ".name":"m", "protocol":"mixed", "listen_port":"1080",
+              "mixed_user":["bob:p:a:ss"] };
+    let r = inb.build_one(s);
+    print(sprintf("%s|%s", r.users[0].username, r.users[0].password));
+')
+[ "$out" = "bob|p:a:ss" ] || die "S4-8 mixed colon password truncated" "$out"
+ok "S4-8 mixed colon password kept"
+
+# shadowsocks inbound: password (tail) contains a colon.
+out=$(je '
+    let inb = require("inbound");
+    let s = { ".name":"ss", "protocol":"shadowsocks", "listen_port":"8388",
+              "shadowsocks_method":"aes-128-gcm",
+              "ss_user":["carol:aes-128-gcm:p:a:ss"] };
+    let r = inb.build_one(s);
+    print(sprintf("%s|%s|%s", r.users[0].name, r.users[0].method, r.users[0].password));
+')
+[ "$out" = "carol|aes-128-gcm|p:a:ss" ] || die "S4-8 ss colon password truncated" "$out"
+ok "S4-8 ss colon password kept"
+
 echo "ALL PASS: test_protocol_descriptors_fixes ($pass checks)"

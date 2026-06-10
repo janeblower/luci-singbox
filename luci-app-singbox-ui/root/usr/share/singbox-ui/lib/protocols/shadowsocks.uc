@@ -101,9 +101,15 @@ reg.register({
         if (length(s_opt(s, "network"))) out.network = s.network;
         let users = [];
         for (let u in as_array(s.ss_user)) {
-            let parts = split(u, ":");
-            if (length(parts) >= 3)
-                push(users, { name: parts[0], method: parts[1], password: parts[2] });
+            let c1 = index(u, ":");
+            if (c1 < 0) continue;
+            let rest = substr(u, c1 + 1);
+            let c2 = index(rest, ":");
+            if (c2 < 0) continue;
+            let nm = substr(u, 0, c1);
+            let meth = substr(rest, 0, c2);
+            let pw = substr(rest, c2 + 1);
+            if (length(nm)) push(users, { name: nm, method: meth, password: pw });
         }
         if (length(users)) {
             out.users = users;
