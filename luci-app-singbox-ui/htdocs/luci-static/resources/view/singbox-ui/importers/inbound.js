@@ -125,8 +125,8 @@ function jsonImportInbound(o) {
 	SbTransport.parseTransport(o, f);
 	if (o.type === 'hysteria2') {
 		if (o.obfs && o.obfs.type) {
-			f.hysteria2_obfs_type     = o.obfs.type;
-			f.hysteria2_obfs_password = o.obfs.password || '';
+			f.obfs_type     = o.obfs.type;
+			f.obfs_password = o.obfs.password || '';
 		}
 		if (o.up_mbps   != null) f.up_mbps   = String(o.up_mbps);
 		if (o.down_mbps != null) f.down_mbps = String(o.down_mbps);
