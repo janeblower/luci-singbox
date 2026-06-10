@@ -540,4 +540,28 @@ out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 ')
 [ "$out" = "all-covered" ] && pass "all active proxy kinds present" || { echo "FAIL"; exit 1; }
 
+# ---- S3-1: subscription output is written atomically (tmp + rename) ----
+# A successful fetch must leave exactly sub_<name>.txt and NO leftover
+# *.tmp.* sibling (proves we wrote a tmp then renamed, never partial).
+echo "-- S3-1: fetch-subs writes output atomically, no tmp leftovers"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subA'
+	option type 'subscription'
+	option sub_url 'https://example.test/sub'
+EOF
+printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"   # b64("vless://uuid@host:443\n")
+export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+rm -f "$SINGBOX_TMPDIR"/sub_subA.txt "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.* 2>/dev/null || true
+run_uc fetch-subs
+[ -s "$SINGBOX_TMPDIR/sub_subA.txt" ] || fail "S3-1: sub_subA.txt missing"
+leftovers=$(ls "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.* 2>/dev/null | wc -l)
+[ "$leftovers" -eq 0 ] || { ls "$SINGBOX_TMPDIR"; fail "S3-1: tmp file left behind ($leftovers)"; }
+pass "S3-1: atomic write leaves no tmp file"
+
+# Structural: production must route the subs output through a tmp+rename
+# helper (fs.rename), not a bare fs.open(out_path,"w") write loop.
+grep -qE 'fs\.rename\(' "$SUB_UC" \
+	|| fail "S3-1: subscription.uc has no fs.rename (atomic write helper missing)"
+pass "S3-1: subscription.uc uses fs.rename for atomic publish"
+
 echo "OK"
