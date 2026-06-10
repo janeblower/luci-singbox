@@ -27,7 +27,13 @@ mkdir -p "$SINGBOX_TMPDIR"
 # Fake curl: writes the contents of $FAKE_CURL_BODY_FILE to the -o argument,
 # and records its full argv to $FAKE_CURL_LOG for assertions.
 mkdir -p "$TMPDIR/bin"
-cat >"$TMPDIR/bin/curl" <<'EOF'
+
+# setup_curl_stub_basic — (re)install the default fake curl: copies
+# $FAKE_CURL_BODY_FILE to the -o target and logs argv to $FAKE_CURL_LOG.
+# Called once up front; later tests that restore the default after a
+# timing/failure-specific curl call it again instead of repeating the heredoc.
+setup_curl_stub_basic() {
+	cat >"$TMPDIR/bin/curl" <<'EOF'
 #!/bin/sh
 echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
 out=""
@@ -40,7 +46,9 @@ done
 [ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
 exit 0
 EOF
-chmod +x "$TMPDIR/bin/curl"
+	chmod +x "$TMPDIR/bin/curl"
+}
+setup_curl_stub_basic
 export PATH="$TMPDIR/bin:$PATH"
 export FAKE_CURL_LOG="$TMPDIR/curl.log"
 
@@ -171,20 +179,7 @@ elapsed=$((end - start))
 pass "two curls run in parallel (${elapsed}s)"
 
 # Restore the simple stub for following tests.
-cat >"$TMPDIR/bin/curl" <<'EOF'
-#!/bin/sh
-echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -o) out="$2"; shift 2 ;;
-        *)  shift ;;
-    esac
-done
-[ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
-exit 0
-EOF
-chmod +x "$TMPDIR/bin/curl"
+setup_curl_stub_basic
 
 # ---- failed curl preserves existing sub_*.txt ----
 echo "-- failed curl does not clobber existing sub_<name>.txt"
@@ -207,20 +202,7 @@ grep -q '^vless://kept@host:1' "$SINGBOX_TMPDIR/sub_subA.txt" \
     || fail "cached sub_subA.txt was clobbered by failed curl"
 pass "cache preserved on curl failure"
 # Restore curl stub.
-cat >"$TMPDIR/bin/curl" <<'EOF'
-#!/bin/sh
-echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -o) out="$2"; shift 2 ;;
-        *)  shift ;;
-    esac
-done
-[ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
-exit 0
-EOF
-chmod +x "$TMPDIR/bin/curl"
+setup_curl_stub_basic
 
 # ---- refresh: no-op when fresh, runs when stale, runs with force ----
 echo "-- refresh respects mtime"
