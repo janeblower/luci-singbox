@@ -70,5 +70,21 @@ r = mod.shareLinkImport('ss://aes-128-gcm:mypass@ss2.example:8388#ss2');
 assert('ss plain method', r.fields.shadowsocks_method === 'aes-128-gcm');
 assert('ss plain password', r.fields.server_password === 'mypass');
 
+// Test 6: malformed %-encoding must NOT throw — importer returns a clean result
+// (spec S2-10). decodeURIComponent('%zz') throws URIError otherwise.
+let threw6 = false;
+try {
+    r = mod.shareLinkImport('vless://uuid@example.com:443?path=%zz#%E0%A4%A');
+} catch (e) { threw6 = true; }
+assert('malformed % does not throw', threw6 === false);
+assert('malformed % still parses core fields', r && r.ok && r.fields.server === 'example.com');
+
+// Test 7: a totally broken %-only userinfo is tolerated, not a crash.
+threw6 = false;
+try { r = mod.shareLinkImport('trojan://%@trojan.example:443#x'); }
+catch (e) { threw6 = true; }
+assert('malformed trojan userinfo does not throw', threw6 === false);
+assert('malformed trojan userinfo yields a result object', r && typeof r.ok === 'boolean');
+
 console.log('ALL PASS: test_share_link_js');
 "
