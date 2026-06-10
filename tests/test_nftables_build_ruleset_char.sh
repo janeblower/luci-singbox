@@ -109,10 +109,15 @@ check m_port_empty_skip    ""   "198.18.0.0/15" "fc00::/18" "br-lan"
 # values make any such swap diverge from the golden.
 check m_mark_ne_mask_rout  7895 "198.18.0.0/15" "fc00::/18" "br-lan" 0x40 0xc0 1
 
-# rs_* set with a tcp port range — exercises emit_named_sets' rule-set loop and
-# the rs_* decision rules in both prerouting and (when router_out=1) output.
+# rs_* set — exercises emit_named_sets' rule-set loop and the rs_* decision
+# rules in both prerouting and (when router_out=1) output. NOTE: no port_range
+# token here on purpose — the pinned baseline fixture (849e2b9) predates the
+# safe_port_range forward-reference fix and would crash in load_rs_rules on a
+# port_range, producing a spurious diff. The build_ruleset split (this test's
+# subject) is independent of port_range; the port_range emit path is covered by
+# test_nftables_apply_security.sh (S1-1).
 cat >"$RS/rs_char_set.json" <<'JSON'
-{ "rules": [ { "ip_cidr": ["1.2.3.0/24","fe80::/10"], "network":"tcp", "port_range":"80:443" } ] }
+{ "rules": [ { "ip_cidr": ["1.2.3.0/24","fe80::/10"], "network":"tcp" } ] }
 JSON
 check m_with_ruleset       7893 "198.18.0.0/15" "fc00::/18" "br-lan"
 check m_with_ruleset_rout  7893 "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1 1
