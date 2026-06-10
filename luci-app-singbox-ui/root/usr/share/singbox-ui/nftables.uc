@@ -205,27 +205,24 @@ function port_expr(network, ports) {
 	return ` ${kw} dport ${body}`;
 }
 
-// emit_set(set_name, family, cidrs) → string with the nft set definition.
-function emit_set(set_name, family, cidrs) {
-	let typ = (family === "v6") ? "ipv6_addr" : "ipv4_addr";
-	let body = join(", ", cidrs);
-	let lines = [
-		`\tset ${set_name} {\n`,
-		`\t\ttype ${typ}\n`,
-		`\t\tflags interval\n`,
-		`\t\telements = { ${body} }\n`,
-		`\t}\n\n`,
-	];
-	return join("", lines);
-}
-
 // emit_named_set(name, type_, body, with_interval) — write a named set
-// declaration. Used by wan_ifaces, fakeip4, fakeip6, and rs_* paths.
+// declaration. Used by wan_ifaces, fakeip4, fakeip6, rs_* paths and emit_set.
 function emit_named_set(name, type_, body, with_interval) {
 	let lines = [`\tset ${name} {\n`, `\t\ttype ${type_}\n`];
 	if (with_interval) push(lines, "\t\tflags interval\n");
 	push(lines, `\t\telements = { ${body} }\n`, "\t}\n\n");
 	return join("", lines);
+}
+
+// emit_set(set_name, family, cidrs) → nft set definition for a cidr set.
+// Thin wrapper over emit_named_set (flags interval always on for cidr sets);
+// both call sites pass literal "v4"/"v6", so the family→type ternary is exact.
+// MUST be defined AFTER emit_named_set: ucode compiles a reference to a
+// top-level function declared later as a (missing) global, so the callee must
+// precede the caller in the file.
+function emit_set(set_name, family, cidrs) {
+	return emit_named_set(set_name, (family === "v6") ? "ipv6_addr" : "ipv4_addr",
+	                      join(", ", cidrs), true);
 }
 
 // emit_rs_decision(name, idx, family, l4, port_e, mark) — single
