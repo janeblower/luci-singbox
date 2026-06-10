@@ -8,7 +8,7 @@ var callDhcpLeases  = SbRpc.callDhcpLeases;
 
 function buildMonitoring() {
 	var state = {
-		timer: null, prevConns: {}, closed: [], leases: {},
+		timer: null, searchTimer: null, prevConns: {}, closed: [], leases: {},
 		filterDevice: 'all', search: '', tab: 'active',
 		lastDown: null, lastUp: null
 	};
@@ -16,12 +16,13 @@ function buildMonitoring() {
 
 	// Per-keystroke repaint stalls the whole connection table on big lists
 	// (spec C2.2.11). Buffer search input for 200 ms so the user can type
-	// before the filter re-runs.
-	var searchTimer = null;
+	// before the filter re-runs. searchTimer lives on `state` so stop() can
+	// clear a pending debounce on teardown (spec S2-3) — otherwise the queued
+	// repaint fires against a detached DOM.
 	function debouncedSearch(value, cb) {
-		if (searchTimer) clearTimeout(searchTimer);
-		searchTimer = setTimeout(function () {
-			searchTimer = null;
+		if (state.searchTimer) clearTimeout(state.searchTimer);
+		state.searchTimer = setTimeout(function () {
+			state.searchTimer = null;
 			cb(value);
 		}, 200);
 	}
@@ -180,13 +181,14 @@ function buildMonitoring() {
 	}
 	function stop() {
 		if (state.timer) { clearInterval(state.timer); state.timer = null; }
+		if (state.searchTimer) { clearTimeout(state.searchTimer); state.searchTimer = null; }
 		if (typeof window !== 'undefined' && window.removeEventListener)
 			window.removeEventListener('pagehide', onPageHide);
 	}
 
-	// `poll` is exported for the regression harness (tests/test_monitoring_js.sh);
-	// production callers use start()/stop().
-	return { node: root, start: start, stop: stop, poll: poll };
+	// `poll`/`debouncedSearch` are exported for the regression harness
+	// (tests/test_monitoring_js.sh); production callers use start()/stop().
+	return { node: root, start: start, stop: stop, poll: poll, debouncedSearch: debouncedSearch };
 }
 
 return L.Class.extend({ buildMonitoring: buildMonitoring });
