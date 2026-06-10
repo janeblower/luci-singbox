@@ -159,6 +159,19 @@ function ok(label, cond) {
   ok('stop() cleared the debounce timer (S2-3)',
      Object.keys(ctx.__test.timeouts).length === 0);
 
+  // --- S2-4: repaint preserves the search-input element across polls -------
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: [], downloadTotal: 0, uploadTotal: 0 }) }));
+  const m4 = Mon.buildMonitoring();
+  const isSearch = (n) => n.tag === 'input' && n.attrs && n.attrs.type === 'search';
+  await m4.poll();
+  const search1 = ctx.__test.find(m4.node, isSearch);
+  await m4.poll();
+  const search2 = ctx.__test.find(m4.node, isSearch);
+  ok('search input is rendered (S2-4)', !!search1);
+  ok('search input survives repaint — same node object (S2-4)',
+     search1 && search1 === search2);
+
   if (failures) { console.error('test_monitoring_js: ' + failures + ' failure(s)'); process.exit(1); }
   console.log('OK');
 })().catch((e) => { console.error('harness error', e); process.exit(1); });
