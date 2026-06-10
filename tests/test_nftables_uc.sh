@@ -48,7 +48,7 @@ cat >/tmp/singbox-ui/rs_uctest_scalar.json <<'JSON'
 JSON
 out=$(emit)
 echo "$out" | grep -q "set rs_uctest_scalar_0_v4" || fail "scalar: set missing"
-echo "$out" | grep -q "elements = { 104.16.0.0/12 }" || fail "scalar: element body wrong"
+echo "$out" | grep -Eq "elements = \{ 104\.16\.0\.0/12 \}" || fail "scalar: element body wrong"
 echo "$out" | grep -q "ip daddr @rs_uctest_scalar_0_v4 meta l4proto { tcp, udp } ct state new ct mark set ct mark or 0x1" \
 	|| fail "scalar: marking rule wrong"
 rm /tmp/singbox-ui/rs_uctest_scalar.json
@@ -62,7 +62,7 @@ JSON
 out=$(emit)
 echo "$out" | grep -q "set rs_uctest_mixed_0_v4" || fail "mixed: v4 set missing"
 echo "$out" | grep -q "set rs_uctest_mixed_0_v6" || fail "mixed: v6 set missing"
-echo "$out" | grep -q "elements = { 1.2.3.0/24,4.5.0.0/16 }" || fail "mixed: v4 elements wrong"
+echo "$out" | grep -Eq "elements = \{ 1\.2\.3\.0/24, ?4\.5\.0\.0/16 \}" || fail "mixed: v4 elements wrong"
 echo "$out" | grep -q "elements = { fe80::/10 }" || fail "mixed: v6 elements wrong"
 echo "$out" | grep -q "ip6 daddr @rs_uctest_mixed_0_v6" || fail "mixed: v6 rule missing"
 rm /tmp/singbox-ui/rs_uctest_mixed.json
@@ -256,7 +256,7 @@ cat >/tmp/singbox-ui/rs_uctest_g2clean.json <<'JSON'
 { "rules": [ { "ip_cidr": ["1.1.1.0/24", "8.8.8.8/32"] } ] }
 JSON
 out=$(emit)
-echo "$out" | grep -q "elements = { 1.1.1.0/24,8.8.8.8/32 }" \
+echo "$out" | grep -Eq "elements = \{ 1\.1\.1\.0/24, ?8\.8\.8\.8/32 \}" \
     || { echo "FAIL: G2 clean elements broken"; echo "$out"; exit 1; }
 rm /tmp/singbox-ui/rs_uctest_g2clean.json
 pass "G2: clean ip_cidr preserved"
@@ -384,5 +384,34 @@ PATH="$STUB:$PATH" UCI_CONFIG_DIR="$UCI_TEST" \
 	| grep -v 'No such file' >/dev/null || true
 rm -rf "$UCI_TEST" "$STUB"
 echo "ok"
+
+# ---- G2b (S1-1): rs_*.json port_range injection ----
+echo "-- S1-1: malicious port_range in rs_*.json is dropped, not injected"
+cat >/tmp/singbox-ui/rs_uctest_s11.json <<'JSON'
+{ "rules": [ { "ip_cidr": "10.0.0.0/8", "network": "tcp", "port_range": "80 }; insert rule inet filter forward drop; #" } ] }
+JSON
+out=$(emit)
+echo "$out" | grep -q 'insert rule' \
+    && { echo "FAIL: S1-1 nft injection via port_range"; echo "$out"; exit 1; }
+echo "$out" | grep -F '}; insert' >/dev/null \
+    && { echo "FAIL: S1-1 poisoned dport clause"; echo "$out"; exit 1; }
+# The set itself must still be emitted (only the bad port is dropped), and the
+# decision rule must carry NO dport clause (port dropped → bare l4proto match).
+echo "$out" | grep -q 'set rs_uctest_s11_0_v4' \
+    || { echo "FAIL: S1-1 dropped the whole rule instead of just the port"; echo "$out"; exit 1; }
+echo "$out" | grep 'daddr @rs_uctest_s11_0_v4' | grep -q 'dport' \
+    && { echo "FAIL: S1-1 emitted a dport clause from a rejected port_range"; echo "$out"; exit 1; }
+rm /tmp/singbox-ui/rs_uctest_s11.json
+pass "S1-1: malicious port_range rejected"
+
+echo "-- S1-1: clean port_range still emits the dport clause"
+cat >/tmp/singbox-ui/rs_uctest_s11ok.json <<'JSON'
+{ "rules": [ { "ip_cidr": "10.0.0.0/8", "network": "tcp", "port_range": "80:443" } ] }
+JSON
+out=$(emit)
+echo "$out" | grep -q 'tcp dport 80-443' \
+    || { echo "FAIL: S1-1 clean port_range dropped"; echo "$out"; exit 1; }
+rm /tmp/singbox-ui/rs_uctest_s11ok.json
+pass "S1-1: clean port_range preserved"
 
 echo "OK"

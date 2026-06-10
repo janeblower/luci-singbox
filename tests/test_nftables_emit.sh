@@ -56,9 +56,11 @@ echo "$out" | grep -q 'meta mark and 0x1 == 0x1' || { echo "FAIL: not AND-mask";
 echo "$out" | grep 'tproxy' | grep -q '^.*meta mark 0x1 meta l4proto' && { echo "FAIL: exact equality still present"; exit 1; }
 :
 
-echo "-- emit: tproxy targets present for tcp+udp, v4+v6, on the configured port"
-echo "$out" | grep -q 'tproxy ip  to 127.0.0.1:7895' || { echo FAIL v4; exit 1; }
-echo "$out" | grep -q 'tproxy ip6 to \[::1\]:7895' || { echo FAIL v6; exit 1; }
+echo "-- emit: tproxy targets present for tcp+udp, v4+v6, on the configured port (whitespace-agnostic)"
+norm=$(echo "$out" | tr -s ' ')
+echo "$norm" | grep -q 'tproxy ip to 127.0.0.1:7895'  || { echo FAIL v4; echo "$norm" | grep tproxy; exit 1; }
+echo "$norm" | grep -q 'tproxy ip6 to \[::1\]:7895'   || { echo FAIL v6; echo "$norm" | grep tproxy; exit 1; }
+# Still exactly four tproxy rules (tcp+udp × v4+v6); count is semantic, not cosmetic.
 n=$(echo "$out" | grep -c 'tproxy ip')
 [ "$n" -eq 4 ] || { echo "FAIL: expected 4 tproxy rules, got $n"; exit 1; }
 
@@ -169,7 +171,7 @@ JSON
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
 echo "$out" | grep -q "set rs_test_scalar_0_v4" \
 	|| { echo "FAIL: scalar ip_cidr — set not emitted"; echo "$out"; exit 1; }
-echo "$out" | grep -q "elements = { 104.16.0.0/12 }" \
+echo "$out" | grep -Eq "elements = \{ 104\.16\.0\.0/12 \}" \
 	|| { echo "FAIL: scalar ip_cidr — element body wrong"; echo "$out"; exit 1; }
 echo "$out" | grep -q "ip daddr @rs_test_scalar_0_v4 meta l4proto udp udp dport 19000-20000 ct state new ct mark set ct mark or 0x1" \
 	|| { echo "FAIL: scalar port_range — marking rule wrong"; echo "$out"; exit 1; }

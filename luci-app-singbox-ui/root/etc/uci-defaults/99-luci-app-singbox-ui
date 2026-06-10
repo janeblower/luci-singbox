@@ -370,7 +370,8 @@ migrate_outbound_type
 migrate_rename_e2_keys() {
 	local sid
 
-	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=(inbound|outbound)$/ {print $2}'); do
+	for sid in $(uci -q show singbox-ui 2>/dev/null \
+		| sed -n 's/^singbox-ui\.\([^.]*\)=inbound$/\1/p; s/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
 
 		# transport → transport_type
 		local tv
@@ -435,7 +436,8 @@ migrate_drop_removed_protocols() {
 	local sid val
 	local dropped=0
 
-	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=inbound$/ {print $2}'); do
+	for sid in $(uci -q show singbox-ui 2>/dev/null \
+		| sed -n 's/^singbox-ui\.\([^.]*\)=inbound$/\1/p'); do
 		val=$(uci -q get "singbox-ui.$sid.protocol" 2>/dev/null || true)
 		case "$val" in
 			tun|vmess)
@@ -445,7 +447,8 @@ migrate_drop_removed_protocols() {
 		esac
 	done
 
-	for sid in $(uci -q show singbox-ui | awk -F'[.=]' '/=outbound$/ {print $2}'); do
+	for sid in $(uci -q show singbox-ui 2>/dev/null \
+		| sed -n 's/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
 		val=$(uci -q get "singbox-ui.$sid.type" 2>/dev/null || true)
 		case "$val" in
 			vmess|tuic|anytls|ssh|interface)
