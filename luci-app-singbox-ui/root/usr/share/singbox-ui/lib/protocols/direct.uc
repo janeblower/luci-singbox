@@ -20,7 +20,7 @@ reg.register({
 		  placeholder: "127.0.0.1", advanced: true },
 		{ name: "override_port", type: "number", tab: "basic",
 		  ui_label: "Override destination port", advanced: true },
-		{ name: "proxy_protocol", type: "number", tab: "basic",
+		{ name: "proxy_protocol", type: "enum", tab: "basic",
 		  ui_label: "Proxy protocol version",
 		  values: ["", "1", "2"], advanced: true },
 	],

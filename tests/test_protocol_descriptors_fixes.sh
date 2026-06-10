@@ -62,4 +62,38 @@ out=$(je '
 [ "$out" = "NO_OBFS" ] || die "S4-1 share-link obfs without password must drop obfs{}" "$out"
 ok "S4-1 share-link: obfs without obfs-password drops obfs{}"
 
+# ---- S4-6: direct proxy_protocol — "0" must not emit proxy_protocol:0 ----
+# With an enum constrained to ""/"1"/"2", a stray "0" still must not surface
+# an invalid 0. We assert that a chosen "1"/"2" emits, and "" emits nothing.
+out=$(je '
+    let ob = require("outbound");
+    let s = { ".name":"d", "proxy_protocol":"2" };
+    let r = ob.build_constructor_for(s, "direct");
+    print(r.proxy_protocol == 2 ? "EMIT2" : "BAD");
+')
+[ "$out" = "EMIT2" ] || die "S4-6 proxy_protocol=2 must emit 2" "$out"
+ok "S4-6 proxy_protocol=2 emits 2"
+
+out=$(je '
+    let ob = require("outbound");
+    let s = { ".name":"d", "proxy_protocol":"" };
+    let r = ob.build_constructor_for(s, "direct");
+    print(r.proxy_protocol != null ? "BAD" : "ABSENT");
+')
+[ "$out" = "ABSENT" ] || die "S4-6 empty proxy_protocol must not emit" "$out"
+ok "S4-6 empty proxy_protocol absent"
+
+# The descriptor field must declare type=enum (so the S4-5 check passes and
+# the UI renders a dropdown rather than a free number input).
+out=$(je '
+    require("outbound");
+    let reg = require("protocols.registry");
+    let d = reg.get("outbound","direct");
+    let t = "";
+    for (let f in d.fields) if (f.name == "proxy_protocol") t = f.type;
+    print(t);
+')
+[ "$out" = "enum" ] || die "S4-6 proxy_protocol field must be type=enum" "$out"
+ok "S4-6 proxy_protocol declared enum"
+
 echo "ALL PASS: test_protocol_descriptors_fixes ($pass checks)"
