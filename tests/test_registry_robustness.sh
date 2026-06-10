@@ -51,4 +51,41 @@ out=$(je '
 [ "$out" = "THREW" ] || die "S4-3 register() must still throw on malformed descriptor" "$out"
 ok "S4-3 register() still strict"
 
+# ---- S4-4: a broken shared module surfaces a warn() on stderr ----
+# Create a throwaway lib tree with a syntactically broken _shared module and a
+# descriptor that references it, then materialize and capture stderr.
+S44_DIR=$(mktemp -d)
+trap 'rm -rf "$S44_DIR"' EXIT
+mkdir -p "$S44_DIR/protocols/_shared"
+# Copy the registry + helpers so require() resolves inside the throwaway tree.
+cp "$UCODE_LIB_DIR/protocols/registry.uc" "$S44_DIR/protocols/registry.uc"
+cp "$UCODE_LIB_DIR/helpers.uc" "$S44_DIR/helpers.uc"
+# A shared module that throws on load (references an undefined symbol).
+printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/protocols/_shared/boom.uc"
+# Teach the registry's KNOWN_SHARED about "boom" is not needed: _shared_fields
+# only loads modules named in d.shared, and validate_shared would reject an
+# unknown key. So we register with a KNOWN key whose module we shadow: shadow
+# multiplex.uc with a broken file.
+printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/protocols/_shared/multiplex.uc"
+rm -f "$S44_DIR/protocols/_shared/boom.uc"
+s44=$("$UCODE_BIN" -L "$S44_DIR" -e '
+    let reg = require("protocols.registry");
+    reg.register({
+        kind: "outbound", type: "s44", sing_box_type: "x",
+        shared: { multiplex: {} },
+        fields: [ { name: "f", type: "string", tab: "basic" } ],
+        emit: function(s) { return {}; },
+    });
+    reg.materialize("outbound", "s44");
+    print("DONE");
+' 2>&1)
+case "$s44" in
+    *"DONE"*) : ;;   # materialize must still complete (returns null module -> skip block)
+    *) die "S4-4 materialize crashed instead of skipping broken shared module" "$s44" ;;
+esac
+case "$s44" in
+    *registry:*shared*|*multiplex*|*"shared module"*) ok "S4-4 broken shared module warns" ;;
+    *) die "S4-4 broken shared module produced no warning" "$s44" ;;
+esac
+
 echo "ALL PASS: test_registry_robustness ($pass checks)"
