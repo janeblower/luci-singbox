@@ -145,8 +145,8 @@ function parse_hy2(url) {
 		type: "hysteria2", server: host, server_port: port, password: password,
 		tls: { enabled: true, server_name: params["sni"] ?? host },
 	};
-	if (params["obfs"] === "salamander")
-		out.obfs = { type: "salamander", password: params["obfs-password"] ?? "" };
+	if (params["obfs"] === "salamander" && length(params["obfs-password"]))
+		out.obfs = { type: "salamander", password: params["obfs-password"] };
 	return out;
 }
 

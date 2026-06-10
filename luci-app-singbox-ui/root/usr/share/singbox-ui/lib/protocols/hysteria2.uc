@@ -49,10 +49,10 @@ reg.register({
             server_port: s_num(s.server_port),
             password: s_opt(s, "server_password"),
         };
-        if (length(s_opt(s, "obfs_type"))) {
+        if (length(s_opt(s, "obfs_type")) && length(s_opt(s, "obfs_password"))) {
             out.obfs = {
                 type: s.obfs_type,
-                password: s_opt(s, "obfs_password") || "",
+                password: s.obfs_password,
             };
         }
         if (length(s_opt(s, "up_mbps")))   out.up_mbps   = s_num(s.up_mbps);
@@ -130,8 +130,8 @@ reg.register({
         } else if (length(s_opt(s, "server_password"))) {
             out.users = [ { name: s[".name"], password: s.server_password } ];
         }
-        if (length(s_opt(s, "obfs_type")))
-            out.obfs = { type: s.obfs_type, password: s_opt(s, "obfs_password") || "" };
+        if (length(s_opt(s, "obfs_type")) && length(s_opt(s, "obfs_password")))
+            out.obfs = { type: s.obfs_type, password: s.obfs_password };
         if (length(s_opt(s, "up_mbps")))   out.up_mbps   = s_num(s.up_mbps);
         if (length(s_opt(s, "down_mbps"))) out.down_mbps = s_num(s.down_mbps);
         if (length(s_opt(s, "masquerade")))
