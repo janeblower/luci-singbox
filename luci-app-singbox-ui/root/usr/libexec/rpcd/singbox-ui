@@ -14,6 +14,7 @@
 // Env overrides (used by tests):
 //   NFTABLES_CMD GENERATE_UC SINGBOX_INIT SUBSCRIPTION_UC SINGBOX_TMP SINGBOX_CONFIG
 //   EXPORT_SECTION_UC CLASH_CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
+//   SINGBOX_VARLIB
 
 'use strict';
 
@@ -28,6 +29,7 @@ const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
 const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 const CLASH_CURL   = getenv("CLASH_CURL")   || "curl";
+const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }
@@ -215,13 +217,13 @@ function call_status_detail() {
 
 	let last_state = {};
 	try {
-		let f = fs.open("/var/lib/singbox-ui/last_state.json", "r");
+		let f = fs.open(`${VARLIB}/last_state.json`, "r");
 		if (f) { last_state = json(f.read("all") || "{}") || {}; f.close(); }
 	} catch (_) {}
 
 	let svc_state = {};
 	try {
-		let f = fs.open("/var/lib/singbox-ui/service_state.json", "r");
+		let f = fs.open(`${VARLIB}/service_state.json`, "r");
 		if (f) { svc_state = json(f.read("all") || "{}") || {}; f.close(); }
 	} catch (_) {}
 
@@ -231,13 +233,32 @@ function call_status_detail() {
 		schema = +trim(s) || 0;
 	} catch (_) {}
 
+	// package_version is constant for the install. rpcd launches a fresh
+	// handler process per ubus call, so an in-memory cache wouldn't survive;
+	// cache on disk under VARLIB and fork `opkg list-installed` only when
+	// the cache file is absent. (spec S5-PERF)
 	let pkg_ver = "unknown";
+	let pkg_cache = `${VARLIB}/pkg_version`;
 	try {
-		let line = trim(run_capture(["opkg", "list-installed", "luci-app-singbox-ui"]) ?? "");
-		// format: "luci-app-singbox-ui - 0.2.0-1"
-		let parts = split(line, " - ");
-		if (length(parts) >= 2) pkg_ver = parts[1];
+		let f = fs.open(pkg_cache, "r");
+		if (f) { pkg_ver = trim(f.read("all") || "") || "unknown"; f.close(); }
 	} catch (_) {}
+	if (pkg_ver === "unknown" || !length(pkg_ver)) {
+		try {
+			let line = trim(run_capture(["opkg", "list-installed", "luci-app-singbox-ui"]) ?? "");
+			// format: "luci-app-singbox-ui - 0.2.0-1"
+			let parts = split(line, " - ");
+			if (length(parts) >= 2) pkg_ver = parts[1];
+		} catch (_) {}
+		// Best-effort persist for the next call. Create VARLIB if needed.
+		if (pkg_ver !== "unknown" && length(pkg_ver)) {
+			try {
+				system("mkdir -p " + sq(VARLIB) + " >/dev/null 2>&1");
+				let w = fs.open(pkg_cache, "w");
+				if (w) { w.write(pkg_ver); w.close(); }
+			} catch (_) {}
+		}
+	}
 
 	emit({
 		status: "ok",

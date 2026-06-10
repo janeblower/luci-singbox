@@ -61,6 +61,13 @@ start_service() {
 	# C3.3: record service-start timestamp for status_detail RPC.
 	mkdir -p /var/lib/singbox-ui
 	echo "{\"service_start_ts\":$(date +%s)}" > /var/lib/singbox-ui/service_state.json
+
+	# Cache the package version once per start so status_detail (a hot read
+	# RPC) doesn't fork opkg on every call. Refreshed here so an upgrade +
+	# restart re-derives it. (spec S5-PERF)
+	opkg list-installed luci-app-singbox-ui 2>/dev/null \
+		| sed -n 's/^luci-app-singbox-ui - //p' \
+		> /var/lib/singbox-ui/pkg_version || true
 }
 
 stop_service() {
