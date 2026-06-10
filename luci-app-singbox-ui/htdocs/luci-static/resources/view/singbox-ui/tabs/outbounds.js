@@ -10,6 +10,7 @@
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
 'require view.singbox-ui.lib.subscription_view as SbSubView';
+'require view.singbox-ui.lib.view_state as SbViewState';
 
 var addRenameField      = SbCommon.addRenameField;
 var openJsonImportModal = SbTabInbounds.openJsonImportModal;
@@ -148,7 +149,7 @@ function buildOutboundsMap() {
 
 	// E2: descriptor-driven UI for all stored outbound types.
 	// subscription has its own UCI shape and is handled by the fields below.
-	var outboundSchema = (window.singboxUiSchemaCache || {}).outbound || {};
+	var outboundSchema = (SbViewState.getSchema() || {}).outbound || {};
 	SB_OUTBOUND_PROTOCOLS.forEach(function (entry) {
 		var protoName = entry[0];
 		if (protoName === 'subscription') return;  // subscription has its own UCI shape
@@ -207,7 +208,7 @@ function buildOutboundsMap() {
 	m._sb_render_hook = m.render;
 	m.render = function () {
 		return m._sb_render_hook.apply(m, arguments).then(function (node) {
-			try { SbSubView.injectChildRows(node, window.singboxUiSubExpand || {}); }
+			try { SbSubView.injectChildRows(node, SbViewState.getSubExpand()); }
 			catch (e) { /* render hook should never break the page */ }
 			return node;
 		});

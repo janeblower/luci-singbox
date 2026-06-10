@@ -2,6 +2,7 @@
 'require ui';
 'require uci';
 'require rpc';
+'require view.singbox-ui.lib.view_state as SbViewState';
 
 var callSubscriptionExpand = rpc.declare({
 	object: 'singbox-ui',
@@ -31,7 +32,7 @@ function fieldLabel(name) {
 }
 
 function openViewModal(endpoint) {
-	var schema = ((window.singboxUiSchemaCache || {}).outbound || {})[endpoint.type];
+	var schema = ((SbViewState.getSchema() || {}).outbound || {})[endpoint.type];
 	var rows;
 	if (schema && Array.isArray(schema.fields)) {
 		rows = schema.fields.map(function (f) {

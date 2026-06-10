@@ -10,6 +10,7 @@ $ROOT/lib/rpc.js
 $ROOT/lib/common.js
 $ROOT/importers/inbound.js
 $ROOT/importers/outbound.js
+$ROOT/importers/transport.js
 $ROOT/tabs/inbounds.js
 $ROOT/tabs/outbounds.js
 $ROOT/tabs/rulesets.js
