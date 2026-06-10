@@ -2,7 +2,8 @@
 # tests/test_nftables_apply_lock.sh
 # S1-4: two concurrent `apply` runs must serialize on a skip-on-contention lock —
 # exactly one wins and applies, the other is cleanly skipped (no crash), and the
-# lock file is released afterwards (no stale lock).
+# lock dir is released afterwards (no stale lock). The lock is a *directory*
+# (fs.mkdir is the atomic primitive; fs.open(path,"x") does not create in ucode).
 set -e
 
 if command -v ucode >/dev/null 2>&1; then
@@ -17,7 +18,7 @@ fi
 SCRIPT=$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/nftables.uc
 TMPDIR=$(mktemp -d)
 mkdir -p /tmp/singbox-ui
-trap 'rm -rf "$TMPDIR"; rm -f /tmp/singbox-ui/.apply.lock' EXIT
+trap 'rm -rf "$TMPDIR"; rm -rf /tmp/singbox-ui/.apply.lock' EXIT
 
 # Slow nft so the two applies overlap in time.
 mkdir -p "$TMPDIR/bin"
@@ -65,7 +66,7 @@ if wait "$p2"; then rc2=0; else rc2=$?; fi
 echo "  PASS: S1-4 concurrent applies serialized (one ran, one skipped), lock released"
 
 echo "-- S1-4: a pre-existing fresh lock makes apply refuse (no race window)"
-: > /tmp/singbox-ui/.apply.lock
+mkdir -p /tmp/singbox-ui/.apply.lock
 # Run under `if` so `set -e` does NOT abort on the (expected, post-fix)
 # non-zero exit — that is the whole point of the assertion below.
 # shellcheck disable=SC2086
@@ -75,7 +76,7 @@ if PATH="$TMPDIR/bin:$PATH" UCI_CONFIG_DIR="$UCI" \
 else
 	rc=$?
 fi
-rm -f /tmp/singbox-ui/.apply.lock
+rm -rf /tmp/singbox-ui/.apply.lock
 [ "$rc" -ne 0 ] \
 	|| { echo "FAIL: S1-4 apply ignored an existing lock (no serialization)"; exit 1; }
 grep -qi 'another apply\|lock' "$TMPDIR/locked.err" \

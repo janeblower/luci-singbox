@@ -543,31 +543,34 @@ function rand_hex(n) {
 	return h;
 }
 
-// APPLY_LOCK — serialization point for cmd_apply. ucode's fs has no flock,
-// so we use fs.open(path, "x") (O_CREAT|O_EXCL) as an atomic create-or-fail
-// lock primitive: two concurrent applies (cron refresh racing a manual
-// Apply) would otherwise interleave their `nft -f` calls and hit the TOCTOU
-// window in make_nft_tmp's fallback.
+// APPLY_LOCK — serialization point for cmd_apply. ucode's fs has no flock, and
+// fs.open(path, "x") is NOT an exclusive-create primitive here ("x" is not a
+// valid base open mode in ucode → open returns null WITHOUT creating the file,
+// so it can never serialize). We instead use a lock *directory*: mkdir(2) is
+// atomic and fails with EEXIST for the second caller. Two concurrent applies
+// (cron refresh racing a manual Apply) would otherwise interleave their
+// `nft -f` calls and hit the TOCTOU window in make_nft_tmp's fallback.
 const APPLY_LOCK = `${TMPDIR}/.apply.lock`;
 
-// acquire_apply_lock() — atomic O_EXCL create. Returns true on success, false
-// if another apply holds the lock. A lock older than 60s is treated as stale
-// (a crashed apply) and reclaimed, so we never wedge permanently.
+// acquire_apply_lock() — atomic create-or-fail via fs.mkdir. mkdir is the
+// portable lock primitive: it returns falsy on EEXIST without throwing (proven
+// by make_nft_tmp/subscription.uc calling it on an existing dir every run).
+// Returns true on success, false if another apply holds the lock. A lock dir
+// older than 60s is treated as stale (a crashed apply) and reclaimed, so we
+// never wedge permanently.
 function acquire_apply_lock() {
 	fs.mkdir(TMPDIR, 0o755);
-	let fd = fs.open(APPLY_LOCK, "x");
-	if (fd) { fd.write(`${time()}\n`); fd.close(); return true; }
-	// Lock exists — check age for staleness.
+	if (fs.mkdir(APPLY_LOCK, 0o755)) return true;
+	// Lock dir exists — check age for staleness.
 	let st = fs.stat(APPLY_LOCK);
 	if (st != null && (time() - st.mtime) > 60) {
-		fs.unlink(APPLY_LOCK);
-		let fd2 = fs.open(APPLY_LOCK, "x");
-		if (fd2) { fd2.write(`${time()}\n`); fd2.close(); return true; }
+		fs.rmdir(APPLY_LOCK);
+		if (fs.mkdir(APPLY_LOCK, 0o755)) return true;
 	}
 	return false;
 }
 
-function release_apply_lock() { fs.unlink(APPLY_LOCK); }
+function release_apply_lock() { fs.rmdir(APPLY_LOCK); }
 
 // make_nft_tmp() — compose a unique tmp path inside TMPDIR without
 // invoking mktemp via fs.popen. fs.popen() in OpenWrt's ucode does not
