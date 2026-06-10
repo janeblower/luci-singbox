@@ -59,9 +59,11 @@ out1=$(run_detail)
 out2=$(run_detail)
 
 # Second call must report the same cached version the first derived from opkg.
-echo "$out1" | grep -q '"package_version":"9.9.9-test"' \
+# NB: the handler emits pretty-printed JSON (`"key": "val"` with a space after
+# the colon), so the value pattern must allow `: *`.
+echo "$out1" | grep -q '"package_version": *"9.9.9-test"' \
     || { echo "FAIL: first call did not derive version from opkg stub; out=$out1"; exit 1; }
-echo "$out2" | grep -q '"package_version":"9.9.9-test"' \
+echo "$out2" | grep -q '"package_version": *"9.9.9-test"' \
     || { echo "FAIL: second call lost cached version; out=$out2"; exit 1; }
 
 # The cache file must exist after the first miss.
