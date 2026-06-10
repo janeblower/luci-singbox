@@ -82,14 +82,13 @@ echo "$out" | grep -q 'require' && echo "$out" | grep -q '"error"' \
 	&& { echo "FAIL: protocol_schema hit a require() failure via prod path; out=$out"; exit 1; }
 echo "  PASS: ubus call singbox-ui protocol_schema loads lib modules via -L shebang"
 
-# 3) `list` over ubus must advertise the methods. (rpcd calls `list` on the
-#    handler to learn the signature; this also goes through the shebang.)
-out=$(ubus -S list singbox-ui 2>/dev/null || true)
-# Fall back to calling the handler's own `list` via ubus call is not
-# possible (list is rpcd-internal); instead assert the object exposes the
-# methods rpcd parsed from the handler's emit_list().
-ubus list -v singbox-ui 2>/dev/null | grep -q '"status"' \
-	|| ubus list -v singbox-ui 2>/dev/null | grep -q 'status' \
+# 3) `list` over ubus must advertise the methods. rpcd calls the handler's
+#    `list` to learn the signatures; `ubus -v list <obj>` prints them. NB: `-v`
+#    is a GLOBAL option and must precede the command — `ubus list -v <obj>` is
+#    rejected with a usage error (verified on the live box), so the arg order
+#    here is load-bearing. A populated method list proves rpcd parsed the
+#    handler's emit_list() output through the shebang.
+ubus -v list singbox-ui 2>/dev/null | grep -q '"status"' \
 	|| { echo "FAIL: ubus does not advertise singbox-ui methods; rpcd failed to parse handler list"; exit 1; }
 echo "  PASS: rpcd parsed handler method list via shebang"
 
