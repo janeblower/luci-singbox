@@ -6,10 +6,10 @@
 # Manual overrides in scripts/install-manifest-overrides.txt (TSV same shape).
 set -e
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG="$ROOT/luci-app-singbox-ui"
-OUT="$ROOT/scripts/install-manifest.txt"
-OVERRIDES="$ROOT/scripts/install-manifest-overrides.txt"
+ROOT="${ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+PKG="${PKG:-$ROOT/luci-app-singbox-ui}"
+OUT="${OUT:-$ROOT/scripts/install-manifest.txt}"
+OVERRIDES="${OVERRIDES:-$ROOT/scripts/install-manifest-overrides.txt}"
 
 mode_for() {
 	case "$1" in
@@ -35,9 +35,17 @@ dst_for() {
 	# root + htdocs trees. Exclude po/templates and po/ru (handled separately
 	# by the po2lmo install step in Makefile).
 	find root htdocs -type f 2>/dev/null | sort | while read -r src; do
-		# Apply override if present
-		if [ -f "$OVERRIDES" ] && grep -q "^$src	" "$OVERRIDES"; then
-			grep "^$src	" "$OVERRIDES"
+		# Apply override if present. Match the source column as a FIXED
+		# string on the first TAB-separated field — never as a regex —
+		# so path metacharacters (. * [ + …) can't false-match another
+		# override row. (Was `grep "^$src\t"`, which treats $src as a
+		# regex; see spec S5-8.)
+		ovr=""
+		if [ -f "$OVERRIDES" ]; then
+			ovr=$(awk -F '\t' -v s="$src" '$1 == s { print; exit }' "$OVERRIDES")
+		fi
+		if [ -n "$ovr" ]; then
+			printf '%s\n' "$ovr"
 			continue
 		fi
 		mode=$(mode_for "$src")
