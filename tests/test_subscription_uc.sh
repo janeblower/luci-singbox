@@ -564,4 +564,41 @@ grep -qE 'fs\.rename\(' "$SUB_UC" \
 	|| fail "S3-1: subscription.uc has no fs.rename (atomic write helper missing)"
 pass "S3-1: subscription.uc uses fs.rename for atomic publish"
 
+# ---- S3-2: oversize subscription body is rejected (no OOM) ----
+# CRITICAL: the body must be VALID (contain a real proxy URL) so it would pass
+# the URL filter and be written if the size guard were missing. Only then does
+# "no output file" prove the post-stat size guard fired (not an empty URL list).
+echo "-- S3-2: curl gets --max-filesize and oversize VALID body is dropped by the size guard"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subBig'
+	option type 'subscription'
+	option sub_url 'https://example.test/big'
+EOF
+# Control first: the SAME valid one-line body UNDER the cap must produce a file.
+# This proves the URL filter accepts the body, so the oversize rejection below
+# can only be attributable to the size guard.
+printf 'vless://uuid@host:443\n' >"$TMPDIR/body"
+export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+: >"$FAKE_CURL_LOG"
+rm -f "$SINGBOX_TMPDIR/sub_subBig.txt"
+run_uc fetch-subs
+[ -s "$SINGBOX_TMPDIR/sub_subBig.txt" ] \
+	|| fail "S3-2(control): under-cap valid body should have produced sub_subBig.txt"
+grep -q '^vless://uuid@host:443' "$SINGBOX_TMPDIR/sub_subBig.txt" \
+	|| fail "S3-2(control): under-cap valid body content wrong"
+pass "S3-2(control): under-cap valid body is written"
+
+# Now the oversize variant: SAME valid first line, then >8 MiB of padding on a
+# second line. The vless:// line still passes the URL filter, so the ONLY thing
+# that can stop the file from being written is the size guard.
+{ printf 'vless://uuid@host:443\n'; head -c 9000000 /dev/zero | tr '\0' 'a'; printf '\n'; } >"$TMPDIR/body"
+: >"$FAKE_CURL_LOG"
+rm -f "$SINGBOX_TMPDIR/sub_subBig.txt"
+run_uc fetch-subs
+grep -q -- '--max-filesize' "$FAKE_CURL_LOG" \
+	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "S3-2: --max-filesize not passed to curl"; }
+[ ! -f "$SINGBOX_TMPDIR/sub_subBig.txt" ] \
+	|| fail "S3-2: oversize body (with a valid URL line) was NOT rejected by the size guard"
+pass "S3-2: oversize valid body rejected by post-stat guard and --max-filesize set"
+
 echo "OK"

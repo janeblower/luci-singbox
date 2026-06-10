@@ -14,6 +14,10 @@
 const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 const SINGBOX    = getenv("SINGBOX")        || "/usr/bin/sing-box";
 const DEFAULT_UA = "Mozilla/5.0";
+// Cap subscription/ruleset bodies so a hostile or runaway source cannot OOM
+// a 128–256 MB router. curl aborts past --max-filesize; the post-stat guard
+// catches bodies with no Content-Length (chunked) and local cp sources.
+const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
 
 let fs  = require("fs");
 let uci_mod = require("uci");
@@ -33,6 +37,7 @@ function parallel_download(specs) {
 		let opts = spec.opts || {};
 		let argv = [
 			"curl", "-sfL",
+			"--max-filesize", `${MAX_BODY}`,
 			"--max-time", `${opts.timeout ?? 15}`,
 			"-A", opts.user_agent || DEFAULT_UA,
 			"-o", spec.outpath,
@@ -158,6 +163,11 @@ function cmd_fetch_subs(cur) {
 			fs.unlink(m.raw_path);
 			continue;
 		}
+		if (st.size > MAX_BODY) {
+			log_err(`fetch_subs: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
+			fs.unlink(m.raw_path);
+			continue;
+		}
 
 		let raw_fd = fs.open(m.raw_path, "r");
 		if (!raw_fd) {
@@ -258,6 +268,11 @@ function cmd_fetch_rulesets(cur) {
 		let st = fs.stat(m.raw_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_rulesets: download failed for ${m.name} (${m.target})`);
+			fs.unlink(m.raw_path);
+			continue;
+		}
+		if (st.size > MAX_BODY) {
+			log_err(`fetch_rulesets: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
 			fs.unlink(m.raw_path);
 			continue;
 		}
