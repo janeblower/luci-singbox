@@ -135,9 +135,17 @@ const OUTBOUND_PROXY_KINDS = [
 	"vless", "trojan", "hysteria2", "shadowsocks",
 ];
 
+// O(1) membership set built once from the list above. Was a linear scan
+// (S4-11); is_outbound_proxy_kind runs per outbound section in
+// build_outbounds() and once per export_section call.
+const _OUTBOUND_PROXY_SET = (function() {
+	let m = {};
+	for (let k in OUTBOUND_PROXY_KINDS) m[k] = true;
+	return m;
+})();
+
 function is_outbound_proxy_kind(t) {
-	for (let k in OUTBOUND_PROXY_KINDS) if (k === t) return true;
-	return false;
+	return _OUTBOUND_PROXY_SET[t] === true;
 }
 
 return {
