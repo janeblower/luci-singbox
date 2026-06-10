@@ -148,6 +148,17 @@ function ok(label, cond) {
   ok('interval clears itself when root detached (S2-2)',
      Object.keys(ctx.__test.intervals).length === 0);
 
+  // --- S2-3: stop() clears a pending search-debounce timer -----------------
+  const m3 = Mon.buildMonitoring();
+  m3.start();
+  // Simulate a keystroke: schedule a debounced search.
+  m3.debouncedSearch('foo', function () {});
+  const tIds = Object.keys(ctx.__test.timeouts);
+  ok('debouncedSearch scheduled a timeout (S2-3)', tIds.length >= 1);
+  m3.stop();
+  ok('stop() cleared the debounce timer (S2-3)',
+     Object.keys(ctx.__test.timeouts).length === 0);
+
   if (failures) { console.error('test_monitoring_js: ' + failures + ' failure(s)'); process.exit(1); }
   console.log('OK');
 })().catch((e) => { console.error('harness error', e); process.exit(1); });
