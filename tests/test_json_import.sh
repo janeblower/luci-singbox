@@ -182,6 +182,22 @@ expect('hysteria2 outbound with obfs',
 		obfs_type: 'salamander', obfs_password: 'op',
 	}});
 
+// hysteria2 inbound with obfs: importer must emit obfs_type/obfs_password
+// (canonical descriptor field names), not the legacy hysteria2_obfs_* names.
+// Auth carried via users[] so server_password is set (top-level `password`
+// is only consumed for shadowsocks inbounds).
+expect('hysteria2 inbound with obfs',
+	fn({ type: 'hysteria2', listen: '::', listen_port: 8443,
+	     users: [{ name: 'u', password: 'pw' }],
+	     up_mbps: 100, down_mbps: 50,
+	     obfs: { type: 'salamander', password: 'op' } }),
+	{ ok: true, errors: [], fields: {
+		protocol: 'hysteria2', listen: '::', listen_port: 8443,
+		server_password: 'pw',
+		obfs_type: 'salamander', obfs_password: 'op',
+		up_mbps: '100', down_mbps: '50',
+	}});
+
 // vless multi-user: when users[] has >1 entry, importer emits a
 // `list inbound_user` and drops section-level server_uuid.
 expect('vless inbound multi-user with per-user flow',
