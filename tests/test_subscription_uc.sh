@@ -554,7 +554,12 @@ export FAKE_CURL_BODY_FILE="$TMPDIR/body"
 rm -f "$SINGBOX_TMPDIR"/sub_subA.txt "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.* 2>/dev/null || true
 run_uc fetch-subs
 [ -s "$SINGBOX_TMPDIR/sub_subA.txt" ] || fail "S3-1: sub_subA.txt missing"
-leftovers=$(ls "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.* 2>/dev/null | wc -l)
+# Count .tmp.* leftovers via a glob loop (avoids `ls | wc`, SC2012; when the
+# glob matches nothing the literal pattern fails the -e test, so count stays 0).
+leftovers=0
+for _f in "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.*; do
+	[ -e "$_f" ] && leftovers=$((leftovers + 1))
+done
 [ "$leftovers" -eq 0 ] || { ls "$SINGBOX_TMPDIR"; fail "S3-1: tmp file left behind ($leftovers)"; }
 pass "S3-1: atomic write leaves no tmp file"
 
