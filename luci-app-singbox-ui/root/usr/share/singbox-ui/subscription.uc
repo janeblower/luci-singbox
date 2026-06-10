@@ -332,7 +332,10 @@ function any_subs_stale(cur, force) {
 	for (let name in helpers.sections_of_kind(cur, "outbound", "type", "subscription")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "sub_interval");
-		if (iv === 0) iv = 3600;
+		// !(iv > 0) catches NaN/0/negatives — +"abc" yields NaN and `iv === 0`
+		// was false, so iv stayed NaN and is_stale's `>= NaN` was always false,
+		// silently disabling refresh.
+		if (!(iv > 0)) iv = 3600;
 		if (is_stale(`${TMPDIR}/sub_${name}.txt`, iv, force)) return true;
 	}
 	return false;
@@ -342,7 +345,8 @@ function any_rulesets_stale(cur, force) {
 	for (let name in helpers.sections_of_kind(cur, "ruleset", "nft_rules", "1")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "update_interval");
-		if (iv === 0) iv = 86400;
+		// !(iv > 0) catches NaN/0/negatives — see any_subs_stale for the bug.
+		if (!(iv > 0)) iv = 86400;
 		if (is_stale(`${TMPDIR}/rs_${name}.json`, iv, force)) return true;
 	}
 	return false;

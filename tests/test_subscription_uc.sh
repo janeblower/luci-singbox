@@ -642,4 +642,23 @@ echo "$out" | grep -qiE "rsOk.*(outside whitelist|unresolvable|relative)" \
 	&& { echo "$out"; fail "S3-3: in-whitelist symlink was wrongly rejected (reject-all regression)"; }
 pass "S3-3: in-whitelist symlink target is allowed"
 
+# ---- S3-4: non-numeric interval falls back to default (refresh still fires) ----
+echo "-- S3-4: NaN sub_interval clamps to default so refresh still runs"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subN'
+	option type 'subscription'
+	option sub_url 'https://example.test/sub'
+	option sub_interval 'abc'
+EOF
+printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
+export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+# Seed a stale cache file dated in 1970 so even the 3600s default is exceeded.
+printf 'vless://old@host:1\n' >"$SINGBOX_TMPDIR/sub_subN.txt"
+touch -t 197001020000 "$SINGBOX_TMPDIR/sub_subN.txt"
+: >"$FAKE_CURL_LOG"
+SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions
+[ -s "$FAKE_CURL_LOG" ] \
+	|| { echo "curl.log empty — refresh treated NaN interval as never-stale"; fail "S3-4: NaN interval disabled refresh"; }
+pass "S3-4: NaN interval clamped to default, refresh fired"
+
 echo "OK"
