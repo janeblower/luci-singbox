@@ -218,6 +218,34 @@ function ok(label, cond) {
   ok('captured handler filters the CURRENT set, not the poll it was built in (S2-6)',
      hostCells.length >= 1);
 
+  // --- S2-9: search matches host/chain/source, NOT raw JSON keys ----------
+  const s9conn = { id: 'q', metadata: { sourceIP: '10.0.0.9', host: 'special-host' },
+                   chains: ['proxy-A'] };
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: [s9conn], downloadTotal: 0, uploadTotal: 0 }) }));
+  const m9 = Mon.buildMonitoring();
+  await m9.poll();
+  function typeSearch(term) {
+    const inp = ctx.__test.find(m9.node, (n) =>
+      n.tag === 'input' && n.attrs && n.attrs.type === 'search');
+    inp.attrs.keyup({ target: { value: term } });   // schedules the debounce
+    ctx.__test.fireAllTimeouts();                    // flush the 200ms setTimeout
+  }
+  function hostCellMatches(text) {
+    return ctx.__test.findAll(m9.node,
+      (n) => n.tag === 'td' && (n.textContent || '').indexOf(text) >= 0).length >= 1;
+  }
+  typeSearch('special-host');
+  ok('search matches by host (S2-9)', hostCellMatches('special-host'));
+  typeSearch('proxy-a');
+  ok('search matches by chain, case-insensitive (S2-9)', hostCellMatches('special-host'));
+  typeSearch('10.0.0.9');
+  ok('search matches by source ip (S2-9)', hostCellMatches('special-host'));
+  // A JSON-structural token must NOT match: JSON.stringify(c) would contain
+  // "metadata"/"sourceIP"; the precomputed hay must not.
+  typeSearch('metadata');
+  ok('search does NOT match JSON keys like metadata (S2-9)', !hostCellMatches('special-host'));
+
   if (failures) { console.error('test_monitoring_js: ' + failures + ' failure(s)'); process.exit(1); }
   console.log('OK');
 })().catch((e) => { console.error('harness error', e); process.exit(1); });

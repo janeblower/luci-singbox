@@ -74,14 +74,21 @@ function buildMonitoring() {
 	}
 	function curConns() { return state.conns || []; }
 
-	// Simple per-connection search string. Task 9 (S2-9) replaces this body
-	// with a precomputed/cached version; the signature stays the same.
+	// Precomputed, lowercased, MEMOIZED search string per connection (spec
+	// S2-9). Built once from the fields the user actually searches (host,
+	// source IP / device name, chain, network) and cached on c._sbHay, instead
+	// of JSON.stringify(c) on every keystroke/repaint (O(n*size) -> O(n) once).
 	function searchHay(c) {
+		if (c._sbHay != null) return c._sbHay;
 		var md = c.metadata || {};
 		var host = md.host || md.destinationIP || '';
+		var port = md.destinationPort ? (':' + md.destinationPort) : '';
 		var src  = md.sourceIP || '';
+		var dev  = nameFor(src);
 		var chain = (c.chains || []).join(' / ');
-		return (host + ' ' + src + ' ' + nameFor(src) + ' ' + chain).toLowerCase();
+		c._sbHay = (host + port + ' ' + src + ' ' + dev + ' ' + chain +
+		            ' ' + (md.network || '')).toLowerCase();
+		return c._sbHay;
 	}
 
 	// renderRows(conns) -> array of <tr>. Filter/map kept from the old
@@ -237,9 +244,10 @@ function buildMonitoring() {
 			window.removeEventListener('pagehide', onPageHide);
 	}
 
-	// `poll`/`debouncedSearch` are exported for the regression harness
-	// (tests/test_monitoring_js.sh); production callers use start()/stop().
-	return { node: root, start: start, stop: stop, poll: poll, debouncedSearch: debouncedSearch };
+	// `poll`/`debouncedSearch`/`_searchHay` are exported for the regression
+	// harness (tests/test_monitoring_js.sh); production callers use start()/stop().
+	return { node: root, start: start, stop: stop, poll: poll,
+	         debouncedSearch: debouncedSearch, _searchHay: searchHay };
 }
 
 return L.Class.extend({ buildMonitoring: buildMonitoring });
