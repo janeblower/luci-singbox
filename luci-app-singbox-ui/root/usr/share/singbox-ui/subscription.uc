@@ -79,6 +79,32 @@ function path_under_whitelist(p) {
 	return false;
 }
 
+// write_atomic(path, body) — write body to a sibling tmp file, flush via
+// close, then fs.rename over `path`. Guarantees sing-box never reads a
+// half-written sub_<name>.txt and never leaks the fd on a write exception.
+// Mirrors generate.uc::publish_atomic. Returns true on success.
+function write_atomic(path, body) {
+	let tmp = sprintf("%s.tmp.%d", path, time());
+	let f = fs.open(tmp, "w");
+	if (!f) { log_err(`write_atomic: cannot open ${tmp}`); return false; }
+	let ok = true;
+	try { f.write(body); } catch (e) { ok = false; }
+	f.close();
+	if (!ok) {
+		log_err(`write_atomic: write to ${tmp} failed`);
+		try { fs.unlink(tmp); } catch (_) {}
+		return false;
+	}
+	let renamed = false;
+	try { renamed = fs.rename(tmp, path); } catch (_) { renamed = false; }
+	if (!renamed) {
+		log_err(`write_atomic: rename ${tmp} -> ${path} failed`);
+		try { fs.unlink(tmp); } catch (_) {}
+		return false;
+	}
+	return true;
+}
+
 function cmd_fetch_subs(cur) {
 	let names = helpers.sections_of_kind(cur, "outbound", "type", "subscription");
 	if (!length(names)) {
@@ -159,13 +185,10 @@ function cmd_fetch_subs(cur) {
 			continue;
 		}
 
-		let out_fd = fs.open(m.out_path, "w");
-		if (!out_fd) {
+		if (!write_atomic(m.out_path, join("\n", urls) + "\n")) {
 			log_err(`fetch_subs: cannot write ${m.out_path}`);
 			continue;
 		}
-		for (let u in urls) out_fd.write(u + "\n");
-		out_fd.close();
 		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
 	}
 	return 0;
