@@ -1,61 +1,82 @@
 # luci-app-singbox-ui
 
-LuCI web UI for [sing-box](https://sing-box.sagernet.org/) on OpenWrt
-24.10+. Provides a forms-based configuration interface for sing-box
-1.12.x — inbounds (tproxy, direct, tun, mixed/socks/http), outbounds
-(vless, vmess, trojan, hysteria2, shadowsocks, tuic, anytls, plus
-selector/urltest/direct/block/dns), routing, DNS, rule-sets, and
-subscriptions. Generates `config.json` directly from UCI sections.
+LuCI-интерфейс для [sing-box](https://sing-box.sagernet.org/) на OpenWrt —
+настройка формами, без правки JSON руками, без bash-обвязки, без fw3.
+Бэкенд генерирует `config.json` напрямую из секций UCI.
 
-## Highlights
+> ⚠️ **Статус: ранняя разработка (0.1.x).** Проект сырой — что-то может
+> ломаться, схема UCI и API ещё устаканиваются. Предложения, хотелки и
+> баг-репорты — в [issues](../../issues) или PR, буду рад.
 
-- Native UI for the active sing-box 1.12.x feature set: TLS+ECH,
-  multiplex, reality, fragment, hysteria2 brutal/obfs, TUIC, anytls.
-- Multi-user vmess/vless/shadowsocks inbounds.
-- Share-link parsers for vmess://, vless://, ss://, trojan://, hy2://.
-- JSON import and (scrubbed) export per section.
-- Subscriptions with the right User-Agent for DDoS-Guarded providers.
-- nftables-driven TProxy with atomic table replace.
-- Monitoring tab backed by the Clash API.
-- Russian translation included.
+## Возможности
 
-## Installation (preview)
+- **Inbound:** `tproxy`, `mixed` (socks/http), `direct`, а также серверные
+  `vless` / `trojan` / `hysteria2` / `shadowsocks`.
+- **Outbound (прокси):** `vless`, `trojan`, `hysteria2`, `shadowsocks`,
+  `direct`. Маршрутизация, DNS и rule-set’ы — отдельными вкладками.
+- **Общие блоки протоколов:** TLS (uTLS / ALPN / Reality / ECH), multiplex,
+  транспорты (ws / grpc / http / httpupgrade / xhttp), dial-опции.
+- **Импорт share-link:** `vless://`, `ss://`, `trojan://`, `hy2://`
+  (с поддержкой IPv6-литералов и секретов с двоеточием).
+- **Импорт/экспорт JSON** по секциям; экспорт скрывает секреты.
+- **Подписки:** параллельный фетч подписок и rule-set’ов с авто-детектом
+  `.srs` / `.json`, лимитом размера тела и кэшем «последнего рабочего»;
+  корректный User-Agent для провайдеров за DDoS-Guard.
+- **TProxy на nftables** — правила собираются одной атомарной транзакцией
+  `nft -f`. Пакет конфликтует с `firewall` (fw3).
+- **Мониторинг** живых соединений через Clash API.
+- Русский перевод в комплекте.
 
-The package conflicts with the legacy `firewall` package because it
-drives nftables directly. See the warning printed by `opkg install`
-for details.
+После установки страница появляется в **Services → Singbox-UI**.
 
-## Documentation
+## Концепции
 
-See `docs/uci-schema.md`, `docs/protocol-coverage.md`, and
-`docs/release.md` for the technical reference.
+- **ucode вместо bash.** Генератор конфига, фетчер подписок и эмиттер
+  nftables написаны на нативном для OpenWrt `ucode`, а не на shell.
+- **Полный контроль без ручного JSON.** Через UCI доступны основные поля
+  inbound/outbound sing-box (multiplex, транспорты, uTLS, ALPN,
+  masquerade и т.д.) — JSON руками писать не нужно. Если очень хочется —
+  есть кнопка импорта JSON.
+- **Прямой nftables, без fw3.** Маркировка трафика собирается атомарной
+  nft-транзакцией; пакет специально конфликтует с `firewall`.
+- **Всё через UCI/LuCI.** Один файл `/etc/config/singbox-ui` — источник
+  правды; LuCI-страница это форма поверх него с импортом share-link’ов и
+  JSON-узлов.
+- **Подписки + Clash API.** Авто-детект формата rule-set’ов и кэш рабочей
+  версии; вкладка мониторинга показывает соединения в реальном времени.
 
-## Running tests
+## Установка
+
+Готовые `.apk` — в [Releases](../../releases). Пакет noarch: один файл
+подходит любой apk-совместимой сборке OpenWrt (24.10+).
 
 ```sh
-sh tests/run.sh
+apk add --allow-untrusted ./luci-app-singbox-ui_*.apk
+# опционально — русский перевод:
+apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
 ```
 
-This boots a real OpenWrt 25.12.3 under QEMU/KVM via a pre-built
-Docker image (`ghcr.io/<owner>/luci-app-sing-box/openwrt-test`) and
-runs the full ucode + shell suite inside the guest. Requires
-`docker` and a writable `/dev/kvm` on the host.
+Пакет **конфликтует с `firewall` (fw3)**, потому что управляет nftables
+напрямую. При установке `apk`/`opkg` удалит `firewall`, и правила из
+`/etc/config/firewall` перестанут применяться — убедитесь, что от fw3
+ничего не зависит (инсталлятор печатает предупреждение перед установкой).
 
-To override the image (e.g. local dev tag from `tests/docker/`):
+Сборка из исходников — `scripts/build-apk.sh <version>` поверх OpenWrt SDK.
 
-```sh
-SINGBOX_TEST_IMAGE=singbox-test:dev sh tests/run.sh
-```
+## Что **не** поддерживается (и не планируется)
 
-## fwmark and `ip rule` for TPROXY
+- **`opkg` / `.ipk`.** Только `apk`. Старые ветки OpenWrt с opkg — мимо.
+- **`fw3` / iptables.** Пакет намеренно конфликтует с `firewall` и
+  совмещаться с ним не будет.
 
-The nft ruleset emitted by this package marks packets that should be
-intercepted by sing-box's TPROXY socket. The mark value is taken from
-the `singbox-ui.@global[0].fwmark` / `fwmark_mask` UCI options
-(defaults `0x1` / `0x1`).
+## fwmark и `ip rule` для TPROXY
 
-For TPROXY to actually route those marked packets to the local socket,
-the kernel needs an `ip rule` and a routing table:
+Ruleset помечает пакеты, которые должен перехватить TPROXY-сокет sing-box.
+Значение метки берётся из UCI-опций `singbox-ui.@global[0].fwmark` /
+`fwmark_mask` (по умолчанию `0x1` / `0x1`).
+
+Чтобы помеченные пакеты дошли до локального сокета, ядру нужны `ip rule` и
+таблица маршрутизации:
 
 ```sh
 ip -4 rule add fwmark 0x1/0x1 lookup 100
@@ -64,14 +85,13 @@ ip -6 rule add fwmark 0x1/0x1 lookup 100
 ip -6 route add local default dev lo table 100
 ```
 
-The package does NOT install these rules — they're operator state and
-typically come from your `network` UCI config, a startup script, or a
-package like `mwan3` / `vpn-policy-routing`. After the package applies
-its ruleset it logs a warning to syslog if no matching `ip rule
-fwmark…` exists; check `logread -e singbox-ui` after enabling the
-tproxy inbound.
+Пакет эти правила **не** ставит — это состояние оператора (обычно приходит
+из `network`-конфига UCI, стартового скрипта или пакетов вроде
+`mwan3` / `vpn-policy-routing`). После применения ruleset’а сервис пишет в
+syslog предупреждение, если подходящего `ip rule fwmark…` нет — проверяйте
+`logread -e singbox-ui` после включения tproxy-inbound.
 
-To use a different bit (e.g., when mwan3 owns `0xff00`):
+Другой бит метки (например, если `0xff00` занят mwan3):
 
 ```sh
 uci set singbox-ui.@global[0].fwmark='0x10000'
@@ -80,16 +100,15 @@ uci commit singbox-ui
 /etc/init.d/singbox-ui restart
 ```
 
-Then update `ip rule` accordingly. The invariant the validator
-enforces: `(fwmark & fwmark_mask) == fwmark`. Violating it falls back
-to `0x1 / 0x1` with a log message.
+После этого поправьте `ip rule`. Инвариант, который проверяет валидатор:
+`(fwmark & fwmark_mask) == fwmark`; при нарушении — откат к `0x1 / 0x1`
+с записью в лог.
 
-## Redirecting router-originated traffic
+## Перенаправление трафика самого роутера
 
-By default only LAN-originated traffic is intercepted (the `prerouting`
-chain handles it). To also route traffic originated by processes on
-the router itself (health checks, OpenVPN clients, etc.) through the
-TPROXY socket, set:
+По умолчанию перехватывается только трафик из LAN (цепочка `prerouting`).
+Чтобы пропускать через TPROXY ещё и трафик процессов самого роутера
+(health-check’и, OpenVPN-клиенты и т.п.):
 
 ```sh
 uci set singbox-ui.@global[0].redirect_router_traffic='1'
@@ -97,70 +116,41 @@ uci commit singbox-ui
 /etc/init.d/singbox-ui restart
 ```
 
-This adds an `output` chain at `priority mangle` that mirrors the
-prerouting decision logic. Disabled by default because router
-processes don't usually want to be proxied.
+Добавляется цепочка `output` (`priority mangle`), зеркалящая логику
+prerouting. По умолчанию выключено — процессы роутера обычно проксировать
+не нужно.
 
----
-
-(Russian section below — оригинальное описание на русском.)
-
-# luci-app-singbox-ui
-
-LuCI-морда для [sing-box](https://github.com/SagerNet/sing-box) на OpenWrt —
-без правки JSON руками, без bash-обвязки, без fw3.
-
-> ⚠️ **Статус: ранняя разработка.** Проект пока сырой — что-то может
-> ломаться, API/схема UCI ещё устаканиваются. Если есть предложения,
-> хотелки или баг-репорты — заводите
-> [issue](../../issues) или PR, буду рад.
-
-## Концепции
-
-- **ucode вместо bash.** Бэкенд (генератор конфига, фетчер подписок,
-  эмиттер nftables) — на нативном для OpenWrt `ucode`, а не на shell.
-- **Полный контроль без ручного JSON.** Через UCI доступны все основные
-  поля inbound/outbound sing-box (multiplex, xhttp/http transports, uTLS,
-  ALPN, masquerade и т.д.) — но JSON не пишется руками.
-  (если очень хочется писать JSON'ы вручную - кнопка импорта имеется)
-- **Прямой nftables, без fw3.** Правила маркировки трафика собираются
-  атомарной транзакцией в nft. Пакет конфликтует с `firewall`.
-- **Всё через UCI/LuCI.** Один файл `/etc/config/singbox-ui` — источник
-  правды. LuCI-страница — форма поверх него с импортом share-link’ов и
-  JSON-узлов.
-- **Подписки + Clash API live.** Параллельный фетч подписок и rule_set’ов
-  с авто-детектом `.srs`/`.json` и кэшем «последнего рабочего». Вкладка
-  мониторинга показывает живые соединения через Clash API.
-
-## Установка
-
-Готовые `.apk` лежат в [Releases](../../releases).
-Пакет noarch — один и тот же файл подходит любой apk-совместимой сборке
-OpenWrt (24.10+).
+## Запуск тестов
 
 ```sh
-apk add --allow-untrusted ./luci-app-singbox-ui_*.apk
-# опционально — русский перевод:
-apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
+sh tests/run.sh
 ```
 
-После установки страница появится в **Services → Singbox-UI**.
+Поднимает реальный OpenWrt 25.12.3 под QEMU/KVM из заранее собранного
+Docker-образа (`ghcr.io/<owner>/luci-app-sing-box/openwrt-test`) и гоняет
+полный набор ucode- и shell-тестов внутри гостя. На хосте нужны `docker`
+и доступный на запись `/dev/kvm` (на GitHub Actions есть из коробки).
 
-Сборка из исходников — `scripts/build-apk.sh <version>` поверх OpenWrt SDK.
+Переопределить образ (например, локальный dev-тег из `tests/docker/`):
 
-## Что **не** поддерживается и не планируется поддерживаться с моей стороны.
+```sh
+SINGBOX_TEST_IMAGE=singbox-test:dev sh tests/run.sh
+```
 
-- **`opkg` / `.ipk`.** Только apk. Старые ветки OpenWrt с opkg — мимо.
-- **`fw3` / iptables.** Пакет специально конфликтует с `firewall` и
-  совмещаться с ним никогда не будет.
+## Документация
+
+Технический справочник — в каталоге `docs/`:
+`uci-schema.md` (схема UCI), `protocol-coverage.md` и
+`protocol-descriptors.md` (протоколы и дескрипторы), `plugins.md`
+(плагины), `release.md` (релизный процесс).
 
 ## Планы
 
 1. Допил до полной юзабельности — оставшиеся поля протоколов, UX
    импорта/экспорта, валидация, тесты.
 2. **Easy-mode** в духе [podkop](https://github.com/itdoginfo/podkop):
-   поверх «полного» интерфейса — упрощённый режим с пресетами и
-   импортом подписки одним полем. «Полный» режим при этом остаётся.
+   поверх «полного» интерфейса — упрощённый режим с пресетами и импортом
+   подписки одним полем. «Полный» режим при этом остаётся.
 
 ## Лицензия
 
