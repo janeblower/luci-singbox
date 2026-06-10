@@ -2,6 +2,7 @@
 'require uci';
 'require ui';
 'require view.singbox-ui.importers.inbound as SbImpInbound';
+'require view.singbox-ui.importers.transport as SbTransport';
 
 // Constrained to the proxy protocols outbound.uc build_constructor_for()
 // actually emits. `direct`/`interface`/`url`/`subscription` are UI-only
@@ -63,23 +64,7 @@ function jsonImportOutbound(o) {
 			if (o.tls.reality.short_id)   f.reality_short_id   = o.tls.reality.short_id;
 		}
 	}
-	if (o.transport && o.transport.type) {
-		f.transport = o.transport.type;
-		if (o.transport.path)         f.transport_path         = o.transport.path;
-		if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
-		if (o.transport.headers && o.transport.headers.Host)
-			f.transport_host = o.transport.headers.Host;
-		if (o.transport.host != null) {
-			if (o.transport.type === 'http')
-				f.transport_hosts = Array.isArray(o.transport.host)
-					? o.transport.host : [ o.transport.host ];
-			else
-				f.transport_host = Array.isArray(o.transport.host)
-					? o.transport.host[0] : o.transport.host;
-		}
-		if (o.transport.type === 'xhttp' && o.transport.mode)
-			f.transport_xhttp_mode = o.transport.mode;
-	}
+	SbTransport.parseTransport(o, f);
 	out.ok = true;
 	return out;
 }

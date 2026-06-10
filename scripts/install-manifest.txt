@@ -3,6 +3,7 @@
 # Format: <src>\t<dst>\t<mode>
 htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js	www/luci-static/resources/view/singbox-ui/importers/inbound.js	data
 htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js	www/luci-static/resources/view/singbox-ui/importers/outbound.js	data
+htdocs/luci-static/resources/view/singbox-ui/importers/transport.js	www/luci-static/resources/view/singbox-ui/importers/transport.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/common.js	www/luci-static/resources/view/singbox-ui/lib/common.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js	www/luci-static/resources/view/singbox-ui/lib/descriptor_form.js	data
 htdocs/luci-static/resources/view/singbox-ui/lib/rpc.js	www/luci-static/resources/view/singbox-ui/lib/rpc.js	data

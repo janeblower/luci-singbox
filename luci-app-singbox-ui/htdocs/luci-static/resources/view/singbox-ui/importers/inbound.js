@@ -3,6 +3,7 @@
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.common as SbCommon';
+'require view.singbox-ui.importers.transport as SbTransport';
 
 // Constrained to the protocols inbound.uc actually builds — importing
 // anything else would create a UCI section that generate.uc silently drops.
@@ -121,25 +122,7 @@ function jsonImportInbound(o) {
 			}
 		}
 	}
-	if (o.transport && o.transport.type) {
-		f.transport = o.transport.type;
-		if (o.transport.path)         f.transport_path         = o.transport.path;
-		if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
-		if (o.transport.headers && o.transport.headers.Host)
-			f.transport_host = o.transport.headers.Host;
-		if (o.transport.host != null) {
-			// `http` transport carries an array of vhosts; ws/httpupgrade
-			// stays a single scalar. Route each into its own UCI field.
-			if (o.transport.type === 'http')
-				f.transport_hosts = Array.isArray(o.transport.host)
-					? o.transport.host : [ o.transport.host ];
-			else
-				f.transport_host = Array.isArray(o.transport.host)
-					? o.transport.host[0] : o.transport.host;
-		}
-		if (o.transport.type === 'xhttp' && o.transport.mode)
-			f.transport_xhttp_mode = o.transport.mode;
-	}
+	SbTransport.parseTransport(o, f);
 	if (o.type === 'hysteria2') {
 		if (o.obfs && o.obfs.type) {
 			f.hysteria2_obfs_type     = o.obfs.type;
