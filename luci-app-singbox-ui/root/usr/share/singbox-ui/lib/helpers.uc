@@ -124,18 +124,28 @@ function reset_iface_cache() { _iface_dev_cache = {}; }
 
 // OUTBOUND_PROXY_KINDS — the set of outbound `type` values that are real
 // proxy protocols supported in E2 (as opposed to interface / url /
-// subscription / direct / block / dns / selector / urltest). Single source
-// for membership checks across export_section.uc and
-// lib/outbound.uc::build_outbounds() dispatch branches — when a new
-// protocol is added, only this list (and the build_constructor_for switch)
-// needs touching. Dropped in E2: vmess, tuic, anytls.
+// subscription / direct / block / dns / selector / urltest). This hand-kept
+// list MUST stay 1:1 with the registered `kind:"outbound"` descriptors
+// (minus `direct`, which has its own dispatch branch). The invariant is
+// enforced by tests/test_protocol_list_consistency.sh against the registry,
+// which is the single source of truth — add a protocol there (a new
+// lib/protocols/<x>.uc + require() in outbound.uc) AND here, and the test
+// keeps the two from drifting. Dropped in E2: vmess, tuic, anytls.
 const OUTBOUND_PROXY_KINDS = [
 	"vless", "trojan", "hysteria2", "shadowsocks",
 ];
 
+// O(1) membership set built once from the list above. Was a linear scan
+// (S4-11); is_outbound_proxy_kind runs per outbound section in
+// build_outbounds() and once per export_section call.
+const _OUTBOUND_PROXY_SET = (function() {
+	let m = {};
+	for (let k in OUTBOUND_PROXY_KINDS) m[k] = true;
+	return m;
+})();
+
 function is_outbound_proxy_kind(t) {
-	for (let k in OUTBOUND_PROXY_KINDS) if (k === t) return true;
-	return false;
+	return _OUTBOUND_PROXY_SET[t] === true;
 }
 
 return {

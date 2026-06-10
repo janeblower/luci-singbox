@@ -30,6 +30,21 @@ function validate_field(f, ctx) {
         assert(f.depends.field != null,           sprintf("%s.%s: depends.field required", ctx, f.name));
         assert(f.depends.value != null,           sprintf("%s.%s: depends.value required (string or array)", ctx, f.name));
     }
+    // enum <-> values <-> default consistency (S4-5). A `values` list is the
+    // hallmark of an enum: it must be an enum and only an enum. A non-empty
+    // default must be one of the listed values. This is the check that would
+    // have caught the direct.proxy_protocol type=number+values bug.
+    if (f.values != null) {
+        assert(type(f.values) === "array",        sprintf("%s.%s: field.values must be an array", ctx, f.name));
+        assert(f.type === "enum",                 sprintf("%s.%s: field.values requires type 'enum' (got '%s')", ctx, f.name, f.type));
+    }
+    if (f.type === "enum")
+        assert(type(f.values) === "array",        sprintf("%s.%s: enum field requires a values array", ctx, f.name));
+    if (f.type === "enum" && f.default != null && f.default !== "") {
+        let found = false;
+        for (let v in f.values) if (v === f.default) found = true;
+        assert(found,                             sprintf("%s.%s: default '%s' is not one of values", ctx, f.name, f.default));
+    }
 }
 
 function validate_shared(shared, ctx) {
@@ -52,6 +67,23 @@ function register(descriptor) {
     delete _materialize_cache[ctx];
 }
 
+// try_register(descriptor) — register() that never throws. A malformed
+// descriptor (or shared block) is logged and skipped so one broken file
+// cannot abort the eager-require chain in outbound.uc / inbound.uc and take
+// down config generation. Built-in callers use register() (strict, unit-
+// tested); the plugin/descriptor bring-up paths use try_register().
+function try_register(descriptor) {
+    try {
+        register(descriptor);
+        return true;
+    } catch (e) {
+        warn(sprintf("registry: skipping descriptor (%s:%s): %s\n",
+            (descriptor != null ? descriptor.kind : "?"),
+            (descriptor != null ? descriptor.type : "?"), e));
+        return false;
+    }
+}
+
 function get(kind, type_) {
     return _registry[sprintf("%s:%s", kind, type_)];
 }
@@ -64,12 +96,16 @@ function types_for_kind(kind) {
 }
 
 // _shared_module(name) — lazy loader that returns the corresponding
-// _shared/<name>.uc module, or null if it does not exist. Wrapped in
-// try/catch so the registry remains usable during early bring-up
-// (Tasks 1–5) before all shared modules ship.
+// _shared/<name>.uc module, or null if it does not exist. A genuine load
+// error (syntax error, bad export) is logged via warn() before returning
+// null — otherwise a broken shared module silently strips its fields from
+// the materialized UI with no diagnostic (S4-4).
 function _shared_module(name) {
     try { return require(sprintf("protocols._shared.%s", name)); }
-    catch (e) { return null; }
+    catch (e) {
+        warn(sprintf("registry: shared module '%s' failed to load: %s\n", name, e));
+        return null;
+    }
 }
 
 function _shared_fields(d) {
@@ -131,4 +167,4 @@ function materialize(kind, type_) {
     return result;
 }
 
-return { register, get, types_for_kind, materialize, _registry };
+return { register, try_register, get, types_for_kind, materialize, _registry };

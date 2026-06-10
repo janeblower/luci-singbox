@@ -40,6 +40,33 @@ function emit_outbound(s) {
     return out;
 }
 
+// build_listen_base(s, type_) — common inbound prelude. Validates listen_port
+// (warns + returns null if missing, matching every inbound emitter's guard),
+// and returns the base { type, tag, listen, listen_port } object with the
+// "::" listen default applied. Callers extend the returned object. (S4-QUAL)
+function build_listen_base(s, type_) {
+    let port = s_num(s.listen_port);
+    if (!port) {
+        warn(sprintf("%s inbound: missing listen_port for '%s'\n", type_, s[".name"]));
+        return null;
+    }
+    return {
+        type: type_,
+        tag: s[".name"],
+        listen: length(s_opt(s, "listen")) ? s.listen : "::",
+        listen_port: port,
+    };
+}
+
+// merge_dial(out, s) — fold the shared dial fields into an outbound object.
+// Replaces the `let d = emit_outbound(s); for (k in keys(d)) out[k]=d[k];`
+// boilerplate repeated across outbound emitters. (S4-QUAL)
+function merge_dial(out, s) {
+    let d = emit_outbound(s);
+    for (let k in keys(d)) out[k] = d[k];
+    return out;
+}
+
 return {
     applies_to: { kinds: [ "outbound" ] },
 
@@ -80,4 +107,6 @@ return {
     ],
 
     emit_outbound: emit_outbound,
+    build_listen_base: build_listen_base,
+    merge_dial: merge_dial,
 };

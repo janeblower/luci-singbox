@@ -2,6 +2,7 @@
 
 let reg     = require("protocols.registry");
 let helpers = require("helpers");
+let dial_blk = require("protocols._shared.dial");
 
 const s_opt  = helpers.s_opt;
 const s_num  = helpers.s_num;
@@ -32,17 +33,8 @@ reg.register({
     ],
 
     emit: function(s) {
-        let port = s_num(s.listen_port);
-        if (!port) {
-            warn(sprintf("tproxy inbound: missing listen_port for '%s'\n", s[".name"]));
-            return null;
-        }
-        let out = {
-            type:         "tproxy",
-            tag:          s[".name"],
-            listen:       length(s_opt(s, "listen")) ? s.listen : "::",
-            listen_port:  port,
-        };
+        let out = dial_blk.build_listen_base(s, "tproxy");
+        if (!out) return null;
         let net = s_opt(s, "network");
         if (net == "tcp" || net == "udp") out.network = net;
         if (s_bool(s, "tcp_fast_open")) out.tcp_fast_open = true;

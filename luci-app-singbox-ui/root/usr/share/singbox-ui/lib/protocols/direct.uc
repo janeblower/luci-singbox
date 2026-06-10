@@ -20,7 +20,7 @@ reg.register({
 		  placeholder: "127.0.0.1", advanced: true },
 		{ name: "override_port", type: "number", tab: "basic",
 		  ui_label: "Override destination port", advanced: true },
-		{ name: "proxy_protocol", type: "number", tab: "basic",
+		{ name: "proxy_protocol", type: "enum", tab: "basic",
 		  ui_label: "Proxy protocol version",
 		  values: ["", "1", "2"], advanced: true },
 	],
@@ -30,8 +30,7 @@ reg.register({
 		if (length(s_opt(s, "override_address"))) out.override_address = s.override_address;
 		if (length(s_opt(s, "override_port")))    out.override_port    = s_num(s.override_port);
 		if (length(s_opt(s, "proxy_protocol")))   out.proxy_protocol   = s_num(s.proxy_protocol);
-		let d = dial_blk.emit_outbound(s);
-		for (let k in keys(d)) out[k] = d[k];
+		dial_blk.merge_dial(out, s);
 		return out;
 	},
 });
@@ -60,17 +59,8 @@ reg.register({
 	],
 
 	emit: function(s) {
-		let port = s_num(s.listen_port);
-		if (!port) {
-			warn(sprintf("direct inbound: missing listen_port for '%s'\n", s[".name"]));
-			return null;
-		}
-		let out = {
-			type: "direct",
-			tag: s[".name"],
-			listen: length(s_opt(s, "listen")) ? s.listen : "::",
-			listen_port: port,
-		};
+		let out = dial_blk.build_listen_base(s, "direct");
+		if (!out) return null;
 		if (length(s_opt(s, "network"))) out.network = s.network;
 		if (length(s_opt(s, "override_address"))) out.override_address = s.override_address;
 		if (length(s_opt(s, "override_port")))    out.override_port    = s_num(s.override_port);

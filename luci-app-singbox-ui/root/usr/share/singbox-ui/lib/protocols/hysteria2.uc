@@ -49,10 +49,10 @@ reg.register({
             server_port: s_num(s.server_port),
             password: s_opt(s, "server_password"),
         };
-        if (length(s_opt(s, "obfs_type"))) {
+        if (length(s_opt(s, "obfs_type")) && length(s_opt(s, "obfs_password"))) {
             out.obfs = {
                 type: s.obfs_type,
-                password: s_opt(s, "obfs_password") || "",
+                password: s.obfs_password,
             };
         }
         if (length(s_opt(s, "up_mbps")))   out.up_mbps   = s_num(s.up_mbps);
@@ -63,8 +63,7 @@ reg.register({
         if (net === "tcp" || net === "udp") out.network = net;
         let t = tls_blk.emit_outbound(s, { force_enabled: true });
         if (t) out.tls = t;
-        let d = dial_blk.emit_outbound(s);
-        for (let k in keys(d)) out[k] = d[k];
+        dial_blk.merge_dial(out, s);
         return out;
     },
 });
@@ -108,30 +107,24 @@ reg.register({
     ],
 
     emit: function(s) {
-        let port = s_num(s.listen_port);
-        if (!port) {
-            warn(sprintf("hysteria2 inbound: missing listen_port for '%s'\n", s[".name"]));
-            return null;
-        }
-        let out = {
-            type: "hysteria2",
-            tag: s[".name"],
-            listen: length(s_opt(s, "listen")) ? s.listen : "::",
-            listen_port: port,
-        };
+        let out = dial_blk.build_listen_base(s, "hysteria2");
+        if (!out) return null;
         let users = [];
         for (let u in as_array(s.inbound_user)) {
-            let parts = split(u, ":");
-            if (length(parts) >= 2)
-                push(users, { name: parts[0], password: parts[1] });
+            let c = index(u, ":");
+            if (c >= 0) {
+                let nm = substr(u, 0, c);
+                let pw = substr(u, c + 1);
+                if (length(nm)) push(users, { name: nm, password: pw });
+            }
         }
         if (length(users)) {
             out.users = users;
         } else if (length(s_opt(s, "server_password"))) {
             out.users = [ { name: s[".name"], password: s.server_password } ];
         }
-        if (length(s_opt(s, "obfs_type")))
-            out.obfs = { type: s.obfs_type, password: s_opt(s, "obfs_password") || "" };
+        if (length(s_opt(s, "obfs_type")) && length(s_opt(s, "obfs_password")))
+            out.obfs = { type: s.obfs_type, password: s.obfs_password };
         if (length(s_opt(s, "up_mbps")))   out.up_mbps   = s_num(s.up_mbps);
         if (length(s_opt(s, "down_mbps"))) out.down_mbps = s_num(s.down_mbps);
         if (length(s_opt(s, "masquerade")))

@@ -1,11 +1,13 @@
 // lib/inbound.uc — sing-box `inbounds` builder. Phase E2: descriptor-only
 // dispatch; shared blocks own TLS / transport / multiplex.
 
-// Shadowsocks inbound ss_user format limitation: each entry is "name:password"
-// with `:` as the FIRST-colon separator. A password containing a literal colon
-// is truncated at the second colon — operators must base64-encode it or pick a
-// colon-free passphrase. Mirrored in docs/uci-schema.md → inbound shadowsocks
-// section. (C2.1.15 guard — keep this comment even after full descriptor migration.)
+// User-list entry formats split on the FIRST separator(s) only, so the
+// trailing secret is preserved verbatim even when it contains ':':
+//   mixed       "username:password"            (split once; password = tail)
+//   hysteria2   "name:password"                (split once; password = tail)
+//   shadowsocks "name:method:password"         (split twice; password = tail)
+//   vless       "name:uuid[:flow]"             (UUIDs have no ':'; flow = tail)
+// (C2.1.15 guard — colon-in-password no longer truncates; keep this note.)
 
 let helpers = require("helpers");
 let reg     = require("protocols.registry");
@@ -51,16 +53,17 @@ function build_inbound_users(s, proto) {
 	let entries = as_array(s.inbound_user);
 	let out = [];
 	for (let entry in entries) {
-		let parts = split(entry, ":");
-		if (length(parts) < 2) continue;
-		let name = parts[0], uuid = parts[1];
+		let c1 = index(entry, ":");
+		if (c1 < 0) continue;
+		let name = substr(entry, 0, c1);
+		let rest = substr(entry, c1 + 1);
+		let c2 = index(rest, ":");
+		let uuid = (c2 < 0) ? rest : substr(rest, 0, c2);
+		let flow = (c2 < 0) ? "" : substr(rest, c2 + 1);
 		if (!length(name) || !length(uuid)) continue;
 		let u = { name: name, uuid: uuid };
-		if (length(parts) >= 3 && length(parts[2])) {
-			if (proto === "vless") {
-				if (parts[2] !== "none") u.flow = parts[2];
-			}
-		}
+		if (length(flow) && proto === "vless" && flow !== "none")
+			u.flow = flow;
 		push(out, u);
 	}
 	return out;
