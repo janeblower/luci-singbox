@@ -30,6 +30,21 @@ function validate_field(f, ctx) {
         assert(f.depends.field != null,           sprintf("%s.%s: depends.field required", ctx, f.name));
         assert(f.depends.value != null,           sprintf("%s.%s: depends.value required (string or array)", ctx, f.name));
     }
+    // enum <-> values <-> default consistency (S4-5). A `values` list is the
+    // hallmark of an enum: it must be an enum and only an enum. A non-empty
+    // default must be one of the listed values. This is the check that would
+    // have caught the direct.proxy_protocol type=number+values bug.
+    if (f.values != null) {
+        assert(type(f.values) === "array",        sprintf("%s.%s: field.values must be an array", ctx, f.name));
+        assert(f.type === "enum",                 sprintf("%s.%s: field.values requires type 'enum' (got '%s')", ctx, f.name, f.type));
+    }
+    if (f.type === "enum")
+        assert(type(f.values) === "array",        sprintf("%s.%s: enum field requires a values array", ctx, f.name));
+    if (f.type === "enum" && f.default != null && f.default !== "") {
+        let found = false;
+        for (let v in f.values) if (v === f.default) found = true;
+        assert(found,                             sprintf("%s.%s: default '%s' is not one of values", ctx, f.name, f.default));
+    }
 }
 
 function validate_shared(shared, ctx) {
