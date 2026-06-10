@@ -602,9 +602,10 @@ grep -q -- '--max-filesize' "$FAKE_CURL_LOG" \
 pass "S3-2: oversize valid body rejected by post-stat guard and --max-filesize set"
 
 # ---- S3-3: symlink whose target escapes the whitelist is rejected ----
-# The symlink path itself is under /tmp (whitelisted), but its lstat target is
-# /proc/version which is under no whitelist prefix. cp would follow it; the
-# fs.lstat(target).target re-check must reject it.
+# The symlink path itself is under /tmp (whitelisted), but its target resolves
+# to /proc/version, under no whitelist prefix. cp would follow it; the handler
+# resolves the link with fs.readlink (lstat exposes no target field) and
+# re-checks the prefix guard, which must reject it.
 echo "-- S3-3: local ruleset symlink escaping whitelist is rejected"
 mkdir -p "$TMPDIR/src"
 ln -sf /proc/version "$TMPDIR/src/sneaky.json"
@@ -616,10 +617,29 @@ config ruleset 'rsLink'
 EOF
 rm -f "$SINGBOX_TMPDIR/rs_rsLink.json" "$SINGBOX_TMPDIR/rs_rsLink.raw"
 out=$(run_uc fetch-rulesets 2>&1 || true)
-echo "$out" | grep -qiE 'outside whitelist|symlink|resolved' \
+echo "$out" | grep -qiE 'outside whitelist|symlink|resolved|unresolvable' \
 	|| { echo "$out"; fail "S3-3: expected rejection log for escaping symlink"; }
 [ ! -f "$SINGBOX_TMPDIR/rs_rsLink.json" ] && [ ! -f "$SINGBOX_TMPDIR/rs_rsLink.raw" ] \
 	|| fail "S3-3: escaping symlink should not have produced a file"
 pass "S3-3: symlink escaping whitelist is rejected"
+
+# Allow-case: a symlink under the whitelist pointing to an in-whitelist regular
+# file must NOT be rejected (proves the readlink re-check ALLOWS legit targets —
+# i.e. the guard isn't a blanket reject-all-symlinks). We assert the symlink
+# rejection log is absent for this ruleset; the source is a valid local file so
+# it proceeds past the symlink guard to the normal cp/decompile path.
+echo "-- S3-3: in-whitelist symlink target is allowed (recheck, not reject-all)"
+printf '{"version":1,"rules":[]}\n' > "$TMPDIR/src/real_ok.json"
+ln -sf "$TMPDIR/src/real_ok.json" "$TMPDIR/src/link_ok.json"
+cat >"$TMPDIR/singbox-ui" <<EOF
+config ruleset 'rsOk'
+	option type 'local'
+	option path '$TMPDIR/src/link_ok.json'
+	option nft_rules '1'
+EOF
+out=$(run_uc fetch-rulesets 2>&1 || true)
+echo "$out" | grep -qiE "rsOk.*(outside whitelist|unresolvable|relative)" \
+	&& { echo "$out"; fail "S3-3: in-whitelist symlink was wrongly rejected (reject-all regression)"; }
+pass "S3-3: in-whitelist symlink target is allowed"
 
 echo "OK"

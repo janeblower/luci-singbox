@@ -246,19 +246,22 @@ function cmd_fetch_rulesets(cur) {
 				log_err(`fetch_rulesets: ${name} target path '${target}' outside whitelist (/etc, /tmp, /var, /usr/share), rejecting`);
 				continue;
 			}
-			// cp follows symlinks: a whitelisted path may point OUTSIDE the
-			// whitelist (e.g. /tmp/x -> /proc/version). Detect the link with
-			// fs.lstat and re-check the prefix guard against its destination.
-			// We read lst.target (the raw link destination string, guaranteed
-			// by the ucode-mod-fs lstat struct) rather than fs.realpath, which
-			// may be absent on this OpenWrt build. A relative destination can't
-			// be whitelist-checked without realpath-style resolution, so we
-			// reject it — a relative ruleset symlink is never legitimate.
+			// cp follows symlinks: a whitelisted path may itself be a symlink
+			// pointing OUTSIDE the whitelist (e.g. /tmp/x -> /proc/version).
+			// Detect the link with fs.lstat and resolve its destination with
+			// fs.readlink — the lstat struct does NOT expose the link target
+			// (no `.target` field); readlink is the ucode fs API for it. The
+			// call is try-wrapped so a build lacking readlink degrades to
+			// "reject the symlink" (dest stays null) rather than throwing. We
+			// re-check the prefix guard against the resolved destination; a
+			// relative or out-of-whitelist target is rejected (a relative
+			// ruleset symlink is never legitimate, and realpath may be absent).
 			let lst = fs.lstat(target);
 			if (lst && lst.type === "link") {
-				let dest = lst.target;
+				let dest = null;
+				try { dest = fs.readlink(target); } catch (_) {}
 				if (dest == null || substr(dest, 0, 1) !== "/") {
-					log_err(`fetch_rulesets: ${name} symlink '${target}' has relative/empty target '${dest}', rejecting`);
+					log_err(`fetch_rulesets: ${name} symlink '${target}' has unresolvable/relative target '${dest}', rejecting`);
 					continue;
 				}
 				if (!path_under_whitelist(dest)) {
