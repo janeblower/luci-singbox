@@ -135,6 +135,19 @@ function ok(label, cond) {
   ok('poll() shows unreachable message on failure (S2-1)',
      m.node.textContent.indexOf('Clash API unreachable') >= 0);
 
+  // --- S2-2: the interval self-cancels once root detaches ------------------
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok', body:'{"connections":[]}' }));
+  ctx.__test.setClashMutate(() => Promise.resolve({ status:'ok' }));
+  const m2 = Mon.buildMonitoring();
+  m2.start();
+  const ids = Object.keys(ctx.__test.intervals);
+  ok('start() registers exactly one interval (S2-2)', ids.length === 1);
+  // Simulate SPA navigation: the node is removed from the DOM.
+  m2.node.isConnected = false;
+  ctx.__test.fireInterval(ids[0]);     // the tick that runs after we navigated away
+  ok('interval clears itself when root detached (S2-2)',
+     Object.keys(ctx.__test.intervals).length === 0);
+
   if (failures) { console.error('test_monitoring_js: ' + failures + ' failure(s)'); process.exit(1); }
   console.log('OK');
 })().catch((e) => { console.error('harness error', e); process.exit(1); });
