@@ -96,4 +96,40 @@ out=$(je '
 [ "$out" = "enum" ] || die "S4-6 proxy_protocol field must be type=enum" "$out"
 ok "S4-6 proxy_protocol declared enum"
 
+# ---- S4-9: dns rewrite_ttl NaN guard ----
+# build_rules(cur) iterates cur.foreach(pkg, kind, cb). Feed a mock cursor that
+# yields one ruleset (enabled) and one dns_rule with a non-numeric rewrite_ttl.
+out=$(je '
+    let dns = require("dns");
+    let cur = {
+        foreach: function(pkg, kind, cb) {
+            if (kind == "ruleset") cb({ ".name":"rs", "enabled":"1" });
+            if (kind == "dns_rule")
+                cb({ ".name":"r", "enabled":"1", "ruleset":["rs"],
+                     "server":"fakeip", "rewrite_ttl":"abc" });
+        },
+    };
+    let rules = dns.build_rules(cur);
+    print(rules[0].rewrite_ttl);
+')
+[ "$out" = "60" ] || die "S4-9 non-numeric rewrite_ttl must fall back to 60" "$out"
+ok "S4-9 NaN rewrite_ttl -> 60"
+
+# "0" must still mean explicit disable (regression guard).
+out=$(je '
+    let dns = require("dns");
+    let cur = {
+        foreach: function(pkg, kind, cb) {
+            if (kind == "ruleset") cb({ ".name":"rs", "enabled":"1" });
+            if (kind == "dns_rule")
+                cb({ ".name":"r", "enabled":"1", "ruleset":["rs"],
+                     "server":"fakeip", "rewrite_ttl":"0" });
+        },
+    };
+    let rules = dns.build_rules(cur);
+    print(rules[0].rewrite_ttl);
+')
+[ "$out" = "0" ] || die "S4-9 rewrite_ttl=0 must stay 0" "$out"
+ok "S4-9 rewrite_ttl=0 stays 0"
+
 echo "ALL PASS: test_protocol_descriptors_fixes ($pass checks)"
