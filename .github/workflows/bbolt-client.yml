@@ -1,0 +1,66 @@
+name: bbolt-client
+
+# Builds the standalone bbolt-client-rs reader as static, libc-free binaries for
+# OpenWrt on x86_64 and aarch64. Binary only — no apk packaging (yet).
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'bbolt-client/**'
+      - '.github/workflows/bbolt-client.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'bbolt-client/**'
+      - '.github/workflows/bbolt-client.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bbolt-client-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+defaults:
+  run:
+    working-directory: bbolt-client
+
+jobs:
+  build:
+    name: static x86_64 + aarch64 (no libc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Nightly + rust-src are required for -Z build-std (the toolchain is also
+      # pinned in bbolt-client/rust-toolchain.toml). aarch64 cross-links with the
+      # bundled rust-lld, so no cross-gcc is needed.
+      - name: Install nightly + rust-src
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src
+          rustc +nightly --version
+
+      # qemu-aarch64 lets us run the cross-built aarch64 binary in the test step.
+      - name: Install qemu-user
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+
+      - name: Build (x86_64 + aarch64)
+        run: ./build.sh
+
+      - name: Test x86_64 (native)
+        run: ./test.sh
+
+      - name: Test aarch64 (qemu)
+        run: RUN="qemu-aarch64 target/aarch64-unknown-linux-gnu/release/bbolt-client-rs" ./test.sh
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: bbolt-client-rs
+          path: |
+            bbolt-client/bbolt-client-rs-x86_64
+            bbolt-client/bbolt-client-rs-aarch64
+          if-no-files-found: error
