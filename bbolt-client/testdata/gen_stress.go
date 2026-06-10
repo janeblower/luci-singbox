@@ -49,7 +49,9 @@ func main() {
 		if e != nil {
 			return e
 		}
-		for i := 0; i < 3000; i++ {
+		// 500 keys is enough to force a multi-level (branch) tree while keeping
+		// the committed fixture small.
+		for i := 0; i < 500; i++ {
 			k := []byte(fmt.Sprintf("key%06d", i))
 			v := []byte(fmt.Sprintf("val-%06d-padding-padding-padding-padding", i))
 			if e := big.Put(k, v); e != nil {

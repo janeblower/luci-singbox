@@ -1,17 +1,41 @@
 #![no_std]
 #![no_main]
 
-//! Minimal read-only bbolt reader. Behavior-compatible with ../bbolt-client (Go):
+//! Minimal read-only bbolt reader (behavior matches the upstream Go bbolt reference):
 //!   <db>                   list top-level buckets
 //!   <db> <bucket>          list keys in bucket
 //!   <db> <bucket> <key>    write raw value bytes to stdout
 //!   -r <db> <bucket> <key> strip the sing-box SavedRuleSet envelope -> .srs payload
 //! No libc, no heap: the file is mmap'd PROT_READ and every key/value is a slice
-//! into the mapping. x86_64 Linux only (raw syscall numbers are arch-specific).
+//! into the mapping. x86_64 and aarch64 Linux (the syscall layer is arch-gated).
 
 use core::arch::{asm, global_asm};
 
-// ---------------- raw syscalls (x86_64 Linux) ----------------
+// ---------------- raw Linux syscalls ----------------
+// Only the numbers, the `syscall6` instruction, and `_start` are arch-specific;
+// the parser and I/O below are arch-independent. Supported: x86_64, aarch64.
+#[cfg(target_arch = "x86_64")]
+mod nr {
+    pub const WRITE: usize = 1;
+    pub const OPENAT: usize = 257;
+    pub const LSEEK: usize = 8;
+    pub const MMAP: usize = 9;
+    pub const FLOCK: usize = 73;
+    pub const NANOSLEEP: usize = 35;
+    pub const EXIT_GROUP: usize = 231;
+}
+#[cfg(target_arch = "aarch64")]
+mod nr {
+    pub const WRITE: usize = 64;
+    pub const OPENAT: usize = 56;
+    pub const LSEEK: usize = 62;
+    pub const MMAP: usize = 222;
+    pub const FLOCK: usize = 32;
+    pub const NANOSLEEP: usize = 101;
+    pub const EXIT_GROUP: usize = 94;
+}
+
+#[cfg(target_arch = "x86_64")]
 #[inline]
 unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
                    a4: usize, a5: usize, a6: usize) -> isize {
@@ -28,26 +52,42 @@ unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
     ret
 }
 
+#[cfg(target_arch = "aarch64")]
+#[inline]
+unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
+                   a4: usize, a5: usize, a6: usize) -> isize {
+    let ret: isize;
+    asm!(
+        "svc #0",
+        in("x8") n,
+        inlateout("x0") a1 => ret,
+        in("x1") a2, in("x2") a3, in("x3") a4, in("x4") a5, in("x5") a6,
+        options(nostack),
+    );
+    ret
+}
+
 const AT_FDCWD: usize = (-100isize) as usize;
 const LOCK_SH: usize = 1;
 const LOCK_NB: usize = 4;
 const EAGAIN: isize = -11;
 
-unsafe fn sys_openat(path: *const u8) -> isize { syscall6(257, AT_FDCWD, path as usize, 0, 0, 0, 0) }
-unsafe fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize { syscall6(1, fd, buf as usize, len, 0, 0, 0) }
-unsafe fn sys_lseek_end(fd: usize) -> isize { syscall6(8, fd, 0, 2, 0, 0, 0) }
-unsafe fn sys_mmap_read(fd: usize, len: usize) -> isize { syscall6(9, 0, len, 1, 2, fd, 0) }
-unsafe fn sys_flock(fd: usize, op: usize) -> isize { syscall6(73, fd, op, 0, 0, 0, 0) }
+unsafe fn sys_openat(path: *const u8) -> isize { syscall6(nr::OPENAT, AT_FDCWD, path as usize, 0, 0, 0, 0) }
+unsafe fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize { syscall6(nr::WRITE, fd, buf as usize, len, 0, 0, 0) }
+unsafe fn sys_lseek_end(fd: usize) -> isize { syscall6(nr::LSEEK, fd, 0, 2, 0, 0, 0) }
+unsafe fn sys_mmap_read(fd: usize, len: usize) -> isize { syscall6(nr::MMAP, 0, len, 1, 2, fd, 0) }
+unsafe fn sys_flock(fd: usize, op: usize) -> isize { syscall6(nr::FLOCK, fd, op, 0, 0, 0, 0) }
 unsafe fn sys_nanosleep_ms(ms: i64) {
     let ts = [ms / 1000, (ms % 1000) * 1_000_000];
-    syscall6(35, ts.as_ptr() as usize, 0, 0, 0, 0, 0);
+    syscall6(nr::NANOSLEEP, ts.as_ptr() as usize, 0, 0, 0, 0, 0);
 }
-unsafe fn sys_exit(code: usize) -> ! { syscall6(231, code, 0, 0, 0, 0, 0); loop {} }
+unsafe fn sys_exit(code: usize) -> ! { syscall6(nr::EXIT_GROUP, code, 0, 0, 0, 0, 0); loop {} }
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! { unsafe { sys_exit(134) } }
 
-// ---------------- entry ----------------
+// ---------------- entry: pass the argv-block pointer (argc at [sp]) to rust_entry ----------------
+#[cfg(target_arch = "x86_64")]
 global_asm!(
     ".global _start",
     "_start:",
@@ -55,6 +95,13 @@ global_asm!(
     "mov rdi, rsp",
     "and rsp, -16",
     "call rust_entry",
+);
+#[cfg(target_arch = "aarch64")]
+global_asm!(
+    ".global _start",
+    "_start:",
+    "mov x0, sp", // argv-block pointer (argc at [sp]); sp is already 16-aligned at entry
+    "bl rust_entry",
 );
 
 #[no_mangle]
