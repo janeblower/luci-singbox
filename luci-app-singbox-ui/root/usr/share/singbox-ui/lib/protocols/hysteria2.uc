@@ -121,9 +121,12 @@ reg.register({
         };
         let users = [];
         for (let u in as_array(s.inbound_user)) {
-            let parts = split(u, ":");
-            if (length(parts) >= 2)
-                push(users, { name: parts[0], password: parts[1] });
+            let c = index(u, ":");
+            if (c >= 0) {
+                let nm = substr(u, 0, c);
+                let pw = substr(u, c + 1);
+                if (length(nm)) push(users, { name: nm, password: pw });
+            }
         }
         if (length(users)) {
             out.users = users;
