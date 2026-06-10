@@ -81,12 +81,16 @@ function types_for_kind(kind) {
 }
 
 // _shared_module(name) — lazy loader that returns the corresponding
-// _shared/<name>.uc module, or null if it does not exist. Wrapped in
-// try/catch so the registry remains usable during early bring-up
-// (Tasks 1–5) before all shared modules ship.
+// _shared/<name>.uc module, or null if it does not exist. A genuine load
+// error (syntax error, bad export) is logged via warn() before returning
+// null — otherwise a broken shared module silently strips its fields from
+// the materialized UI with no diagnostic (S4-4).
 function _shared_module(name) {
     try { return require(sprintf("protocols._shared.%s", name)); }
-    catch (e) { return null; }
+    catch (e) {
+        warn(sprintf("registry: shared module '%s' failed to load: %s\n", name, e));
+        return null;
+    }
 }
 
 function _shared_fields(d) {
