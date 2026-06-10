@@ -547,11 +547,24 @@ after_count=$(count_preview_tmpfiles)
 	|| { echo "FAIL: preview_config left a tmpfile after run"; exit 1; }
 echo "  PASS: preview_config tmpfile cleanup"
 
-# === C2.1.5: is_singbox_running no longer uses pgrep -f ===
-echo "-- C2.1.5: is_singbox_running no longer uses pgrep -f"
-grep -q 'pgrep -f "sing-box run"' luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui && \
-	{ echo "FAIL: pgrep -f \"sing-box run\" still present"; exit 1; } || \
-	echo "  PASS: pgrep -f \"sing-box run\" removed"
+# === C2.1.5 (functional): is_singbox_running ignores `pgrep -f "sing-box run"` ===
+# Behavioral replacement for the old grep-over-source assert: a process
+# whose commandline merely contains "sing-box run" must NOT count as
+# running. Stub pgrep so that ONLY `pgrep -f "sing-box run"` succeeds and
+# `pgrep -x sing-box` fails; the handler must report running=false.
+echo "-- C2.1.5: running=false when only 'pgrep -f \"sing-box run\"' would match"
+cat >"$tmpdir/pgrep" <<'EOF'
+#!/bin/sh
+case "$*" in
+	'-f sing-box run') exit 0 ;;   # the OLD, wrong form — must be ignored
+	*) exit 1 ;;
+esac
+EOF
+chmod +x "$tmpdir/pgrep"
+raw=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_TMP=/nonexistent/path run_h call status)
+printf "%s\n" "$raw" | je 'd.running == false' \
+	|| { echo "FAIL: running should be false when only pgrep -f matches; raw=[$raw]"; exit 1; }
+echo "  PASS: is_singbox_running ignores the pgrep -f form (functional)"
 
 # Positive: rpcd answers status with running:true via fallback pgrep -x when
 # ubus is unavailable (the test env has no ubus, so the fallback path runs).
@@ -569,11 +582,27 @@ printf "%s\n" "$raw" | je 'd.status == "ok" && d.running == true' \
 	|| { echo "FAIL: status running=true via pgrep -x fallback; raw=[$raw]"; exit 1; }
 echo "  PASS: status running=true via pgrep -x fallback"
 
-# === C2.1.9: preview_tmp uses mktemp ===
-echo "-- C2.1.9: preview_tmp uses mktemp"
-grep -q 'mktemp' luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui && \
-	echo "  PASS: preview_tmp uses mktemp" || \
-	{ echo "FAIL: mktemp not present"; exit 1; }
+# === C2.1.9 (functional): preview_config tmpfile is atomic + always cleaned ===
+# Behavioral replacement for the old `grep -q mktemp` assert. We don't care
+# HOW the tmpfile is made (mktemp vs fs native) — only that a successful
+# preview leaves no singbox-ui-preview.* behind and a failed one doesn't
+# either. (Collision/cleanup already covered above; this pins the contract.)
+echo "-- C2.1.9: preview_config leaves no tmpfile (atomic create + cleanup)"
+cat >"$tmpdir/ucode" <<'EOF'
+#!/bin/sh
+: "${SINGBOX_CONFIG:?}"
+printf '{"x":1}\n' >"$SINGBOX_CONFIG"
+exit 0
+EOF
+chmod +x "$tmpdir/ucode"
+rm -f /tmp/singbox-ui-preview.*
+out=$(echo '{}' | PATH="$tmpdir:$PATH" SINGBOX_CONFIG="$real_cfg" run_h call preview_config)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL: preview_config not ok; out=$out"; exit 1; }
+left=$(find /tmp -maxdepth 1 -name 'singbox-ui-preview.*' 2>/dev/null | wc -l)
+[ "$left" -eq 0 ] \
+	|| { echo "FAIL: preview_config left $left tmpfile(s) behind"; exit 1; }
+echo "  PASS: preview_config tmpfile atomically created + cleaned (functional)"
 
 # === E1 (read_config plain): read_config returns secrets verbatim ===
 echo "-- E1 (read_config plain): read_config returns secrets verbatim"
