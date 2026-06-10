@@ -55,6 +55,7 @@ root/usr/share/singbox-ui/lib/protocols/trojan.uc	usr/share/singbox-ui/lib/proto
 root/usr/share/singbox-ui/lib/protocols/vless.uc	usr/share/singbox-ui/lib/protocols/vless.uc	data
 root/usr/share/singbox-ui/lib/route.uc	usr/share/singbox-ui/lib/route.uc	data
 root/usr/share/singbox-ui/lib/ruleset.uc	usr/share/singbox-ui/lib/ruleset.uc	data
+root/usr/share/singbox-ui/lib/sharelink.uc	usr/share/singbox-ui/lib/sharelink.uc	data
 root/usr/share/singbox-ui/lib/subscription_expand.uc	usr/share/singbox-ui/lib/subscription_expand.uc	data
 root/usr/share/singbox-ui/nftables.uc	usr/share/singbox-ui/nftables.uc	data
 root/usr/share/singbox-ui/subscription.uc	usr/share/singbox-ui/subscription.uc	data

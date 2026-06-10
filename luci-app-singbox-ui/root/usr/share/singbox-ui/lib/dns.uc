@@ -58,9 +58,16 @@ function build_rules(cur) {
 		let has_match = rule.rule_set || rule.domain_suffix || rule.domain_keyword || rule.clash_mode;
 		if (!has_match || !length(server)) return;
 		rule.server = server;
-		// rewrite_ttl default = 60. Empty/absent → 60. "0" → 0 (explicit disable).
+		// rewrite_ttl default = 60. Empty/absent → 60. "0" → 0 (explicit
+		// disable). A non-numeric value (+"abc" → NaN) also falls back to 60
+		// rather than serializing to null and breaking sing-box (S4-9).
 		let rtt_raw = s_opt(s, "rewrite_ttl");
-		rule.rewrite_ttl = (rtt_raw === "") ? 60 : (+rtt_raw);
+		if (rtt_raw === "") {
+			rule.rewrite_ttl = 60;
+		} else {
+			let n = +rtt_raw;
+			rule.rewrite_ttl = (n == n) ? n : 60;
+		}
 		push(rules, rule);
 	});
 	return rules;
@@ -84,4 +91,4 @@ function build_dns(cur) {
 	return length(keys(out)) ? out : null;
 }
 
-return { build_dns };
+return { build_dns, build_rules };

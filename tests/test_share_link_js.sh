@@ -86,5 +86,18 @@ catch (e) { threw6 = true; }
 assert('malformed trojan userinfo does not throw', threw6 === false);
 assert('malformed trojan userinfo yields a result object', r && typeof r.ok === 'boolean');
 
+// Test 8: bracketed IPv6 literal hosts must parse for all four schemes (S4-7).
+r = mod.shareLinkImport('vless://11111111-2222-3333-4444-555555555555@[2001:db8::1]:443?type=tcp#v6');
+assert('vless IPv6 host', r.ok && r.fields.server === '[2001:db8::1]' && r.fields.server_port === 443);
+r = mod.shareLinkImport('trojan://pw@[2001:db8::2]:8443#v6');
+assert('trojan IPv6 host', r.ok && r.fields.server === '[2001:db8::2]' && r.fields.server_port === 8443);
+r = mod.shareLinkImport('hysteria2://pw@[2001:db8::3]:443#v6');
+assert('hy2 IPv6 host', r.ok && r.fields.server === '[2001:db8::3]' && r.fields.server_port === 443);
+r = mod.shareLinkImport('ss://aes-256-gcm:pw@[2001:db8::4]:8388#v6');
+assert('ss IPv6 host', r.ok && r.fields.server === '[2001:db8::4]' && r.fields.server_port === 8388);
+// IPv4 must still parse (no regression).
+r = mod.shareLinkImport('trojan://pw@1.2.3.4:443#v4');
+assert('trojan IPv4 still parses', r.ok && r.fields.server === '1.2.3.4' && r.fields.server_port === 443);
+
 console.log('ALL PASS: test_share_link_js');
 "

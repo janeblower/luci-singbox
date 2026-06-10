@@ -49,8 +49,7 @@ reg.register({
         let t = tls_blk.emit_outbound(s);  if (t) out.tls = t;
         let r = tr_blk.emit(s);            if (r) out.transport = r;
         let m = mux_blk.emit(s);           if (m) out.multiplex = m;
-        let d = dial_blk.emit_outbound(s);
-        for (let k in keys(d)) out[k] = d[k];
+        dial_blk.merge_dial(out, s);
         return out;
     },
 });
@@ -77,17 +76,8 @@ reg.register({
 
     emit: function(s) {
         let inb = require("inbound");
-        let port = s_num(s.listen_port);
-        if (!port) {
-            warn(sprintf("vless inbound: missing listen_port for '%s'\n", s[".name"]));
-            return null;
-        }
-        let out = {
-            type: "vless",
-            tag: s[".name"],
-            listen: length(s_opt(s, "listen")) ? s.listen : "::",
-            listen_port: port,
-        };
+        let out = dial_blk.build_listen_base(s, "vless");
+        if (!out) return null;
         let multi = inb.build_inbound_users(s, "vless");
         out.users = length(multi) ? multi : [ inb.build_user(s) ];
         let t = tls_blk.emit_inbound(s);  if (t) out.tls = t;
