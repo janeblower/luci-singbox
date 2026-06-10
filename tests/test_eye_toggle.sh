@@ -13,7 +13,7 @@ if ! grep -q 'function decorateSecretInput' "$DF"; then
 fi
 
 if ! grep -q 'decorateSecretInput(opt)' "$DF"; then
-    echo "FAIL: decorateSecretInput not invoked from applyDescriptor"
+    echo "FAIL: decorateSecretInput not invoked from applyMaterialized"
     fail=1
 fi
 

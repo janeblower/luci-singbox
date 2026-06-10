@@ -1,9 +1,12 @@
 #!/bin/sh
 # tests/test_descriptor_form_js.sh — node-based unit tests for
-# lib/descriptor_form.js::applyDescriptor(). Mocks LuCI's `form`, `ui`,
-# `validators`, and `L` globals via vm.createContext, then asserts taboption
-# call count, depends keys, widget mapping, password, rmempty, enum values,
-# and inbound vs outbound discriminator.
+# lib/descriptor_form.js::applyMaterialized() (the live renderer; the legacy
+# applyDescriptor was removed once inbounds.js/outbounds.js fully migrated).
+# Mocks LuCI's `form`, `ui`, `validators`, and `L` globals via
+# vm.createContext, then asserts tab registration, taboption call count,
+# object-chain depends arms, widget mapping, password, rmempty, enum values,
+# cross-protocol dedup + enum union, advanced/parent_enabled/virtual wiring,
+# and the inbound-vs-outbound discriminator.
 # Skips when node is unavailable, mirroring tests/test_validators_js.sh.
 set -e
 
@@ -59,11 +62,11 @@ const ctx = vm.createContext(sandbox);
 vm.runInContext('(function() {' + body + '})();', ctx, { filename: 'descriptor_form.js' });
 
 const DF = ctx.__moduleExports;
-if (!DF || typeof DF.applyDescriptor !== 'function') {
-	console.error('FAIL: descriptor_form.js did not export applyDescriptor');
+if (!DF || typeof DF.applyMaterialized !== 'function') {
+	console.error('FAIL: descriptor_form.js did not export applyMaterialized');
 	process.exit(1);
 }
-const applyDescriptor = DF.applyDescriptor;
+const applyMaterialized = DF.applyMaterialized;
 
 let failures = 0;
 function pass(label) { console.log('  PASS:', label); }
@@ -73,14 +76,18 @@ function fail(label, msg) {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: build a mock section that records taboption() calls.
+// Helper: mock section recording tab()/taboption() calls. depends() now takes
+// a single object (the materialized renderer builds object-chain arms), not
+// the legacy (key,value) pair.
 // ---------------------------------------------------------------------------
 function makeSection() {
 	const opts = [];
+	const tabs = [];
 	const s = {
-		taboption: function(group, widget, name, label) {
+		tab: function(name, title) { tabs.push([name, title]); },
+		taboption: function(tab, widget, name, label) {
 			const o = {
-				_group:   group,
+				_tab:     tab,
 				_widget:  widget,
 				_name:    name,
 				_label:   label,
@@ -88,57 +95,71 @@ function makeSection() {
 				_values:  [],
 				rmempty:  true,
 			};
-			o.depends = function(k, v) { o._depends.push([k, v]); return o; };
-			o.value   = function(k, v) { o._values.push([k, v]);   return o; };
+			o.depends = function(d) { o._depends.push(d); return o; };
+			o.value   = function(k, v) { o._values.push([k, v]); return o; };
 			opts.push(o);
 			return o;
 		},
 	};
-	return { s, opts };
+	return { s, opts, tabs };
 }
 
 // ---------------------------------------------------------------------------
-// Sample outbound descriptor — covers all widget types.
+// Sample materialized outbound payload — covers all widget types.
 // ---------------------------------------------------------------------------
-const descriptor = {
+const mat = {
 	sing_box_type: 'vless',
+	tabs: ['basic', 'tls'],
 	fields: [
-		{ name: 'server',      type: 'string', required: true, validate: 'host', group: 'basic'       },
-		{ name: 'server_port', type: 'number', required: true, validate: 'port', group: 'basic'       },
-		{ name: 'server_uuid', type: 'string', secret: true,   validate: 'uuid', group: 'credentials' },
-		{ name: 'vless_flow',  type: 'enum',   values: ['', 'xtls-rprx-vision'],  group: 'credentials' },
-		{ name: 'multi',       type: 'list',   item: 'string',                    group: 'advanced'    },
-		{ name: 'enabled',     type: 'bool',                                       group: 'advanced'    },
+		{ name: 'server',      type: 'string', tab: 'basic', required: true, validate: 'host' },
+		{ name: 'server_port', type: 'string', tab: 'basic', required: true, validate: 'port' },
+		{ name: 'server_uuid', type: 'string', tab: 'basic', secret: true,   validate: 'uuid' },
+		{ name: 'vless_flow',  type: 'enum',   tab: 'tls',   values: ['', 'xtls-rprx-vision'] },
+		{ name: 'multi',       type: 'list',   tab: 'tls' },
+		{ name: 'enabled',     type: 'bool',   tab: 'tls' },
 	],
 };
 
-const { s, opts } = makeSection();
-applyDescriptor(s, 'outbound', 'vless', descriptor);
+const { s, opts, tabs } = makeSection();
+applyMaterialized(s, 'outbound', 'vless', mat);
 
 // 1. Call count matches field count.
-if (opts.length === descriptor.fields.length) {
+if (opts.length === mat.fields.length) {
 	pass('taboption call count (' + opts.length + ')');
 } else {
 	fail('taboption call count',
-		'expected ' + descriptor.fields.length + ', got ' + opts.length);
+		'expected ' + mat.fields.length + ', got ' + opts.length);
 }
 
-// 2. Each option has exactly one depends('type', 'vless').
+// 2. Each declared tab is registered exactly once.
+if (tabs.length === 2 &&
+    tabs.some(t => t[0] === 'basic') &&
+    tabs.some(t => t[0] === 'tls')) {
+	pass('tabs registered once (basic, tls)');
+} else {
+	fail('tabs registered once', JSON.stringify(tabs));
+}
+
+// 3. Each option has exactly one depends arm {type:'vless'} (no extra keys).
 let depOk = true;
 for (const o of opts) {
 	if (o._depends.length !== 1) {
 		fail("depends count for '" + o._name + "'",
 			'expected 1, got ' + o._depends.length);
 		depOk = false;
-	} else if (o._depends[0][0] !== 'type' || o._depends[0][1] !== 'vless') {
-		fail("depends value for '" + o._name + "'",
-			'expected [type,vless], got ' + JSON.stringify(o._depends[0]));
-		depOk = false;
+	} else {
+		const d = o._depends[0];
+		const keys = Object.keys(d);
+		if (keys.length !== 1 || d.type !== 'vless') {
+			fail("depends arm for '" + o._name + "'",
+				'expected {type:vless}, got ' + JSON.stringify(d));
+			depOk = false;
+		}
 	}
 }
-if (depOk) pass("depends('type','vless') on every outbound option");
+if (depOk) pass("depends({type:'vless'}) on every outbound option");
 
-// 3. Widget mapping.
+// 4. Widget mapping.
 const widgetMap = {
 	server:      'Value',
 	server_port: 'Value',
@@ -155,9 +176,9 @@ for (const o of opts) {
 		widgetOk = false;
 	}
 }
-if (widgetOk) pass('widget mapping (string/number → Value, list → DynamicList, bool → Flag, enum → ListValue)');
+if (widgetOk) pass('widget mapping (string → Value, list → DynamicList, bool → Flag, enum → ListValue)');
 
-// 4. secret:true → password=true.
+// 5. secret:true → password=true.
 const uuidOpt = opts.find(o => o._name === 'server_uuid');
 if (uuidOpt && uuidOpt.password === true) {
 	pass('secret:true → password=true');
@@ -166,7 +187,7 @@ if (uuidOpt && uuidOpt.password === true) {
 		'server_uuid.password = ' + (uuidOpt && uuidOpt.password));
 }
 
-// 5. required:true → rmempty=false.
+// 6. required:true → rmempty=false.
 const serverOpt = opts.find(o => o._name === 'server');
 if (serverOpt && serverOpt.rmempty === false) {
 	pass('required:true → rmempty=false');
@@ -175,7 +196,7 @@ if (serverOpt && serverOpt.rmempty === false) {
 		'server.rmempty = ' + (serverOpt && serverOpt.rmempty));
 }
 
-// 6. Enum values populated (vless_flow has 2 entries: '' and 'xtls-rprx-vision').
+// 7. Enum values populated (vless_flow has 2 entries: '' and 'xtls-rprx-vision').
 const flowOpt = opts.find(o => o._name === 'vless_flow');
 if (flowOpt && flowOpt._values.length === 2) {
 	pass('enum values populated (2 entries for vless_flow)');
@@ -184,61 +205,62 @@ if (flowOpt && flowOpt._values.length === 2) {
 		'vless_flow._values.length = ' + (flowOpt && flowOpt._values.length));
 }
 
-// 7. Non-required, non-secret field keeps rmempty=true default.
+// 8. Non-required, non-secret field keeps rmempty=true default + modalonly set.
 const multiOpt = opts.find(o => o._name === 'multi');
-if (multiOpt && multiOpt.rmempty === true) {
-	pass('optional field keeps rmempty=true');
+if (multiOpt && multiOpt.rmempty === true && multiOpt.modalonly === true) {
+	pass('optional field keeps rmempty=true and is modalonly');
 } else {
-	fail('optional field keeps rmempty=true',
-		'multi.rmempty = ' + (multiOpt && multiOpt.rmempty));
+	fail('optional field keeps rmempty=true and is modalonly',
+		'multi.rmempty=' + (multiOpt && multiOpt.rmempty) + ' modalonly=' + (multiOpt && multiOpt.modalonly));
 }
 
 // ---------------------------------------------------------------------------
-// Test 8: inbound discriminator uses 'protocol' not 'type'.
+// Test 9: inbound discriminator uses 'protocol' not 'type'.
 // ---------------------------------------------------------------------------
 const { s: s2, opts: opts2 } = makeSection();
-applyDescriptor(s2, 'inbound', 'trojan', {
+applyMaterialized(s2, 'inbound', 'trojan', {
 	sing_box_type: 'trojan',
+	tabs: ['basic'],
 	fields: [
-		{ name: 'listen_port', type: 'number', group: 'basic' },
+		{ name: 'listen_port', type: 'string', tab: 'basic' },
 	],
 });
 
 if (opts2.length === 1 &&
     opts2[0]._depends.length === 1 &&
-    opts2[0]._depends[0][0] === 'protocol' &&
-    opts2[0]._depends[0][1] === 'trojan') {
-	pass("inbound uses depends('protocol', ...) not depends('type', ...)");
+    Object.keys(opts2[0]._depends[0]).length === 1 &&
+    opts2[0]._depends[0].protocol === 'trojan') {
+	pass("inbound uses depends({protocol:...}) not depends({type:...})");
 } else {
 	fail("inbound discriminator",
 		JSON.stringify(opts2[0] && opts2[0]._depends));
 }
 
 // ---------------------------------------------------------------------------
-// Test 9: null/missing descriptor does not throw.
+// Test 10: null/missing/fieldless payload does not throw.
 // ---------------------------------------------------------------------------
 let threw = false;
 try {
 	const { s: sNull } = makeSection();
-	applyDescriptor(sNull, 'outbound', 'vless', null);
-	applyDescriptor(sNull, 'outbound', 'vless', { sing_box_type: 'vless' });
+	applyMaterialized(sNull, 'outbound', 'vless', null);
+	applyMaterialized(sNull, 'outbound', 'vless', { sing_box_type: 'vless' });
 } catch (e) {
 	threw = true;
-	fail('null/missing descriptor guard', e.message);
+	fail('null/missing payload guard', e.message);
 }
-if (!threw) pass('null/missing descriptor handled without throw');
+if (!threw) pass('null/missing payload handled without throw');
 
 // ---------------------------------------------------------------------------
-// Test 10: Dedup — shared field across two protocols → one taboption, two depends.
+// Test 11: Dedup — shared (tab,name) across two protocols → one taboption,
+// two depends arms (one per protocol).
 // ---------------------------------------------------------------------------
 {
 	const { s: sDedup, opts: optsDedup } = makeSection();
-	applyDescriptor(sDedup, 'outbound', 'protoA',
-		{ fields: [{ name: 'shared', type: 'string', group: 'basic' }] });
-	applyDescriptor(sDedup, 'outbound', 'protoB',
-		{ fields: [{ name: 'shared', type: 'string', group: 'basic' }] });
+	applyMaterialized(sDedup, 'outbound', 'protoA',
+		{ tabs: ['basic'], fields: [{ name: 'shared', type: 'string', tab: 'basic' }] });
+	applyMaterialized(sDedup, 'outbound', 'protoB',
+		{ tabs: ['basic'], fields: [{ name: 'shared', type: 'string', tab: 'basic' }] });
 
-	// Only one taboption call for 'shared'
 	const sharedCalls = optsDedup.filter(o => o._name === 'shared');
 	if (sharedCalls.length === 1) {
 		pass('shared field deduped to one taboption');
@@ -247,7 +269,6 @@ if (!threw) pass('null/missing descriptor handled without throw');
 			'expected 1, got ' + sharedCalls.length);
 	}
 
-	// The single option has depends from both protocols
 	const opt = sharedCalls[0];
 	if (opt && opt._depends.length === 2) {
 		pass('shared has depends from both protocols');
@@ -257,40 +278,38 @@ if (!threw) pass('null/missing descriptor handled without throw');
 	}
 
 	const dep0 = opt && opt._depends[0];
-	if (dep0 && dep0[0] === 'type' && dep0[1] === 'protoA') {
-		pass('first depends is protoA');
+	if (dep0 && dep0.type === 'protoA') {
+		pass('first depends arm is protoA');
 	} else {
-		fail('first depends is protoA', JSON.stringify(dep0));
+		fail('first depends arm is protoA', JSON.stringify(dep0));
 	}
 
 	const dep1 = opt && opt._depends[1];
-	if (dep1 && dep1[0] === 'type' && dep1[1] === 'protoB') {
-		pass('second depends is protoB');
+	if (dep1 && dep1.type === 'protoB') {
+		pass('second depends arm is protoB');
 	} else {
-		fail('second depends is protoB', JSON.stringify(dep1));
+		fail('second depends arm is protoB', JSON.stringify(dep1));
 	}
 
-	// modalonly should be set on descriptor fields
 	if (opt && opt.modalonly === true) {
-		pass('descriptor fields default to modalonly');
+		pass('materialized fields default to modalonly');
 	} else {
-		fail('descriptor fields default to modalonly',
+		fail('materialized fields default to modalonly',
 			'shared.modalonly = ' + (opt && opt.modalonly));
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Test 11: Enum-merge overlap — two protocols declare same field with
-// different enum values; merged option should have union of values, no dups.
+// Test 12: Enum-merge overlap — two protocols declare same field with
+// different enum values; merged option carries the union, no duplicates.
 // ---------------------------------------------------------------------------
 {
 	const { s: sEnumMerge, opts: optsEnumMerge } = makeSection();
-	applyDescriptor(sEnumMerge, 'outbound', 'protoA',
-		{ fields: [{ name: 'mode', type: 'enum', values: ['', 'x', 'y'], group: 'basic' }] });
-	applyDescriptor(sEnumMerge, 'outbound', 'protoB',
-		{ fields: [{ name: 'mode', type: 'enum', values: ['y', 'z'], group: 'basic' }] });
+	applyMaterialized(sEnumMerge, 'outbound', 'protoA',
+		{ tabs: ['basic'], fields: [{ name: 'mode', type: 'enum', tab: 'basic', values: ['', 'x', 'y'] }] });
+	applyMaterialized(sEnumMerge, 'outbound', 'protoB',
+		{ tabs: ['basic'], fields: [{ name: 'mode', type: 'enum', tab: 'basic', values: ['y', 'z'] }] });
 
-	// Only one taboption call for 'mode'
 	const modeCalls = optsEnumMerge.filter(o => o._name === 'mode');
 	if (modeCalls.length === 1) {
 		pass('enum field deduped to one taboption');
@@ -301,7 +320,6 @@ if (!threw) pass('null/missing descriptor handled without throw');
 
 	const modeOpt = modeCalls[0];
 
-	// The single option has depends from both protocols
 	if (modeOpt && modeOpt._depends.length === 2) {
 		pass('enum mode has depends from both protocols');
 	} else {
@@ -309,33 +327,66 @@ if (!threw) pass('null/missing descriptor handled without throw');
 			'expected 2, got ' + (modeOpt && modeOpt._depends.length));
 	}
 
-	// Values should be union of all seen values: ['', 'x', 'y', 'z'] (no duplicates)
-	if (modeOpt && modeOpt._values.length === 4) {
-		pass('enum merge: _values.length === 4 (union of [], [x, y], [y, z])');
-	} else {
-		fail('enum merge: _values.length === 4',
-			'expected 4, got ' + (modeOpt && modeOpt._values.length));
-	}
-
-	// Verify the actual values are correct (order: '', 'x', 'y' from protoA, then 'z' from protoB)
 	const valueKeys = modeOpt && modeOpt._values.map(v => v[0]);
 	const expectedKeys = ['', 'x', 'y', 'z'];
-	let valuesMatch = true;
-	if (!valueKeys || valueKeys.length !== expectedKeys.length) {
-		valuesMatch = false;
-	} else {
+	let valuesMatch = !!valueKeys && valueKeys.length === expectedKeys.length;
+	if (valuesMatch) {
 		for (let i = 0; i < expectedKeys.length; i++) {
-			if (valueKeys[i] !== expectedKeys[i]) {
-				valuesMatch = false;
-				break;
-			}
+			if (valueKeys[i] !== expectedKeys[i]) { valuesMatch = false; break; }
 		}
 	}
 	if (valuesMatch) {
-		pass('enum merge: values are [, x, y, z] (no duplicates)');
+		pass('enum merge: values are [, x, y, z] (union, no duplicates)');
 	} else {
 		fail('enum merge: values are [, x, y, z]',
-			'expected [, x, y, z], got ' + JSON.stringify(valueKeys));
+			'got ' + JSON.stringify(valueKeys));
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: advanced + parent_enabled + depends → a single depends arm that
+// ANDs the protocol gate with the per-value depends, the parent_enabled flag,
+// and the per-tab _show_advanced toggle.
+// ---------------------------------------------------------------------------
+{
+	const { s: sAdv, opts: optsAdv } = makeSection();
+	applyMaterialized(sAdv, 'outbound', 'vless', {
+		tabs: ['tls'],
+		fields: [{
+			name: 'reality_short_id', type: 'string', tab: 'tls',
+			advanced: true, parent_enabled: 'tls_enable',
+			depends: { field: 'tls_reality', value: '1' },
+		}],
+	});
+	const o = optsAdv.find(x => x._name === 'reality_short_id');
+	const d = o && o._depends[0];
+	if (d &&
+	    d.type === 'vless' &&
+	    d.tls_reality === '1' &&
+	    d.tls_enable === '1' &&
+	    d._show_advanced_tls === '1' &&
+	    o._depends.length === 1) {
+		pass('advanced/parent_enabled/depends folded into one AND-arm');
+	} else {
+		fail('advanced/parent_enabled/depends arm', JSON.stringify(o && o._depends));
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 14: virtual field is write-suppressed and returns its default cfgvalue.
+// ---------------------------------------------------------------------------
+{
+	const { s: sVirt, opts: optsVirt } = makeSection();
+	applyMaterialized(sVirt, 'outbound', 'vless', {
+		tabs: ['tls'],
+		fields: [{ name: '_show_advanced_tls', type: 'bool', tab: 'tls', virtual: true, default: '0' }],
+	});
+	const o = optsVirt.find(x => x._name === '_show_advanced_tls');
+	if (o && typeof o.write === 'function' && typeof o.remove === 'function' && o.cfgvalue() === '0') {
+		pass('virtual field: write/remove suppressed, cfgvalue returns default');
+	} else {
+		fail('virtual field handling',
+			'write=' + (o && typeof o.write) + ' cfgvalue=' + (o && o.cfgvalue && o.cfgvalue()));
 	}
 }
 
@@ -350,15 +401,4 @@ console.log('OK');
 NODE
 
 node "$TMP/run.js" "$JS"
-
-# E2: applyMaterialized accepts materialized payload and creates per-tab
-# advanced toggle.
-grep -q 'applyMaterialized' "$JS" \
-    || { echo "FAIL: applyMaterialized missing"; exit 1; }
-grep -q '_show_advanced_' "$JS" \
-    || { echo "FAIL: per-tab advanced toggle missing"; exit 1; }
-grep -q 'parent_enabled' "$JS" \
-    || { echo "FAIL: parent_enabled handling missing"; exit 1; }
-grep -q 'virtual' "$JS" \
-    || { echo "FAIL: virtual field handling missing"; exit 1; }
-echo "PASS: descriptor_form E2 shape"
+echo "PASS: descriptor_form applyMaterialized unit tests"

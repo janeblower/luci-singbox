@@ -169,53 +169,6 @@ function applyMaterialized(s, kind, protoName, materialized) {
     });
 }
 
-// ---------------------------------------------------------------------------
-// applyDescriptor — legacy E1 renderer (kept for T17 migration window).
-//   Uses the old descriptor format: fields have `group` instead of `tab`,
-//   and depends is a flat depends(key, val) call rather than an object chain.
-//   T17 will update inbounds.js and outbounds.js to call applyMaterialized
-//   directly, after which this function can be removed.
-// ---------------------------------------------------------------------------
-function applyDescriptor(s, kind, protoName, descriptor) {
-    if (!descriptor || !Array.isArray(descriptor.fields)) return;
-    var discr = (kind === 'inbound') ? 'protocol' : 'type';
-    s._sbDescriptorRegistry = s._sbDescriptorRegistry || {};
-    descriptor.fields.forEach(function(f) {
-        var key = f.name;
-        var registered = s._sbDescriptorRegistry[key];
-        if (registered) {
-            // First-descriptor-wins for required/default/secret/validate/widget.
-            registered.opt.depends(discr, protoName);
-            if (f.type === 'enum' && Array.isArray(f.values))
-                f.values.forEach(function(v) {
-                    if (!registered.values[v]) {
-                        registered.opt.value(v, v === '' ? _('(none)') : v);
-                        registered.values[v] = 1;
-                    }
-                });
-            return;
-        }
-        var opt = s.taboption(f.group || 'advanced', widgetFor(f), f.name, _(labelFor(f)));
-        opt.modalonly = true;
-        opt.depends(discr, protoName);
-        if (f.required)        opt.rmempty = false;
-        if (f.default != null) opt.default = String(f.default);
-        var values = {};
-        if (f.type === 'enum' && Array.isArray(f.values))
-            f.values.forEach(function(v) {
-                opt.value(v, v === '' ? _('(none)') : v);
-                values[v] = 1;
-            });
-        if (f.secret) {
-            opt.password = true;
-            decorateSecretInput(opt);
-        }
-        attachValidator(opt, f.validate);
-        s._sbDescriptorRegistry[key] = { opt: opt, values: values };
-    });
-}
-
 return L.Class.extend({
     applyMaterialized: applyMaterialized,
-    applyDescriptor:   applyDescriptor,
 });
