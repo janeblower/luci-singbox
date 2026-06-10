@@ -52,6 +52,23 @@ function register(descriptor) {
     delete _materialize_cache[ctx];
 }
 
+// try_register(descriptor) — register() that never throws. A malformed
+// descriptor (or shared block) is logged and skipped so one broken file
+// cannot abort the eager-require chain in outbound.uc / inbound.uc and take
+// down config generation. Built-in callers use register() (strict, unit-
+// tested); the plugin/descriptor bring-up paths use try_register().
+function try_register(descriptor) {
+    try {
+        register(descriptor);
+        return true;
+    } catch (e) {
+        warn(sprintf("registry: skipping descriptor (%s:%s): %s\n",
+            (descriptor != null ? descriptor.kind : "?"),
+            (descriptor != null ? descriptor.type : "?"), e));
+        return false;
+    }
+}
+
 function get(kind, type_) {
     return _registry[sprintf("%s:%s", kind, type_)];
 }
@@ -131,4 +148,4 @@ function materialize(kind, type_) {
     return result;
 }
 
-return { register, get, types_for_kind, materialize, _registry };
+return { register, try_register, get, types_for_kind, materialize, _registry };
