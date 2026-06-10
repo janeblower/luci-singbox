@@ -30,11 +30,25 @@ let helpers = require("helpers");
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn("error: " + msg + "\n"); }
 
-// parallel_download(specs) — kick off multiple curls under /bin/sh and
-// wait for all of them in one transaction. Each spec: {url, outpath, opts}.
-// Failures are surfaced via the post-call fs.stat() in callers; no return
-// value here.
-function parallel_download(specs) {
+// I/O seams — overridable for tests, mirroring log._set_logger_for_test.
+// _reader(path) returns the raw body string (or null); _downloader(specs)
+// runs the parallel curl transaction. BOTH `let` bindings are declared here,
+// BEFORE the setter helpers below close over and assign to them — a forward
+// reference would hit the temporal dead zone and throw at call time.
+let _reader = function(path) {
+	let fd = fs.open(path, "r");
+	if (!fd) return null;
+	let body;
+	try { body = fd.read("all"); } catch (e) { body = null; }
+	fd.close();
+	return body;
+};
+
+// Default _downloader is the old parallel_download body, unchanged (it keeps
+// the --max-filesize token from S3-2). Kicks off multiple curls under
+// /bin/sh and waits for all in one transaction. Each spec: {url, outpath,
+// opts}. Failures surface via the caller's fs.stat().
+let _downloader = function(specs) {
 	if (!length(specs)) return;
 	let parts = [];
 	for (let spec in specs) {
@@ -54,7 +68,19 @@ function parallel_download(specs) {
 	}
 	push(parts, "wait");
 	system(["/bin/sh", "-c", join(" ", parts)]);
+};
+
+// _set_io_for_test(downloader, reader) — install mock I/O. Either arg may be
+// null to keep the current implementation. Declared AFTER _downloader/_reader
+// so both targets are already in scope when this assigns to them.
+function _set_io_for_test(downloader, reader) {
+	if (downloader != null) _downloader = downloader;
+	if (reader != null)     _reader = reader;
 }
+
+// _read_raw_for_test(path) — thin wrapper so a test can verify the reader
+// seam without a uci cursor.
+function _read_raw_for_test(path) { return _reader(path); }
 
 // Subscription bodies are usually base64-encoded plaintext containing one
 // proxy URL per line; some servers return plaintext directly. Decode only
@@ -157,7 +183,7 @@ function cmd_fetch_subs(cur) {
 	}
 
 	// Phase 2: parallel curl.
-	parallel_download(specs);
+	_downloader(specs);
 
 	// Phase 3: parse each result; on failure, leave existing out_path alone.
 	for (let m in meta) {
@@ -173,14 +199,7 @@ function cmd_fetch_subs(cur) {
 			continue;
 		}
 
-		let raw_fd = fs.open(m.raw_path, "r");
-		if (!raw_fd) {
-			log_err(`fetch_subs: cannot read ${m.raw_path}`);
-			fs.unlink(m.raw_path);
-			continue;
-		}
-		let raw = raw_fd.read("all") ?? "";
-		raw_fd.close();
+		let raw = _reader(m.raw_path) ?? "";
 		fs.unlink(m.raw_path);
 		if (length(raw) === 0) {
 			log_err(`fetch_subs: empty body for ${m.name}`);
@@ -288,7 +307,7 @@ function cmd_fetch_rulesets(cur) {
 		}
 	}
 
-	parallel_download(specs);
+	_downloader(specs);
 
 	// Decompile / promote each raw file.
 	for (let m in meta) {
@@ -401,4 +420,6 @@ return {
 	try_b64_decode,
 	path_under_whitelist,
 	is_stale,
+	_set_io_for_test,
+	_read_raw_for_test,
 };
