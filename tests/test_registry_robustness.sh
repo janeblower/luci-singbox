@@ -88,4 +88,62 @@ case "$s44" in
     *) die "S4-4 broken shared module produced no warning" "$s44" ;;
 esac
 
+# ---- S4-5: enum field without values[] is rejected ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45a", sing_box_type:"x",
+            fields:[{ name:"e", type:"enum", tab:"basic" }],   // enum w/o values
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "REJECTED" ] || die "S4-5 enum without values[] must be rejected" "$out"
+ok "S4-5 enum without values rejected"
+
+# ---- S4-5: non-enum field carrying values[] is rejected ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45b", sing_box_type:"x",
+            fields:[{ name:"n", type:"number", tab:"basic", values:["","1","2"] }],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "REJECTED" ] || die "S4-5 number with values[] must be rejected" "$out"
+ok "S4-5 number+values rejected"
+
+# ---- S4-5: enum default not in values[] is rejected ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45c", sing_box_type:"x",
+            fields:[{ name:"e", type:"enum", tab:"basic",
+                      values:["a","b"], default:"c" }],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "REJECTED" ] || die "S4-5 enum default outside values[] must be rejected" "$out"
+ok "S4-5 enum default outside values rejected"
+
+# ---- S4-5: valid enum with default in values[] still accepted ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45d", sing_box_type:"x",
+            fields:[{ name:"e", type:"enum", tab:"basic",
+                      values:["","a","b"], default:"a" }],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "ACCEPTED" ] || die "S4-5 valid enum must still be accepted" "$out"
+ok "S4-5 valid enum accepted"
+
 echo "ALL PASS: test_registry_robustness ($pass checks)"
