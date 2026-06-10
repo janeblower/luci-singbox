@@ -150,9 +150,9 @@ function cmd_fetch_subs(cur) {
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
 	let timeout = boot ? 5 : 15;
 
-	// Phase 1: build download specs.
-	let specs = [];
-	let meta  = [];   // parallel array: { name, raw_path, out_path }
+	// Phase 1: build one job per subscription (download spec + metadata in a
+	// single struct — no more index-parallel specs/meta arrays to desync).
+	let jobs = [];
 	for (let name in names) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_subs: ${name} disabled, skipping`);
@@ -178,15 +178,18 @@ function cmd_fetch_subs(cur) {
 		}
 		let raw_path = `${TMPDIR}/sub_${name}.raw`;
 		let out_path = `${TMPDIR}/sub_${name}.txt`;
-		push(specs, { url: url, outpath: raw_path, opts: { timeout: timeout, interface: iface } });
-		push(meta,  { name: name, raw_path: raw_path, out_path: out_path });
+		push(jobs, {
+			name: name, raw_path: raw_path, out_path: out_path,
+			url: url, outpath: raw_path,
+			opts: { timeout: timeout, interface: iface },
+		});
 	}
 
-	// Phase 2: parallel curl.
-	_downloader(specs);
+	// Phase 2: parallel curl (each job is also a valid download spec).
+	_downloader(jobs);
 
 	// Phase 3: parse each result; on failure, leave existing out_path alone.
-	for (let m in meta) {
+	for (let m in jobs) {
 		let st = fs.stat(m.raw_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_subs: download failed for ${m.name}`);
@@ -240,8 +243,8 @@ function cmd_fetch_rulesets(cur) {
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
 	let timeout = boot ? 10 : 30;
 
-	let specs = [];
-	let meta  = [];
+	let jobs = [];   // each: { name, raw_path, out_path, rs_type, target,
+	                 //         download? (remote only): url, outpath, opts }
 	for (let name in names) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_rulesets: ${name} disabled, skipping`);
@@ -259,8 +262,11 @@ function cmd_fetch_rulesets(cur) {
 		}
 
 		if (rs_type === "remote") {
-			push(specs, { url: target, outpath: raw_path, opts: { timeout: timeout } });
-			push(meta,  { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
+			push(jobs, {
+				name: name, raw_path: raw_path, out_path: out_path,
+				rs_type: rs_type, target: target,
+				url: target, outpath: raw_path, opts: { timeout: timeout },
+			});
 		} else if (rs_type === "local") {
 			// Restrict local copies to a small set of known prefixes
 			// (/etc, /tmp, /var, /usr/share) — defense in depth so a
@@ -300,17 +306,20 @@ function cmd_fetch_rulesets(cur) {
 				fs.unlink(raw_path);
 				continue;
 			}
-			push(meta, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
+			push(jobs, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
 		} else {
 			log_err(`fetch_rulesets: unknown type '${rs_type}' for ${name}`);
 			continue;
 		}
 	}
 
-	_downloader(specs);
+	// Only remote jobs carry a download spec (url/outpath/opts); local jobs
+	// were already cp'd inline above. The downloader ignores entries with no
+	// `url`, so passing the whole list is safe.
+	_downloader(filter(jobs, function(j) { return j.url != null; }));
 
 	// Decompile / promote each raw file.
-	for (let m in meta) {
+	for (let m in jobs) {
 		let st = fs.stat(m.raw_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_rulesets: download failed for ${m.name} (${m.target})`);
