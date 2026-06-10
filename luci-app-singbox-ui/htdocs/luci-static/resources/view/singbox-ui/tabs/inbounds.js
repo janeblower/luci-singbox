@@ -8,6 +8,7 @@
 'require view.singbox-ui.importers.inbound as SbImpInbound';
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';
+'require view.singbox-ui.lib.view_state as SbViewState';
 
 var addRenameField   = SbCommon.addRenameField;
 
@@ -157,7 +158,7 @@ function buildInboundsMap() {
 	// The hand-coded TUN / TProxy / Direct blocks have been removed — their
 	// fields live in protocols/tun.uc, protocols/tproxy.uc, protocols/direct.uc
 	// and are served by the protocol_schema RPC.
-	var inboundSchema = (window.singboxUiSchemaCache || {}).inbound || {};
+	var inboundSchema = (SbViewState.getSchema() || {}).inbound || {};
 	SB_INBOUND_PROTOCOLS.forEach(function (entry) {
 		var protoName = entry[0];
 		var mat = inboundSchema[protoName];
