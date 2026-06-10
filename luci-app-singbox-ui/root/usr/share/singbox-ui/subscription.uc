@@ -209,9 +209,11 @@ function cmd_fetch_subs(cur) {
 			continue;
 		}
 
-		let decoded = try_b64_decode(raw);
+		// try_b64_decode returns either the decoded blob (scheme-bearing
+		// base64) or the original plaintext. Feed it straight into the line
+		// scan so we don't hold a separate `decoded` copy alongside `raw`.
 		let urls = [];
-		for (let line in split(decoded, "\n")) {
+		for (let line in split(try_b64_decode(raw), "\n")) {
 			let t = trim(line);
 			if (t !== "" && match(lc(t), /^[a-z][a-z0-9+.-]*:\/\//))
 				push(urls, t);
