@@ -71,23 +71,42 @@ echo "==> wait for SSH banner on :2222"
 # Settle: let dropbear finish its first-listen and procd quiesce.
 sleep 2
 
-echo "==> savevm + quit via monitor"
+echo "==> savevm via monitor"
+# Freeze the guest and snapshot. Do NOT quit yet — savevm is async-ish and
+# can outlast a fixed sleep on a loaded runner. We poll `info snapshots`
+# over the live monitor until boot-state appears (or a deadline) before
+# issuing quit, so we never `quit` mid-write.
 {
 	printf 'stop\n'
 	sleep 1
 	printf 'savevm boot-state\n'
-	sleep 2
-	printf 'info snapshots\n'
-	sleep 1
-	printf 'quit\n'
 } | socat - "UNIX-CONNECT:$MON_SOCK"
 
-# Wait for qemu to finish writing the snapshot to qcow2 and exit.
+echo "==> poll 'info snapshots' until boot-state is durable"
+snap_ready=0
+i=0
+while [ "$i" -lt 30 ]; do
+	# Fresh monitor connection per probe; reads the snapshot table back.
+	if printf 'info snapshots\n' \
+		| socat -t1 - "UNIX-CONNECT:$MON_SOCK" 2>/dev/null \
+		| grep -q 'boot-state'; then
+		snap_ready=1
+		break
+	fi
+	i=$((i + 1))
+	sleep 1
+done
+[ "$snap_ready" = 1 ] || { echo "FAIL: savevm boot-state did not appear in 'info snapshots' within 30s" >&2; exit 1; }
+
+echo "==> quit qemu (snapshot durable)"
+printf 'quit\n' | socat -t1 - "UNIX-CONNECT:$MON_SOCK" 2>/dev/null || true
+
+# Wait for qemu to flush the snapshot to qcow2 and exit.
 wait "$QEMU_PID" || true
 # Reaped; null QEMU_PID so the EXIT trap does not SIGTERM a recycled pid.
 QEMU_PID=""
 
-echo "==> verify snapshot present"
+echo "==> verify snapshot present in qcow2"
 qemu-img snapshot -l "$QCOW" | grep -E "^\s*[0-9]+\s+boot-state" \
 	|| { echo "FAIL: boot-state snapshot not in $QCOW" >&2; exit 1; }
 
