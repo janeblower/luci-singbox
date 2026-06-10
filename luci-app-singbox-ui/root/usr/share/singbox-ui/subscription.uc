@@ -376,13 +376,25 @@ let uci_dir = getenv("UCI_CONFIG_DIR");
 let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
 fs.mkdir(TMPDIR, 0o755);
 
-let argv = ARGV;
-let sub = argv[0] || "";
-switch (sub) {
-case "fetch-subs":     cmd_fetch_subs(cur); break;
-case "fetch-rulesets": cmd_fetch_rulesets(cur); break;
-case "refresh":        cmd_refresh(cur, argv[1] || "all", argv[2] === "force"); break;
-default:
-	log_err("usage: subscription.uc {fetch-subs|fetch-rulesets|refresh [what] [force]}");
-	exit(2);
+// When run as a CLI (init.d / cron) ARGV carries the subcommand. When the
+// file is require()d as a module (tests), ARGV is empty — skip the dispatch
+// and just export the pure/injectable surface, mirroring how lib modules
+// return {} at the bottom.
+if (length(ARGV)) {
+	let argv = ARGV;
+	let sub = argv[0] || "";
+	switch (sub) {
+	case "fetch-subs":     cmd_fetch_subs(cur); break;
+	case "fetch-rulesets": cmd_fetch_rulesets(cur); break;
+	case "refresh":        cmd_refresh(cur, argv[1] || "all", argv[2] === "force"); break;
+	default:
+		log_err("usage: subscription.uc {fetch-subs|fetch-rulesets|refresh [what] [force]}");
+		exit(2);
+	}
 }
+
+return {
+	try_b64_decode,
+	path_under_whitelist,
+	is_stale,
+};
