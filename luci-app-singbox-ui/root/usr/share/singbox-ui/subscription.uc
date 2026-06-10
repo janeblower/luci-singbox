@@ -14,25 +14,48 @@
 const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 const SINGBOX    = getenv("SINGBOX")        || "/usr/bin/sing-box";
 const DEFAULT_UA = "Mozilla/5.0";
+// Cap subscription/ruleset bodies so a hostile or runaway source cannot OOM
+// a 128–256 MB router. curl aborts past --max-filesize; the post-stat guard
+// catches bodies with no Content-Length (chunked) and local cp sources.
+const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
 
 let fs  = require("fs");
 let uci_mod = require("uci");
 let helpers = require("helpers");
 
+// Two channels: log() is ops-info, log_err() is errors. They both write to
+// stderr (init.d/cron route it to syslog) but log_err tags severity so an
+// operator reading logread can tell the two apart — they used to be byte
+// identical, an illusion of separate channels.
 function log(msg)     { warn(msg + "\n"); }
-function log_err(msg) { warn(msg + "\n"); }
+function log_err(msg) { warn("error: " + msg + "\n"); }
 
-// parallel_download(specs) — kick off multiple curls under /bin/sh and
-// wait for all of them in one transaction. Each spec: {url, outpath, opts}.
-// Failures are surfaced via the post-call fs.stat() in callers; no return
-// value here.
-function parallel_download(specs) {
+// I/O seams — overridable for tests, mirroring log._set_logger_for_test.
+// _reader(path) returns the raw body string (or null); _downloader(specs)
+// runs the parallel curl transaction. BOTH `let` bindings are declared here,
+// BEFORE the setter helpers below close over and assign to them — a forward
+// reference would hit the temporal dead zone and throw at call time.
+let _reader = function(path) {
+	let fd = fs.open(path, "r");
+	if (!fd) return null;
+	let body;
+	try { body = fd.read("all"); } catch (e) { body = null; }
+	fd.close();
+	return body;
+};
+
+// Default _downloader is the old parallel_download body, unchanged (it keeps
+// the --max-filesize token from S3-2). Kicks off multiple curls under
+// /bin/sh and waits for all in one transaction. Each spec: {url, outpath,
+// opts}. Failures surface via the caller's fs.stat().
+let _downloader = function(specs) {
 	if (!length(specs)) return;
 	let parts = [];
 	for (let spec in specs) {
 		let opts = spec.opts || {};
 		let argv = [
 			"curl", "-sfL",
+			"--max-filesize", `${MAX_BODY}`,
 			"--max-time", `${opts.timeout ?? 15}`,
 			"-A", opts.user_agent || DEFAULT_UA,
 			"-o", spec.outpath,
@@ -45,7 +68,19 @@ function parallel_download(specs) {
 	}
 	push(parts, "wait");
 	system(["/bin/sh", "-c", join(" ", parts)]);
+};
+
+// _set_io_for_test(downloader, reader) — install mock I/O. Either arg may be
+// null to keep the current implementation. Declared AFTER _downloader/_reader
+// so both targets are already in scope when this assigns to them.
+function _set_io_for_test(downloader, reader) {
+	if (downloader != null) _downloader = downloader;
+	if (reader != null)     _reader = reader;
 }
+
+// _read_raw_for_test(path) — thin wrapper so a test can verify the reader
+// seam without a uci cursor.
+function _read_raw_for_test(path) { return _reader(path); }
 
 // Subscription bodies are usually base64-encoded plaintext containing one
 // proxy URL per line; some servers return plaintext directly. Decode only
@@ -79,6 +114,32 @@ function path_under_whitelist(p) {
 	return false;
 }
 
+// write_atomic(path, body) — write body to a sibling tmp file, flush via
+// close, then fs.rename over `path`. Guarantees sing-box never reads a
+// half-written sub_<name>.txt and never leaks the fd on a write exception.
+// Mirrors generate.uc::publish_atomic. Returns true on success.
+function write_atomic(path, body) {
+	let tmp = sprintf("%s.tmp.%d", path, time());
+	let f = fs.open(tmp, "w");
+	if (!f) { log_err(`write_atomic: cannot open ${tmp}`); return false; }
+	let ok = true;
+	try { f.write(body); } catch (e) { ok = false; }
+	f.close();
+	if (!ok) {
+		log_err(`write_atomic: write to ${tmp} failed`);
+		try { fs.unlink(tmp); } catch (_) {}
+		return false;
+	}
+	let renamed = false;
+	try { renamed = fs.rename(tmp, path); } catch (_) { renamed = false; }
+	if (!renamed) {
+		log_err(`write_atomic: rename ${tmp} -> ${path} failed`);
+		try { fs.unlink(tmp); } catch (_) {}
+		return false;
+	}
+	return true;
+}
+
 function cmd_fetch_subs(cur) {
 	let names = helpers.sections_of_kind(cur, "outbound", "type", "subscription");
 	if (!length(names)) {
@@ -89,9 +150,9 @@ function cmd_fetch_subs(cur) {
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
 	let timeout = boot ? 5 : 15;
 
-	// Phase 1: build download specs.
-	let specs = [];
-	let meta  = [];   // parallel array: { name, raw_path, out_path }
+	// Phase 1: build one job per subscription (download spec + metadata in a
+	// single struct — no more index-parallel specs/meta arrays to desync).
+	let jobs = [];
 	for (let name in names) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_subs: ${name} disabled, skipping`);
@@ -117,39 +178,42 @@ function cmd_fetch_subs(cur) {
 		}
 		let raw_path = `${TMPDIR}/sub_${name}.raw`;
 		let out_path = `${TMPDIR}/sub_${name}.txt`;
-		push(specs, { url: url, outpath: raw_path, opts: { timeout: timeout, interface: iface } });
-		push(meta,  { name: name, raw_path: raw_path, out_path: out_path });
+		push(jobs, {
+			name: name, raw_path: raw_path, out_path: out_path,
+			url: url, outpath: raw_path,
+			opts: { timeout: timeout, interface: iface },
+		});
 	}
 
-	// Phase 2: parallel curl.
-	parallel_download(specs);
+	// Phase 2: parallel curl (each job is also a valid download spec).
+	_downloader(jobs);
 
 	// Phase 3: parse each result; on failure, leave existing out_path alone.
-	for (let m in meta) {
+	for (let m in jobs) {
 		let st = fs.stat(m.raw_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_subs: download failed for ${m.name}`);
 			fs.unlink(m.raw_path);
 			continue;
 		}
-
-		let raw_fd = fs.open(m.raw_path, "r");
-		if (!raw_fd) {
-			log_err(`fetch_subs: cannot read ${m.raw_path}`);
+		if (st.size > MAX_BODY) {
+			log_err(`fetch_subs: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
 			fs.unlink(m.raw_path);
 			continue;
 		}
-		let raw = raw_fd.read("all") ?? "";
-		raw_fd.close();
+
+		let raw = _reader(m.raw_path) ?? "";
 		fs.unlink(m.raw_path);
 		if (length(raw) === 0) {
 			log_err(`fetch_subs: empty body for ${m.name}`);
 			continue;
 		}
 
-		let decoded = try_b64_decode(raw);
+		// try_b64_decode returns either the decoded blob (scheme-bearing
+		// base64) or the original plaintext. Feed it straight into the line
+		// scan so we don't hold a separate `decoded` copy alongside `raw`.
 		let urls = [];
-		for (let line in split(decoded, "\n")) {
+		for (let line in split(try_b64_decode(raw), "\n")) {
 			let t = trim(line);
 			if (t !== "" && match(lc(t), /^[a-z][a-z0-9+.-]*:\/\//))
 				push(urls, t);
@@ -159,13 +223,10 @@ function cmd_fetch_subs(cur) {
 			continue;
 		}
 
-		let out_fd = fs.open(m.out_path, "w");
-		if (!out_fd) {
+		if (!write_atomic(m.out_path, join("\n", urls) + "\n")) {
 			log_err(`fetch_subs: cannot write ${m.out_path}`);
 			continue;
 		}
-		for (let u in urls) out_fd.write(u + "\n");
-		out_fd.close();
 		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
 	}
 	return 0;
@@ -184,8 +245,8 @@ function cmd_fetch_rulesets(cur) {
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
 	let timeout = boot ? 10 : 30;
 
-	let specs = [];
-	let meta  = [];
+	let jobs = [];   // each: { name, raw_path, out_path, rs_type, target,
+	                 //         download? (remote only): url, outpath, opts }
 	for (let name in names) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_rulesets: ${name} disabled, skipping`);
@@ -203,8 +264,11 @@ function cmd_fetch_rulesets(cur) {
 		}
 
 		if (rs_type === "remote") {
-			push(specs, { url: target, outpath: raw_path, opts: { timeout: timeout } });
-			push(meta,  { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
+			push(jobs, {
+				name: name, raw_path: raw_path, out_path: out_path,
+				rs_type: rs_type, target: target,
+				url: target, outpath: raw_path, opts: { timeout: timeout },
+			});
 		} else if (rs_type === "local") {
 			// Restrict local copies to a small set of known prefixes
 			// (/etc, /tmp, /var, /usr/share) — defense in depth so a
@@ -212,6 +276,29 @@ function cmd_fetch_rulesets(cur) {
 			if (!path_under_whitelist(target)) {
 				log_err(`fetch_rulesets: ${name} target path '${target}' outside whitelist (/etc, /tmp, /var, /usr/share), rejecting`);
 				continue;
+			}
+			// cp follows symlinks: a whitelisted path may itself be a symlink
+			// pointing OUTSIDE the whitelist (e.g. /tmp/x -> /proc/version).
+			// Detect the link with fs.lstat and resolve its destination with
+			// fs.readlink — the lstat struct does NOT expose the link target
+			// (no `.target` field); readlink is the ucode fs API for it. The
+			// call is try-wrapped so a build lacking readlink degrades to
+			// "reject the symlink" (dest stays null) rather than throwing. We
+			// re-check the prefix guard against the resolved destination; a
+			// relative or out-of-whitelist target is rejected (a relative
+			// ruleset symlink is never legitimate, and realpath may be absent).
+			let lst = fs.lstat(target);
+			if (lst && lst.type === "link") {
+				let dest = null;
+				try { dest = fs.readlink(target); } catch (_) {}
+				if (dest == null || substr(dest, 0, 1) !== "/") {
+					log_err(`fetch_rulesets: ${name} symlink '${target}' has unresolvable/relative target '${dest}', rejecting`);
+					continue;
+				}
+				if (!path_under_whitelist(dest)) {
+					log_err(`fetch_rulesets: ${name} symlink '${target}' resolved to '${dest}' outside whitelist, rejecting`);
+					continue;
+				}
 			}
 			// Local copies are cheap, do them inline.
 			if (system(["cp", "--", target, raw_path]) !== 0) {
@@ -221,20 +308,28 @@ function cmd_fetch_rulesets(cur) {
 				fs.unlink(raw_path);
 				continue;
 			}
-			push(meta, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
+			push(jobs, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
 		} else {
 			log_err(`fetch_rulesets: unknown type '${rs_type}' for ${name}`);
 			continue;
 		}
 	}
 
-	parallel_download(specs);
+	// Only remote jobs carry a download spec (url/outpath/opts); local jobs
+	// were already cp'd inline above. The downloader ignores entries with no
+	// `url`, so passing the whole list is safe.
+	_downloader(filter(jobs, function(j) { return j.url != null; }));
 
 	// Decompile / promote each raw file.
-	for (let m in meta) {
+	for (let m in jobs) {
 		let st = fs.stat(m.raw_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_rulesets: download failed for ${m.name} (${m.target})`);
+			fs.unlink(m.raw_path);
+			continue;
+		}
+		if (st.size > MAX_BODY) {
+			log_err(`fetch_rulesets: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
 			fs.unlink(m.raw_path);
 			continue;
 		}
@@ -271,7 +366,10 @@ function any_subs_stale(cur, force) {
 	for (let name in helpers.sections_of_kind(cur, "outbound", "type", "subscription")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "sub_interval");
-		if (iv === 0) iv = 3600;
+		// !(iv > 0) catches NaN/0/negatives — +"abc" yields NaN and `iv === 0`
+		// was false, so iv stayed NaN and is_stale's `>= NaN` was always false,
+		// silently disabling refresh.
+		if (!(iv > 0)) iv = 3600;
 		if (is_stale(`${TMPDIR}/sub_${name}.txt`, iv, force)) return true;
 	}
 	return false;
@@ -281,7 +379,8 @@ function any_rulesets_stale(cur, force) {
 	for (let name in helpers.sections_of_kind(cur, "ruleset", "nft_rules", "1")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "update_interval");
-		if (iv === 0) iv = 86400;
+		// !(iv > 0) catches NaN/0/negatives — see any_subs_stale for the bug.
+		if (!(iv > 0)) iv = 86400;
 		if (is_stale(`${TMPDIR}/rs_${name}.json`, iv, force)) return true;
 	}
 	return false;
@@ -311,13 +410,27 @@ let uci_dir = getenv("UCI_CONFIG_DIR");
 let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
 fs.mkdir(TMPDIR, 0o755);
 
-let argv = ARGV;
-let sub = argv[0] || "";
-switch (sub) {
-case "fetch-subs":     cmd_fetch_subs(cur); break;
-case "fetch-rulesets": cmd_fetch_rulesets(cur); break;
-case "refresh":        cmd_refresh(cur, argv[1] || "all", argv[2] === "force"); break;
-default:
-	log_err("usage: subscription.uc {fetch-subs|fetch-rulesets|refresh [what] [force]}");
-	exit(2);
+// When run as a CLI (init.d / cron) ARGV carries the subcommand. When the
+// file is require()d as a module (tests), ARGV is empty — skip the dispatch
+// and just export the pure/injectable surface, mirroring how lib modules
+// return {} at the bottom.
+if (length(ARGV)) {
+	let argv = ARGV;
+	let sub = argv[0] || "";
+	switch (sub) {
+	case "fetch-subs":     cmd_fetch_subs(cur); break;
+	case "fetch-rulesets": cmd_fetch_rulesets(cur); break;
+	case "refresh":        cmd_refresh(cur, argv[1] || "all", argv[2] === "force"); break;
+	default:
+		log_err("usage: subscription.uc {fetch-subs|fetch-rulesets|refresh [what] [force]}");
+		exit(2);
+	}
 }
+
+return {
+	try_b64_decode,
+	path_under_whitelist,
+	is_stale,
+	_set_io_for_test,
+	_read_raw_for_test,
+};

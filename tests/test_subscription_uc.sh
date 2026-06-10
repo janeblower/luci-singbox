@@ -540,4 +540,142 @@ out=$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 ')
 [ "$out" = "all-covered" ] && pass "all active proxy kinds present" || { echo "FAIL"; exit 1; }
 
+# ---- S3-1: subscription output is written atomically (tmp + rename) ----
+# A successful fetch must leave exactly sub_<name>.txt and NO leftover
+# *.tmp.* sibling (proves we wrote a tmp then renamed, never partial).
+echo "-- S3-1: fetch-subs writes output atomically, no tmp leftovers"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subA'
+	option type 'subscription'
+	option sub_url 'https://example.test/sub'
+EOF
+printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"   # b64("vless://uuid@host:443\n")
+export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+rm -f "$SINGBOX_TMPDIR"/sub_subA.txt "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.* 2>/dev/null || true
+run_uc fetch-subs
+[ -s "$SINGBOX_TMPDIR/sub_subA.txt" ] || fail "S3-1: sub_subA.txt missing"
+# Count .tmp.* leftovers via a glob loop (avoids `ls | wc`, SC2012; when the
+# glob matches nothing the literal pattern fails the -e test, so count stays 0).
+leftovers=0
+for _f in "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.*; do
+	[ -e "$_f" ] && leftovers=$((leftovers + 1))
+done
+[ "$leftovers" -eq 0 ] || { ls "$SINGBOX_TMPDIR"; fail "S3-1: tmp file left behind ($leftovers)"; }
+pass "S3-1: atomic write leaves no tmp file"
+
+# Structural: production must route the subs output through a tmp+rename
+# helper (fs.rename), not a bare fs.open(out_path,"w") write loop.
+grep -qE 'fs\.rename\(' "$SUB_UC" \
+	|| fail "S3-1: subscription.uc has no fs.rename (atomic write helper missing)"
+pass "S3-1: subscription.uc uses fs.rename for atomic publish"
+
+# ---- S3-2: oversize subscription body is rejected (no OOM) ----
+# CRITICAL: the body must be VALID (contain a real proxy URL) so it would pass
+# the URL filter and be written if the size guard were missing. Only then does
+# "no output file" prove the post-stat size guard fired (not an empty URL list).
+echo "-- S3-2: curl gets --max-filesize and oversize VALID body is dropped by the size guard"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subBig'
+	option type 'subscription'
+	option sub_url 'https://example.test/big'
+EOF
+# Control first: the SAME valid one-line body UNDER the cap must produce a file.
+# This proves the URL filter accepts the body, so the oversize rejection below
+# can only be attributable to the size guard.
+printf 'vless://uuid@host:443\n' >"$TMPDIR/body"
+export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+: >"$FAKE_CURL_LOG"
+rm -f "$SINGBOX_TMPDIR/sub_subBig.txt"
+run_uc fetch-subs
+[ -s "$SINGBOX_TMPDIR/sub_subBig.txt" ] \
+	|| fail "S3-2(control): under-cap valid body should have produced sub_subBig.txt"
+grep -q '^vless://uuid@host:443' "$SINGBOX_TMPDIR/sub_subBig.txt" \
+	|| fail "S3-2(control): under-cap valid body content wrong"
+pass "S3-2(control): under-cap valid body is written"
+
+# Now the oversize variant: SAME valid first line, then >8 MiB of padding on a
+# second line. The vless:// line still passes the URL filter, so the ONLY thing
+# that can stop the file from being written is the size guard.
+{ printf 'vless://uuid@host:443\n'; head -c 9000000 /dev/zero | tr '\0' 'a'; printf '\n'; } >"$TMPDIR/body"
+: >"$FAKE_CURL_LOG"
+rm -f "$SINGBOX_TMPDIR/sub_subBig.txt"
+run_uc fetch-subs
+grep -q -- '--max-filesize' "$FAKE_CURL_LOG" \
+	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "S3-2: --max-filesize not passed to curl"; }
+[ ! -f "$SINGBOX_TMPDIR/sub_subBig.txt" ] \
+	|| fail "S3-2: oversize body (with a valid URL line) was NOT rejected by the size guard"
+pass "S3-2: oversize valid body rejected by post-stat guard and --max-filesize set"
+
+# ---- S3-3: symlink whose target escapes the whitelist is rejected ----
+# The symlink path itself is under /tmp (whitelisted), but its target resolves
+# to /proc/version, under no whitelist prefix. cp would follow it; the handler
+# resolves the link with fs.readlink (lstat exposes no target field) and
+# re-checks the prefix guard, which must reject it.
+echo "-- S3-3: local ruleset symlink escaping whitelist is rejected"
+mkdir -p "$TMPDIR/src"
+ln -sf /proc/version "$TMPDIR/src/sneaky.json"
+cat >"$TMPDIR/singbox-ui" <<EOF
+config ruleset 'rsLink'
+	option type 'local'
+	option path '$TMPDIR/src/sneaky.json'
+	option nft_rules '1'
+EOF
+rm -f "$SINGBOX_TMPDIR/rs_rsLink.json" "$SINGBOX_TMPDIR/rs_rsLink.raw"
+out=$(run_uc fetch-rulesets 2>&1 || true)
+echo "$out" | grep -qiE 'outside whitelist|symlink|resolved|unresolvable' \
+	|| { echo "$out"; fail "S3-3: expected rejection log for escaping symlink"; }
+[ ! -f "$SINGBOX_TMPDIR/rs_rsLink.json" ] && [ ! -f "$SINGBOX_TMPDIR/rs_rsLink.raw" ] \
+	|| fail "S3-3: escaping symlink should not have produced a file"
+pass "S3-3: symlink escaping whitelist is rejected"
+
+# Allow-case: a symlink under the whitelist pointing to an in-whitelist regular
+# file must NOT be rejected (proves the readlink re-check ALLOWS legit targets —
+# i.e. the guard isn't a blanket reject-all-symlinks). We assert the symlink
+# rejection log is absent for this ruleset; the source is a valid local file so
+# it proceeds past the symlink guard to the normal cp/decompile path.
+echo "-- S3-3: in-whitelist symlink target is allowed (recheck, not reject-all)"
+printf '{"version":1,"rules":[]}\n' > "$TMPDIR/src/real_ok.json"
+ln -sf "$TMPDIR/src/real_ok.json" "$TMPDIR/src/link_ok.json"
+cat >"$TMPDIR/singbox-ui" <<EOF
+config ruleset 'rsOk'
+	option type 'local'
+	option path '$TMPDIR/src/link_ok.json'
+	option nft_rules '1'
+EOF
+out=$(run_uc fetch-rulesets 2>&1 || true)
+echo "$out" | grep -qiE "rsOk.*(outside whitelist|unresolvable|relative)" \
+	&& { echo "$out"; fail "S3-3: in-whitelist symlink was wrongly rejected (reject-all regression)"; }
+pass "S3-3: in-whitelist symlink target is allowed"
+
+# ---- S3-4: non-numeric interval falls back to default (refresh still fires) ----
+echo "-- S3-4: NaN sub_interval clamps to default so refresh still runs"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'subN'
+	option type 'subscription'
+	option sub_url 'https://example.test/sub'
+	option sub_interval 'abc'
+EOF
+printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
+export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+# Seed a stale cache file dated in 1970 so even the 3600s default is exceeded.
+printf 'vless://old@host:1\n' >"$SINGBOX_TMPDIR/sub_subN.txt"
+touch -t 197001020000 "$SINGBOX_TMPDIR/sub_subN.txt"
+: >"$FAKE_CURL_LOG"
+SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions
+[ -s "$FAKE_CURL_LOG" ] \
+	|| { echo "curl.log empty — refresh treated NaN interval as never-stale"; fail "S3-4: NaN interval disabled refresh"; }
+pass "S3-4: NaN interval clamped to default, refresh fired"
+
+# ---- S3-8: log_err is a distinct channel (tagged) vs log ----
+echo "-- S3-8: error log lines are tagged distinctly from info lines"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'notasub'
+	option type 'interface'
+	option interface 'wan'
+EOF
+err=$(run_uc fetch-subs 2>&1 >/dev/null || true)
+echo "$err" | grep -qE 'error:.*no subscription outbounds' \
+	|| { echo "[$err]"; fail "S3-8: log_err output not tagged 'error:'"; }
+pass "S3-8: log_err lines carry an 'error:' tag"
+
 echo "OK"
