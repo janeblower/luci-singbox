@@ -1,0 +1,17 @@
+cargo-features = ["panic-immediate-abort"]
+
+[package]
+name = "bbolt-client-rs"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "bbolt-client-rs"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "immediate-abort"
+strip = true
