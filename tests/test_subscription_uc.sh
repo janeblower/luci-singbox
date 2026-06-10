@@ -661,4 +661,16 @@ SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions
 	|| { echo "curl.log empty — refresh treated NaN interval as never-stale"; fail "S3-4: NaN interval disabled refresh"; }
 pass "S3-4: NaN interval clamped to default, refresh fired"
 
+# ---- S3-8: log_err is a distinct channel (tagged) vs log ----
+echo "-- S3-8: error log lines are tagged distinctly from info lines"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config outbound 'notasub'
+	option type 'interface'
+	option interface 'wan'
+EOF
+err=$(run_uc fetch-subs 2>&1 >/dev/null || true)
+echo "$err" | grep -qE 'error:.*no subscription outbounds' \
+	|| { echo "[$err]"; fail "S3-8: log_err output not tagged 'error:'"; }
+pass "S3-8: log_err lines carry an 'error:' tag"
+
 echo "OK"

@@ -23,8 +23,12 @@ let fs  = require("fs");
 let uci_mod = require("uci");
 let helpers = require("helpers");
 
+// Two channels: log() is ops-info, log_err() is errors. They both write to
+// stderr (init.d/cron route it to syslog) but log_err tags severity so an
+// operator reading logread can tell the two apart — they used to be byte
+// identical, an illusion of separate channels.
 function log(msg)     { warn(msg + "\n"); }
-function log_err(msg) { warn(msg + "\n"); }
+function log_err(msg) { warn("error: " + msg + "\n"); }
 
 // parallel_download(specs) — kick off multiple curls under /bin/sh and
 // wait for all of them in one transaction. Each spec: {url, outpath, opts}.
