@@ -492,7 +492,7 @@ UI write: `tabs/rulesets.js` — `buildRulesetsMap()`.
 | `url` | string | HTTPS URL | yes | `type=remote` | Download URL for the rule-set file (`.srs` or `.json`). Read by `subscription.uc` during fetch; stored path used by `ruleset.uc`. |
 | `path` | string | absolute file path | yes | `type=local` | Path to the local rule-set file on the router filesystem. Read by `ruleset.uc` to emit `path` in the sing-box config. |
 | `nft_rules` | bool | `0`/`1` | no | — | UI-only flag: `subscription.uc` iterates over rulesets with `nft_rules=1` to decide which to keep fresh. **Not read by `ruleset.uc`** (nftables integration is handled outside generate.uc). Default `0`. |
-| `update_interval` | integer | seconds | no | `type=remote` | Minimum age (seconds) before `subscription.uc` re-downloads the ruleset. Defaults to `86400` (24 h) when absent or `0`. **Not read by `ruleset.uc`**. |
+| `update_interval` | integer | seconds | no | `type=remote` | Auto-update interval. Two consumers: (1) `subscription.uc` uses it as the minimum age before re-downloading the `rs_*.json` for `nft_rules=1` rulesets (defaults to `86400`/24 h when absent or `0`); (2) `ruleset.uc` emits it into the sing-box `route.rule_set` entry as a duration (`"<n>s"`) when `> 0`, so sing-box auto-updates the rule-set itself — independent of `nft_rules`. Without it, a routing-only (`nft_rules=0`) rule-set would never auto-update. |
 
 ---
 

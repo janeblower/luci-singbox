@@ -251,6 +251,40 @@ check "ru source format"      '"format": "source"'                      "$TMPDIR
 check "route rule cn->vless"  '"outbound": "my_vless"'                  "$TMPDIR/out.json"
 check "route rule ru->direct" '"outbound": "direct"'                    "$TMPDIR/out.json"
 
+# ---- remote ruleset update_interval -> sing-box rule_set (auto-update independent of nft_rules) ----
+# A remote rule-set with update_interval set must emit "update_interval" in its
+# route.rule_set entry so sing-box auto-updates it — even when "Create nftables
+# rules" (nft_rules) is OFF. UI seconds map to a sing-box duration ("<n>s").
+echo "-- ruleset update_interval -> rule_set"
+write_cfg "
+config ruleset 'auto_rs'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/auto.srs'
+	option format 'binary'
+	option nft_rules '0'
+	option update_interval '86400'
+
+config ruleset 'no_iv_rs'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/noiv.srs'
+	option format 'binary'
+
+config route_rule 'rule_auto'
+	option enabled '1'
+	list ruleset 'auto_rs'
+	list ruleset 'no_iv_rs'
+	option action 'direct'
+"
+run_gen
+check "update_interval emitted as duration" '"update_interval": "86400s"' "$TMPDIR/out.json"
+# A ruleset without update_interval must NOT receive the key — so exactly one occurrence.
+n_iv=$(grep -c '"update_interval"' "$TMPDIR/out.json")
+[ "$n_iv" = "1" ] \
+	|| { echo "FAIL: expected exactly one update_interval (no_iv_rs must omit it), got $n_iv"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: update_interval propagated only when set"
+
 # ---- disabled ruleset skipped ----
 echo "-- disabled ruleset skipped"
 write_cfg "

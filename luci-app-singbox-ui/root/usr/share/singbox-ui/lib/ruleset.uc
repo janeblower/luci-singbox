@@ -22,6 +22,14 @@ function build_rule_sets(cur, referenced_names) {
 		let entry = { tag: name, type: rs.type ?? "remote", format: detect_format(rs) };
 		if (entry.type === "remote") {
 			if (rs.url) entry.url = rs.url;
+			// Per-ruleset auto-update: hand sing-box `update_interval` so it
+			// refreshes the rule-set itself — independent of "Create nftables
+			// rules" (nft_rules). The app-side fetch (subscription.uc) only
+			// runs for nft_rules=1; without this, a routing-only rule-set with
+			// an update interval set in the UI would never auto-update. The UI
+			// stores whole seconds; sing-box wants a duration string ("<n>s").
+			let iv = +(rs.update_interval ?? "0");
+			if (iv > 0) entry.update_interval = `${int(iv)}s`;
 		} else if (entry.type === "local") {
 			if (rs.path) entry.path = rs.path;
 		}
