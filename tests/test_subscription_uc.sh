@@ -601,4 +601,25 @@ grep -q -- '--max-filesize' "$FAKE_CURL_LOG" \
 	|| fail "S3-2: oversize body (with a valid URL line) was NOT rejected by the size guard"
 pass "S3-2: oversize valid body rejected by post-stat guard and --max-filesize set"
 
+# ---- S3-3: symlink whose target escapes the whitelist is rejected ----
+# The symlink path itself is under /tmp (whitelisted), but its lstat target is
+# /proc/version which is under no whitelist prefix. cp would follow it; the
+# fs.lstat(target).target re-check must reject it.
+echo "-- S3-3: local ruleset symlink escaping whitelist is rejected"
+mkdir -p "$TMPDIR/src"
+ln -sf /proc/version "$TMPDIR/src/sneaky.json"
+cat >"$TMPDIR/singbox-ui" <<EOF
+config ruleset 'rsLink'
+	option type 'local'
+	option path '$TMPDIR/src/sneaky.json'
+	option nft_rules '1'
+EOF
+rm -f "$SINGBOX_TMPDIR/rs_rsLink.json" "$SINGBOX_TMPDIR/rs_rsLink.raw"
+out=$(run_uc fetch-rulesets 2>&1 || true)
+echo "$out" | grep -qiE 'outside whitelist|symlink|resolved' \
+	|| { echo "$out"; fail "S3-3: expected rejection log for escaping symlink"; }
+[ ! -f "$SINGBOX_TMPDIR/rs_rsLink.json" ] && [ ! -f "$SINGBOX_TMPDIR/rs_rsLink.raw" ] \
+	|| fail "S3-3: escaping symlink should not have produced a file"
+pass "S3-3: symlink escaping whitelist is rejected"
+
 echo "OK"

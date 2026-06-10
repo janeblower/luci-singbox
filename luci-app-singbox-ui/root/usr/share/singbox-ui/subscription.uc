@@ -246,6 +246,26 @@ function cmd_fetch_rulesets(cur) {
 				log_err(`fetch_rulesets: ${name} target path '${target}' outside whitelist (/etc, /tmp, /var, /usr/share), rejecting`);
 				continue;
 			}
+			// cp follows symlinks: a whitelisted path may point OUTSIDE the
+			// whitelist (e.g. /tmp/x -> /proc/version). Detect the link with
+			// fs.lstat and re-check the prefix guard against its destination.
+			// We read lst.target (the raw link destination string, guaranteed
+			// by the ucode-mod-fs lstat struct) rather than fs.realpath, which
+			// may be absent on this OpenWrt build. A relative destination can't
+			// be whitelist-checked without realpath-style resolution, so we
+			// reject it — a relative ruleset symlink is never legitimate.
+			let lst = fs.lstat(target);
+			if (lst && lst.type === "link") {
+				let dest = lst.target;
+				if (dest == null || substr(dest, 0, 1) !== "/") {
+					log_err(`fetch_rulesets: ${name} symlink '${target}' has relative/empty target '${dest}', rejecting`);
+					continue;
+				}
+				if (!path_under_whitelist(dest)) {
+					log_err(`fetch_rulesets: ${name} symlink '${target}' resolved to '${dest}' outside whitelist, rejecting`);
+					continue;
+				}
+			}
 			// Local copies are cheap, do them inline.
 			if (system(["cp", "--", target, raw_path]) !== 0) {
 				log_err(`fetch_rulesets: cannot read: ${target}`);
