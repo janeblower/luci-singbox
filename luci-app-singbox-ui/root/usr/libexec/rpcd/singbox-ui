@@ -103,6 +103,15 @@ function run_capture(argv) {
 	return out;
 }
 
+// uc_argv(script, ...rest) — argv для запуска bundled-.uc через системный
+// ucode с app-lib на module-path. rest — варарг-массив, for...in идёт по
+// значениям (тот же приём, что run(cmd, ...extra) выше).
+function uc_argv(script, ...rest) {
+	let a = ["ucode", "-L", UCODE_LIB, script];
+	for (let r in rest) push(a, r);
+	return a;
+}
+
 // is_singbox_running() — query procd via ubus first; fall back to
 // `pgrep -x sing-box` (basename-only match) if ubus is unavailable.
 // Avoids false positives on shells/processes whose commandline merely
@@ -149,7 +158,7 @@ function list_files_with_mtime(dir, prefix, suffix) {
 
 function call_generate() {
 	drain_stdin();
-	if (run(["ucode", "-L", UCODE_LIB, GENERATE_UC])) emit_ok();
+	if (run(uc_argv(GENERATE_UC))) emit_ok();
 	else {
 		try { require("log").log_event("error", "rpc.generate.failed", {}); } catch (_) {}
 		emit_err("generate.uc failed");
@@ -180,7 +189,7 @@ function call_refresh() {
 		emit_err(`invalid what: ${what}`);
 		return;
 	}
-	if (run(["ucode", "-L", UCODE_LIB, SUBSCRIPTION_UC, "refresh", what, "force"])) emit_ok();
+	if (run(uc_argv(SUBSCRIPTION_UC, "refresh", what, "force"))) emit_ok();
 	else emit_err(`refresh ${what} failed`);
 }
 
@@ -324,14 +333,10 @@ function call_export_section() {
 		emit_err("invalid or missing name");
 		return;
 	}
-	// Phase E1: no REVEAL_TOKEN — scrubbing removed.
-	let quoted = [];
-	for (let a in ["ucode", "-L", UCODE_LIB, EXPORT_SECTION_UC, kind, name])
-		push(quoted, "'" + replace(a, "'", "'\\''") + "'");
-	let shcmd = join(" ", quoted) + " 2>/dev/null";
-	let p = fs.popen(shcmd, "r");
-	let body = null;
-	if (p) { body = p.read("all") ?? ""; p.close(); }
+	// Phase E1: no REVEAL_TOKEN — scrubbing removed. run_capture builds the
+	// identical `… 2>/dev/null` shell line and returns stdout (null only on
+	// popen failure), so behaviour matches the previous inline form.
+	let body = run_capture(uc_argv(EXPORT_SECTION_UC, kind, name));
 	if (body == null) { emit_err("export_section helper failed"); return; }
 	// export_section.uc always emits a single JSON line ({status,...}) — pass
 	// through verbatim so the section object stays a proper JSON value (not
@@ -369,8 +374,7 @@ function call_preview_config() {
 	// Phase E1: scrub removed — preview returns plain JSON.
 	let tmp = preview_tmp();
 	if (tmp == null) { emit_err("cannot create preview tmpfile"); return; }
-	let ok = run_env(["ucode", "-L", UCODE_LIB, GENERATE_UC],
-	                 { SINGBOX_CONFIG: tmp });
+	let ok = run_env(uc_argv(GENERATE_UC), { SINGBOX_CONFIG: tmp });
 	if (!ok) {
 		try { fs.unlink(tmp); } catch (_) {}
 		emit_err("preview generation failed");
