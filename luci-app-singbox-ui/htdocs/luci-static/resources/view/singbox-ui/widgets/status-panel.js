@@ -42,6 +42,11 @@ function renderStatusPanel(holder) {
 		if (rs) rows.push(rs);
 
 		rows.forEach(function (r) { holder.appendChild(r); });
+	// callStatus rejecting (rpcd restart / ubus error) must not leak an
+	// uncaught rejection; render the same 'unavailable' fallback (spec S2-1).
+	}).catch(function () {
+		holder.innerHTML = '';
+		holder.appendChild(E('em', _('Status unavailable')));
 	});
 }
 

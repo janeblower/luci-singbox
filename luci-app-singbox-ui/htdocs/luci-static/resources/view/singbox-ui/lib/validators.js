@@ -89,31 +89,28 @@ function requiresWsPath(transportType, path) {
 	return true;
 }
 
+// softWarnCongestion — PURE, non-blocking validator (spec S2-8). It only
+// *classifies* the value; it must not touch L/E/console (the module contract
+// at the top of this file). An unknown value is permitted (sing-box rejects it
+// at runtime if truly invalid); callers that want a UI hint can compare against
+// KNOWN_CONGESTION themselves.
+var KNOWN_CONGESTION = ['cubic', 'new_reno', 'bbr', 'brutal'];
+function isKnownCongestion(v) {
+	return !(typeof v === 'string' && v.length && KNOWN_CONGESTION.indexOf(v) < 0);
+}
 function softWarnCongestion(v) {
-	var known = ['cubic', 'new_reno', 'bbr', 'brutal'];
-	if (typeof v === 'string' && v.length && known.indexOf(v) < 0) {
-		// Surface the warning in the LuCI UI when available so the user
-		// sees it (spec C2.2.8). Fall back to console.warn under the node
-		// test harness where L/E/_ are mocked or absent.
-		if (typeof L !== 'undefined' && L.ui && typeof L.ui.addNotification === 'function' &&
-		    typeof E !== 'undefined') {
-			L.ui.addNotification(null,
-				E('p', {}, _('Unknown congestion_control value:') + ' ' + String(v) +
-				          '. ' + _('sing-box may reject it at runtime.')),
-				'warning');
-		} else if (typeof console !== 'undefined' && console.warn) {
-			console.warn('singbox-ui: unknown congestion_control value: ' + v);
-		}
-	}
-	// Always non-blocking — see spec B6 / Phase 8 "warn but allow".
+	// Non-blocking by design — always valid. Classification lives in
+	// isKnownCongestion for callers that want to surface a warning.
+	void isKnownCongestion(v);
 	return true;
 }
 
 return L.Class.extend({
-	isPort:             isPort,
-	isUuid:             isUuid,
-	isHost:             isHost,
-	validateAlpn:       validateAlpn,
-	requiresWsPath:     requiresWsPath,
-	softWarnCongestion: softWarnCongestion,
+	isPort:              isPort,
+	isUuid:              isUuid,
+	isHost:              isHost,
+	validateAlpn:        validateAlpn,
+	requiresWsPath:      requiresWsPath,
+	softWarnCongestion:  softWarnCongestion,
+	isKnownCongestion:   isKnownCongestion,
 });

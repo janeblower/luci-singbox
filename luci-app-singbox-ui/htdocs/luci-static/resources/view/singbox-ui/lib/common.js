@@ -192,7 +192,11 @@ function notify(promise, okLabel, errPrefix) {
 		}
 		return res;
 	}, function (err) {
-		ui.addNotification(null, E('p', errPrefix + ': ' + (err.message || err)), 'danger');
+		// err may be null/undefined (e.g. an aborted RPC), so guard before
+		// reading .message — otherwise the error handler itself TypeErrors and
+		// the rejection becomes uncaught (spec S2-7).
+		var msg = (err && err.message) || err || _('unknown error');
+		ui.addNotification(null, E('p', errPrefix + ': ' + msg), 'danger');
 	});
 }
 

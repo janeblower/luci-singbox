@@ -37,10 +37,15 @@ const ctxConsole = {
 	warn: (msg) => warnings.push(String(msg)),
 };
 
+// S2-8: provide L.ui.addNotification so any side effect from a "pure" validator
+// is observable. A pure validator must NOT touch it (addNotificationCalls stays 0).
+let addNotificationCalls = 0;
 const sandbox = {
 	__moduleExports: null,
 	_: (s) => s,
-	L: { Class: { extend: (o) => o } },
+	L: { Class: { extend: (o) => o },
+	     ui: { addNotification: () => { addNotificationCalls++; } } },
+	E: (t, a, c) => ({ tag: t }),
 	console: ctxConsole,
 };
 const ctx = vm.createContext(sandbox);
@@ -155,9 +160,25 @@ warnings.length = 0;
 const r = V.softWarnCongestion('extreme-future-cc');
 check('softWarnCongestion unknown returns true',
 	r, true);
-check('softWarnCongestion unknown emitted console.warn',
-	(warnings.length === 1 && warnings[0].indexOf('extreme-future-cc') >= 0)
-		? true : warnings.join('|'),
+// S2-8: the validator is now pure — it must NOT emit console.warn either.
+check('softWarnCongestion unknown stays silent (pure, S2-8)',
+	warnings.length === 0 ? true : warnings.join('|'),
+	true);
+// isKnownCongestion is the pure classifier the validator now delegates to.
+// The harness `check` contract (lines 56-72): want `true` expects strict
+// `true`; want `'error'` expects any non-empty string. isKnownCongestion
+// returns a BOOLEAN, so assert the boolean result with `=== ` and want `true`.
+check('isKnownCongestion classifies bbr as known',
+	V.isKnownCongestion('bbr') === true, true);
+check('isKnownCongestion classifies junk as unknown',
+	V.isKnownCongestion('junk-cc') === false, true);
+
+// --- S2-8: softWarnCongestion must be a PURE validator (no side effects) -----
+addNotificationCalls = 0;
+const pr = V.softWarnCongestion('definitely-unknown-cc');
+check('softWarnCongestion unknown still returns true (pure)', pr, true);
+check('softWarnCongestion does NOT call L.ui.addNotification (S2-8)',
+	addNotificationCalls === 0 ? true : ('called ' + addNotificationCalls + 'x'),
 	true);
 
 if (failures) {
