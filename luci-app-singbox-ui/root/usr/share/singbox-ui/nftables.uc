@@ -96,6 +96,31 @@ function safe_cidr_list(family, csv) {
 	return join(", ", out);
 }
 
+// safe_port_range(p) — sanitise ONE port_range token from rs_*.json. sing-box
+// uses ':' for ranges; nft uses '-'. We normalise, then accept only a bare
+// port or a port-port range whose every numeric part is in 1..65535 (same
+// bound as validate_port). Returns the nft-safe token, or null (caller drops +
+// log_err). The contract is BOTH injection-safe AND range-valid: a poisoned
+// rs_*.json (MITM-able download) must not escape the `dport …` clause via a
+// value like "80 }; insert rule …; #", and an out-of-range part like "99999"
+// or "0" is dropped HERE rather than passing the regex and making the kernel
+// reject the whole `nft -f` ruleset (a worse, all-or-nothing failure).
+// Centralised so the only place ports reach the nft string is past this gate.
+// NOTE: defined BEFORE load_rs_rules (its caller) — ucode resolves a forward
+// reference to a later top-level function as a (nonexistent) global, so a
+// callee MUST precede its caller in the file.
+function safe_port_range(p) {
+	if (p == null || p === "") return null;
+	let tok = replace(`${p}`, ":", "-");
+	if (!match(tok, /^[0-9]{1,5}(-[0-9]{1,5})?$/)) return null;
+	let parts = split(tok, "-");
+	for (let part in parts) {
+		let n = +part;
+		if (type(n) !== "int" || n < 1 || n > 65535) return null;
+	}
+	return tok;
+}
+
 // load_rs_rules() — scan /tmp/singbox-ui/rs_*.json and return a list of
 // { name, idx, v4, v6, network, ports } entries (one per rule with ip_cidr).
 // Each rule may produce a v4 entry, a v6 entry, both, or neither. Idx is the
@@ -308,28 +333,6 @@ function validate_port(p) {
 	let n = (type(p) === "int") ? p : +p;
 	if (type(n) !== "int" || n < 1 || n > 65535) return null;
 	return n;
-}
-
-// safe_port_range(p) — sanitise ONE port_range token from rs_*.json. sing-box
-// uses ':' for ranges; nft uses '-'. We normalise, then accept only a bare
-// port or a port-port range whose every numeric part is in 1..65535 (same
-// bound as validate_port). Returns the nft-safe token, or null (caller drops +
-// log_err). The contract is BOTH injection-safe AND range-valid: a poisoned
-// rs_*.json (MITM-able download) must not escape the `dport …` clause via a
-// value like "80 }; insert rule …; #", and an out-of-range part like "99999"
-// or "0" is dropped HERE rather than passing the regex and making the kernel
-// reject the whole `nft -f` ruleset (a worse, all-or-nothing failure).
-// Centralised so the only place ports reach the nft string is past this gate.
-function safe_port_range(p) {
-	if (p == null || p === "") return null;
-	let tok = replace(`${p}`, ":", "-");
-	if (!match(tok, /^[0-9]{1,5}(-[0-9]{1,5})?$/)) return null;
-	let parts = split(tok, "-");
-	for (let part in parts) {
-		let n = +part;
-		if (type(n) !== "int" || n < 1 || n > 65535) return null;
-	}
-	return tok;
 }
 
 // emit_named_sets(buf, ifaces, v4, v6, rules) — wan_ifaces + fakeip4/6 + one
