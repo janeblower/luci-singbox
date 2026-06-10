@@ -70,6 +70,9 @@ sandbox.SbRpc = {
 	callDhcpLeases: () => Promise.resolve(),
 };
 sandbox.SbCommon = loadModule(path.join(viewDir, 'lib/common.js'));
+// S2-QUAL: the transport helper is required by both importers; load it first
+// so the snapshot loadModule() takes for each importer already has it bound.
+sandbox.SbTransport   = loadModule(path.join(viewDir, 'importers/transport.js'));
 sandbox.SbImpInbound  = loadModule(path.join(viewDir, 'importers/inbound.js'));
 sandbox.SbImpOutbound = loadModule(path.join(viewDir, 'importers/outbound.js'));
 
@@ -315,6 +318,7 @@ function loadModule(filePath) {
 const viewDir = path.dirname('$JS');
 sandbox.SbRpc = { callExportSection: () => Promise.resolve() };
 sandbox.SbCommon = loadModule(path.join(viewDir, 'lib/common.js'));
+sandbox.SbTransport   = loadModule(path.join(viewDir, 'importers/transport.js'));
 sandbox.SbImpInbound  = loadModule(path.join(viewDir, 'importers/inbound.js'));
 sandbox.SbImpOutbound = loadModule(path.join(viewDir, 'importers/outbound.js'));
 const ctx = vm.createContext(sandbox);
