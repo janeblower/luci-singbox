@@ -33,11 +33,18 @@ function buildMonitoring() {
 	}
 	function nameFor(ip) { return state.leases[ip] || ip; }
 
+	function showUnreachable() {
+		root.innerHTML = '';
+		root.appendChild(E('em', {},
+			_('Clash API unreachable — enable it in settings and restart.')));
+	}
 	function closeConn(id) {
-		return callClashMutate('DELETE', '/connections/' + id, '').then(poll);
+		return callClashMutate('DELETE', '/connections/' + id, '')
+			.then(poll).catch(showUnreachable);
 	}
 	function closeAll() {
-		return callClashMutate('DELETE', '/connections', '').then(poll);
+		return callClashMutate('DELETE', '/connections', '')
+			.then(poll).catch(showUnreachable);
 	}
 
 	function renderTable(conns) {
@@ -139,15 +146,15 @@ function buildMonitoring() {
 
 	function poll() {
 		return callClashGet('/connections').then(function (res) {
-			if (!res || res.status !== 'ok') {
-				root.innerHTML = '';
-				root.appendChild(E('em', {}, _('Clash API unreachable — enable it in settings and restart.')));
-				return;
-			}
+			if (!res || res.status !== 'ok') { showUnreachable(); return; }
 			var data;
 			try { data = JSON.parse(res.body); } catch (e) { data = { connections: [] }; }
 			repaint(data);
-		});
+		// A rejected RPC (ubus/network down) fires every 1.5s from the poll
+		// interval; without .catch each one is an uncaught rejection that the
+		// browser logs and that loses the error (spec S2-1). Surface it in the
+		// node and stop the rejection from propagating.
+		}).catch(showUnreachable);
 	}
 
 	function start() {
@@ -165,7 +172,9 @@ function buildMonitoring() {
 	}
 	function stop() { if (state.timer) { clearInterval(state.timer); state.timer = null; } }
 
-	return { node: root, start: start, stop: stop };
+	// `poll` is exported for the regression harness (tests/test_monitoring_js.sh);
+	// production callers use start()/stop().
+	return { node: root, start: start, stop: stop, poll: poll };
 }
 
 return L.Class.extend({ buildMonitoring: buildMonitoring });
