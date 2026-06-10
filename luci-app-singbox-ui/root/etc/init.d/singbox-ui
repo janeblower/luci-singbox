@@ -63,10 +63,13 @@ start_service() {
 	echo "{\"service_start_ts\":$(date +%s)}" > /var/lib/singbox-ui/service_state.json
 
 	# Cache the package version once per start so status_detail (a hot read
-	# RPC) doesn't fork opkg on every call. Refreshed here so an upgrade +
-	# restart re-derives it. (spec S5-PERF)
-	opkg list-installed luci-app-singbox-ui 2>/dev/null \
-		| sed -n 's/^luci-app-singbox-ui - //p' \
+	# RPC) doesn't fork apk on every call. Refreshed here so an upgrade +
+	# restart re-derives it. (spec S5-PERF). OpenWrt 25.12.3 ships apk, not
+	# opkg; `apk list --installed` prints "<name>-<version> noarch {...}".
+	# Must yield the SAME cache format as cached_pkg_version in the rpcd
+	# handler: the version with the package-name prefix stripped.
+	apk list --installed luci-app-singbox-ui 2>/dev/null \
+		| sed -n 's/^luci-app-singbox-ui-\([^ ]*\) .*/\1/p' \
 		> /var/lib/singbox-ui/pkg_version || true
 }
 

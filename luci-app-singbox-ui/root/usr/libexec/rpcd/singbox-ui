@@ -206,10 +206,48 @@ function call_status() {
 	});
 }
 
+// cached_pkg_version() — версия пакета для status_detail. rpcd форкает свежий
+// обработчик на каждый вызов, поэтому in-memory кэш не выживает: персистим на
+// диск под VARLIB и форкаем apk только при cache-miss. OpenWrt 25.12.3 — apk
+// (не opkg); `apk list --installed <pkg>` читает локальную installed-БД (без
+// сети) и печатает строку вида
+//   "luci-app-singbox-ui-0.0.0-r337 noarch {luci-app-singbox-ui} (...) [installed]"
+// Версия = первый токен со снятым префиксом имени. (НЕ переиспользовать старый
+// opkg-парсер split(line," - ") — в apk нет поля " - ".)
+function cached_pkg_version() {
+	let pkg_cache = `${VARLIB}/pkg_version`;
+	let pkg_ver = "unknown";
+	try {
+		let f = fs.open(pkg_cache, "r");
+		if (f) { pkg_ver = trim(f.read("all") || "") || "unknown"; f.close(); }
+	} catch (_) {}
+	if (pkg_ver !== "unknown" && length(pkg_ver)) return pkg_ver;
+
+	const PKG = "luci-app-singbox-ui";
+	try {
+		let line = trim(run_capture(["apk", "list", "--installed", PKG]) ?? "");
+		if (length(line)) {
+			let tok = split(trim(split(line, "\n")[0]), " ")[0];
+			let prefix = PKG + "-";
+			if (substr(tok, 0, length(prefix)) === prefix)
+				pkg_ver = substr(tok, length(prefix));
+		}
+	} catch (_) {}
+
+	if (pkg_ver !== "unknown" && length(pkg_ver)) {
+		try {
+			system("mkdir -p " + sq(VARLIB) + " >/dev/null 2>&1");
+			let w = fs.open(pkg_cache, "w");
+			if (w) { w.write(pkg_ver); w.close(); }
+		} catch (_) {}
+	}
+	return pkg_ver;
+}
+
 // status_detail — aggregate diagnostic snapshot for the Monitoring tab.
 // Returns running flag, last_generate_ts, last_apply_result, config_hash
 // (from generate.uc state file), schema_version (uci _meta), package_version
-// (opkg list-installed), service_start_ts (from init.d state file), and the
+// (apk list --installed), service_start_ts (from init.d state file), and the
 // current 'now' timestamp. All side-effect-free, safe for read ACL.
 function call_status_detail() {
 	drain_stdin();
@@ -233,32 +271,7 @@ function call_status_detail() {
 		schema = +trim(s) || 0;
 	} catch (_) {}
 
-	// package_version is constant for the install. rpcd launches a fresh
-	// handler process per ubus call, so an in-memory cache wouldn't survive;
-	// cache on disk under VARLIB and fork `opkg list-installed` only when
-	// the cache file is absent. (spec S5-PERF)
-	let pkg_ver = "unknown";
-	let pkg_cache = `${VARLIB}/pkg_version`;
-	try {
-		let f = fs.open(pkg_cache, "r");
-		if (f) { pkg_ver = trim(f.read("all") || "") || "unknown"; f.close(); }
-	} catch (_) {}
-	if (pkg_ver === "unknown" || !length(pkg_ver)) {
-		try {
-			let line = trim(run_capture(["opkg", "list-installed", "luci-app-singbox-ui"]) ?? "");
-			// format: "luci-app-singbox-ui - 0.2.0-1"
-			let parts = split(line, " - ");
-			if (length(parts) >= 2) pkg_ver = parts[1];
-		} catch (_) {}
-		// Best-effort persist for the next call. Create VARLIB if needed.
-		if (pkg_ver !== "unknown" && length(pkg_ver)) {
-			try {
-				system("mkdir -p " + sq(VARLIB) + " >/dev/null 2>&1");
-				let w = fs.open(pkg_cache, "w");
-				if (w) { w.write(pkg_ver); w.close(); }
-			} catch (_) {}
-		}
-	}
+	let pkg_ver = cached_pkg_version();
 
 	emit({
 		status: "ok",
