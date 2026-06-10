@@ -172,6 +172,52 @@ function ok(label, cond) {
   ok('search input survives repaint — same node object (S2-4)',
      search1 && search1 === search2);
 
+  // --- S2-6: handlers act on the CURRENT poll's data, not a captured one ----
+  // Regression guard for the original repaint(data) staleness. Fails against
+  // the pre-Task-4 source (toolbar/handlers captured `data`); green after.
+  let s6conns = [{ id: 'a', metadata: { sourceIP: '10.0.0.1', host: 'old' }, chains: [] }];
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: s6conns, downloadTotal: 0, uploadTotal: 0 }) }));
+  const m6 = Mon.buildMonitoring();
+  await m6.poll();                                  // renders row for conn 'a'
+  s6conns = [{ id: 'b', metadata: { sourceIP: '10.0.0.2', host: 'new' }, chains: [] }];
+  await m6.poll();                                  // tbody now holds conn 'b' only
+  const deletes = [];
+  ctx.__test.setClashMutate((method, path) => { deletes.push(path); return Promise.resolve({ status:'ok' }); });
+  // Both the per-row Close and the toolbar "Close all" carry cbi-button-remove;
+  // the per-row button deletes /connections/<id>, "Close all" deletes
+  // /connections. Click every such button and assert the ROW delete targeted b.
+  const isCloseBtn = (n) => n.tag === 'button' &&
+    n.attrs && /cbi-button-remove/.test(n.attrs['class'] || '') && typeof n.attrs.click === 'function';
+  const closeBtns = ctx.__test.findAll(m6.node, isCloseBtn);
+  ok('a per-row Close button is rendered for current data (S2-6)', closeBtns.length >= 1);
+  closeBtns.forEach(b => b.attrs.click());
+  ok('a row Close acts on latest connection id b, not stale a (S2-6)',
+     deletes.indexOf('/connections/b') >= 0 && deletes.indexOf('/connections/a') < 0);
+
+  // Device filter must apply to the CURRENT set. The decisive stale-closure
+  // probe: capture the device-<select> change handler that exists after the
+  // FIRST poll, fire ANOTHER poll, then invoke the CAPTURED handler. In the
+  // original source that handler closed over poll #1's `data`, so filtering to
+  // conn 'b's device (absent from poll #1) rendered zero rows. The Task-4
+  // handler instead sets state.filterDevice + updateRows() which reads
+  // curConns() live, so conn 'b' renders.
+  const isSelect = (n) => n.tag === 'select' && n.attrs && n.attrs.change;
+  let s7conns = [{ id: 'c', metadata: { sourceIP: '10.0.0.1', host: 'first-only' }, chains: [] }];
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: s7conns, downloadTotal: 0, uploadTotal: 0 }) }));
+  const m7 = Mon.buildMonitoring();
+  await m7.poll();                                          // poll #1: conn 'c'
+  const selHandler = ctx.__test.find(m7.node, isSelect).attrs.change;  // capture
+  s7conns = [{ id: 'd', metadata: { sourceIP: '10.0.0.2', host: 'second-only' }, chains: [] }];
+  await m7.poll();                                          // poll #2: conn 'd'
+  ok('captured device <select> handler exists (S2-6)', typeof selHandler === 'function');
+  selHandler({ target: { value: '10.0.0.2' } });            // fire the OLD handler
+  const hostCells = ctx.__test.findAll(m7.node,
+    (n) => n.tag === 'td' && (n.textContent || '').indexOf('second-only') >= 0);
+  ok('captured handler filters the CURRENT set, not the poll it was built in (S2-6)',
+     hostCells.length >= 1);
+
   if (failures) { console.error('test_monitoring_js: ' + failures + ' failure(s)'); process.exit(1); }
   console.log('OK');
 })().catch((e) => { console.error('harness error', e); process.exit(1); });
