@@ -7,24 +7,38 @@
 # byte-identical before and after, across every branch (v4-only, v4+v6,
 # router-out on/off, multi-iface, with/without rs_* sets).
 #
-# Why a git-baseline golden instead of committed .nft fixtures: the golden is
-# generated at run time from the pre-refactor nftables.uc extracted from a
-# pinned baseline commit, then compared against the current working-tree file
-# over a fixed input matrix. This captures-then-compares inside ONE VM/CI run,
-# so it needs no hand-authored fixtures (which could carry a stray byte and
-# falsely pass/fail) and stays correct in environments where ucode can only be
-# driven inside the VM. If the baseline commit is unreachable (e.g. a shallow
-# clone) the test SKIPs rather than giving a false signal.
+# Why a committed baseline fixture (not `git show`): tests/docker/entrypoint.sh
+# tars the working tree into the guest with `--exclude=.git`, so any `git show
+# <commit>:...` baseline is unreachable inside the VM and the test would SKIP
+# unconditionally in CI — a silent non-gate. Instead we ship the pinned
+# pre-S1-QUAL-refactor nftables.uc as a committed fixture
+# (tests/fixtures/build_ruleset/nftables.baseline.uc, captured from commit
+# 849e2b9) and emit the golden ruleset from it at run time. This proves the
+# build_ruleset split (emit_named_sets / emit_prerouting_chain /
+# emit_output_chain) is byte-identical to the monolith, and it runs inside the
+# VM with no .git needed. The baseline fixture is a complete standalone ucode
+# script and uses the same lib/ as the current file, so the same -L flags drive
+# both. If build_ruleset output ever legitimately changes, regenerate the
+# fixture:
+#   git show 849e2b9:luci-app-singbox-ui/root/usr/share/singbox-ui/nftables.uc \
+#     > tests/fixtures/build_ruleset/nftables.baseline.uc
 set -e
 
-# Pre-refactor baseline: the commit whose nftables.uc still has the monolithic
-# build_ruleset. The golden ruleset is emitted from THIS revision of the file.
-BASELINE_REF=${SINGBOX_CHAR_BASELINE:-849e2b9}
+# Pre-refactor baseline: a committed copy of the nftables.uc that still has the
+# monolithic build_ruleset (from commit 849e2b9). The golden ruleset is emitted
+# from THIS file. It is invoked directly — no git history is consulted, so the
+# test works inside the .git-less VM.
+BASELINE_UC=$PWD/tests/fixtures/build_ruleset/nftables.baseline.uc
 SCRIPT_REL=luci-app-singbox-ui/root/usr/share/singbox-ui/nftables.uc
 CUR_SCRIPT=$PWD/$SCRIPT_REL
 
 if [ ! -x "$CUR_SCRIPT" ]; then
 	echo "FAIL: $CUR_SCRIPT not present or not executable"
+	exit 1
+fi
+
+if [ ! -f "$BASELINE_UC" ]; then
+	echo "FAIL: baseline fixture $BASELINE_UC missing"
 	exit 1
 fi
 
@@ -42,23 +56,13 @@ else
 	exit 0
 fi
 
-# Materialize the pre-refactor golden script from the pinned baseline commit.
-# If the baseline isn't reachable (shallow clone, detached export), SKIP — a
-# missing golden source must not masquerade as a pass or a failure.
-if ! git rev-parse --verify "${BASELINE_REF}^{commit}" >/dev/null 2>&1; then
-	echo "SKIP: baseline commit ${BASELINE_REF} unreachable (shallow clone?)"
-	exit 0
-fi
-GOLD_SCRIPT=$(mktemp /tmp/singbox-char-gold.XXXXXX.uc)
-trap 'rm -f "$GOLD_SCRIPT" "$RS"/rs_char_*.json' EXIT
-if ! git show "${BASELINE_REF}:${SCRIPT_REL}" > "$GOLD_SCRIPT" 2>/dev/null; then
-	echo "SKIP: ${SCRIPT_REL} absent at baseline ${BASELINE_REF}"
-	exit 0
-fi
+# The pre-refactor golden is the committed fixture itself — invoked directly.
+GOLD_SCRIPT=$BASELINE_UC
 
 RS=/tmp/singbox-ui
 mkdir -p "$RS"
 rm -f "$RS"/rs_char_*.json
+trap 'rm -f "$RS"/rs_char_*.json' EXIT
 
 emit() { # $1=script, rest=emit args
 	_s=$1; shift
@@ -81,7 +85,7 @@ check() { # $1=label, then emit args; asserts current == golden, byte-for-byte
 	echo "  PASS: $label byte-identical"
 }
 
-echo "-- build_ruleset characterization matrix (golden = ${BASELINE_REF})"
+echo "-- build_ruleset characterization matrix (golden = committed baseline fixture, 849e2b9)"
 
 # emit argv positions: port v4 v6 iface[,iface] [mark] [mask] [router_out]
 check m_fakeip_v4_only     7893 "198.18.0.0/15" ""          "br-lan"
