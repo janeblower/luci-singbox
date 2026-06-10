@@ -98,4 +98,36 @@ else
   echo "skip: flock(1) or cache.db unavailable for lock test"
 fi
 
+# --- malformed / adversarial regression (from the security review) ---
+# Crafted corruption the bbolt API cannot produce. The reader must fail CLEANLY
+# (exit 1) and never crash (SIGSEGV 139 / SIGILL 132 / SIGABRT 134) or emit a wrong
+# answer with exit 0. Regenerate fixtures: go run testdata/gen_corrupt.go <kind> <out>
+echo "== adversarial regression =="
+adv() {
+  desc="$1"; db="$2"; arg="$3"; want="$4"
+  rc=0; out=$(timeout 5 "$RS" "$db" $arg 2>&1) || rc=$?
+  case "$rc" in 132|134|139) fail "[$desc] CRASHED (exit $rc): $out" ;; esac
+  [ "$rc" = "$want" ] || fail "[$desc] exit $rc, want $want ($out)"
+  echo "  ok: $desc (clean exit $rc)"
+}
+if [ -f "$HERE/testdata/cyclic.db" ]; then
+  adv "cyclic branch -> recursion guard" "$HERE/testdata/cyclic.db" x 1
+  adv "pgid*pageSize wrap -> self-id guard" "$HERE/testdata/wrap.db" x 1
+  # bogus overflow field: bbolt ignores it on read; the port must match byte-for-byte
+  "$GO" "$HERE/testdata/overflow.db" x > "$TMP/go.o" 2>/dev/null; goc=$?
+  timeout 5 "$RS" "$HERE/testdata/overflow.db" x > "$TMP/rs.o" 2>/dev/null; rsc=$?
+  { [ "$goc" = "0" ] && [ "$rsc" = "0" ]; } || fail "overflow exit (go=$goc rs=$rsc)"
+  cmp -s "$TMP/go.o" "$TMP/rs.o" || fail "bogus-overflow output differs from Go"
+  echo "  ok: bogus-overflow parity with Go (exit 0)"
+else
+  echo "skip: crafted fixtures missing (go run testdata/gen_corrupt.go ...)"
+fi
+# truncated / garbage non-bbolt files must fail cleanly, never crash
+printf 'garbage!' > "$TMP/g8.db"
+adv "8-byte garbage" "$TMP/g8.db" "" 1
+if [ -f "$HERE/../cache.db" ]; then
+  head -c 100 "$HERE/../cache.db" > "$TMP/trunc.db"
+  adv "truncated cache.db (100B)" "$TMP/trunc.db" "" 1
+fi
+
 echo "ALL PARITY CHECKS PASSED"

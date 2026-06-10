@@ -38,6 +38,21 @@ bad args.
 > the Go tool there; the bucket/key/value/`-r`/usage/`no bucket`/`no key`/`timeout`
 > outputs match exactly, byte-for-byte.
 
+### Robustness on corrupt input
+
+A malformed or truncated db is reported as `invalid database` (exit 1) — never a
+crash. The parser bounds-checks page spans, rejects page ids that overflow or fail
+bbolt's self-identity check (`FastCheck`), and depth-limits the B+tree descent, so a
+truncated copy or a crafted db (cyclic page links, a wrapping `pgid`, a bogus
+`overflow` field) yields a clean exit instead of a SIGSEGV/SIGILL or a wrong answer.
+These cases are covered by `test-parity.sh` against the fixtures in `testdata/`
+(`gen_corrupt.go`).
+
+One intentional divergence: a `-r` envelope whose declared content length is ≥ 2⁶³
+gets a clean `content length … out of range` error here (exit 1), whereas the Go tool
+panics (exit 2) on an `int64` overflow — a latent bug in the original that this port
+does not reproduce.
+
 ## How it stays small
 
 - No libc, no CRT: own `_start` (via `global_asm!`) + raw `syscall` wrappers.

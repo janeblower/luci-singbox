@@ -22,7 +22,8 @@ unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
         in("rdi") a1, in("rsi") a2, in("rdx") a3,
         in("r10") a4, in("r8") a5, in("r9") a6,
         out("rcx") _, out("r11") _,
-        options(nostack, preserves_flags),
+        // NOT preserves_flags: the kernel may clobber EFLAGS across `syscall`.
+        options(nostack),
     );
     ret
 }
@@ -152,22 +153,52 @@ fn select_root(m: &[u8], ps: usize) -> u64 {
     }
 }
 
-// full page span (header + data + any overflow pages)
+// Determine the page size. Trust meta0's pageSize field only if meta0 itself
+// validates (its FNV checksum covers the field); otherwise the writer may have
+// torn meta0 mid-write, so locate the surviving meta by probing page sizes —
+// matching bbolt's getPageSize() crash-recovery path. Also yields a clean
+// "invalid database" exit on a too-small / non-bbolt file (no OOB read).
+fn page_size(m: &[u8]) -> usize {
+    if read_meta(m, 0).is_some() {
+        return u32le(m, 24) as usize;
+    }
+    let mut p = 512usize;
+    while p <= 65536 {
+        if read_meta(m, p).is_some() { return p; }
+        p <<= 1;
+    }
+    err(b"invalid database\n");
+    unsafe { sys_exit(1) }
+}
+
+// full page span (header + data + any overflow pages), with corruption guards
 fn page(m: &[u8], ps: usize, id: u64) -> &[u8] {
-    let off = id as usize * ps;
+    // reject ids that overflow usize or fall outside the mapping (corrupt db)
+    let off = match (id as usize).checked_mul(ps) {
+        Some(v) if v + 16 <= m.len() => v,
+        _ => { err(b"invalid database\n"); unsafe { sys_exit(1) } }
+    };
+    // bbolt FastCheck: a page must self-identify as the requested id, else a
+    // wrapped/forged pgid could alias a different in-bounds page (wrong answer).
+    if u64le(m, off) != id { err(b"invalid database\n"); unsafe { sys_exit(1) } }
     let overflow = u32le(m, off + 12) as usize;
-    &m[off..off + (overflow + 1) * ps]
+    let mut end = off + (overflow + 1) * ps;
+    if end > m.len() { end = m.len(); } // bbolt ignores overflow on the read path
+    &m[off..end]
 }
 
 // DFS a B+tree, printing keys. buckets_only => only leaf entries flagged as sub-buckets.
-fn walk(m: &[u8], ps: usize, p: &[u8], buckets_only: bool) {
+// `depth` bounds the descent so a cyclic/forged branch pgid yields a clean exit
+// instead of unbounded recursion (stack-overflow SIGSEGV). bbolt trees never approach 64.
+fn walk(m: &[u8], ps: usize, p: &[u8], buckets_only: bool, depth: u32) {
+    if depth > 64 { err(b"invalid database\n"); unsafe { sys_exit(1) } }
     let flags = u16le(p, 8);
     let count = u16le(p, 10) as usize;
     let mut i = 0;
     if flags & 0x01 != 0 {
         while i < count {
             let child = u64le(p, 16 + i * 16 + 8);
-            walk(m, ps, page(m, ps, child), buckets_only);
+            walk(m, ps, page(m, ps, child), buckets_only, depth + 1);
             i += 1;
         }
     } else {
@@ -198,7 +229,9 @@ fn lkey(p: &[u8], i: usize) -> &[u8] {
 }
 
 // find `target` in a B+tree; returns (leaf flags, value bytes) on exact match.
-fn search<'a>(m: &'a [u8], ps: usize, p: &'a [u8], target: &[u8]) -> Option<(u32, &'a [u8])> {
+// `depth` bounds the descent (cyclic/forged branch pgid => clean exit, not a hang).
+fn search<'a>(m: &'a [u8], ps: usize, p: &'a [u8], target: &[u8], depth: u32) -> Option<(u32, &'a [u8])> {
+    if depth > 64 { err(b"invalid database\n"); unsafe { sys_exit(1) } }
     let flags = u16le(p, 8);
     let count = u16le(p, 10) as usize;
     if flags & 0x01 != 0 {
@@ -211,7 +244,7 @@ fn search<'a>(m: &'a [u8], ps: usize, p: &'a [u8], target: &[u8]) -> Option<(u32
         let idx = if lo < count && bkey(p, lo) == target { lo }
                   else if lo > 0 { lo - 1 } else { 0 };
         let child = u64le(p, 16 + idx * 16 + 8);
-        search(m, ps, page(m, ps, child), target)
+        search(m, ps, page(m, ps, child), target, depth + 1)
     } else {
         // leaf: exact match only
         let (mut lo, mut hi) = (0usize, count);
@@ -236,7 +269,7 @@ enum BRoot<'a> { Page(u64), Inline(&'a [u8]) }
 
 // resolve a named top-level bucket to its root page or inline leaf buffer
 fn find_bucket<'a>(m: &'a [u8], ps: usize, root: u64, name: &[u8]) -> Option<BRoot<'a>> {
-    match search(m, ps, page(m, ps, root), name) {
+    match search(m, ps, page(m, ps, root), name, 0) {
         Some((flags, val)) if flags & 0x01 != 0 => {
             let broot = u64le(val, 0); // bucket{ root: u64, sequence: u64 }
             if broot != 0 { Some(BRoot::Page(broot)) } else { Some(BRoot::Inline(&val[16..])) }
@@ -296,11 +329,11 @@ unsafe fn run(argc: usize, argv: *const *const u8) -> i32 {
     if rem == 0 { err(b"usage: bbolt-client [-r] <db> [bucket] [key]\n"); return 2; }
 
     let m = open_db(*argv.add(base));
-    let ps = u32le(m, 24) as usize; // pageSize @ meta0 + 8
+    let ps = page_size(m);
     let root = select_root(m, ps);
 
     if rem == 1 {
-        walk(m, ps, page(m, ps, root), true);
+        walk(m, ps, page(m, ps, root), true, 0);
         return 0;
     }
 
@@ -312,12 +345,12 @@ unsafe fn run(argc: usize, argv: *const *const u8) -> i32 {
     let bp: &[u8] = match bref { BRoot::Page(pg) => page(m, ps, pg), BRoot::Inline(b) => b };
 
     if rem == 2 {
-        walk(m, ps, bp, false);
+        walk(m, ps, bp, false, 0);
         return 0;
     }
 
     let kname = cstr(*argv.add(base + 2));
-    let val = match search(m, ps, bp, kname) {
+    let val = match search(m, ps, bp, kname, 0) {
         Some((flags, v)) if flags & 0x01 == 0 => v, // plain key only; sub-bucket => no value
         _ => { err_quoted(b"no key ", kname); return 1; }
     };
