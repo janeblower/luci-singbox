@@ -392,8 +392,11 @@ function call_preview_config() {
 function clash_path_ok(path) {
 	if (type(path) !== "string") return false;
 	if (substr(path, 0, 1) !== "/") return false;
-	// Reject traversal / NUL / whitespace outright.
-	if (!match(path, /^\/[A-Za-z0-9_\-\/.]*$/)) return false;
+	// Reject traversal / NUL / whitespace outright. NB: the '-' MUST be last in
+	// the class (literal) — ucode's regex engine mis-parses a mid-class escaped
+	// hyphen like `_\-\/` as the range _..(/) and aborts with "Invalid character
+	// range". Same char set as before: word chars, '_', '.', '/', '-'.
+	if (!match(path, /^\/[A-Za-z0-9_.\/-]*$/)) return false;
 	if (index(path, "..") >= 0) return false;
 	let allow = [ "/version", "/configs", "/connections", "/traffic",
 	              "/proxies", "/group", "/providers" ];
