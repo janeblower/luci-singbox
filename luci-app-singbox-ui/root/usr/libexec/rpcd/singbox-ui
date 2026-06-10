@@ -244,6 +244,18 @@ function cached_pkg_version() {
 	return pkg_ver;
 }
 
+// read_json_file(path) — parse a JSON object file, returning {} on missing
+// file, read error, or parse failure. Defined before its sole caller
+// (call_status_detail) per the callee-precedes-caller rule.
+function read_json_file(path) {
+	let obj = {};
+	try {
+		let f = fs.open(path, "r");
+		if (f) { obj = json(f.read("all") || "{}") || {}; f.close(); }
+	} catch (_) {}
+	return obj;
+}
+
 // status_detail — aggregate diagnostic snapshot for the Monitoring tab.
 // Returns running flag, last_generate_ts, last_apply_result, config_hash
 // (from generate.uc state file), schema_version (uci _meta), package_version
@@ -253,17 +265,8 @@ function call_status_detail() {
 	drain_stdin();
 	let running = is_singbox_running();
 
-	let last_state = {};
-	try {
-		let f = fs.open(`${VARLIB}/last_state.json`, "r");
-		if (f) { last_state = json(f.read("all") || "{}") || {}; f.close(); }
-	} catch (_) {}
-
-	let svc_state = {};
-	try {
-		let f = fs.open(`${VARLIB}/service_state.json`, "r");
-		if (f) { svc_state = json(f.read("all") || "{}") || {}; f.close(); }
-	} catch (_) {}
+	let last_state = read_json_file(`${VARLIB}/last_state.json`);
+	let svc_state  = read_json_file(`${VARLIB}/service_state.json`);
 
 	let schema = 0;
 	try {
