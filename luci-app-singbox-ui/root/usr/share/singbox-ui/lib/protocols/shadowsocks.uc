@@ -56,8 +56,7 @@ reg.register({
         }
         if (helpers.s_bool(s, "udp_over_tcp")) out.udp_over_tcp = true;
         let m = mux_blk.emit(s); if (m) out.multiplex = m;
-        let d = dial_blk.emit_outbound(s);
-        for (let k in keys(d)) out[k] = d[k];
+        dial_blk.merge_dial(out, s);
         return out;
     },
 });
@@ -85,19 +84,10 @@ reg.register({
     ],
 
     emit: function(s) {
-        let port = s_num(s.listen_port);
-        if (!port) {
-            warn(sprintf("ss inbound: missing listen_port for '%s'\n", s[".name"]));
-            return null;
-        }
-        let out = {
-            type: "shadowsocks",
-            tag: s[".name"],
-            listen: length(s_opt(s, "listen")) ? s.listen : "::",
-            listen_port: port,
-            method: s_opt(s, "shadowsocks_method"),
-            password: s_opt(s, "server_password"),
-        };
+        let out = dial_blk.build_listen_base(s, "shadowsocks");
+        if (!out) return null;
+        out.method = s_opt(s, "shadowsocks_method");
+        out.password = s_opt(s, "server_password");
         if (length(s_opt(s, "network"))) out.network = s.network;
         let users = [];
         for (let u in as_array(s.ss_user)) {

@@ -63,8 +63,7 @@ reg.register({
         if (net === "tcp" || net === "udp") out.network = net;
         let t = tls_blk.emit_outbound(s, { force_enabled: true });
         if (t) out.tls = t;
-        let d = dial_blk.emit_outbound(s);
-        for (let k in keys(d)) out[k] = d[k];
+        dial_blk.merge_dial(out, s);
         return out;
     },
 });
@@ -108,17 +107,8 @@ reg.register({
     ],
 
     emit: function(s) {
-        let port = s_num(s.listen_port);
-        if (!port) {
-            warn(sprintf("hysteria2 inbound: missing listen_port for '%s'\n", s[".name"]));
-            return null;
-        }
-        let out = {
-            type: "hysteria2",
-            tag: s[".name"],
-            listen: length(s_opt(s, "listen")) ? s.listen : "::",
-            listen_port: port,
-        };
+        let out = dial_blk.build_listen_base(s, "hysteria2");
+        if (!out) return null;
         let users = [];
         for (let u in as_array(s.inbound_user)) {
             let c = index(u, ":");
