@@ -280,8 +280,9 @@ function parse_proxy_url(url) {
 	return null;
 }
 
+// Only parse_proxy_url is consumed externally (outbound.uc re-export). The
+// per-scheme parsers and sanitisers stay file-private — they are reached
+// solely through parse_proxy_url's dispatch below.
 return {
 	parse_proxy_url,
-	parse_vless, parse_ss, parse_trojan, parse_hy2,
-	url_decode, drop_ctrl, safe_tag, safe_host, safe_port, parse_query, b64_decode,
 };

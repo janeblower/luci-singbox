@@ -19,11 +19,7 @@ require("protocols.vless");
 require("protocols.trojan");
 require("protocols.hysteria2");
 
-const s_opt    = helpers.s_opt;
-const s_bool   = helpers.s_bool;
-const s_num    = helpers.s_num;
-const csv_list = helpers.csv_list;
-const as_array = helpers.as_array;
+const s_opt = helpers.s_opt;
 
 // Share-link parsers live in lib/sharelink.uc (SRP, S4-10). Re-export
 // parse_proxy_url so existing callers — build_outbounds below, the rpcd /

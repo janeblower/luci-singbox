@@ -185,9 +185,7 @@ function jsonExportInbound(name)  { openJsonExportModal('inbound',  name); }
 function jsonExportOutbound(name) { openJsonExportModal('outbound', name); }
 
 return L.Class.extend({
-    SB_INBOUND_KNOWN:    SB_INBOUND_KNOWN,
     jsonImportInbound:   jsonImportInbound,
-    openJsonExportModal: openJsonExportModal,
     jsonExportInbound:   jsonExportInbound,
     jsonExportOutbound:  jsonExportOutbound,
 });

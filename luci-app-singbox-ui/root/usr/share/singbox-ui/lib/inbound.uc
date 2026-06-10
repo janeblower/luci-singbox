@@ -22,9 +22,6 @@ require("protocols.tproxy");
 require("protocols.mixed");
 
 const s_opt    = helpers.s_opt;
-const s_bool   = helpers.s_bool;
-const s_num    = helpers.s_num;
-const csv_list = helpers.csv_list;
 const as_array = helpers.as_array;
 
 // build_user(s) — single-user object for vless/trojan/hysteria2.
