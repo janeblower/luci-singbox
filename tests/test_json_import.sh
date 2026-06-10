@@ -179,7 +179,7 @@ expect('hysteria2 outbound with obfs',
 	{ ok: true, errors: [], fields: {
 		type: 'hysteria2', server: 'h.b', server_port: 8443,
 		server_password: 'pw', up_mbps: '100', down_mbps: '50',
-		hysteria2_obfs_type: 'salamander', hysteria2_obfs_password: 'op',
+		obfs_type: 'salamander', obfs_password: 'op',
 	}});
 
 // vless multi-user: when users[] has >1 entry, importer emits a
