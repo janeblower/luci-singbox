@@ -69,7 +69,12 @@ done
 # Seed UCI from fixture, take a baseline copy inside the container,
 # install bun deps + Chrome (once per worktree).
 docker exec "$CNAME" sh -c 'cp /seed/baseline.uci /etc/config/singbox-ui && cp /etc/config/singbox-ui /tmp/uci.baseline'
-docker exec "$CNAME" /etc/init.d/rpcd reload || true
+# This container boots ubusd→rpcd→uhttpd directly (no procd, see entrypoint.sh),
+# so `/etc/init.d/rpcd reload` routes through procd's `service` ubus object —
+# absent here — and ubus prints "Command failed: Not found" to stderr. The
+# reload is a no-op without procd anyway (the handler loads at rpcd startup);
+# `|| true` already treats it as best-effort, so silence the stray stderr too.
+docker exec "$CNAME" /etc/init.d/rpcd reload 2>/dev/null || true
 
 LOCK_HASH=$(sha256sum tests/browser/bun.lock | cut -c1-12)
 STAMP="tests/browser/node_modules/.lock-${LOCK_HASH}"
@@ -95,7 +100,10 @@ for t in tests/browser/[0-9]*.mjs; do
     echo "==> $t"
     # Per-test UCI snapshot/restore.
     docker exec "$CNAME" cp /tmp/uci.baseline /etc/config/singbox-ui
-    docker exec "$CNAME" /etc/init.d/rpcd reload || true
+    # See the setup-phase reload above: no procd in this container → the
+    # init script's reload hits an absent `service` ubus object and prints
+    # "Command failed: Not found". Best-effort + silenced.
+    docker exec "$CNAME" /etc/init.d/rpcd reload 2>/dev/null || true
     sleep 1  # let rpcd settle after reload before the test issues its first call
     if ! ( cd tests/browser && bun "$(basename "$t")" ); then
         echo "FAIL: $t"
