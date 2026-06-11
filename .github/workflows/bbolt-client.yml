@@ -1,11 +1,11 @@
 name: bbolt-client
 
 # Builds the standalone bbolt-client-rs reader as static, libc-free binaries for
-# OpenWrt on x86_64 and aarch64. Binary only — no apk packaging (yet).
+# OpenWrt on x86_64, aarch64, armv7, mipsel and mips. Binary only — no apk
+# packaging (yet).
 on:
   push:
     branches: [main]
-    tags: ['bbolt-v*']
     paths:
       - 'bbolt-client/**'
       - '.github/workflows/bbolt-client.yml'
@@ -16,8 +16,9 @@ on:
       - '.github/workflows/bbolt-client.yml'
   workflow_dispatch:
 
-# Release publishing (on bbolt-v* tags) needs write; the rpcd bbolt_install
-# handler downloads the attached assets from /releases/latest.
+# Release publishing (the rolling bbolt-latest tag) needs write; the rpcd
+# bbolt_install handler downloads the attached assets from
+# /releases/download/bbolt-latest.
 permissions:
   contents: write
 
@@ -31,7 +32,7 @@ defaults:
 
 jobs:
   build:
-    name: static x86_64 + aarch64 (no libc)
+    name: static 5-arch (no libc)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -50,7 +51,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-user
 
-      - name: Build (x86_64 + aarch64)
+      - name: Build (all 5 arches)
         run: ./build.sh
 
       - name: Test x86_64 (native)
@@ -59,28 +60,48 @@ jobs:
       - name: Test aarch64 (qemu)
         run: RUN="qemu-aarch64 target/aarch64-unknown-linux-gnu/release/bbolt-client-rs" ./test.sh
 
-      - name: Upload binaries
+      - name: Test armv7 (qemu)
+        run: RUN="qemu-arm target/armv7-unknown-linux-gnueabihf/release/bbolt-client-rs" ./test.sh
+
+      - name: Test mipsel (qemu)
+        run: RUN="qemu-mipsel target/mipsel-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
+
+      - name: Test mips (qemu)
+        run: RUN="qemu-mips target/mips-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
+
+      - name: Upload binaries (PR inspection)
         uses: actions/upload-artifact@v4
         with:
           name: bbolt-client-rs
           path: |
             bbolt-client/bbolt-client-rs-x86_64
             bbolt-client/bbolt-client-rs-aarch64
+            bbolt-client/bbolt-client-rs-armv7
+            bbolt-client/bbolt-client-rs-mipsel
+            bbolt-client/bbolt-client-rs-mips
           if-no-files-found: error
 
-      # On a bbolt-v* tag, publish the dual-arch binaries + checksums to a
-      # GitHub Release. The rpcd bbolt_install handler fetches them from
-      # /releases/latest/download/<asset> and verifies against sha256sums.txt.
+      # On push to main: recreate a rolling `bbolt-latest` prerelease with all 5
+      # binaries + checksums. bbolt_install (rpcd) and install.sh fetch from
+      # /releases/download/bbolt-latest/<asset> — a fixed tag, not the fragile
+      # /releases/latest (which picks the newest non-prerelease across all tags).
       - name: Generate checksums
-        if: startsWith(github.ref, 'refs/tags/bbolt-v')
-        run: sha256sum bbolt-client-rs-x86_64 bbolt-client-rs-aarch64 > sha256sums.txt
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: sha256sum bbolt-client-rs-x86_64 bbolt-client-rs-aarch64 bbolt-client-rs-armv7 bbolt-client-rs-mipsel bbolt-client-rs-mips > sha256sums.txt
 
-      - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/bbolt-v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: |
-            bbolt-client/bbolt-client-rs-x86_64
-            bbolt-client/bbolt-client-rs-aarch64
-            bbolt-client/sha256sums.txt
-          fail_on_unmatched_files: true
+      - name: Publish rolling bbolt-latest release
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release delete bbolt-latest --cleanup-tag --yes \
+            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh release create bbolt-latest \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
+            --title "bbolt-client (latest)" \
+            --notes "Static no-libc bbolt-client for OpenWrt (x86_64/aarch64/armv7/mipsel/mips). Auto-built from \`main\` @ \`${GITHUB_SHA::7}\`; replaced on every push to main." \
+            --prerelease \
+            bbolt-client-rs-x86_64 bbolt-client-rs-aarch64 bbolt-client-rs-armv7 \
+            bbolt-client-rs-mipsel bbolt-client-rs-mips sha256sums.txt
