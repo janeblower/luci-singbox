@@ -4,13 +4,13 @@
 		"read": {
 			"uci": [ "singbox-ui" ],
 			"ubus": {
-				"singbox-ui": [ "status", "status_detail", "read_config", "clash_get", "export_section", "preview_config", "protocol_schema", "subscription_expand" ]
+				"singbox-ui": [ "status", "status_detail", "read_config", "clash_get", "export_section", "preview_config", "protocol_schema", "subscription_expand", "bbolt_status" ]
 			}
 		},
 		"write": {
 			"uci": [ "singbox-ui" ],
 			"ubus": {
-				"singbox-ui": [ "generate", "nftables", "restart", "refresh", "clash_mutate" ]
+				"singbox-ui": [ "generate", "nftables", "restart", "refresh", "clash_mutate", "bbolt_install" ]
 			}
 		}
 	}
