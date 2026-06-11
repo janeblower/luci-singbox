@@ -212,6 +212,14 @@ jobs:
 
       # Push to main → rolling pre-release `latest` (recreated each push so the
       # asset always reflects the tip of main).
+      - name: Stage stable-named apk
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          src=$(ls -1 dist/*.apk | head -1)
+          cp "$src" "dist/luci-app-singbox-ui.apk"
+          ls -1 dist/*.apk
+
       - name: Publish rolling "latest" release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
@@ -224,10 +232,10 @@ jobs:
           gh release create latest \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "Latest build" \
-            --notes "Auto-built from \`main\` @ \`${GITHUB_SHA::7}\`. This pre-release is replaced on every push to main." \
+            --title "Latest build (${{ steps.version.outputs.version }})" \
+            --notes "Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-app-singbox-ui.apk\` is the stable-named asset used by install.sh." \
             --prerelease \
-            dist/*.apk
+            dist/luci-app-singbox-ui.apk dist/*.apk
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.
       - name: Publish tagged release
