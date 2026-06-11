@@ -216,8 +216,13 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
-          src=$(ls -1 dist/*.apk | head -1)
-          cp "$src" "dist/luci-app-singbox-ui.apk"
+          # dist/ is root-owned (build-apk.sh runs under sudo); pick the MAIN
+          # package (not luci-i18n-*) and copy it to a stable, version-less name.
+          src=""
+          for f in dist/luci-app-singbox-ui_*.apk; do src="$f"; break; done
+          [ -n "$src" ] || { echo "no main apk found in dist/"; exit 1; }
+          sudo cp "$src" dist/luci-app-singbox-ui.apk
+          sudo chown "$(id -u):$(id -g)" dist/luci-app-singbox-ui.apk
           ls -1 dist/*.apk
 
       - name: Publish rolling "latest" release
@@ -235,7 +240,7 @@ jobs:
             --title "Latest build (${{ steps.version.outputs.version }})" \
             --notes "Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-app-singbox-ui.apk\` is the stable-named asset used by install.sh." \
             --prerelease \
-            dist/luci-app-singbox-ui.apk dist/*.apk
+            dist/*.apk
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.
       - name: Publish tagged release

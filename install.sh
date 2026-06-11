@@ -37,11 +37,13 @@ detect_arch() {
   case "$pa" in
     x86_64*)  echo x86_64 ;;
     aarch64*) echo aarch64 ;;
+    mips64*)  echo "" ;;           # 64-bit mips unsupported (before mips*)
     mipsel*)  echo mipsel ;;       # before mips*
-    armeb*)   echo "" ;;           # big-endian ARM unsupported
     mips*)    echo mips ;;
+    armeb*)   echo "" ;;           # big-endian ARM unsupported
     arm*)     echo armv7 ;;
-    *)
+    "")
+      # apk unavailable: fall back to uname -m
       m=$(uname -m 2>/dev/null || true)
       case "$m" in
         x86_64|amd64) echo x86_64 ;;
@@ -49,6 +51,7 @@ detect_arch() {
         armv7*) echo armv7 ;;
         *) echo "" ;;
       esac ;;
+    *) echo "" ;;                  # apk gave a definitive but unsupported arch
   esac
 }
 
