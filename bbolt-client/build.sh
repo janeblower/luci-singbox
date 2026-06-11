@@ -10,8 +10,16 @@ set -eu
 cd "$(dirname "$0")"
 export PATH="$HOME/.cargo/bin:$PATH"
 
-# rust-objcopy ships with the toolchain (llvm-tools); override via $OBJCOPY if needed.
-OBJCOPY="${OBJCOPY:-rust-objcopy}"
+# Locate an objcopy for stripping the MIPS .pdr section. The llvm-tools rustup
+# component installs llvm-objcopy/rust-objcopy into the toolchain's rustlib bin
+# dir, which is NOT on PATH — resolve it via the sysroot. Override with $OBJCOPY.
+if [ -z "${OBJCOPY:-}" ]; then
+  _rlbin="$(rustc +nightly --print sysroot)/lib/rustlib/$(rustc +nightly -vV | sed -n 's/^host: //p')/bin"
+  for _c in "$_rlbin/llvm-objcopy" "$_rlbin/rust-objcopy" llvm-objcopy rust-objcopy; do
+    if command -v "$_c" >/dev/null 2>&1; then OBJCOPY="$_c"; break; fi
+  done
+fi
+[ -n "${OBJCOPY:-}" ] || { echo "build.sh: no objcopy found (run: rustup component add llvm-tools)" >&2; exit 1; }
 
 build_one() {
   triple="$1"; arch="$2"
