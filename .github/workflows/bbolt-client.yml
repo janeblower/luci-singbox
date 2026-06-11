@@ -5,6 +5,7 @@ name: bbolt-client
 on:
   push:
     branches: [main]
+    tags: ['bbolt-v*']
     paths:
       - 'bbolt-client/**'
       - '.github/workflows/bbolt-client.yml'
@@ -15,8 +16,10 @@ on:
       - '.github/workflows/bbolt-client.yml'
   workflow_dispatch:
 
+# Release publishing (on bbolt-v* tags) needs write; the rpcd bbolt_install
+# handler downloads the attached assets from /releases/latest.
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: bbolt-client-${{ github.ref }}
@@ -64,3 +67,20 @@ jobs:
             bbolt-client/bbolt-client-rs-x86_64
             bbolt-client/bbolt-client-rs-aarch64
           if-no-files-found: error
+
+      # On a bbolt-v* tag, publish the dual-arch binaries + checksums to a
+      # GitHub Release. The rpcd bbolt_install handler fetches them from
+      # /releases/latest/download/<asset> and verifies against sha256sums.txt.
+      - name: Generate checksums
+        if: startsWith(github.ref, 'refs/tags/bbolt-v')
+        run: sha256sum bbolt-client-rs-x86_64 bbolt-client-rs-aarch64 > sha256sums.txt
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/bbolt-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            bbolt-client/bbolt-client-rs-x86_64
+            bbolt-client/bbolt-client-rs-aarch64
+            bbolt-client/sha256sums.txt
+          fail_on_unmatched_files: true
