@@ -1,4 +1,4 @@
-# bbolt-client-rs — minimal static no-libc bbolt reader (x86_64 + aarch64, nightly Rust).
+# bbolt-client-rs — minimal static no-libc bbolt reader (x86_64/aarch64/armv7/mipsel/mips, nightly Rust).
 .PHONY: all build test clean
 
 all: build
@@ -14,4 +14,5 @@ test: build
 
 clean:
 	export PATH="$$HOME/.cargo/bin:$$PATH"; cargo +nightly clean 2>/dev/null || true
-	rm -f bbolt-client-rs bbolt-client-rs-x86_64 bbolt-client-rs-aarch64
+	rm -f bbolt-client-rs bbolt-client-rs-x86_64 bbolt-client-rs-aarch64 \
+	      bbolt-client-rs-armv7 bbolt-client-rs-mipsel bbolt-client-rs-mips
