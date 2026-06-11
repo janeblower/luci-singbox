@@ -31,6 +31,17 @@ exec /usr/bin/uname "$@"
 EOF
 chmod +x "$TMPDIR/bin/uname"
 
+# Stub apk: `--print-arch` echoes the contents of $ARCHFILE (host_arch() now
+# prefers apk --print-arch over uname -m). Default to the OpenWrt x86_64 pkg
+# arch so the install happy-path below stays deterministic.
+ARCHFILE="$TMPDIR/apk-arch"; echo "x86_64" >"$ARCHFILE"
+cat >"$TMPDIR/bin/apk" <<EOF
+#!/bin/sh
+[ "\$1" = "--print-arch" ] && { cat "$ARCHFILE"; exit 0; }
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/apk"
+
 # Build a fake "release" dir with the x86_64 asset + a correct sha256sums.txt.
 REL="$TMPDIR/release"; mkdir -p "$REL"
 printf 'FAKE-BBOLT-CLIENT-BINARY\n' >"$REL/bbolt-client-rs-x86_64"
@@ -89,6 +100,7 @@ echo "$out" | grep -qi 'sha256 mismatch' || { echo "$out"; fail "expected sha256
 pass "sha256 mismatch refused"
 
 echo "-- unknown arch → error"
+echo "mips64" >"$ARCHFILE"
 cat >"$TMPDIR/bin/uname" <<'EOF'
 #!/bin/sh
 [ "$1" = "-m" ] && { echo mips64; exit 0; }
@@ -98,5 +110,33 @@ chmod +x "$TMPDIR/bin/uname"
 out=$(echo '{}' | run_h call bbolt_install)
 echo "$out" | grep -qi 'unsupported arch' || { echo "$out"; fail "expected unsupported arch error"; }
 pass "unknown arch rejected"
+
+# host_arch() maps apk --print-arch prefixes to bbolt asset arches. bbolt_status
+# exposes the resolved arch side-effect-free ("arch": "<arch>"), so we drive it
+# per apk --print-arch value. mipsel MUST resolve before mips (mipsel_* also
+# starts with "mips").
+echo "-- host_arch prefix map (via apk --print-arch)"
+for pair in \
+  "x86_64=x86_64" \
+  "aarch64_cortex-a53=aarch64" "aarch64_generic=aarch64" \
+  "arm_cortex-a7=armv7" "arm_cortex-a15_neon-vfpv4=armv7" \
+  "mipsel_24kc=mipsel" "mipsel_74kc=mipsel" \
+  "mips_24kc=mips"; do
+	pa=${pair%%=*}; want=${pair##*=}
+	echo "$pa" >"$ARCHFILE"
+	out=$(echo '{}' | run_h call bbolt_status)
+	echo "$out" | grep -q "\"arch\": *\"$want\"" || { echo "$out"; fail "host_arch($pa) != $want"; }
+done
+pass "apk --print-arch prefixes mapped (incl. mipsel before mips)"
+
+echo "-- armeb (big-endian ARM) is unsupported"
+echo "armeb_xscale" >"$ARCHFILE"
+out=$(echo '{}' | run_h call bbolt_status)
+echo "$out" | grep -q '"arch": *""' || { echo "$out"; fail "armeb must be unsupported (empty arch)"; }
+pass "armeb rejected"
+
+echo "-- BBOLT_BASE default points at the fixed bbolt-latest tag"
+grep -q 'releases/download/bbolt-latest' "$H" || fail "BBOLT_BASE not bbolt-latest"
+pass "BBOLT_BASE → bbolt-latest"
 
 echo "OK"

@@ -30,11 +30,11 @@ const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 const CLASH_CURL   = getenv("CLASH_CURL")   || "curl";
 const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
-// bbolt-client helper: not packaged in the .apk; fetched on demand from GitHub
-// Releases (latest) and installed here. Test-overridable.
+// bbolt-client helper: not packaged in the .apk; fetched on demand from the
+// fixed `bbolt-latest` GitHub Release and installed here. Test-overridable.
 const BBOLT_PATH   = getenv("SINGBOX_BBOLT_BIN") || "/usr/libexec/singbox-ui/bbolt-client";
 const BBOLT_BASE   = getenv("BBOLT_RELEASE_BASE")
-	|| "https://github.com/janeblower/luci-app-sing-box/releases/latest/download";
+	|| "https://github.com/janeblower/luci-app-sing-box/releases/download/bbolt-latest";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }
@@ -504,12 +504,24 @@ function call_subscription_expand() {
 	emit({ status: "ok", name: name, endpoints: endpoints });
 }
 
-// host_arch() → "x86_64" | "aarch64" | null. Normalises uname -m so the
-// installer picks the right release asset.
+// host_arch() → bbolt asset arch ("x86_64"|"aarch64"|"armv7"|"mipsel"|"mips") or
+// null. Prefers `apk --print-arch` (distinguishes mips endianness, which uname -m
+// cannot — both report "mips"); falls back to uname -m for x86_64/aarch64.
 function host_arch() {
+	let pa = trim(run_capture(["apk", "--print-arch"]) ?? "");
+	if (length(pa)) {
+		if (substr(pa, 0, 6) === "x86_64") return "x86_64";
+		if (substr(pa, 0, 7) === "aarch64") return "aarch64";
+		if (substr(pa, 0, 6) === "mipsel") return "mipsel";   // before "mips"
+		if (substr(pa, 0, 4) === "mips") return "mips";
+		if (substr(pa, 0, 5) === "armeb") return null;        // big-endian ARM unsupported
+		if (substr(pa, 0, 3) === "arm") return "armv7";
+	}
+	// Fallback: uname -m (cannot distinguish mips endianness — only the 64-bit arches)
 	let m = trim(run_capture(["uname", "-m"]) ?? "");
 	if (m === "x86_64" || m === "amd64") return "x86_64";
 	if (m === "aarch64" || m === "arm64") return "aarch64";
+	if (substr(m, 0, 5) === "armv7" || m === "armv7l") return "armv7";
 	return null;
 }
 
@@ -536,7 +548,7 @@ function call_bbolt_status() {
 function call_bbolt_install() {
 	drain_stdin();
 	let arch = host_arch();
-	if (arch == null) { emit_err("unsupported arch (need x86_64/aarch64)"); return; }
+	if (arch == null) { emit_err("unsupported arch (need x86_64/aarch64/armv7/mipsel/mips)"); return; }
 	let asset = `bbolt-client-rs-${arch}`;
 
 	// Install dir = parent of BBOLT_PATH (derived, not hardcoded, so a test
