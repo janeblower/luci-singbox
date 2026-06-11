@@ -16,7 +16,6 @@ elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
 else
 	echo "SKIP: ucode not available"; exit 0
 fi
-command -v curl >/dev/null 2>&1 || { echo "SKIP: curl not available"; exit 0; }
 command -v sha256sum >/dev/null 2>&1 || { echo "SKIP: sha256sum not available"; exit 0; }
 
 TMPDIR=$(mktemp -d); trap 'rm -rf "$TMPDIR"' EXIT
@@ -31,16 +30,34 @@ cat >"$TMPDIR/bin/uname" <<'EOF'
 exec /usr/bin/uname "$@"
 EOF
 chmod +x "$TMPDIR/bin/uname"
-export PATH="$TMPDIR/bin:$PATH"
 
 # Build a fake "release" dir with the x86_64 asset + a correct sha256sums.txt.
 REL="$TMPDIR/release"; mkdir -p "$REL"
 printf 'FAKE-BBOLT-CLIENT-BINARY\n' >"$REL/bbolt-client-rs-x86_64"
 ( cd "$REL" && sha256sum bbolt-client-rs-x86_64 >sha256sums.txt )
 
+# Stub curl: copy $REL/<basename-of-url> to the -o target (avoids depending on a
+# real curl with the FILE protocol, which busybox/OpenWrt may not ship).
+cat >"$TMPDIR/bin/curl" <<EOF
+#!/bin/sh
+out=""; url=""
+while [ \$# -gt 0 ]; do
+	case "\$1" in
+		-o) out="\$2"; shift 2 ;;
+		-sfL|-s|-f|-L) shift ;;
+		*) url="\$1"; shift ;;
+	esac
+done
+base=\$(basename "\$url")
+[ -f "$REL/\$base" ] || exit 22
+cp "$REL/\$base" "\$out"
+EOF
+chmod +x "$TMPDIR/bin/curl"
+export PATH="$TMPDIR/bin:$PATH"
+
 TARGET="$TMPDIR/install/bbolt-client"
 export SINGBOX_BBOLT_BIN="$TARGET"
-export BBOLT_RELEASE_BASE="file://$REL"
+export BBOLT_RELEASE_BASE="http://example.invalid/dl"
 
 # shellcheck disable=SC2086
 run_h() { "$UCODE_BIN" $UCODE_LIB_FLAGS "$H" "$@"; }

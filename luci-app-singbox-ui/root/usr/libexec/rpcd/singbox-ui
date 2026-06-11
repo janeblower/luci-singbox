@@ -539,12 +539,20 @@ function call_bbolt_install() {
 	if (arch == null) { emit_err("unsupported arch (need x86_64/aarch64)"); return; }
 	let asset = `bbolt-client-rs-${arch}`;
 
-	let dir = "/tmp/singbox-ui";
-	system("mkdir -p " + sq(dir) + " >/dev/null 2>&1");
-	let bin_tmp  = `${dir}/bbolt-client.dl`;
-	let sums_tmp = `${dir}/bbolt-client.sha256sums`;
+	// Install dir = parent of BBOLT_PATH (derived, not hardcoded, so a test
+	// override lands in its sandbox). Download the binary INTO this dir so the
+	// final rename is same-filesystem (atomic). A /tmp → /usr/libexec rename is
+	// cross-device on OpenWrt (tmpfs vs overlay) and fails with EXDEV.
+	let i = length(BBOLT_PATH) - 1;
+	while (i >= 0 && substr(BBOLT_PATH, i, 1) !== "/") i--;
+	let parent = (i > 0) ? substr(BBOLT_PATH, 0, i) : "/";
+	system("mkdir -p " + sq(parent) + " >/dev/null 2>&1");
+
+	let bin_tmp  = `${parent}/.bbolt-client.dl`;
+	let sums_tmp = "/tmp/bbolt-client.sha256sums";
 
 	if (!run(["curl", "-sfL", "-o", bin_tmp,  `${BBOLT_BASE}/${asset}`])) {
+		try { fs.unlink(bin_tmp); } catch (_) {}
 		emit_err("download failed (binary)"); return;
 	}
 	if (!run(["curl", "-sfL", "-o", sums_tmp, `${BBOLT_BASE}/sha256sums.txt`])) {
@@ -575,13 +583,7 @@ function call_bbolt_install() {
 		emit_err("sha256 mismatch — refusing to install"); return;
 	}
 
-	// Ensure the install dir exists (parent of BBOLT_PATH — derived, not
-	// hardcoded, so a test override lands in its sandbox).
-	let i = length(BBOLT_PATH) - 1;
-	while (i >= 0 && substr(BBOLT_PATH, i, 1) !== "/") i--;
-	let parent = (i > 0) ? substr(BBOLT_PATH, 0, i) : "/";
-	system("mkdir -p " + sq(parent) + " >/dev/null 2>&1");
-	try { fs.chmod(bin_tmp, 0o755); } catch (_) {}
+	system("chmod 0755 " + sq(bin_tmp) + " >/dev/null 2>&1");
 	let ok = false;
 	try { ok = fs.rename(bin_tmp, BBOLT_PATH); } catch (_) { ok = false; }
 	if (!ok) { try { fs.unlink(bin_tmp); } catch (_) {} emit_err("install (rename) failed"); return; }
