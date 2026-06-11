@@ -27,7 +27,10 @@ mkdir -p "$SINGBOX_TMPDIR" "$TMPDIR/bin"
 
 pass() { echo "  PASS: $1"; }
 fail() { echo "FAIL: $1"; exit 1; }
-run_uc() { UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$SUB_UC" "$@"; }
+run_uc() {
+	# shellcheck disable=SC2086
+	UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS "$SUB_UC" "$@"
+}
 
 # --- fake bbolt-client: "<db> rule_set" lists known tags; "-r <db> rule_set
 #     <tag>" emits a fake .srs body for a known tag, else exits 1. The set of
