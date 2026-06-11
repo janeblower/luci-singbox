@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "luci-app-singbox-ui-browser-tests",
+      "name": "luci-singbox-ui-browser-tests",
       "dependencies": {
         "puppeteer": "^24.0.0",
       },

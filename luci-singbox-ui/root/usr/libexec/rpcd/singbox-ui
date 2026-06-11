@@ -216,7 +216,7 @@ function call_status() {
 // диск под VARLIB и форкаем apk только при cache-miss. OpenWrt 25.12.3 — apk
 // (не opkg); `apk list --installed <pkg>` читает локальную installed-БД (без
 // сети) и печатает строку вида
-//   "luci-app-singbox-ui-0.0.0-r337 noarch {luci-app-singbox-ui} (...) [installed]"
+//   "luci-singbox-ui-0.0.0-r337 noarch {luci-singbox-ui} (...) [installed]"
 // Версия = первый токен со снятым префиксом имени. (НЕ переиспользовать старый
 // opkg-парсер split(line," - ") — в apk нет поля " - ".)
 function cached_pkg_version() {
@@ -228,7 +228,7 @@ function cached_pkg_version() {
 	} catch (_) {}
 	if (pkg_ver !== "unknown" && length(pkg_ver)) return pkg_ver;
 
-	const PKG = "luci-app-singbox-ui";
+	const PKG = "luci-singbox-ui";
 	try {
 		let line = trim(run_capture(["apk", "list", "--installed", PKG]) ?? "");
 		if (length(line)) {

@@ -68,8 +68,8 @@ start_service() {
 	# opkg; `apk list --installed` prints "<name>-<version> noarch {...}".
 	# Must yield the SAME cache format as cached_pkg_version in the rpcd
 	# handler: the version with the package-name prefix stripped.
-	apk list --installed luci-app-singbox-ui 2>/dev/null \
-		| sed -n 's/^luci-app-singbox-ui-\([^ ]*\) .*/\1/p' \
+	apk list --installed luci-singbox-ui 2>/dev/null \
+		| sed -n 's/^luci-singbox-ui-\([^ ]*\) .*/\1/p' \
 		> /var/lib/singbox-ui/pkg_version || true
 }
 
