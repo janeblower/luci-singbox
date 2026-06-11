@@ -31,22 +31,24 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Install host tooling
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends shellcheck
-
       - name: main.js syntax check (host node)
         run: sh tests/test_main_js_syntax.sh
 
+      # Lint via the official shellcheck image instead of apt-installing the
+      # binary on every run (saves the apt-get update/install round-trip and
+      # pins a known shellcheck version). The repo is mounted at /mnt — the
+      # image's WORKDIR — so .shellcheckrc at the root is honoured and the
+      # relative globs resolve. Two invocations: the uci-defaults script must
+      # be linted as busybox ash, not bash.
       - name: shellcheck
         run: |
-          shellcheck tests/*.sh scripts/*.sh \
+          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
+            tests/*.sh scripts/*.sh \
             luci-singbox-ui/root/etc/init.d/singbox-ui
           # uci-defaults runs under busybox ash on OpenWrt, not bash. Lint
           # it with --shell=ash so bashisms (arrays, [[ ]], $'...') fail at
           # CI rather than silently at first-boot on the router.
-          shellcheck --shell=ash \
+          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --shell=ash \
             luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui
 
   test:
