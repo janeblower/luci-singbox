@@ -26,3 +26,14 @@ rustflags = [
   "-C", "link-arg=-static",
   "-C", "link-arg=--no-dynamic-linker",
 ]
+
+# armv7 cross (32-bit ARM EABI hardfloat baseline; we use no float, so the VFP
+# ABI flag is irrelevant for a static -nostdlib ELF). Links with rust-lld.
+[target.armv7-unknown-linux-gnueabihf]
+linker = "rust-lld"
+rustflags = [
+  "-C", "relocation-model=static",
+  "-C", "linker-flavor=ld.lld",
+  "-C", "link-arg=-static",
+  "-C", "link-arg=--no-dynamic-linker",
+]

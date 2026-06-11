@@ -34,6 +34,18 @@ mod nr {
     pub const NANOSLEEP: usize = 101;
     pub const EXIT_GROUP: usize = 94;
 }
+// arm (armv7 EABI): 32-bit. `lseek` (19) returns a 32-bit off_t — fine for the
+// small cache.db; `mmap2` (192) takes the offset in 4 KB pages (we pass 0).
+#[cfg(target_arch = "arm")]
+mod nr {
+    pub const WRITE: usize = 4;
+    pub const OPENAT: usize = 322;
+    pub const LSEEK: usize = 19;
+    pub const MMAP: usize = 192;     // mmap2; pgoffset 0
+    pub const FLOCK: usize = 143;
+    pub const NANOSLEEP: usize = 162;
+    pub const EXIT_GROUP: usize = 248;
+}
 
 #[cfg(target_arch = "x86_64")]
 #[inline]
@@ -62,6 +74,23 @@ unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
         in("x8") n,
         inlateout("x0") a1 => ret,
         in("x1") a2, in("x2") a3, in("x3") a4, in("x4") a5, in("x5") a6,
+        options(nostack),
+    );
+    ret
+}
+
+// arm EABI: `svc #0`, nr in r7, args r0–r5, return in r0 (negative errno) —
+// same convention as aarch64, only the nr register differs.
+#[cfg(target_arch = "arm")]
+#[inline]
+unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
+                   a4: usize, a5: usize, a6: usize) -> isize {
+    let ret: isize;
+    asm!(
+        "svc #0",
+        in("r7") n,
+        inlateout("r0") a1 => ret,
+        in("r1") a2, in("r2") a3, in("r3") a4, in("r4") a5, in("r5") a6,
         options(nostack),
     );
     ret
@@ -101,6 +130,13 @@ global_asm!(
     ".global _start",
     "_start:",
     "mov x0, sp", // argv-block pointer (argc at [sp]); sp is already 16-aligned at entry
+    "bl rust_entry",
+);
+#[cfg(target_arch = "arm")]
+global_asm!(
+    ".global _start",
+    "_start:",
+    "mov r0, sp",   // argv-block pointer (argc at [sp]); sp is 8-aligned at entry
     "bl rust_entry",
 );
 
