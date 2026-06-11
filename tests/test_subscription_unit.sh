@@ -5,8 +5,8 @@
 set -e
 cd "$(dirname "$0")/.."
 
-APP_LIB="${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
-SUB_DIR="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui"
+APP_LIB="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+SUB_DIR="$PWD/luci-singbox-ui/root/usr/share/singbox-ui"
 
 # Mirror test_subscription_uc.sh: skip if ucode/uci-mod unavailable on dev box.
 # In addition, add the script's own directory to the lib flags so that

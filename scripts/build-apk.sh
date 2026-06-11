@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Build the luci-app-singbox-ui .apk packages directly via the OpenWrt SDK's
+# Build the luci-singbox-ui .apk packages directly via the OpenWrt SDK's
 # host `apk` tool, skipping the full SDK build orchestration. Packages are
 # noarch (LUCI_PKGARCH:=all), so no cross-compilation is needed — only po2lmo
 # (built once from the luci feed) and apk-mkpkg.
 #
 # Produces two packages:
-#   - luci-app-singbox-ui_<version>.apk        main app (no translations)
+#   - luci-singbox-ui_<version>.apk        main app (no translations)
 #   - luci-i18n-singbox-ui-ru_<version>.apk    Russian translation pack
 #
 # Usage: build-apk.sh [version] [output_dir]
@@ -15,17 +15,17 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-APP_NAME="luci-app-singbox-ui"
+APP_NAME="luci-singbox-ui"
 APP_DESC="LuCI support for singbox-ui"
 APP_DEPENDS="libc luci-base nftables sing-box jq curl"
 APP_CONFFILE="/etc/config/singbox-ui"
 
 I18N_NAME="luci-i18n-singbox-ui-ru"
-I18N_DESC="Translation for luci-app-singbox-ui — Русский (Russian)"
+I18N_DESC="Translation for luci-singbox-ui — Русский (Russian)"
 I18N_DEPENDS="libc $APP_NAME"
 
 PKG_LICENSE="GPL-2.0-or-later"
-PKG_URL="https://github.com/Jyn/luci-app-sing-box"
+PKG_URL="https://github.com/Jyn/luci-singbox"
 PKG_MAINTAINER="Jyn"
 
 VERSION="${1:-}"
@@ -40,7 +40,7 @@ fi
 OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 
 SDK_URL="${SDK_URL:-https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst}"
-SDK_CACHE_DIR="${SDK_CACHE_DIR:-$HOME/.cache/luci-app-singbox-ui/openwrt-sdk}"
+SDK_CACHE_DIR="${SDK_CACHE_DIR:-$HOME/.cache/luci-singbox-ui/openwrt-sdk}"
 WORK_DIR="${WORK_DIR:-$ROOT_DIR/.build}"
 SDK_DIR="$WORK_DIR/sdk"
 
@@ -80,7 +80,7 @@ if [ ! -x "$PO2LMO_BIN" ]; then
   install -m0755 "$luci_src/po2lmo" "$PO2LMO_BIN"
 fi
 
-PKG_SRC="$ROOT_DIR/luci-app-singbox-ui"
+PKG_SRC="$ROOT_DIR/luci-singbox-ui"
 
 # ---------------------------------------------------------------------------
 # Main package root
@@ -90,7 +90,7 @@ APP_SCRIPTS="$WORK_DIR/scripts-app"
 rm -rf "$APP_ROOT" "$APP_SCRIPTS"
 
 # Install file set is driven from scripts/install-manifest.txt, shared with
-# luci-app-singbox-ui/Makefile. Single source of truth: adding a file means
+# luci-singbox-ui/Makefile. Single source of truth: adding a file means
 # editing one place. tests/test_install_lists_match.sh asserts the parity.
 MANIFEST="$SCRIPT_DIR/install-manifest.txt"
 [ -f "$MANIFEST" ] || { echo "install-manifest.txt missing at $MANIFEST" >&2; exit 1; }
@@ -118,7 +118,7 @@ mkdir -p "$APP_SCRIPTS"
 # NOTE: default_postinst derives the package name from `basename "${1%.*}"`,
 # i.e. the post-install script's filename minus its extension. With apk-mkpkg
 # we name the script "post-install.sh", so it resolves to "post-install" and
-# the package's file list at /lib/apk/packages/luci-app-singbox-ui.list is
+# the package's file list at /lib/apk/packages/luci-singbox-ui.list is
 # never found — which silently skips the init.d enable+start block. We call
 # default_postinst for any side-effects (uci-defaults runner) and then enable
 # /start /etc/init.d/singbox-ui explicitly. Both ops are idempotent.

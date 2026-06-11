@@ -12,9 +12,9 @@ cd "$(dirname "$0")/.."
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
 
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
-HANDLER="$PWD/luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
-ACL="$PWD/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+HANDLER="$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
+ACL="$PWD/luci-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json"
 
 [ -x "$HANDLER" ] || { echo "FAIL: handler missing/not exec: $HANDLER"; exit 1; }
 [ -f "$ACL" ]     || { echo "FAIL: ACL file missing: $ACL"; exit 1; }
@@ -32,7 +32,7 @@ handler_methods=$("$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" "$HANDLER" list 2>/dev/nu
 acl_methods=$("$UCODE_BIN" -e '
 	let fs = require("fs");
 	let d = json(fs.readfile("'"$ACL"'") || "{}");
-	let o = d["luci-app-singbox-ui"] ?? {};
+	let o = d["luci-singbox-ui"] ?? {};
 	let s = [];
 	for (let k in (o.read.ubus["singbox-ui"] ?? []))  push(s, k);
 	for (let k in (o.write.ubus["singbox-ui"] ?? [])) push(s, k);

@@ -15,7 +15,7 @@ if ! command -v node >/dev/null 2>&1; then
 	exit 0
 fi
 
-JS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js
+JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

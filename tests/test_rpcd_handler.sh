@@ -2,7 +2,7 @@
 # tests/test_rpcd_handler.sh
 set -e
 
-H=luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui
+H=luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui
 
 if [ ! -x "$H" ]; then
   echo "FAIL: $H not present or not executable"; exit 1
@@ -37,9 +37,9 @@ if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=$(command -v ucode)
 	# Handler requires protocols.schema_dump (protocol_schema method) and
 	# outbound/inbound dependencies, so it needs the app's lib dir on its module search path.
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
 else
 	echo "SKIP: ucode not available"
@@ -325,14 +325,14 @@ printf "%s\n" "$out" | je 'd.status == "error"' \
 
 # nonexistent section rejected
 out=$(echo '{"kind":"inbound","name":"nope"}' | UCI_CONFIG_DIR="$uci_dir" \
-	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
 printf "%s\n" "$out" | je 'd.status == "error"' \
 	|| { echo "FAIL: missing section should error; got=$out"; exit 1; }
 
 # happy path: inbound shadowsocks
 out_inbound=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
-	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
 printf "%s\n" "$out_inbound" | je 'd.status == "ok"' \
 	|| { echo "FAIL: ss inbound export should succeed; got=$out_inbound"; exit 1; }
@@ -344,7 +344,7 @@ printf "%s\n" "$out_inbound" | je 'd.section.listen_port == 8388 && d.section.pa
 
 # happy path: outbound vless
 out_outbound=$(echo '{"kind":"outbound","name":"out_vless"}' | UCI_CONFIG_DIR="$uci_dir" \
-	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
 printf "%s\n" "$out_outbound" | je 'd.status == "ok"' \
 	|| { echo "FAIL: vless outbound export should succeed; got=$out_outbound"; exit 1; }
@@ -379,7 +379,7 @@ echo "$out_outbound" | grep -Eq '"server":[[:space:]]*"\*\*\*"' && \
 
 # kind mismatch (querying outbound for an inbound name) returns error
 out=$(echo '{"kind":"outbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
-	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
 printf "%s\n" "$out" | je 'd.status == "error"' \
 	|| { echo "FAIL: kind mismatch should error; got=$out"; exit 1; }
@@ -387,7 +387,7 @@ printf "%s\n" "$out" | je 'd.status == "error"' \
 # url / subscription outbound types are refused (out of scope per spec)
 for n in out_url out_sub; do
 	out=$(echo "{\"kind\":\"outbound\",\"name\":\"$n\"}" | UCI_CONFIG_DIR="$uci_dir" \
-		UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+		UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 		run_h call export_section)
 	printf "%s\n" "$out" | je 'd.status == "error"' \
 		|| { echo "FAIL: $n should be refused; got=$out"; exit 1; }
@@ -658,7 +658,7 @@ printf "%s\n" "$out" | je 'd.status == "error"' \
 	|| { echo "FAIL: S1-3 slash export_section name should error; out=$out"; exit 1; }
 # A well-formed name (matching subscription_expand's regex) still works.
 out=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
-	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
+	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
 printf "%s\n" "$out" | je 'd.status == "ok"' \
 	|| { echo "FAIL: S1-3 valid export_section name regressed; out=$out"; exit 1; }

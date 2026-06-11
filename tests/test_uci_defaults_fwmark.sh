@@ -2,7 +2,7 @@
 # tests/test_uci_defaults_fwmark.sh
 set -e
 
-SCRIPT=luci-app-singbox-ui/root/etc/uci-defaults/90-singbox-ui-fwmark
+SCRIPT=luci-singbox-ui/root/etc/uci-defaults/90-singbox-ui-fwmark
 [ -x "$SCRIPT" ] || { echo "FAIL: $SCRIPT missing or not executable"; exit 1; }
 
 # The script uses real `uci` — skip when not on a UCI host.

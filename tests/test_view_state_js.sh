@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-ROOT=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui
+ROOT=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui
 JS="$ROOT/lib/view_state.js"
 
 [ -f "$JS" ] || { echo "FAIL: $JS missing"; exit 1; }

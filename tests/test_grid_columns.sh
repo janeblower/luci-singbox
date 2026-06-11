@@ -31,7 +31,7 @@ check_file() {
 }
 
 fail=0
-check_file luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js || fail=1
-check_file luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js  || fail=1
+check_file luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js || fail=1
+check_file luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js  || fail=1
 [ "$fail" -eq 0 ] && echo "PASS test_grid_columns"
 exit $fail

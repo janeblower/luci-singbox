@@ -6,7 +6,7 @@
 set -e
 cd "$(dirname "$0")/.."
 
-ACL_FILE="luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"
+ACL_FILE="luci-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json"
 
 if [ ! -f "$ACL_FILE" ]; then
     echo "FAIL: ACL file missing at $ACL_FILE"
@@ -35,12 +35,12 @@ extract_methods() {
     # $1 = "read" | "write"
     section="$1"
     if command -v jsonfilter >/dev/null 2>&1; then
-        jsonfilter -i "$ACL_FILE" -e "@[\"luci-app-singbox-ui\"].$section.ubus[\"singbox-ui\"][*]"
+        jsonfilter -i "$ACL_FILE" -e "@[\"luci-singbox-ui\"].$section.ubus[\"singbox-ui\"][*]"
     elif command -v python3 >/dev/null 2>&1; then
         python3 -c "
 import json
 d=json.load(open('$ACL_FILE'))
-for m in d['luci-app-singbox-ui']['$section']['ubus']['singbox-ui']:
+for m in d['luci-singbox-ui']['$section']['ubus']['singbox-ui']:
     print(m)
 "
     else

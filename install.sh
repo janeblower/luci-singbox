@@ -1,9 +1,9 @@
 #!/bin/sh
-# luci-app-singbox-ui installer for OpenWrt 25.12.x (apk).
+# luci-singbox-ui installer for OpenWrt 25.12.x (apk).
 # Detects the device arch, installs the main apk (deps from feeds), then downloads
 # and sha256-verifies the matching bbolt-client helper.
 #
-#   wget -O- https://raw.githubusercontent.com/janeblower/luci-app-sing-box/main/install.sh | sh
+#   wget -O- https://raw.githubusercontent.com/janeblower/luci-singbox/main/install.sh | sh
 #
 # Env overrides (used by tests / mirrors):
 #   APK_BASE     base URL for the apk           (default: GitHub latest release)
@@ -14,10 +14,10 @@ set -eu
 # NOTE: fixed tag form (/releases/download/latest/), NOT /releases/latest/download/.
 # The rolling release is a *prerelease*, and the /releases/latest/ selector ignores
 # prereleases (→ 404). "latest" here is the literal tag name, like "bbolt-latest".
-APK_BASE="${APK_BASE:-https://github.com/janeblower/luci-app-sing-box/releases/download/latest/}"
-BBOLT_BASE="${BBOLT_BASE:-https://github.com/janeblower/luci-app-sing-box/releases/download/bbolt-latest/}"
+APK_BASE="${APK_BASE:-https://github.com/janeblower/luci-singbox/releases/download/latest/}"
+BBOLT_BASE="${BBOLT_BASE:-https://github.com/janeblower/luci-singbox/releases/download/bbolt-latest/}"
 BBOLT_DEST="${BBOLT_DEST:-/usr/libexec/singbox-ui/bbolt-client}"
-APK_NAME="luci-app-singbox-ui.apk"
+APK_NAME="luci-singbox-ui.apk"
 
 die() { echo "install: $1" >&2; exit 1; }
 info() { echo ">> $1"; }

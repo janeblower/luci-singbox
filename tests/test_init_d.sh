@@ -4,7 +4,7 @@
 # verifies parallel fetch, boot-mode env, and fail-fast on missing config.
 set -e
 
-INIT=luci-app-singbox-ui/root/etc/init.d/singbox-ui
+INIT=luci-singbox-ui/root/etc/init.d/singbox-ui
 if [ ! -x "$INIT" ]; then
     echo "FAIL: $INIT not executable"; exit 1
 fi

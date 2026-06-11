@@ -28,10 +28,10 @@ fi
 command -v ubus >/dev/null 2>&1 || { echo "SKIP: no ubus in this env"; exit 0; }
 command -v rpcd >/dev/null 2>&1 || { echo "SKIP: no rpcd in this env"; exit 0; }
 
-SRC=luci-app-singbox-ui/root
+SRC=luci-singbox-ui/root
 HANDLER_SRC="$SRC/usr/libexec/rpcd/singbox-ui"
 LIB_SRC="$SRC/usr/share/singbox-ui/lib"
-ACL_SRC="$SRC/usr/share/rpcd/acl.d/luci-app-singbox-ui.json"
+ACL_SRC="$SRC/usr/share/rpcd/acl.d/luci-singbox-ui.json"
 
 [ -x "$HANDLER_SRC" ] || { echo "FAIL: $HANDLER_SRC not executable"; exit 1; }
 [ -d "$LIB_SRC" ]     || { echo "FAIL: $LIB_SRC missing"; exit 1; }
@@ -44,7 +44,7 @@ mkdir -p /usr/libexec/rpcd /usr/share/singbox-ui /usr/share/rpcd/acl.d
 cp -f "$HANDLER_SRC" /usr/libexec/rpcd/singbox-ui
 chmod +x /usr/libexec/rpcd/singbox-ui
 cp -af "$SRC/usr/share/singbox-ui/." /usr/share/singbox-ui/
-cp -f "$ACL_SRC" /usr/share/rpcd/acl.d/luci-app-singbox-ui.json
+cp -f "$ACL_SRC" /usr/share/rpcd/acl.d/luci-singbox-ui.json
 
 # Restart rpcd so it re-scans /usr/libexec/rpcd and registers the object,
 # launching the handler via its shebang the next time a method is called.

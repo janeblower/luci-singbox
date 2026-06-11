@@ -8,7 +8,7 @@ if ! command -v node >/dev/null 2>&1; then
 	exit 0
 fi
 
-JS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js
+JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -260,8 +260,8 @@ if ! command -v ucode >/dev/null 2>&1; then
 	exit 0
 fi
 UCODE_BIN=$(command -v ucode)
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
-EXPORT_UC="$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/export_section.uc"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+EXPORT_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc"
 
 UCI_DIR="$TMP/uci"
 mkdir -p "$UCI_DIR"

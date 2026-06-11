@@ -26,10 +26,10 @@ root/etc/capabilities/singbox-ui.json	etc/capabilities/singbox-ui.json	data
 root/etc/config/singbox-ui	etc/config/singbox-ui	conf
 root/etc/init.d/singbox-ui	etc/init.d/singbox-ui	bin
 root/etc/uci-defaults/90-singbox-ui-fwmark	etc/uci-defaults/90-singbox-ui-fwmark	bin
-root/etc/uci-defaults/99-luci-app-singbox-ui	etc/uci-defaults/99-luci-app-singbox-ui	bin
+root/etc/uci-defaults/99-luci-singbox-ui	etc/uci-defaults/99-luci-singbox-ui	bin
 root/usr/libexec/rpcd/singbox-ui	usr/libexec/rpcd/singbox-ui	bin
-root/usr/share/luci/menu.d/luci-app-singbox-ui.json	usr/share/luci/menu.d/luci-app-singbox-ui.json	data
-root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json	usr/share/rpcd/acl.d/luci-app-singbox-ui.json	data
+root/usr/share/luci/menu.d/luci-singbox-ui.json	usr/share/luci/menu.d/luci-singbox-ui.json	data
+root/usr/share/rpcd/acl.d/luci-singbox-ui.json	usr/share/rpcd/acl.d/luci-singbox-ui.json	data
 root/usr/share/singbox-ui/export_section.uc	usr/share/singbox-ui/export_section.uc	data
 root/usr/share/singbox-ui/generate.uc	usr/share/singbox-ui/generate.uc	data
 root/usr/share/singbox-ui/lib/cache.uc	usr/share/singbox-ui/lib/cache.uc	data

@@ -40,13 +40,13 @@ echo "==> launching container $CNAME"
 # the asset subdirs into LuCI's existing /www tree.
 docker run -d --name "$CNAME" \
     -p "127.0.0.1::80" \
-    -v "$PWD/luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui:/www/luci-static/resources/view/singbox-ui:ro" \
-    -v "$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui:/usr/share/singbox-ui:ro" \
-    -v "$PWD/luci-app-singbox-ui/root/usr/share/luci/menu.d/luci-app-singbox-ui.json:/usr/share/luci/menu.d/luci-app-singbox-ui.json:ro" \
-    -v "$PWD/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-app-singbox-ui.json:/usr/share/rpcd/acl.d/luci-app-singbox-ui.json:ro" \
-    -v "$PWD/luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui:/usr/libexec/rpcd/singbox-ui:ro" \
-    -v "$PWD/luci-app-singbox-ui/root/etc/init.d/singbox-ui:/etc/init.d/singbox-ui:ro" \
-    -v "$PWD/luci-app-singbox-ui/root/etc/capabilities/singbox-ui.json:/etc/capabilities/singbox-ui.json:ro" \
+    -v "$PWD/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui:/www/luci-static/resources/view/singbox-ui:ro" \
+    -v "$PWD/luci-singbox-ui/root/usr/share/singbox-ui:/usr/share/singbox-ui:ro" \
+    -v "$PWD/luci-singbox-ui/root/usr/share/luci/menu.d/luci-singbox-ui.json:/usr/share/luci/menu.d/luci-singbox-ui.json:ro" \
+    -v "$PWD/luci-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json:/usr/share/rpcd/acl.d/luci-singbox-ui.json:ro" \
+    -v "$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui:/usr/libexec/rpcd/singbox-ui:ro" \
+    -v "$PWD/luci-singbox-ui/root/etc/init.d/singbox-ui:/etc/init.d/singbox-ui:ro" \
+    -v "$PWD/luci-singbox-ui/root/etc/capabilities/singbox-ui.json:/etc/capabilities/singbox-ui.json:ro" \
     -v "$PWD/tests/browser/fixtures:/seed:ro" \
     "$IMG" >/dev/null
 PORT=$(docker port "$CNAME" 80/tcp | head -1 | awk -F: '{print $NF}')

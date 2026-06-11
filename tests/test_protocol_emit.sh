@@ -11,9 +11,9 @@ cd "$(dirname "$0")/.."
 
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
 else
 	echo "SKIP test_protocol_emit (ucode missing)"; exit 0
@@ -22,7 +22,7 @@ fi
 FIXTURES=tests/fixtures/protocols
 [ -d "$FIXTURES" ] || { echo "PASS: no fixtures yet"; exit 0; }
 
-GENERATE_UC=luci-app-singbox-ui/root/usr/share/singbox-ui/generate.uc
+GENERATE_UC=luci-singbox-ui/root/usr/share/singbox-ui/generate.uc
 WORK=$(mktemp -d); trap 'rm -rf "$WORK"' EXIT
 SANDBOX_DIR="$WORK/sandbox"; mkdir -p "$SANDBOX_DIR/subs"
 

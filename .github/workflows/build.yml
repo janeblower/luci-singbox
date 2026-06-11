@@ -42,12 +42,12 @@ jobs:
       - name: shellcheck
         run: |
           shellcheck tests/*.sh scripts/*.sh \
-            luci-app-singbox-ui/root/etc/init.d/singbox-ui
+            luci-singbox-ui/root/etc/init.d/singbox-ui
           # uci-defaults runs under busybox ash on OpenWrt, not bash. Lint
           # it with --shell=ash so bashisms (arrays, [[ ]], $'...') fail at
           # CI rather than silently at first-boot on the router.
           shellcheck --shell=ash \
-            luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui
+            luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui
 
   test:
     name: Test suite (OpenWrt VM)
@@ -60,7 +60,7 @@ jobs:
     # .github/workflows/test-image.yml; CI just pulls it. See
     # docs/superpowers/specs/2026-06-09-unified-qemu-test-rig-design.md.
     container:
-      image: ghcr.io/janeblower/luci-app-sing-box/openwrt-test:latest
+      image: ghcr.io/janeblower/luci-singbox/openwrt-test:latest
       options: --device /dev/kvm
 
     steps:
@@ -154,7 +154,7 @@ jobs:
         uses: actions/cache@v5
         with:
           path: |
-            ~/.cache/luci-app-singbox-ui/openwrt-sdk
+            ~/.cache/luci-singbox-ui/openwrt-sdk
             .build/sdk
           key: openwrt-sdk-25.12.3-x86-64-v1
 
@@ -205,7 +205,7 @@ jobs:
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: luci-app-singbox-ui-${{ steps.version.outputs.version }}
+          name: luci-singbox-ui-${{ steps.version.outputs.version }}
           path: dist/*.apk
           if-no-files-found: error
           retention-days: 30
@@ -219,10 +219,10 @@ jobs:
           # dist/ is root-owned (build-apk.sh runs under sudo); pick the MAIN
           # package (not luci-i18n-*) and copy it to a stable, version-less name.
           src=""
-          for f in dist/luci-app-singbox-ui_*.apk; do src="$f"; break; done
+          for f in dist/luci-singbox-ui_*.apk; do src="$f"; break; done
           [ -n "$src" ] || { echo "no main apk found in dist/"; exit 1; }
-          sudo cp "$src" dist/luci-app-singbox-ui.apk
-          sudo chown "$(id -u):$(id -g)" dist/luci-app-singbox-ui.apk
+          sudo cp "$src" dist/luci-singbox-ui.apk
+          sudo chown "$(id -u):$(id -g)" dist/luci-singbox-ui.apk
           ls -1 dist/*.apk
 
       - name: Publish rolling "latest" release
@@ -238,7 +238,7 @@ jobs:
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "Latest build (${{ steps.version.outputs.version }})" \
-            --notes "Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-app-singbox-ui.apk\` is the stable-named asset used by install.sh." \
+            --notes "Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-singbox-ui.apk\` is the stable-named asset used by install.sh." \
             --prerelease \
             dist/*.apk
 

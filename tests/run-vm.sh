@@ -10,7 +10,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-IMAGE="${SINGBOX_TEST_IMAGE:-ghcr.io/janeblower/luci-app-sing-box/openwrt-test:latest}"
+IMAGE="${SINGBOX_TEST_IMAGE:-ghcr.io/janeblower/luci-singbox/openwrt-test:latest}"
 
 if ! command -v docker >/dev/null 2>&1; then
 	echo "ERROR: docker not found in PATH." >&2

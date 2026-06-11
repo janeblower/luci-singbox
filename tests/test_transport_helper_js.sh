@@ -6,7 +6,7 @@ set -e
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-ROOT=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui
+ROOT=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui
 HELPER="$ROOT/importers/transport.js"
 [ -f "$HELPER" ] || { echo "FAIL: $HELPER missing"; exit 1; }
 

@@ -4,7 +4,7 @@
 # the action-bar Refresh handler.
 set -eu; cd "$(dirname "$0")/.."
 
-JS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
+JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
 
 grep -q 'SbSubView.injectChildRows' "$JS" \
     || { echo "FAIL: outbounds.js never calls injectChildRows"; exit 1; }
@@ -19,7 +19,7 @@ awk '
     END { exit (hits ? 0 : 1) }
 ' "$JS" || { echo "FAIL: injectChildRows not inside render() wrapper"; exit 1; }
 
-CSS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/style.css
+CSS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/style.css
 grep -q 'sb-sub-child' "$CSS" \
     || { echo "FAIL: no .sb-sub-child rules in style.css"; exit 1; }
 

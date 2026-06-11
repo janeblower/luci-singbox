@@ -1,4 +1,4 @@
-# luci-app-singbox-ui
+# luci-singbox-ui
 
 LuCI-интерфейс для [sing-box](https://sing-box.sagernet.org/) на OpenWrt —
 настройка формами, без правки JSON руками, без bash-обвязки, без fw3.
@@ -51,7 +51,7 @@ LuCI-интерфейс для [sing-box](https://sing-box.sagernet.org/) на O
 подходит любой apk-совместимой сборке OpenWrt (24.10+).
 
 ```sh
-apk add --allow-untrusted ./luci-app-singbox-ui_*.apk
+apk add --allow-untrusted ./luci-singbox-ui_*.apk
 # опционально — русский перевод:
 apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
 ```
@@ -127,7 +127,7 @@ sh tests/run.sh
 ```
 
 Поднимает реальный OpenWrt 25.12.3 под QEMU/KVM из заранее собранного
-Docker-образа (`ghcr.io/<owner>/luci-app-sing-box/openwrt-test`) и гоняет
+Docker-образа (`ghcr.io/<owner>/luci-singbox/openwrt-test`) и гоняет
 полный набор ucode- и shell-тестов внутри гостя. На хосте нужны `docker`
 и доступный на запись `/dev/kvm` (на GitHub Actions есть из коробки).
 

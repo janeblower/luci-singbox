@@ -6,8 +6,8 @@
 set -e
 cd "$(dirname "$0")/.."
 
-JS_DIR="luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui"
-PO="luci-app-singbox-ui/po/ru/luci-app-singbox-ui.po"
+JS_DIR="luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui"
+PO="luci-singbox-ui/po/ru/luci-singbox-ui.po"
 
 # Count unique _('...') strings in JS (single- and double-quoted).
 js_count=$(grep -rho "_('[^']*')\|_(\"[^\"]*\")" "$JS_DIR" \

@@ -19,7 +19,7 @@ Source of truth: this file. Everything read by `lib/*.uc` or written by the LuCI
 
 ## Migrations
 
-Source file: `luci-app-singbox-ui/root/etc/uci-defaults/99-luci-app-singbox-ui`. The script runs once on package install/upgrade (OpenWrt `uci-defaults` mechanism) and removes itself on success. Every migration is idempotent — the script may re-run on upgrade without harm.
+Source file: `luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui`. The script runs once on package install/upgrade (OpenWrt `uci-defaults` mechanism) and removes itself on success. Every migration is idempotent — the script may re-run on upgrade without harm.
 
 ### Migration: `fakeip-list-to-option`
 
@@ -627,7 +627,7 @@ UCI section type: `clash_api`. **Singleton named section** (UCI name is literall
 
 Backend: `lib/clash.uc` — `build_clash_api(cur)`. Absent section or `enabled=0` → returns `null` (no `experimental.clash_api` emitted).
 
-UI write: **none** — there is no UI tab or form for `clash_api`. The section and its defaults are provisioned exclusively by the uci-defaults script (`99-luci-app-singbox-ui`) at install time. `listen`, `port`, and a randomly generated `secret` are written once during package installation. Users must edit UCI directly to change these values.
+UI write: **none** — there is no UI tab or form for `clash_api`. The section and its defaults are provisioned exclusively by the uci-defaults script (`99-luci-singbox-ui`) at install time. `listen`, `port`, and a randomly generated `secret` are written once during package installation. Users must edit UCI directly to change these values.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|

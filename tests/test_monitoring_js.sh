@@ -10,7 +10,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
-JS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js
+JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

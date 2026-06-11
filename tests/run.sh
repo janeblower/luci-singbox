@@ -19,7 +19,7 @@ fi
 export UCODE_STUB_DIR
 [ -n "${UCODE_BIN:-}" ] && export UCODE_BIN
 [ -n "${UCODE_LIB_DIR:-}" ] && export UCODE_LIB_DIR
-: "${UCODE_APP_LIB_DIR:=$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+: "${UCODE_APP_LIB_DIR:=$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 export UCODE_APP_LIB_DIR
 
 echo "==> Shell tests"

@@ -13,14 +13,14 @@
 #   3. Every (non-comment) row is a 3-field TSV (src, dst, mode).
 #   4. Every src listed exists in the source tree.
 #   5. Every mode is one of bin|conf|data.
-#   6. Every file under luci-app-singbox-ui/{root,htdocs} is covered by
+#   6. Every file under luci-singbox-ui/{root,htdocs} is covered by
 #      the manifest (catches the "added a new file but forgot to ship
 #      it" footgun).
 set -e
 cd "$(dirname "$0")/.."
 
 MANIFEST="scripts/install-manifest.txt"
-MAKEFILE="luci-app-singbox-ui/Makefile"
+MAKEFILE="luci-singbox-ui/Makefile"
 BUILDSH="scripts/build-apk.sh"
 
 [ -f "$MANIFEST" ] || { echo "FAIL: $MANIFEST missing"; exit 1; }
@@ -46,7 +46,7 @@ while IFS="$TAB" read -r src dst mode rest; do
     [ -n "$src" ] && [ -n "$dst" ] && [ -n "$mode" ] && [ -z "$rest" ] \
         || { echo "FAIL: not a 3-field TSV row: src='$src' dst='$dst' mode='$mode' rest='$rest'"; fail=1; continue; }
 
-    if [ ! -f "luci-app-singbox-ui/$src" ]; then
+    if [ ! -f "luci-singbox-ui/$src" ]; then
         echo "FAIL: manifest src missing in source tree: $src"
         fail=1
     fi
@@ -71,8 +71,8 @@ tree_tmp=$(mktemp)
 missing_tmp=$(mktemp)
 trap 'rm -f "$listed_tmp" "$tree_tmp" "$missing_tmp"' EXIT
 
-find luci-app-singbox-ui/root luci-app-singbox-ui/htdocs -type f \
-    | sed 's#^luci-app-singbox-ui/##' \
+find luci-singbox-ui/root luci-singbox-ui/htdocs -type f \
+    | sed 's#^luci-singbox-ui/##' \
     | LC_ALL=C sort > "$tree_tmp"
 
 # Files in $tree_tmp but NOT in $listed_tmp = uncovered.

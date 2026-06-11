@@ -1,5 +1,5 @@
 {
-  "name": "luci-app-singbox-ui-browser-tests",
+  "name": "luci-singbox-ui-browser-tests",
   "private": true,
   "type": "module",
   "version": "0.0.0",

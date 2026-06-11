@@ -404,7 +404,7 @@ and frontend descriptor-driven rendering tracked as Phase D work.
   full root. Drop to `user=nobody` deferred (would require fixing
   `/tmp/singbox-ui.json` ownership).
 - `scripts/gen-manifest.sh` — auto-generates `scripts/install-manifest.txt`
-  by scanning `luci-app-singbox-ui/`. Mode auto-detection
+  by scanning `luci-singbox-ui/`. Mode auto-detection
   (bin / conf / data); manual overrides via
   `scripts/install-manifest-overrides.txt`.
 - `tests/test_post_process_uc.sh`, `tests/test_log_uc.sh`,
@@ -626,7 +626,7 @@ sub-phase entries as work lands.
 - `SINGBOX_TMPDIR`/`SINGBOX_CONFIG` env vars honoured by `generate.uc`
 
 **Build / Packaging**
-- APK packaging via OpenWrt SDK host `apk` tool (skips full SDK orchestration); produces `luci-app-singbox-ui_<version>.apk` + `luci-i18n-singbox-ui-ru_<version>.apk`
+- APK packaging via OpenWrt SDK host `apk` tool (skips full SDK orchestration); produces `luci-singbox-ui_<version>.apk` + `luci-i18n-singbox-ui-ru_<version>.apk`
 - GitHub Actions CI: builds APK and publishes to a rolling `latest` release on every push to `main`
 - `scripts/build-apk.sh`: version derivable from git tag when positional arg is omitted
 
@@ -643,7 +643,7 @@ sub-phase entries as work lands.
 - `REFRESH_SH` env renamed to `SUBSCRIPTION_UC` in rpcd handler; `NFTABLES_SH` renamed to `NFTABLES_CMD`
 - `generate.uc` collapsed to orchestration-only; sub-modules extracted into `lib/` (outbound, inbound, dns, route, ruleset, cache, log, helpers)
 - main.js modularized: tabs (general, dns, inbounds, outbounds, rulesets, routing, monitoring), importers (inbound, outbound), widgets (action-bar, status-panel), and shared lib (rpc, common) extracted into separate files
-- LuCI app renamed from `sing-box` to `singbox-ui`; repository restructured into `luci-app-singbox-ui/` subdirectory
+- LuCI app renamed from `sing-box` to `singbox-ui`; repository restructured into `luci-singbox-ui/` subdirectory
 - Mutating ubus methods moved to the `write` ACL group (security hardening)
 - `rpcd` `restart` method now redirects child stderr; rpcd error message surfaced in LuCI notification
 
@@ -677,5 +677,5 @@ sub-phase entries as work lands.
 - `nft -c` permission errors treated as skip rather than failure
 - shellcheck CI step over all shell scripts
 
-[Unreleased]: https://github.com/Jyn/luci-app-sing-box/compare/v0.1.0...HEAD
-[v0.1.0]: https://github.com/Jyn/luci-app-sing-box/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Jyn/luci-singbox/compare/v0.1.0...HEAD
+[v0.1.0]: https://github.com/Jyn/luci-singbox/releases/tag/v0.1.0

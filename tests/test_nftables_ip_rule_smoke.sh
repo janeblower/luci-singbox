@@ -9,8 +9,8 @@ if ! command -v ucode >/dev/null 2>&1; then
 	echo "SKIP: ucode not available"; exit 0
 fi
 
-SCRIPT=$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/nftables.uc
-LIB="-L $PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib"
+SCRIPT=$PWD/luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc
+LIB="-L $PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib"
 
 # Mock UCI config dir with all the sections cmd_apply needs.
 UCI=$(mktemp -d)

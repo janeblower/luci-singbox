@@ -13,8 +13,8 @@ fi
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
 
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
-HANDLER="$PWD/luci-app-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+HANDLER="$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
 
 # Minimal: list method shows status_detail
 out=$("$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" "$HANDLER" list 2>/dev/null)
@@ -48,7 +48,7 @@ COUNTER="$CACHE_TMP/apk_calls"
 cat >"$CACHE_TMP/bin/apk" <<EOF
 #!/bin/sh
 echo x >> "$COUNTER"
-echo "luci-app-singbox-ui-9.9.9-test noarch {luci-app-singbox-ui} (GPL-2.0-or-later) [installed]"
+echo "luci-singbox-ui-9.9.9-test noarch {luci-singbox-ui} (GPL-2.0-or-later) [installed]"
 EOF
 chmod +x "$CACHE_TMP/bin/apk"
 

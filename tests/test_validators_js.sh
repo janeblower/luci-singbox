@@ -1,6 +1,6 @@
 #!/bin/sh
 # tests/test_validators_js.sh — node-based unit tests for the form
-# validators in luci-app-singbox-ui/htdocs/.../lib/validators.js (Phase 8 / B6).
+# validators in luci-singbox-ui/htdocs/.../lib/validators.js (Phase 8 / B6).
 # Skips when node is unavailable, mirroring tests/test_json_import.sh.
 set -e
 
@@ -9,7 +9,7 @@ if ! command -v node >/dev/null 2>&1; then
 	exit 0
 fi
 
-JS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js
+JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

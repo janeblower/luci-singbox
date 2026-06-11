@@ -1,7 +1,7 @@
 # tests/docker — qemu-OpenWrt test image scaffolding
 
 This directory holds the source for the **published test image**
-`ghcr.io/<owner>/luci-app-sing-box/openwrt-test`, used by CI and by
+`ghcr.io/<owner>/luci-singbox/openwrt-test`, used by CI and by
 `tests/run-vm.sh` locally.
 
 ## Files

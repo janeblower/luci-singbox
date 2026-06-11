@@ -4,7 +4,7 @@
 # POSIX-portable: uses only sh, grep, sed, sort.
 set -e
 SCHEMA="docs/uci-schema.md"
-LIB="luci-app-singbox-ui/root/usr/share/singbox-ui/lib"
+LIB="luci-singbox-ui/root/usr/share/singbox-ui/lib"
 
 if [ ! -f "$SCHEMA" ]; then
   echo "FAIL: $SCHEMA missing"
@@ -112,7 +112,7 @@ echo "PASS: field-level schema coverage"
 # left over from a prior generate within the same long-lived process.
 # ---------------------------------------------------------------------------
 HELPERS_UC="$LIB/helpers.uc"
-GENERATE_UC="luci-app-singbox-ui/root/usr/share/singbox-ui/generate.uc"
+GENERATE_UC="luci-singbox-ui/root/usr/share/singbox-ui/generate.uc"
 grep -q 'reset_iface_cache' "$HELPERS_UC" \
 	|| { echo "FAIL: C2.1.14: helpers.uc must export reset_iface_cache"; exit 1; }
 grep -q 'reset_iface_cache' "$GENERATE_UC" \

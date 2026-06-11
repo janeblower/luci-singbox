@@ -1,5 +1,5 @@
 {
-	"luci-app-singbox-ui": {
+	"luci-singbox-ui": {
 		"description": "Grant LuCI access to singbox-ui",
 		"read": {
 			"uci": [ "singbox-ui" ],

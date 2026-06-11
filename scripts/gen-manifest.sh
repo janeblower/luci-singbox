@@ -1,13 +1,13 @@
 #!/bin/sh
 # scripts/gen-manifest.sh
-# Auto-generate scripts/install-manifest.txt by scanning luci-app-singbox-ui/.
+# Auto-generate scripts/install-manifest.txt by scanning luci-singbox-ui/.
 # Mode detection: anything under etc/init.d/, etc/uci-defaults/, or
 # usr/libexec/rpcd/ is 'bin'; etc/config/ is 'conf'; everything else 'data'.
 # Manual overrides in scripts/install-manifest-overrides.txt (TSV same shape).
 set -e
 
 ROOT="${ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
-PKG="${PKG:-$ROOT/luci-app-singbox-ui}"
+PKG="${PKG:-$ROOT/luci-singbox-ui}"
 OUT="${OUT:-$ROOT/scripts/install-manifest.txt}"
 OVERRIDES="${OVERRIDES:-$ROOT/scripts/install-manifest-overrides.txt}"
 

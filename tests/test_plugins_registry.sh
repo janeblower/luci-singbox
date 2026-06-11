@@ -6,7 +6,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 
 if ! command -v "$UCODE_BIN" >/dev/null 2>&1; then
     echo "SKIP test_plugins_registry (ucode missing)"

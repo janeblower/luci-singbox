@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=luci-app-singbox-ui
+PKG_NAME:=luci-singbox-ui
 PKG_VERSION?=0.1.0
 PKG_RELEASE:=1
 PKG_LICENSE:=GPL-2.0-or-later
@@ -24,7 +24,7 @@ include $(TOPDIR)/feeds/luci/luci.mk
 define Package/$(PKG_NAME)/preinst
 #!/bin/sh
 echo "=============================================================="
-echo "INFO: luci-app-singbox-ui conflicts with package 'firewall'."
+echo "INFO: luci-singbox-ui conflicts with package 'firewall'."
 echo "If you continue, 'firewall' will be removed and any fw3-based"
 echo "rules in /etc/config/firewall will stop being applied."
 echo "Make sure no other software depends on fw3 before proceeding."
@@ -50,10 +50,10 @@ define Package/$(PKG_NAME)/install
 	    esac ; \
 	done < $(INSTALL_MANIFEST)
 
-	if [ -f $(PO_DIR)/ru/luci-app-singbox-ui.po ]; then \
+	if [ -f $(PO_DIR)/ru/luci-singbox-ui.po ]; then \
 		$(INSTALL_DIR) $(1)/usr/lib/lua/luci/i18n; \
-		po2lmo $(PO_DIR)/ru/luci-app-singbox-ui.po \
-		       $(1)/usr/lib/lua/luci/i18n/luci-app-singbox-ui.ru.lmo; \
+		po2lmo $(PO_DIR)/ru/luci-singbox-ui.po \
+		       $(1)/usr/lib/lua/luci/i18n/luci-singbox-ui.ru.lmo; \
 	fi
 endef
 

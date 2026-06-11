@@ -7,7 +7,7 @@
             "path": "singbox-ui/main"
         },
         "depends": {
-            "acl": [ "luci-app-singbox-ui" ],
+            "acl": [ "luci-singbox-ui" ],
             "uci": { "singbox-ui": true }
         }
     }

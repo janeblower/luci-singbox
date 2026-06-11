@@ -40,7 +40,7 @@ command -v sha256sum >/dev/null || fail "host needs sha256sum for the test"
 printf '#!/bin/sh\necho 0\n' > "$BIN/id"; chmod +x "$BIN/id"
 
 # --- fixtures served ---
-echo "FAKE_APK" > "$TMP/serve/luci-app-singbox-ui.apk"
+echo "FAKE_APK" > "$TMP/serve/luci-singbox-ui.apk"
 echo "FAKE_AARCH64_BINARY" > "$TMP/serve/bbolt-client-rs-aarch64"
 # build a matching sha256sums.txt that the script must verify.
 # Generate from inside $TMP/serve so the line's path is the bare basename the
@@ -57,7 +57,7 @@ BBOLT_DEST="$DEST/bbolt-client" \
 sh "$ROOT/install.sh" || fail "install.sh exited nonzero"
 
 # --- assertions ---
-grep -q "luci-app-singbox-ui.apk" "$TMP/apk.log" || fail "apk add not called with the apk"
+grep -q "luci-singbox-ui.apk" "$TMP/apk.log" || fail "apk add not called with the apk"
 [ -x "$DEST/bbolt-client" ] || fail "bbolt-client not installed 0755"
 [ "$(cat "$DEST/bbolt-client")" = "FAKE_AARCH64_BINARY" ] || fail "wrong bbolt content"
 

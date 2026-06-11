@@ -7,7 +7,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-app-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_registry_robustness (ucode missing)"; exit 0; }
 
 # je() captures STDOUT only (mirrors tests/test_share_link_hy2.sh:7). Do NOT add

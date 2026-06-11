@@ -44,7 +44,7 @@ jobs:
         id: tags
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
-          REPO="ghcr.io/${OWNER}/luci-app-sing-box/openwrt-test"
+          REPO="ghcr.io/${OWNER}/luci-singbox/openwrt-test"
           SHA="${GITHUB_SHA::12}"
           {
             echo "tags<<EOF"

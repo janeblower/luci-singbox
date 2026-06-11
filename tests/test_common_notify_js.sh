@@ -5,7 +5,7 @@ set -e
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-JS=luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js
+JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 cat >"$TMP/run.js" <<'NODE'

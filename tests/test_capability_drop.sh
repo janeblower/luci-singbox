@@ -4,7 +4,7 @@ set -e
 cd "$(dirname "$0")/.."
 
 # Capability file exists with correct shape
-F=luci-app-singbox-ui/root/etc/capabilities/singbox-ui.json
+F=luci-singbox-ui/root/etc/capabilities/singbox-ui.json
 [ -f "$F" ] || { echo "FAIL: $F missing"; exit 1; }
 for cap in CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE; do
 	grep -q "$cap" "$F" || { echo "FAIL: $cap missing from $F"; exit 1; }
@@ -12,7 +12,7 @@ done
 echo "PASS: capability file lists 3 required caps"
 
 # init.d declares capabilities param
-grep -q 'procd_set_param capabilities' luci-app-singbox-ui/root/etc/init.d/singbox-ui \
+grep -q 'procd_set_param capabilities' luci-singbox-ui/root/etc/init.d/singbox-ui \
 	|| { echo "FAIL: init.d missing procd_set_param capabilities"; exit 1; }
 echo "PASS: init.d wires capability file"
 
