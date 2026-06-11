@@ -139,4 +139,22 @@ case "$out" in
 esac
 echo "PASS: fields[] includes gate + reality_enabled"
 
+# Test 9: tls_alpn stays a free-entry list but now carries combobox
+# suggestions (h2 / http/1.1 / h3); tls_cipher_suites carries suggestions too.
+out=$(je '
+    let tls = require("protocols._shared.tls");
+    let alpn = null, cs = null;
+    for (let f in tls.fields) {
+        if (f.name == "tls_alpn")          alpn = f;
+        if (f.name == "tls_cipher_suites") cs   = f;
+    }
+    print(sprintf("%s|%d|%s|%s|%s|%d",
+        alpn.type, length(alpn.values), alpn.values[0], alpn.values[2],
+        cs.type, length(cs.values)));
+')
+case "$out" in
+    "list|3|h2|h3|list|"[1-9]*) echo "PASS: tls_alpn/cipher_suites combobox suggestions" ;;
+    *) echo "FAIL: tls suggestion values [$out]"; exit 1 ;;
+esac
+
 echo "ALL PASS: test_shared_tls"

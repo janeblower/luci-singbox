@@ -146,4 +146,58 @@ out=$(je '
 [ "$out" = "ACCEPTED" ] || die "S4-5 valid enum must still be accepted" "$out"
 ok "S4-5 valid enum accepted"
 
+# ---- combobox: list/string MAY carry values[] (datalist suggestions) ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45e", sing_box_type:"x",
+            fields:[{ name:"l", type:"list", tab:"basic", values:["a","b"] }],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "ACCEPTED" ] || die "list+values must be accepted (combobox suggestions)" "$out"
+ok "list+values accepted"
+
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45f", sing_box_type:"x",
+            fields:[{ name:"st", type:"string", tab:"basic", values:["a","b"] }],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "ACCEPTED" ] || die "string+values must be accepted (combobox suggestions)" "$out"
+ok "string+values accepted"
+
+# ---- dynamic selector source: unknown discriminator rejected, known accepted ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45g", sing_box_type:"x",
+            fields:[{ name:"d", type:"string", tab:"basic", dynamic:"bogus" }],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "REJECTED" ] || die "unknown dynamic source must be rejected" "$out"
+ok "unknown dynamic source rejected"
+
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"s45h", sing_box_type:"x",
+            fields:[{ name:"d", type:"string", tab:"basic", dynamic:"outbounds" }],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "ACCEPTED" ] || die "known dynamic source must be accepted" "$out"
+ok "known dynamic source accepted"
+
 echo "ALL PASS: test_registry_robustness ($pass checks)"

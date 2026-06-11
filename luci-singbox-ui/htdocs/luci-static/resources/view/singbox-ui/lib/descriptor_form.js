@@ -1,6 +1,8 @@
 'use strict';
 'require form';
 'require ui';
+'require uci';
+'require network';
 'require view.singbox-ui.lib.validators as validators';
 
 // Phase E2: applyMaterialized(s, kind, protoName, materialized)
@@ -25,9 +27,64 @@ var TAB_TITLES = {
 function widgetFor(field) {
     var t = field.type;
     if (t === 'bool') return form.Flag;
+    // Dynamic selectors populate their choices at load() time (see
+    // attachDynamic). `devices` is a free-entry multi list; every other
+    // source is a single-select reference to an existing section.
+    if (field.dynamic)
+        return (field.dynamic === 'devices') ? form.DynamicList : form.ListValue;
     if (t === 'enum') return form.ListValue;
     if (t === 'list') return form.DynamicList;
+    // A string/list field carrying a static `values` array still renders as a
+    // free-entry widget (Value / DynamicList); the values become datalist
+    // suggestions, not a strict whitelist. Only `enum` is a strict dropdown.
     return form.Value;
+}
+
+// Dynamic selectors: options are populated from live UCI / network state at
+// .load() time instead of a static `values` array. Generalises the
+// loadOutboundList() pattern from tabs/common.js over a `source` discriminator.
+function dynamicChoices(source) {
+    if (source === 'outbounds')
+        return uci.sections('singbox-ui', 'outbound')
+            .map(function (s) { return [s['.name'], s['.name']]; })
+            .sort(function (a, b) { return a[0] < b[0] ? -1 : (a[0] > b[0] ? 1 : 0); });
+    if (source === 'dns_servers')
+        return uci.sections('singbox-ui', 'dns_server')
+            .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
+    if (source === 'interfaces')
+        return uci.sections('network', 'interface')
+            .filter(function (s) { return s['.name'] !== 'loopback'; })
+            .map(function (s) { return [s['.name'], s['.name']]; });
+    return [];
+}
+
+function attachDynamic(opt, field) {
+    // Device suggestions need the async network runtime and must NOT restrict
+    // input: netdev names like eth0.100 / pppoe-wan aren't all enumerable, so
+    // they render as free-entry DynamicList datalist hints.
+    if (field.dynamic === 'devices') {
+        opt.load = function (section_id) {
+            var self = this, args = arguments;
+            return network.getDevices().then(function (devs) {
+                (devs || []).forEach(function (d) {
+                    var n = d.getName ? d.getName() : String(d);
+                    if (n) self.value(n, n);
+                });
+                return form.DynamicList.prototype.load.apply(self, args);
+            });
+        };
+        return;
+    }
+    // Single-select reference to an existing section. Optional fields get a
+    // leading (none); required ones don't.
+    opt.load = function (section_id) {
+        this.keylist = [];
+        this.vallist = [];
+        if (!field.required) this.value('', _('(none)'));
+        var self = this;
+        dynamicChoices(field.dynamic).forEach(function (kv) { self.value(kv[0], kv[1]); });
+        return form.ListValue.prototype.load.apply(this, arguments);
+    };
 }
 
 function labelFor(field) {
@@ -132,7 +189,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
             depsArmsFor(f, protoName).forEach(function (d) {
                 registered.opt.depends(d);
             });
-            if (f.type === 'enum' && Array.isArray(f.values))
+            if (!f.dynamic && Array.isArray(f.values))
                 f.values.forEach(function (v) {
                     if (!registered.values[v]) {
                         registered.opt.value(v, v === '' ? _('(none)') : v);
@@ -151,11 +208,13 @@ function applyMaterialized(s, kind, protoName, materialized) {
         if (f.placeholder)     opt.placeholder = f.placeholder;
 
         var values = {};
-        if (f.type === 'enum' && Array.isArray(f.values))
+        if (!f.dynamic && Array.isArray(f.values))
             f.values.forEach(function (v) {
                 opt.value(v, v === '' ? _('(none)') : v);
                 values[v] = 1;
             });
+
+        if (f.dynamic) attachDynamic(opt, f);
 
         if (f.secret) {
             opt.password = true;

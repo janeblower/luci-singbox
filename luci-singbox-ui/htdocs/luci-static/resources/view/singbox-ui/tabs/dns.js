@@ -49,7 +49,11 @@ function buildDnsMap() {
 	o.modalonly = true;
 	loadOutboundList(o, true);
 	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
-	o = s.option(form.Value, 'domain_resolver', _('Domain resolver (dns_server tag)')); o.modalonly = true;
+	// Resolver used for this server's own domain — points at another DNS
+	// server tag. Dropdown of defined dns_server sections (+ none) instead of
+	// a free-text tag the user has to copy by hand.
+	o = s.option(form.ListValue, 'domain_resolver', _('Domain resolver')); o.modalonly = true;
+	loadDnsServerList(o, true);
 	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
 	o = s.option(form.Value, 'inet4_range', _('FakeIP IPv4 range')); o.modalonly = true;
 	o.datatype = 'cidr4'; o.placeholder = '198.18.0.0/15'; o.depends('type','fakeip');

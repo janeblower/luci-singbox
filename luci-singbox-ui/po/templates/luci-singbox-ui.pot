@@ -216,8 +216,8 @@ msgstr ""
 msgid "Detour (outbound)"
 msgstr ""
 
-#: /home/ubuntu/luci-singbox/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:52
-msgid "Domain resolver (dns_server tag)"
+#: /home/ubuntu/luci-singbox/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:55
+msgid "Domain resolver"
 msgstr ""
 
 #: /home/ubuntu/luci-singbox/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:54

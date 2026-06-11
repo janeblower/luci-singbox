@@ -30,6 +30,7 @@ return view.extend({
 		});
 		return Promise.all([
 			uci.load('singbox-ui'),
+			L.resolveDefault(uci.load('network'), null),  // bind_interface dropdown source
 			L.resolveDefault(callProtocolSchema(), null).then(function (r) {
 				if (r && r.status === 'ok') {
 					SbViewState.setSchema(r.schema);

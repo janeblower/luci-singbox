@@ -136,4 +136,30 @@ if printf '%s\n' "$response" | grep -q '"emit"'; then
 fi
 echo "PASS no emit key"
 
+# 8. Dynamic selector sources survive whitelist projection (detour /
+#    bind_interface → "outbounds"/"interfaces" — proves schema_dump carries
+#    the `dynamic` key through to the frontend renderer).
+if ! printf '%s\n' "$response" | grep -q '"dynamic"[[:space:]]*:[[:space:]]*"outbounds"'; then
+	echo "FAIL no dynamic:outbounds marker — schema_dump whitelist missing 'dynamic'?"; exit 1
+fi
+echo "PASS dynamic selector source preserved"
+
+# 9. tproxy.interface is a persisted dynamic device selector, NOT a virtual
+#    (write-suppressed) field — regression guard for the de-virtualization fix.
+itf=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
+	let fs = require("fs");
+	let raw = fs.stdin.read("all") || "";
+	let j; try { j = json(raw); } catch (_) { print("FAIL_PARSE\n"); exit(0); }
+	let tp = (j && j.schema && j.schema.inbound) ? j.schema.inbound.tproxy : null;
+	if (tp == null) { print("FAIL_NO_TPROXY\n"); exit(0); }
+	let itf = null;
+	for (let f in tp.fields) if (f.name == "interface") itf = f;
+	if (itf == null)            { print("FAIL_NO_IFACE\n"); exit(0); }
+	if (itf.virtual != null)    { print("FAIL_STILL_VIRTUAL\n"); exit(0); }
+	if (itf.dynamic != "devices") { print("FAIL_NOT_DEVICES\n"); exit(0); }
+	print("OK\n");
+')
+[ "$itf" = "OK" ] || { echo "FAIL tproxy.interface selector ($itf)"; exit 1; }
+echo "PASS tproxy.interface is a de-virtualized device selector"
+
 echo "PASS test_protocol_schema_rpc"

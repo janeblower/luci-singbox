@@ -23,13 +23,18 @@ reg.register({
           ui_label: "TCP fast open", default: 0, advanced: true },
         { name: "udp_fragment", type: "bool", tab: "basic",
           ui_label: "UDP fragment", default: 0, advanced: true },
-        // UI-only — not emitted to sing-box JSON; consumed by nftables.uc + UI.
+        // Persisted to UCI and consumed by nftables.uc — NOT emitted to
+        // sing-box JSON (emit() below simply omits them). These must NOT be
+        // `virtual`: descriptor_form.makeVirtual() write-suppresses virtual
+        // fields, which silently discarded every modal edit to them. The
+        // interface set holds netdev DEVICE names (br-lan, eth0, eth0.100)
+        // because nftables matches them via `iifname @wan_ifaces`.
         { name: "interface", type: "list", tab: "basic",
-          ui_label: "Interfaces to redirect (nftables)", virtual: true },
+          ui_label: "Interfaces to redirect (nftables)", dynamic: "devices" },
         { name: "nft_rules", type: "bool", tab: "basic",
-          ui_label: "Install nftables redirect rules", default: 1, virtual: true },
+          ui_label: "Install nftables redirect rules", default: 1 },
         { name: "hijack_dns", type: "bool", tab: "basic",
-          ui_label: "Hijack DNS via nftables", default: 0, virtual: true },
+          ui_label: "Hijack DNS via nftables", default: 0 },
     ],
 
     emit: function(s) {

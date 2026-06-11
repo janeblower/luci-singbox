@@ -213,9 +213,9 @@ msgstr "HTTPS-путь"
 msgid "Detour (outbound)"
 msgstr "Маршрут (outbound)"
 
-#: /home/ubuntu/luci-singbox/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:52
-msgid "Domain resolver (dns_server tag)"
-msgstr "Резолвер домена (тег dns_server)"
+#: /home/ubuntu/luci-singbox/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:55
+msgid "Domain resolver"
+msgstr "Резолвер домена"
 
 #: /home/ubuntu/luci-singbox/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:54
 msgid "FakeIP IPv4 range"

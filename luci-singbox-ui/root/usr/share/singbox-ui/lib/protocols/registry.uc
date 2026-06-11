@@ -20,6 +20,10 @@ let _materialize_cache = {};
 
 const KNOWN_SHARED  = { tls: 1, transport: 1, multiplex: 1, dial: 1 };
 const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
+// `dynamic` marks a selector whose choices are populated at render time from
+// live UCI / network state (see descriptor_form.js attachDynamic), not from a
+// static `values` array.
+const KNOWN_DYNAMIC = { outbounds: 1, dns_servers: 1, interfaces: 1, devices: 1 };
 
 function validate_field(f, ctx) {
     assert(f.name != null,                        sprintf("%s: field.name required", ctx));
@@ -36,8 +40,16 @@ function validate_field(f, ctx) {
     // have caught the direct.proxy_protocol type=number+values bug.
     if (f.values != null) {
         assert(type(f.values) === "array",        sprintf("%s.%s: field.values must be an array", ctx, f.name));
-        assert(f.type === "enum",                 sprintf("%s.%s: field.values requires type 'enum' (got '%s')", ctx, f.name, f.type));
+        // `values` is a strict whitelist for enum and a datalist of combobox
+        // suggestions for string/list (free entry retained). number/bool may
+        // not carry values — this is the check that caught the
+        // direct.proxy_protocol type=number+values bug (S4-5).
+        assert(f.type === "enum" || f.type === "string" || f.type === "list",
+               sprintf("%s.%s: field.values requires type enum|string|list (got '%s')", ctx, f.name, f.type));
     }
+    if (f.dynamic != null)
+        assert(KNOWN_DYNAMIC[f.dynamic] != null,
+               sprintf("%s.%s: unknown dynamic source '%s'", ctx, f.name, f.dynamic));
     if (f.type === "enum")
         assert(type(f.values) === "array",        sprintf("%s.%s: enum field requires a values array", ctx, f.name));
     if (f.type === "enum" && f.default != null && f.default !== "") {

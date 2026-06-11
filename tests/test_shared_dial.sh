@@ -43,4 +43,16 @@ out=$(je '
     || { echo "FAIL: dial full coverage [$out]"; exit 1; }
 echo "PASS: emit_outbound full coverage"
 
+# Test 5: dial reference fields expose dynamic selector sources so the UI
+# renders dropdowns (detour→existing outbounds, bind_interface→logical
+# interfaces) instead of free-text tags the user has to type by hand.
+out=$(je '
+    let d = require("protocols._shared.dial");
+    let dyn = {};
+    for (let f in d.fields) if (f.dynamic) dyn[f.name] = f.dynamic;
+    print(sprintf("%s|%s", dyn.detour, dyn.bind_interface));
+')
+[ "$out" = "outbounds|interfaces" ] || { echo "FAIL: dial dynamic sources [$out]"; exit 1; }
+echo "PASS: detour/bind_interface dynamic selector sources"
+
 echo "ALL PASS: test_shared_dial"

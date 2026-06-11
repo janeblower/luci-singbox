@@ -72,7 +72,8 @@ return {
 
     fields: [
         { name: "bind_interface", type: "string", tab: "dial",
-          ui_label: "Bind interface", placeholder: "wan" },
+          ui_label: "Bind interface", placeholder: "wan",
+          dynamic: "interfaces" },
 
         { name: "inet4_bind_address", type: "string", tab: "dial",
           ui_label: "IPv4 bind address", placeholder: "0.0.0.0", advanced: true },
@@ -101,7 +102,8 @@ return {
         { name: "fallback_delay", type: "string", tab: "dial",
           ui_label: "Fallback delay", placeholder: "300ms", advanced: true },
         { name: "detour", type: "string", tab: "dial",
-          ui_label: "Detour outbound tag", placeholder: "another_outbound", advanced: true },
+          ui_label: "Detour outbound tag", placeholder: "another_outbound",
+          dynamic: "outbounds", advanced: true },
         { name: "netns", type: "string", tab: "dial",
           ui_label: "Network namespace", placeholder: "/var/run/netns/xx", advanced: true },
     ],
