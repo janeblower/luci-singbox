@@ -37,3 +37,26 @@ rustflags = [
   "-C", "link-arg=-static",
   "-C", "link-arg=--no-dynamic-linker",
 ]
+
+# mips/mipsel (MIPS32r2 o32, soft-float — mips_24kc has no FPU). tier-3 targets;
+# we already build std via -Z build-std=core. Static, non-PIC so _start needs no $gp.
+[target.mipsel-unknown-linux-musl]
+linker = "rust-lld"
+rustflags = [
+  "-C", "relocation-model=static",
+  "-C", "target-feature=+soft-float",
+  "-C", "linker-flavor=ld.lld",
+  "-C", "link-arg=-static",
+  "-C", "link-arg=--no-dynamic-linker",
+  "-C", "link-arg=--entry=_start",   # lld defaults this target's entry to __start
+]
+[target.mips-unknown-linux-musl]
+linker = "rust-lld"
+rustflags = [
+  "-C", "relocation-model=static",
+  "-C", "target-feature=+soft-float",
+  "-C", "linker-flavor=ld.lld",
+  "-C", "link-arg=-static",
+  "-C", "link-arg=--no-dynamic-linker",
+  "-C", "link-arg=--entry=_start",   # lld defaults this target's entry to __start
+]

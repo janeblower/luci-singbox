@@ -1,5 +1,6 @@
 #![no_std]
 #![no_main]
+#![cfg_attr(target_arch = "mips", feature(asm_experimental_arch))]
 
 //! Minimal read-only bbolt reader (behavior matches the upstream Go bbolt reference):
 //!   <db>                   list top-level buckets
@@ -45,6 +46,17 @@ mod nr {
     pub const FLOCK: usize = 143;
     pub const NANOSLEEP: usize = 162;
     pub const EXIT_GROUP: usize = 248;
+}
+// mips/mipsel (o32, 32-bit). Same numbers for both endians.
+#[cfg(target_arch = "mips")]
+mod nr {
+    pub const WRITE: usize = 4004;
+    pub const OPENAT: usize = 4288;
+    pub const LSEEK: usize = 4019;     // 32-bit off_t; ok for the small db
+    pub const MMAP: usize = 4210;      // mmap2; pgoffset 0
+    pub const FLOCK: usize = 4143;
+    pub const NANOSLEEP: usize = 4166;
+    pub const EXIT_GROUP: usize = 4246;
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -96,6 +108,34 @@ unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
     ret
 }
 
+// mips o32: error flag in $a3 ($7); 5th/6th args on the stack. We subtract a
+// 32-byte frame, store a5/a6 at 16/20($sp), syscall, restore, then fold the
+// $a3 error flag into a negative-errno isize so callers stay arch-agnostic.
+#[cfg(target_arch = "mips")]
+#[inline]
+unsafe fn syscall6(n: usize, a1: usize, a2: usize, a3: usize,
+                   a4: usize, a5: usize, a6: usize) -> isize {
+    let ret: usize;
+    let err: usize;
+    asm!(
+        "addiu $sp, $sp, -32",
+        "sw $10, 16($sp)",               // a5 (passed in $t2)
+        "sw $11, 20($sp)",               // a6 (passed in $t3)
+        "syscall",
+        "addiu $sp, $sp, 32",
+        inlateout("$2") n => ret,        // $v0: nr in / result out
+        in("$4") a1, in("$5") a2, in("$6") a3,
+        inlateout("$7") a4 => err,       // $a3: 4th arg in / error flag out
+        in("$10") a5, in("$11") a6,      // a5/a6 staged in $t2/$t3, then to the stack
+        out("$3") _,                     // $v1 clobbered by the kernel ($at/$1 is
+                                         // assembler-reserved, managed by LLVM)
+        out("$8") _, out("$9") _, out("$12") _, out("$13") _,
+        out("$14") _, out("$15") _, out("$24") _, out("$25") _,
+        // default options: memory is assumed clobbered, stack is preserved.
+    );
+    if err != 0 { -(ret as isize) } else { ret as isize }
+}
+
 const AT_FDCWD: usize = (-100isize) as usize;
 const LOCK_SH: usize = 1;
 const LOCK_NB: usize = 4;
@@ -138,6 +178,15 @@ global_asm!(
     "_start:",
     "mov r0, sp",   // argv-block pointer (argc at [sp]); sp is 8-aligned at entry
     "bl rust_entry",
+);
+#[cfg(target_arch = "mips")]
+global_asm!(
+    ".global _start",
+    "_start:",
+    "move $a0, $sp",   // argv-block pointer (argc at [sp])
+    "and $sp, $sp, -8",
+    "jal rust_entry",
+    "nop",
 );
 
 #[no_mangle]
@@ -256,17 +305,19 @@ fn page_size(m: &[u8]) -> usize {
 
 // full page span (header + data + any overflow pages), with corruption guards
 fn page(m: &[u8], ps: usize, id: u64) -> &[u8] {
-    // reject ids that overflow usize or fall outside the mapping (corrupt db)
-    let off = match (id as usize).checked_mul(ps) {
-        Some(v) if v + 16 <= m.len() => v,
+    // reject ids that overflow or fall outside the mapping (corrupt db).
+    // Compute in u64 (pgid is u64; usize is 32-bit on arm/mips) then narrow.
+    let off = match id.checked_mul(ps as u64) {
+        Some(v) if v + 16 <= m.len() as u64 => v as usize,
         _ => { err(b"invalid database\n"); unsafe { sys_exit(1) } }
     };
     // bbolt FastCheck: a page must self-identify as the requested id, else a
     // wrapped/forged pgid could alias a different in-bounds page (wrong answer).
     if u64le(m, off) != id { err(b"invalid database\n"); unsafe { sys_exit(1) } }
-    let overflow = u32le(m, off + 12) as usize;
-    let mut end = off + (overflow + 1) * ps;
-    if end > m.len() { end = m.len(); } // bbolt ignores overflow on the read path
+    let overflow = u32le(m, off + 12) as u64;
+    // Compute the span end in u64 (32-bit arches truncate otherwise) and clamp
+    // to the mapping; bbolt ignores overflow on the read path.
+    let end = (off as u64 + (overflow + 1) * ps as u64).min(m.len() as u64) as usize;
     &m[off..end]
 }
 
