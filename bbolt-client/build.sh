@@ -10,10 +10,20 @@ set -eu
 cd "$(dirname "$0")"
 export PATH="$HOME/.cargo/bin:$PATH"
 
+# rust-objcopy ships with the toolchain (llvm-tools); override via $OBJCOPY if needed.
+OBJCOPY="${OBJCOPY:-rust-objcopy}"
+
 build_one() {
   triple="$1"; arch="$2"
   cargo +nightly build --release --target "$triple"
   cp "target/$triple/release/bbolt-client-rs" "bbolt-client-rs-$arch"
+  # MIPS targets emit a huge non-allocated .pdr (procedure-descriptor) section —
+  # ~23 KB, not in any LOAD segment, so it's pure file-size dead weight (zero
+  # runtime effect). cargo's strip=true does NOT drop .pdr (it isn't flagged as
+  # debug), so remove it explicitly. Cuts the mips/mipsel binary ~32 KB → ~8 KB.
+  case "$arch" in
+    mips|mipsel) "$OBJCOPY" --remove-section .pdr "bbolt-client-rs-$arch" ;;
+  esac
   printf '%-8s %6d bytes  %s\n' "$arch" "$(wc -c < "bbolt-client-rs-$arch")" \
     "$(file -b "bbolt-client-rs-$arch" | cut -d, -f1-2)"
 }

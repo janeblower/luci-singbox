@@ -39,10 +39,11 @@ jobs:
 
       # Nightly + rust-src are required for -Z build-std (the toolchain is also
       # pinned in bbolt-client/rust-toolchain.toml). aarch64 cross-links with the
-      # bundled rust-lld, so no cross-gcc is needed.
-      - name: Install nightly + rust-src
+      # bundled rust-lld, so no cross-gcc is needed. llvm-tools provides
+      # rust-objcopy, which build.sh uses to strip the MIPS .pdr section.
+      - name: Install nightly + rust-src + llvm-tools
         run: |
-          rustup toolchain install nightly --profile minimal --component rust-src
+          rustup toolchain install nightly --profile minimal --component rust-src --component llvm-tools
           rustc +nightly --version
 
       # qemu-aarch64 lets us run the cross-built aarch64 binary in the test step.
