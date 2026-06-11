@@ -1,9 +1,9 @@
 #!/bin/sh
-# Build the smallest static, libc-free bbolt-client for OpenWrt: x86_64 and
-# aarch64. Requires a nightly toolchain with rust-src (pinned in
-# rust-toolchain.toml). aarch64 links with the bundled rust-lld (no cross-gcc).
+# Build the smallest static, libc-free bbolt-client for OpenWrt: x86_64, aarch64,
+# armv7, mipsel, and mips. Requires a nightly toolchain with rust-src (pinned in
+# rust-toolchain.toml). Cross targets link with the bundled rust-lld (no cross-gcc).
 #
-# Outputs: ./bbolt-client-rs-x86_64, ./bbolt-client-rs-aarch64, and ./bbolt-client-rs
+# Outputs: ./bbolt-client-rs-{x86_64,aarch64,armv7,mipsel,mips} and ./bbolt-client-rs
 # (a copy of the native x86_64 build, used by ./test.sh). Each binary is a fully
 # static ELF with no libc dependency, so it runs on glibc and musl/OpenWrt alike.
 set -eu
@@ -18,6 +18,9 @@ build_one() {
     "$(file -b "bbolt-client-rs-$arch" | cut -d, -f1-2)"
 }
 
-build_one x86_64-unknown-linux-gnu  x86_64
-build_one aarch64-unknown-linux-gnu aarch64
+build_one x86_64-unknown-linux-gnu       x86_64
+build_one aarch64-unknown-linux-gnu      aarch64
+build_one armv7-unknown-linux-gnueabihf  armv7
+build_one mipsel-unknown-linux-musl      mipsel
+build_one mips-unknown-linux-musl        mips
 cp bbolt-client-rs-x86_64 bbolt-client-rs   # native default for ./test.sh

@@ -4,28 +4,33 @@ A `#![no_std]`, **no-libc**, raw-syscall, read-only [bbolt](https://github.com/e
 reader for sing-box caches (`experimental.cache_file`, e.g. `/etc/sing-box/cache.db`
 or `/tmp/singbox-ui-cache.db`), built for minimal size.
 
-Fully static, libc-free binaries: **~7.6 KB** (x86_64) / **~6.2 KB** (aarch64). Each
-links no libc and makes raw Linux syscalls, so the single static ELF runs on glibc
-hosts and musl/OpenWrt alike.
+Fully static, libc-free binaries: **~7.6 KB** (x86_64) / **~6.2 KB** (aarch64) /
+**~6.3 KB** (armv7) / **~32 KB** (mipsel) / **~32 KB** (mips). The mips/mipsel
+binaries are larger (the o32 syscall wrapper and tier-3 codegen are less compact) but
+still tiny. Each links no libc and makes raw Linux syscalls, so the single static ELF
+runs on glibc hosts and musl/OpenWrt alike.
 
 ## Build (nightly required)
 
-    ./build.sh        # -> ./bbolt-client-rs-{x86_64,aarch64}  (+ ./bbolt-client-rs = native)
+    ./build.sh        # -> ./bbolt-client-rs-{x86_64,aarch64,armv7,mipsel,mips}  (+ ./bbolt-client-rs = native)
     make test         # build + self-contained golden regression tests
 
 Needs a nightly toolchain with `rust-src` (pinned in `rust-toolchain.toml`). The build
 uses `-Z build-std=core` with `panic = "immediate-abort"` and links with `-nostdlib`
 so no libc or CRT is pulled in; the result is a static ELF with no `PT_INTERP`.
-**aarch64** cross-links with the toolchain's bundled `rust-lld` — no cross-gcc needed.
+The cross targets link with the toolchain's bundled `rust-lld` — no cross-gcc needed.
 
-CI builds both architectures and runs the tests (aarch64 under `qemu-user`) on every
-push — see [`.github/workflows/bbolt-client.yml`](../.github/workflows/bbolt-client.yml).
+CI builds all five architectures and runs the tests (cross arches under `qemu-user`)
+on every push — see [`.github/workflows/bbolt-client.yml`](../.github/workflows/bbolt-client.yml).
 Binaries are uploaded as artifacts (binary only; no apk packaging yet).
 
-**Supported arches: x86_64 and aarch64 Linux.** The syscall layer is arch-gated
-(`#[cfg(target_arch)]`: syscall numbers + the `syscall`/`svc` instruction + `_start`);
-everything else is arch-independent. Other arches would need another `nr`/`syscall6`/
-`_start` variant.
+**Supported arches: x86_64, aarch64, armv7, mipsel (LE), mips (BE) Linux.** The
+syscall layer is arch-gated (`#[cfg(target_arch)]`: syscall numbers + the
+`syscall`/`svc` instruction + `_start`); everything else is arch-independent and
+reads on-disk integers little-endian, so the same binary logic is correct on
+big-endian mips. armv7 is `target_arch="arm"`; mipsel and mips share
+`target_arch="mips"` (endianness is `target_endian`). One bbolt binary per family
+covers all OpenWrt CPU subtypes in that family (no float is used).
 
 ## Usage
 
