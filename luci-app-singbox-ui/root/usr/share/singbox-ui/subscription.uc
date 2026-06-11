@@ -19,9 +19,22 @@ const DEFAULT_UA = "Mozilla/5.0";
 // catches bodies with no Content-Length (chunked) and local cp sources.
 const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
 
+// nft_rules remote rule-sets are no longer curl'd; we read the already-compiled
+// .srs straight from sing-box's bbolt cache (cache.db / bucket rule_set / key =
+// section name) via bbolt-client. These seams are test-overridable.
+const BBOLT_BIN     = getenv("SINGBOX_BBOLT_BIN") || "/usr/libexec/singbox-ui/bbolt-client";
+const RS_CACHE_WAIT = +(getenv("SINGBOX_RS_CACHE_WAIT") || "10");   // sec, cold-cache poll
+// Trigger/apply seams. init.d reload is stop+start (sing-box has no signal
+// reload) — used to make sing-box fetch+cache a cold remote rule-set. The nft
+// apply re-runs nftables.uc so rebuilt rs_*.json reach the live ruleset.
+const SINGBOX_INITD = getenv("SINGBOX_INITD")     || "/etc/init.d/singbox-ui";
+const NFT_APPLY_CMD = getenv("SINGBOX_NFT_APPLY")
+	|| "ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/nftables.uc apply";
+
 let fs  = require("fs");
 let uci_mod = require("uci");
 let helpers = require("helpers");
+let cache_mod = require("cache");
 
 // Two channels: log() is ops-info, log_err() is errors. They both write to
 // stderr (init.d/cron route it to syslog) but log_err tags severity so an
@@ -138,6 +151,43 @@ function write_atomic(path, body) {
 		return false;
 	}
 	return true;
+}
+
+// bbolt_available() — path to the executable bbolt-client, or null. Defined
+// before its callers (cmd_fetch_rulesets, cmd_refresh) per ucode's
+// callee-precedes-caller rule (no function hoisting).
+function bbolt_available() {
+	let st = fs.stat(BBOLT_BIN);
+	return (st && st.type === "file") ? BBOLT_BIN : null;
+}
+
+// cache_extract_srs(db, tag, out_path) — write the .srs payload of `tag` from
+// cache.db (bucket rule_set) into out_path. Returns true on success (rc 0 and
+// non-empty file). Runs through /bin/sh with stdout redirection; every argument
+// is single-quoted via helpers.sq so a hostile tag/path cannot break out.
+function cache_extract_srs(db, tag, out_path) {
+	let bin = bbolt_available();
+	if (!bin) return false;
+	let cmd = helpers.sq(bin) + " -r " + helpers.sq(db) + " rule_set " +
+	          helpers.sq(tag) + " > " + helpers.sq(out_path) + " 2>/dev/null";
+	if (system(["/bin/sh", "-c", cmd]) !== 0) { fs.unlink(out_path); return false; }
+	let st = fs.stat(out_path);
+	if (!st || st.size === 0) { fs.unlink(out_path); return false; }
+	return true;
+}
+
+// cache_has_key(db, tag) — is `tag` present in the rule_set bucket of cache.db?
+// Cheap presence probe: list keys (one per line) and exact-match.
+function cache_has_key(db, tag) {
+	let bin = bbolt_available();
+	if (!bin) return false;
+	let cmd = helpers.sq(bin) + " " + helpers.sq(db) + " rule_set 2>/dev/null";
+	let p = fs.popen(cmd, "r");
+	if (!p) return false;
+	let raw = p.read("all") ?? "";
+	p.close();
+	for (let line in split(raw, "\n")) if (trim(line) === tag) return true;
+	return false;
 }
 
 function cmd_fetch_subs(cur) {
@@ -264,11 +314,27 @@ function cmd_fetch_rulesets(cur) {
 		}
 
 		if (rs_type === "remote") {
-			push(jobs, {
-				name: name, raw_path: raw_path, out_path: out_path,
-				rs_type: rs_type, target: target,
-				url: target, outpath: raw_path, opts: { timeout: timeout },
-			});
+			// nft_rules remote: pull the already-compiled .srs from sing-box's
+			// bbolt cache (cache.db / bucket rule_set / key = section name)
+			// instead of curl'ing the URL a second time — sing-box already
+			// downloaded and cached the same rule-set. All cold edges degrade
+			// to skip+log (the cold-cache trigger lives in cmd_refresh).
+			let db = cache_mod.cache_db_path(cur);
+			if (db == null) {
+				log_err(`fetch_rulesets: ${name} skipped — cache_file disabled (enable [cache] to build nft rules)`);
+				continue;
+			}
+			if (!bbolt_available()) {
+				log_err(`fetch_rulesets: ${name} skipped — bbolt-client not installed (use the UI button)`);
+				continue;
+			}
+			if (!cache_extract_srs(db, name, raw_path)) {
+				log_err(`fetch_rulesets: ${name} not in cache.db yet (will appear after sing-box fetches it), skipping`);
+				continue;
+			}
+			// The cache always stores a compiled .srs → force binary decompile.
+			push(jobs, { name: name, raw_path: raw_path, out_path: out_path,
+			             rs_type: rs_type, target: target, force_binary: true });
 		} else if (rs_type === "local") {
 			// Restrict local copies to a small set of known prefixes
 			// (/etc, /tmp, /var, /usr/share) — defense in depth so a
@@ -315,10 +381,9 @@ function cmd_fetch_rulesets(cur) {
 		}
 	}
 
-	// Only remote jobs carry a download spec (url/outpath/opts); local jobs
-	// were already cp'd inline above. The downloader ignores entries with no
-	// `url`, so passing the whole list is safe.
-	_downloader(filter(jobs, function(j) { return j.url != null; }));
+	// No network download here anymore: remote rule-sets were extracted from
+	// cache.db (.srs → raw_path) and local ones cp'd inline above. Subscriptions
+	// still use _downloader (cmd_fetch_subs); rule-sets no longer do.
 
 	// Decompile / promote each raw file.
 	for (let m in jobs) {
@@ -333,7 +398,10 @@ function cmd_fetch_rulesets(cur) {
 			fs.unlink(m.raw_path);
 			continue;
 		}
-		let fmt = helpers.detect_rs_format(m.target, helpers.uci_get_or_empty(cur, m.name, "format"));
+		// Cache-extracted remote rule-sets are always compiled .srs (force
+		// binary); local sources keep extension-based detection.
+		let fmt = m.force_binary ? "binary"
+		          : helpers.detect_rs_format(m.target, helpers.uci_get_or_empty(cur, m.name, "format"));
 		if (fmt === "binary") {
 			if (system([SINGBOX, "rule-set", "decompile", m.raw_path, "-o", m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: decompile failed for ${m.name}`);
@@ -386,22 +454,76 @@ function any_rulesets_stale(cur, force) {
 	return false;
 }
 
+// remote_nft_tags(cur) — names of enabled remote rule-sets with nft_rules=1.
+// These are the cache.db keys we expect sing-box to have compiled.
+function remote_nft_tags(cur) {
+	let out = [];
+	for (let name in helpers.sections_of_kind(cur, "ruleset", "nft_rules", "1")) {
+		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
+		if (helpers.uci_get_or_empty(cur, name, "type") !== "remote") continue;
+		push(out, name);
+	}
+	return out;
+}
+
+// any_tag_cold(db, tags) — true if at least one tag is missing from cache.db.
+function any_tag_cold(db, tags) {
+	for (let t in tags) if (!cache_has_key(db, t)) return true;
+	return false;
+}
+
+// wait_for_tags(db, tags, deadline_s) — poll cache.db (1s) until every tag is
+// present or the deadline passes. Returns true if all appeared. Used after a
+// cold-cache reload so the just-restarted sing-box has time to fetch+cache the
+// remote rule-sets before we extract them.
+function wait_for_tags(db, tags, deadline_s) {
+	let end = time() + deadline_s;
+	while (true) {
+		if (!any_tag_cold(db, tags)) return true;
+		if (time() >= end) return false;
+		system(["sleep", "1"]);
+	}
+}
+
 function cmd_refresh(cur, what, force) {
-	let refreshed = false;
+	let subs_refreshed = false;
+	let no_reload = getenv("SINGBOX_NO_RELOAD") === "1";
+
 	if (what === "subscriptions" || what === "all") {
 		if (any_subs_stale(cur, force)) {
 			cmd_fetch_subs(cur);
-			refreshed = true;
+			subs_refreshed = true;
 		}
 	}
+
 	if (what === "rulesets" || what === "all") {
 		if (any_rulesets_stale(cur, force)) {
+			// Cold cache: if a remote nft rule-set isn't compiled into cache.db
+			// yet, issue ONE init.d reload (stop+start — sing-box fetches+caches
+			// remote rule-sets on start) and poll cache.db for the keys. Skipped
+			// in boot mode (sing-box not up yet) and when reload is suppressed
+			// (tests). Warm tags skip the reload entirely so live connections
+			// survive a routine refresh.
+			let db = cache_mod.cache_db_path(cur);
+			let tags = remote_nft_tags(cur);
+			let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
+			if (db != null && length(tags) && !boot && !no_reload
+			    && any_tag_cold(db, tags)) {
+				log("refresh: cold rule-set in cache.db; reloading sing-box to populate it");
+				system([SINGBOX_INITD, "reload"]);
+				wait_for_tags(db, tags, RS_CACHE_WAIT);
+			}
 			cmd_fetch_rulesets(cur);
-			refreshed = true;
+			// Re-apply nft so rebuilt rs_*.json reach the live ruleset (a routine
+			// warm refresh does not reload, so nft would otherwise stay stale).
+			if (!no_reload) system(["/bin/sh", "-c", NFT_APPLY_CMD]);
 		}
 	}
-	if (refreshed && getenv("SINGBOX_NO_RELOAD") !== "1") {
-		system(["/etc/init.d/singbox-ui", "reload"]);
+
+	// Subscriptions still need a sing-box reload to pick up new sub config.
+	// Rule-sets handled their own reload/apply above, so no extra stop+start.
+	if (subs_refreshed && !no_reload) {
+		system([SINGBOX_INITD, "reload"]);
 	}
 	return 0;
 }
