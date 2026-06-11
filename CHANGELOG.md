@@ -677,5 +677,5 @@ sub-phase entries as work lands.
 - `nft -c` permission errors treated as skip rather than failure
 - shellcheck CI step over all shell scripts
 
-[Unreleased]: https://github.com/Jyn/luci-singbox/compare/v0.1.0...HEAD
-[v0.1.0]: https://github.com/Jyn/luci-singbox/releases/tag/v0.1.0
+[Unreleased]: https://github.com/janeblower/luci-singbox/compare/v0.1.0...HEAD
+[v0.1.0]: https://github.com/janeblower/luci-singbox/releases/tag/v0.1.0

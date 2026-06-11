@@ -1,5 +1,5 @@
 # tests/docker/Dockerfile
-# Publishes ghcr.io/<owner>/luci-app-sing-box/openwrt-test
+# Publishes ghcr.io/<owner>/luci-singbox/openwrt-test
 # Build requires /dev/kvm (the savevm step boots qemu under KVM).
 #
 # Layer strategy:

@@ -34,7 +34,7 @@ const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
 // fixed `bbolt-latest` GitHub Release and installed here. Test-overridable.
 const BBOLT_PATH   = getenv("SINGBOX_BBOLT_BIN") || "/usr/libexec/singbox-ui/bbolt-client";
 const BBOLT_BASE   = getenv("BBOLT_RELEASE_BASE")
-	|| "https://github.com/janeblower/luci-app-sing-box/releases/download/bbolt-latest";
+	|| "https://github.com/janeblower/luci-singbox/releases/download/bbolt-latest";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }

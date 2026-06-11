@@ -25,7 +25,7 @@ I18N_DESC="Translation for luci-singbox-ui — Русский (Russian)"
 I18N_DEPENDS="libc $APP_NAME"
 
 PKG_LICENSE="GPL-2.0-or-later"
-PKG_URL="https://github.com/Jyn/luci-singbox"
+PKG_URL="https://github.com/janeblower/luci-singbox"
 PKG_MAINTAINER="Jyn"
 
 VERSION="${1:-}"
