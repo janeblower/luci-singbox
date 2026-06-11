@@ -11,7 +11,10 @@
 #   BBOLT_DEST   install path for the helper     (default: /usr/libexec/singbox-ui/bbolt-client)
 set -eu
 
-APK_BASE="${APK_BASE:-https://github.com/janeblower/luci-app-sing-box/releases/latest/download/}"
+# NOTE: fixed tag form (/releases/download/latest/), NOT /releases/latest/download/.
+# The rolling release is a *prerelease*, and the /releases/latest/ selector ignores
+# prereleases (→ 404). "latest" here is the literal tag name, like "bbolt-latest".
+APK_BASE="${APK_BASE:-https://github.com/janeblower/luci-app-sing-box/releases/download/latest/}"
 BBOLT_BASE="${BBOLT_BASE:-https://github.com/janeblower/luci-app-sing-box/releases/download/bbolt-latest/}"
 BBOLT_DEST="${BBOLT_DEST:-/usr/libexec/singbox-ui/bbolt-client}"
 APK_NAME="luci-app-singbox-ui.apk"
