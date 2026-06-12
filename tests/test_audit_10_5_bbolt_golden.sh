@@ -44,10 +44,31 @@ if [ ! -f "$BBOLT_DIR/testdata/cache.db" ]; then
 fi
 
 echo "-- bbolt-client golden suite (real parser, end-to-end) via $BIN"
-# Run the self-contained golden suite against the real binary. It compares the
-# binary's whole-tree + `-r` output against frozen sha256 goldens and asserts
-# clean exits on adversarial/forged inputs, so a regression in the real
-# parser's output (the exact thing the ucode-side stub cannot catch) fails here.
-RUN="$(pwd)/$BIN" sh "$BBOLT_DIR/test.sh"
+if command -v od >/dev/null 2>&1; then
+	# Full golden suite: compares the binary's whole-tree + `-r` output against
+	# frozen sha256 goldens and asserts clean exits on adversarial/forged inputs,
+	# so a regression in the real parser's output (the exact thing the ucode-side
+	# stub cannot catch) fails here. Needs od(1) for key hex-encoding and the
+	# forged-field byte patching.
+	RUN="$(pwd)/$BIN" sh "$BBOLT_DIR/test.sh"
+else
+	# Minimal OpenWrt/busybox guests ship no od(1), so the hash-comparison
+	# harness (test.sh) cannot run. Still exercise the REAL binary end-to-end
+	# with an od-free smoke so a gross real-vs-stub drift is still caught in the
+	# integration pass; the full cross-arch golden-hash matrix runs in
+	# .github/workflows/bbolt-client.yml where od is present.
+	echo "   note: od(1) absent (busybox guest) -> od-free real-binary smoke"
+	db="$BBOLT_DIR/testdata/cache.db"
+	buckets=$("$BIN" "$db") || { echo "FAIL: list buckets exit $?"; exit 1; }
+	[ -n "$buckets" ] || { echo "FAIL: golden cache.db listed no buckets"; exit 1; }
+	b1=$(printf '%s\n' "$buckets" | head -1)
+	"$BIN" "$db" "$b1" >/dev/null 2>&1 || { echo "FAIL: list keys of '$b1' exit $?"; exit 1; }
+	rc=0; out=$("$BIN" "$db" __nb__ 2>&1) || rc=$?
+	{ [ "$rc" = 1 ] && [ "$out" = 'no bucket "__nb__"' ]; } \
+		|| { echo "FAIL: no-bucket path (exit $rc, out [$out])"; exit 1; }
+	rc=0; "$BIN" /no/such/file.db >/dev/null 2>&1 || rc=$?
+	[ "$rc" = 1 ] || { echo "FAIL: missing-file exit $rc (want 1)"; exit 1; }
+	echo "ok: real binary lists buckets/keys + clean error paths (od-free smoke)"
+fi
 
 echo "OK"
