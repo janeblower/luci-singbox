@@ -24,6 +24,8 @@ const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
 // live UCI / network state (see descriptor_form.js attachDynamic), not from a
 // static `values` array.
 const KNOWN_DYNAMIC = { outbounds: 1, dns_servers: 1, interfaces: 1, devices: 1 };
+const KNOWN_COERCE  = { str: 1, num: 1, bool: 1, array: 1 };
+const KNOWN_OMIT    = { empty: 1, never: 1 };
 
 function validate_field(f, ctx) {
     assert(f.name != null,                        sprintf("%s: field.name required", ctx));
@@ -57,6 +59,15 @@ function validate_field(f, ctx) {
         for (let v in f.values) if (v === f.default) found = true;
         assert(found,                             sprintf("%s.%s: default '%s' is not one of values", ctx, f.name, f.default));
     }
+    if (f.json_key != null)
+        assert(type(f.json_key) === "string" && length(f.json_key) > 0,
+               sprintf("%s.%s: json_key must be a non-empty string", ctx, f.name));
+    if (f.coerce != null)
+        assert(KNOWN_COERCE[f.coerce] != null,
+               sprintf("%s.%s: unknown coerce '%s'", ctx, f.name, f.coerce));
+    if (f.omit_when != null)
+        assert(KNOWN_OMIT[f.omit_when] != null,
+               sprintf("%s.%s: unknown omit_when '%s'", ctx, f.name, f.omit_when));
 }
 
 function validate_shared(shared, ctx) {
@@ -70,7 +81,17 @@ function register(descriptor) {
     assert(descriptor.kind === "inbound" || descriptor.kind === "outbound",
         "descriptor.kind must be 'inbound' or 'outbound'");
     assert(descriptor.type != null,            "descriptor.type required");
-    assert(type(descriptor.emit) === "function", "descriptor.emit must be a function");
+    // A descriptor builds its JSON either via a hand-written emit() (legacy /
+    // escape-hatch) or declaratively via fields[] consumed by protocols._filler.
+    // At least one must be present. post() is an optional filler escape-hatch.
+    let _has_emit = type(descriptor.emit) === "function";
+    let _has_decl = type(descriptor.fields) === "array";
+    assert(_has_emit || _has_decl,
+        "descriptor must provide emit() or declarative fields[]");
+    if (descriptor.emit != null)
+        assert(_has_emit, "descriptor.emit, when present, must be a function");
+    if (descriptor.post != null)
+        assert(type(descriptor.post) === "function", "descriptor.post must be a function");
     let ctx = sprintf("%s:%s", descriptor.kind, descriptor.type);
     validate_shared(descriptor.shared, ctx);
     for (let f in (descriptor.fields || []))
