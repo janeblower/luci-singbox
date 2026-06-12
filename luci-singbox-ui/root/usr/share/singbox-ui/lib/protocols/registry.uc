@@ -85,9 +85,12 @@ function register(descriptor) {
     // escape-hatch) or declaratively via fields[] consumed by protocols._filler.
     // At least one must be present. post() is an optional filler escape-hatch.
     let _has_emit = type(descriptor.emit) === "function";
-    let _has_decl = type(descriptor.fields) === "array";
+    // A declarative descriptor needs at least one field to build anything
+    // meaningful; an empty fields[] + no emit would silently emit just
+    // {type,tag} — reject it so the omission fails loudly at registration.
+    let _has_decl = type(descriptor.fields) === "array" && length(descriptor.fields) > 0;
     assert(_has_emit || _has_decl,
-        "descriptor must provide emit() or declarative fields[]");
+        "descriptor must provide emit() or a non-empty declarative fields[]");
     if (descriptor.emit != null)
         assert(_has_emit, "descriptor.emit, when present, must be a function");
     if (descriptor.post != null)
