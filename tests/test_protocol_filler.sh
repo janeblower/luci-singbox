@@ -124,6 +124,27 @@ out=$(je '
 [ "$out" = "MATCH" ] || die "trojan outbound golden parity" "$out"
 ok "trojan outbound golden parity"
 
+# ---- golden parity: direct outbound via the production dispatcher ----
+out=$(je '
+    let ob = require("outbound");
+    let got = ob.build_constructor_for(
+        { ".name":"dir1", override_address:"1.1.1.1", override_port:"5353", proxy_protocol:"2" },
+        "direct");
+    let want = { type:"direct", tag:"dir1", override_address:"1.1.1.1", override_port:5353, proxy_protocol:2 };
+    print(sprintf("%J", got) === sprintf("%J", want) ? "MATCH" : sprintf("MISMATCH got=%J want=%J", got, want));
+')
+[ "$out" = "MATCH" ] || die "direct outbound golden parity" "$out"
+ok "direct outbound golden parity"
+
+# ---- golden parity: direct outbound with all override fields empty ----
+out=$(je '
+    let ob = require("outbound");
+    let got = ob.build_constructor_for({ ".name":"dir2" }, "direct");
+    print(sprintf("%J", got));
+')
+[ "$out" = '{ "type": "direct", "tag": "dir2" }' ] || die "direct outbound empty section" "$out"
+ok "direct outbound empty section omits all overrides"
+
 # ---- registry: a descriptor with fields but no emit registers OK ----
 out=$(je '
     let reg = require("protocols.registry");

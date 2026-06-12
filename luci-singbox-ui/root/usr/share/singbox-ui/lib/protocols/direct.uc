@@ -17,22 +17,18 @@ reg.register({
 	fields: [
 		{ name: "override_address", type: "string", tab: "basic",
 		  ui_label: "Override destination address",
-		  placeholder: "127.0.0.1", advanced: true },
+		  placeholder: "127.0.0.1", advanced: true,
+		  json_key: "override_address" },
 		{ name: "override_port", type: "number", tab: "basic",
-		  ui_label: "Override destination port", advanced: true },
+		  ui_label: "Override destination port", advanced: true,
+		  json_key: "override_port", coerce: "num" },
 		{ name: "proxy_protocol", type: "enum", tab: "basic",
 		  ui_label: "Proxy protocol version",
-		  values: ["", "1", "2"], advanced: true },
+		  values: ["", "1", "2"], advanced: true,
+		  json_key: "proxy_protocol", coerce: "num" },
 	],
-
-	emit: function(s) {
-		let out = { type: "direct", tag: s[".name"] };
-		if (length(s_opt(s, "override_address"))) out.override_address = s.override_address;
-		if (length(s_opt(s, "override_port")))    out.override_port    = s_num(s.override_port);
-		if (length(s_opt(s, "proxy_protocol")))   out.proxy_protocol   = s_num(s.proxy_protocol);
-		dial_blk.merge_dial(out, s);
-		return out;
-	},
+	// No emit(): filler builds {type,tag} + the three omit-if-empty fields + the
+	// declared dial shared block, byte-identical to the former emit().
 });
 
 reg.register({
