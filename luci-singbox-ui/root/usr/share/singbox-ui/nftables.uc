@@ -766,10 +766,24 @@ function _cmd_apply_locked(cur) {
 	// busy ruleset) can't hold the apply lock for its full 60s stale TTL. 30s is
 	// comfortably above a normal atomic load and well under the TTL. busybox and
 	// coreutils both return 124 on timeout.
-	let rc = system(["timeout", "30", "nft", "-f", tmp]);
+	//
+	// `timeout` is NOT present on a stock OpenWrt though — it is not a busybox
+	// applet and coreutils-timeout is not a dependency — so system(["timeout",..])
+	// would return 127 and make EVERY firewall apply fail on a default box. Probe
+	// for it once and fall back to a plain `nft -f` when absent; the timeout bound
+	// is a best-effort safety net, not a correctness requirement.
+	let timed = false;
+	let tproc = fs.popen("command -v timeout 2>/dev/null");
+	if (tproc) {
+		let tout = tproc.read("all");
+		tproc.close();
+		timed = (tout != null && length(trim(tout)) > 0);
+	}
+	let rc = timed ? system(["timeout", "30", "nft", "-f", tmp])
+	               : system(["nft", "-f", tmp]);
 	fs.unlink(tmp);
 	if (rc !== 0) {
-		log_err(rc == 124 ? "nftables: nft -f timed out (30s)" : "nftables: nft -f failed");
+		log_err((timed && rc == 124) ? "nftables: nft -f timed out (30s)" : "nftables: nft -f failed");
 		return 1;
 	}
 	// Best-effort smoke check: warn (don't fail) when the host has no
