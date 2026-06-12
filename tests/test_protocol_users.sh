@@ -66,4 +66,26 @@ out=$(je '
 [ "$out" = '[ { "name": "t", "password": "pw" } ]' ] || die "trojan single" "$out"
 ok "trojan single password"
 
+# colon-less single token is dropped (legacy: index(u,":")<0 -> skip) — all families
+out=$(je '
+    let U = require("protocols._shared.users");
+    let r = U.build({ ".name":"m", mixed_user:["alice","bob:secret"] },
+        { from:"mixed_user", columns:[ {key:"username",required:true}, {key:"password",tail:true,always:true} ] });
+    print(sprintf("%J", r.users));
+')
+[ "$out" = '[ { "username": "bob", "password": "secret" } ]' ] || die "mixed colon-less drop" "$out"
+ok "mixed: colon-less token dropped"
+
+# hysteria2 colon-less -> dropped -> single fallback fires with real server_password
+out=$(je '
+    let U = require("protocols._shared.users");
+    let spec = { from:"inbound_user",
+        columns:[ {key:"name",required:true}, {key:"password",tail:true,always:true} ],
+        single_fallback:{ fields:[ {key:"password",from:"server_password"} ] } };
+    let r = U.build({ ".name":"h", inbound_user:["alice"], server_password:"SRVPW" }, spec);
+    print(sprintf("%J", r));
+')
+[ "$out" = '{ "users": [ { "name": "h", "password": "SRVPW" } ], "from_list": false }' ] || die "hy2 colon-less fallback" "$out"
+ok "hysteria2: colon-less drops, single fallback uses server_password"
+
 echo "test_protocol_users: all PASS"
