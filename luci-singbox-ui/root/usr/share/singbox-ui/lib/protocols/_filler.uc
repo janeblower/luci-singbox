@@ -21,10 +21,17 @@ const SHARED_DISPATCH = {
     dial:      { merge: "merge_dial" },
 };
 
-// _emit_field(out, s, f) — write one descriptor field into out per its
-// json_key / coerce / omit_when metadata. Fields without json_key never reach
-// here (filtered in build()).
-function _emit_field(out, s, f) {
+// _emit_scalar(out, s, f) — write one scalar field per its metadata:
+// json_key / coerce / omit_when / skip_value / requires / default_when_empty.
+// Fields without json_key never reach here (filtered in build()).
+function _emit_scalar(out, s, f) {
+    if (f.requires != null) {
+        if (type(f.requires) === "string") {
+            if (!length(s_opt(s, f.requires))) return;
+        } else {
+            if (s_opt(s, f.requires.field) !== f.requires.value) return;
+        }
+    }
     let coerce = f.coerce || "str";
     let omit   = f.omit_when || "empty";
 
@@ -50,6 +57,8 @@ function _emit_field(out, s, f) {
     }
     // "str" (default)
     let v = s_opt(s, f.name);
+    if (f.skip_value != null && v === f.skip_value) return;
+    if (!length(v) && f.default_when_empty != null) v = f.default_when_empty;
     if (omit === "never" || length(v)) out[f.json_key] = v;
 }
 
@@ -84,7 +93,7 @@ function build(d, s) {
     let out = { type: d.sing_box_type, tag: s[".name"] };
     for (let f in (d.fields || [])) {
         if (f.json_key == null) continue;   // UI-only field
-        _emit_field(out, s, f);
+        _emit_scalar(out, s, f);
     }
     _emit_shared(out, s, d.kind, d);
     if (type(d.post) === "function") d.post(out, s);
