@@ -47,4 +47,16 @@ return {
     ],
 
     emit: emit,
+
+    emit_spec: {
+        gate: { enabled_field: "multiplex_enabled" },
+        seq: [
+            { json_key: "enabled", const: true },
+            { name: "multiplex_protocol", json_key: "protocol", default_when_empty: "smux", omit_when: "never" },
+            { name: "multiplex_max_connections", json_key: "max_connections", coerce: "num" },
+            { name: "multiplex_min_streams",     json_key: "min_streams", coerce: "num" },
+            { name: "multiplex_max_streams",     json_key: "max_streams", coerce: "num" },
+            { name: "multiplex_padding",         json_key: "padding", coerce: "bool" },
+        ],
+    },
 };
