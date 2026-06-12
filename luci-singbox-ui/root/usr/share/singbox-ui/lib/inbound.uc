@@ -23,59 +23,7 @@ for (let _m in ["protocols.trojan", "protocols.shadowsocks", "protocols.vless",
 	catch (e) { warn(sprintf("inbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }
 
-const s_opt    = helpers.s_opt;
-const as_array = helpers.as_array;
-
-// build_user(s) — single-user object for vless/trojan/hysteria2.
-// Used by inbound descriptors that expose server_uuid / server_password
-// fields for single-user configuration.
-function build_user(s) {
-	let proto = s.protocol;
-	let u = { name: s[".name"] };
-	if (proto === "vless") {
-		if (length(s_opt(s, "server_uuid"))) u.uuid = s.server_uuid;
-	}
-	if (proto === "trojan" || proto === "hysteria2") {
-		if (length(s_opt(s, "server_password"))) u.password = s.server_password;
-	}
-	if (proto === "vless" && length(s_opt(s, "vless_flow")))   // S2.3: dead !== "none" removed
-		u.flow = s.vless_flow;
-	return u;
-}
-
-// build_inbound_users(s, proto) — parse `list inbound_user` entries for
-// vless (multi-user). Returns an array of user objects, or [] when no valid
-// entries.  Format per entry:
-//   vless: "name:uuid"          or "name:uuid:flow"
-// Invalid entries (missing name/uuid) are silently skipped. 1.6: a uuid token
-// that is structurally impossible (whitespace, JSON-breaking chars, anything
-// outside the UUID character class) would be rejected loudly by sing-box at
-// load — warn+skip such an entry here so one bad row doesn't kill the inbound.
-// Kept deliberately permissive (not a strict canonical-UUID match): only
-// clearly-malformed tokens are dropped, plausible identifiers pass through.
-function build_inbound_users(s, proto) {
-	let entries = as_array(s.inbound_user);
-	let out = [];
-	for (let entry in entries) {
-		let c1 = index(entry, ":");
-		if (c1 < 0) continue;
-		let name = substr(entry, 0, c1);
-		let rest = substr(entry, c1 + 1);
-		let c2 = index(rest, ":");
-		let uuid = (c2 < 0) ? rest : substr(rest, 0, c2);
-		let flow = (c2 < 0) ? "" : substr(rest, c2 + 1);
-		if (!length(name) || !length(uuid)) continue;
-		if (!match(uuid, /^[0-9A-Za-z-]+$/)) {
-			warn(sprintf("inbound.uc: %s inbound_user '%s' has malformed uuid '%s'; skipping\n", proto, name, uuid));
-			continue;
-		}
-		let u = { name: name, uuid: uuid };
-		if (length(flow) && proto === "vless")   // S2.3: dead !== "none" removed
-			u.flow = flow;
-		push(out, u);
-	}
-	return out;
-}
+const s_opt = helpers.s_opt;
 
 function build_one(s) {
 	let proto = s_opt(s, "protocol");
@@ -98,4 +46,4 @@ function build_inbounds(cur) {
 	return out;
 }
 
-return { build_inbounds, build_one, build_user, build_inbound_users };
+return { build_inbounds, build_one };
