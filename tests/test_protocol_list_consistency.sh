@@ -17,7 +17,9 @@ out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
     require("outbound");                       // eager-load all descriptors
     let reg = require("protocols.registry");
     let helpers = require("helpers");
-    let non_proxy = { direct: 1 };             // registered outbound, not a proxy kind
+    // registered outbounds with their own dispatch branch (not proxy kinds):
+    // direct (iface/direct), and the Task 4 raw passthrough types json/sharelink.
+    let non_proxy = { direct: 1, json: 1, sharelink: 1 };
     let registered = reg.types_for_kind("outbound");
     let problems = [];
     // 1) every registered outbound proxy must be in OUTBOUND_PROXY_KINDS

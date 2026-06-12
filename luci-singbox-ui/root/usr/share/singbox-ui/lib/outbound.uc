@@ -18,7 +18,7 @@ let sharelink = require("sharelink");
 // config generation for ALL protocols. The robustness net try_register
 // documents now actually exists on the production path.
 for (let _m in ["protocols.direct", "protocols.shadowsocks", "protocols.vless",
-                "protocols.trojan", "protocols.hysteria2"]) {
+                "protocols.trojan", "protocols.hysteria2", "protocols.json_raw"]) {
 	try { require(_m); }
 	catch (e) { warn(sprintf("outbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }
@@ -100,6 +100,11 @@ function build_outbounds(cur) {
 			// E2: descriptor-owned direct outbound (type=direct in UCI).
 			// Distinct from the legacy type=interface branch above which
 			// builds the same sing-box JSON but via UCI iface resolution.
+			outbound = build_constructor_for(section, kind);
+		} else if (kind === "json" || kind === "sharelink") {
+			// Task 4: raw passthrough types. Their descriptor emit() parses the
+			// stored raw_json / raw_link and stamps the section tag. Own dispatch
+			// branch (like direct) — not in OUTBOUND_PROXY_KINDS.
 			outbound = build_constructor_for(section, kind);
 		} else if (helpers.is_outbound_proxy_kind(kind)) {
 			outbound = build_constructor_for(section, kind);
