@@ -4,7 +4,8 @@
 // shared blocks. emit()/post() remain an escape-hatch for nesting/conditionals
 // (see protocols/registry.uc and outbound.uc build_constructor_for).
 
-let helpers = require("helpers");
+let helpers  = require("helpers");
+let dial_blk = require("protocols._shared.dial");
 
 const s_opt    = helpers.s_opt;
 const s_num    = helpers.s_num;
@@ -62,7 +63,63 @@ function _emit_scalar(out, s, f) {
     if (omit === "never" || length(v)) out[f.json_key] = v;
 }
 
+// _gate(s, gate, opts) — evaluate a gate object. null gate => true.
+function _gate(s, gate, opts) {
+    if (gate == null) return true;
+    if (gate.flag != null) return s_bool(s, gate.flag);
+    if (gate.enabled_field != null)
+        return s_bool(s, gate.enabled_field) || (opts != null && gate.force_opt != null && opts[gate.force_opt]);
+    if (gate.all_present != null) {
+        for (let n in gate.all_present) if (!length(s_opt(s, n))) return false;
+        return length(gate.all_present) > 0;
+    }
+    if (gate.any_present != null) {
+        for (let n in gate.any_present) if (length(s_opt(s, n))) return true;
+        return false;
+    }
+    return true;
+}
+
+// _emit_seq(out, s, seq) — walk a sequence of entries (scalar | const | group).
+function _emit_seq(out, s, seq) {
+    for (let e in (seq || [])) {
+        if ("const" in e) { out[e.json_key] = e.const; continue; }
+        if (e.fields != null) { _emit_group(out, s, e); continue; }   // nested group
+        if (e.json_key != null) { _emit_scalar(out, s, e); continue; }
+    }
+}
+
+// _emit_group(out, s, g) — gated nested object built from g.fields.
+function _emit_group(out, s, g) {
+    if (!_gate(s, g.gate, null)) return;
+    let sub = {};
+    _emit_seq(sub, s, g.fields);
+    out[g.json_key] = sub;
+}
+
+// _build_block(s, spec, kind, opts) — build a shared-block object from its
+// declarative emit_spec. Returns the object, or null when gated out.
+//   spec: { gate?, merge?, variant?, outbound?:[seq], inbound?:[seq], seq?:[seq] }
+function _build_block(s, spec, kind, opts) {
+    if (spec.variant != null) {
+        let v = spec.variant;
+        let sel = s_opt(s, v.selector);
+        if (!length(sel) || sel === v.none_value) return null;
+        let entries = v.variants[sel];
+        if (entries == null) return null;
+        let obj = {};
+        obj[v.emit_selector_as] = sel;
+        _emit_seq(obj, s, entries);
+        return obj;
+    }
+    if (!_gate(s, spec.gate, opts)) return (spec.merge ? {} : null);
+    let obj = {};
+    _emit_seq(obj, s, spec[kind] != null ? spec[kind] : spec.seq);
+    return obj;
+}
+
 // _emit_shared(out, s, kind, d) — auto-invoke each declared shared block.
+// Prefers a declarative emit_spec on the module; falls back to legacy fn/merge.
 function _emit_shared(out, s, kind, d) {
     if (d.shared == null) return;
     for (let blk in d.shared) {
@@ -75,26 +132,41 @@ function _emit_shared(out, s, kind, d) {
         try { mod = require(sprintf("protocols._shared.%s", blk)); }
         catch (e) { warn(sprintf("_filler: shared '%s' failed to load: %s\n", blk, e)); continue; }
         if (mod == null) continue;
+        let opts = (type(d.shared[blk]) === "object") ? d.shared[blk] : {};
 
-        if (spec.merge != null) {
-            mod[spec.merge](out, s);
+        if (mod.emit_spec != null) {                 // declarative path
+            if (spec.merge != null) {
+                let o = _build_block(s, mod.emit_spec, kind, opts);
+                for (let k in keys(o)) out[k] = o[k];
+            } else {
+                let res = _build_block(s, mod.emit_spec, kind, opts);
+                if (res != null) out[spec.key] = res;
+            }
             continue;
         }
-        let opts = (type(d.shared[blk]) === "object") ? d.shared[blk] : {};
+        if (spec.merge != null) { mod[spec.merge](out, s); continue; }   // legacy
         let res = mod[spec.fn[kind]](s, opts);
         if (res != null) out[spec.key] = res;
     }
 }
 
 // build(d, s) — construct the sing-box JSON object for descriptor d from
-// section s. Order: type/tag, declared fields (declaration order), declared
-// shared blocks (declaration order), then optional post() escape-hatch.
+// section s. Order: type/tag (or inbound base), declared fields (declaration
+// order), declared groups (declaration order), declared shared blocks
+// (declaration order), then optional post() escape-hatch.
 function build(d, s) {
-    let out = { type: d.sing_box_type, tag: s[".name"] };
+    let out;
+    if (d.kind === "inbound") {
+        out = dial_blk.build_listen_base(s, d.sing_box_type);
+        if (out == null) return null;
+    } else {
+        out = { type: d.sing_box_type, tag: s[".name"] };
+    }
     for (let f in (d.fields || [])) {
         if (f.json_key == null) continue;   // UI-only field
         _emit_scalar(out, s, f);
     }
+    for (let g in (d.groups || [])) _emit_group(out, s, g);
     _emit_shared(out, s, d.kind, d);
     if (type(d.post) === "function") d.post(out, s);
     return out;
