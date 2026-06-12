@@ -188,7 +188,7 @@ function notify(promise, okLabel, errPrefix) {
 			ui.addNotification(null, E('p', _(okLabel)), 'info');
 		} else {
 			var msg = (res && res.message) || _('unknown error');
-			ui.addNotification(null, E('p', errPrefix + ': ' + msg), 'danger');
+			ui.addNotification(null, E('p', errPrefix + ': ' + msg), 'error');
 		}
 		return res;
 	}, function (err) {
@@ -196,7 +196,7 @@ function notify(promise, okLabel, errPrefix) {
 		// reading .message — otherwise the error handler itself TypeErrors and
 		// the rejection becomes uncaught (spec S2-7).
 		var msg = (err && err.message) || err || _('unknown error');
-		ui.addNotification(null, E('p', errPrefix + ': ' + msg), 'danger');
+		ui.addNotification(null, E('p', errPrefix + ': ' + msg), 'error');
 	});
 }
 

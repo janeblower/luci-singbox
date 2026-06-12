@@ -121,17 +121,36 @@ function decorateSecretInput(opt) {
     };
 }
 
+// Session-scoped (not UCI-backed) store for virtual toggle state, so the
+// "Show advanced fields" checkbox survives a modal re-open within the same
+// page session instead of always re-initialising to its default (audit 8.3).
+// Keyed by section_id + option name; lives only for the page lifetime and is
+// never persisted to UCI — keeping the keep-out-of-UCI invariant intact.
+var virtualToggleState = {};
+function virtualKey(sectionId, optName) { return String(sectionId) + '\0' + String(optName); }
+
 function makeVirtual(opt) {
     // Virtual fields exist only in the form DOM; never written to UCI.
     // cfgvalue must NOT call formvalue — formvalue dereferences the
     // rendered UI element which doesn't exist during pre-render cfgvalue
     // (`findElements` throws TypeError on undefined node). LuCI's depends()
     // machinery reads the current value via formvalue at runtime, so we
-    // only need cfgvalue to return the initial (default) state.
-    opt.write  = function () {};
-    opt.remove = function () {};
+    // only need cfgvalue to return the initial state.
     var defVal = (opt.default != null) ? String(opt.default) : '0';
-    opt.cfgvalue = function () { return defVal; };
+    // write/remove stay no-ops w.r.t. UCI — the toggle must never leak into the
+    // generated config. We only mirror the live value into the session store on
+    // save so a subsequent modal open restores the user's choice (audit 8.3).
+    opt.write  = function (sectionId, value) {
+        virtualToggleState[virtualKey(sectionId, this.option)] =
+            (value != null) ? String(value) : defVal;
+    };
+    opt.remove = function (sectionId) {
+        delete virtualToggleState[virtualKey(sectionId, this.option)];
+    };
+    opt.cfgvalue = function (sectionId) {
+        var k = virtualKey(sectionId, this.option);
+        return (k in virtualToggleState) ? virtualToggleState[k] : defVal;
+    };
 }
 
 function applyMaterialized(s, kind, protoName, materialized) {
@@ -189,6 +208,17 @@ function applyMaterialized(s, kind, protoName, materialized) {
             depsArmsFor(f, protoName).forEach(function (d) {
                 registered.opt.depends(d);
             });
+            // Label resolution must not be coupled to protocol registration
+            // order (audit 2.4). A single shared (tab,name) widget can carry
+            // only one title, so we make the choice deterministic instead of
+            // "first protocol in SB_*_PROTOCOLS wins": an explicit per-field
+            // ui_label always beats a name-derived label, regardless of which
+            // protocol was registered first. Reordering the protocol list can
+            // therefore no longer silently drop a curated label.
+            if (f.ui_label && !registered.explicitLabel) {
+                registered.opt.title = _(labelFor(f));
+                registered.explicitLabel = true;
+            }
             if (!f.dynamic && Array.isArray(f.values))
                 f.values.forEach(function (v) {
                     if (!registered.values[v]) {
@@ -224,7 +254,13 @@ function applyMaterialized(s, kind, protoName, materialized) {
         if (f.virtual) makeVirtual(opt);
 
         attachValidator(opt, f.validate);
-        s._sbMatRegistry[key] = { opt: opt, values: values };
+        s._sbMatRegistry[key] = {
+            opt: opt, values: values,
+            // Track whether THIS first registration already carried an explicit
+            // ui_label, so a later protocol's explicit label only overrides a
+            // name-derived one (audit 2.4) and explicit-vs-explicit stays stable.
+            explicitLabel: !!f.ui_label,
+        };
     });
 }
 
