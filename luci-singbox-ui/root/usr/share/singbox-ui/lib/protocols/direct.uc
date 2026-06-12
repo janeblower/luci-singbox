@@ -3,12 +3,6 @@
 // type=interface outbound.
 
 let reg = require("protocols.registry");
-let helpers = require("helpers");
-let dial_blk = require("protocols._shared.dial");
-
-const s_opt = helpers.s_opt;
-const s_num = helpers.s_num;
-const s_bool = helpers.s_bool;
 
 reg.register({
 	kind: "outbound", type: "direct", sing_box_type: "direct",
@@ -40,30 +34,22 @@ reg.register({
 		{ name: "listen_port", type: "number", tab: "basic", required: true,
 		  validate: "port", ui_label: "Listen port" },
 		{ name: "network", type: "enum", tab: "basic",
-		  values: ["", "tcp", "udp"], ui_label: "Network" },
+		  values: ["", "tcp", "udp"], ui_label: "Network", json_key: "network" },
 		{ name: "dns_listener", type: "bool", tab: "basic",
 		  ui_label: "DNS listener (Hijack DNS via route rule)", default: 0 },
 		{ name: "override_address", type: "string", tab: "basic",
 		  ui_label: "Override destination address",
-		  placeholder: "1.1.1.1", advanced: true },
+		  placeholder: "1.1.1.1", advanced: true, json_key: "override_address" },
 		{ name: "override_port", type: "number", tab: "basic",
-		  ui_label: "Override destination port", advanced: true },
+		  ui_label: "Override destination port", advanced: true,
+		  json_key: "override_port", coerce: "num" },
 		{ name: "tcp_fast_open", type: "bool", tab: "basic",
-		  ui_label: "TCP fast open", default: 0, advanced: true },
+		  ui_label: "TCP fast open", default: 0, advanced: true,
+		  json_key: "tcp_fast_open", coerce: "bool" },
 		{ name: "udp_fragment", type: "bool", tab: "basic",
-		  ui_label: "UDP fragment", default: 0, advanced: true },
+		  ui_label: "UDP fragment", default: 0, advanced: true,
+		  json_key: "udp_fragment", coerce: "bool" },
 	],
-
-	emit: function(s) {
-		let out = dial_blk.build_listen_base(s, "direct");
-		if (!out) return null;
-		if (length(s_opt(s, "network"))) out.network = s.network;
-		if (length(s_opt(s, "override_address"))) out.override_address = s.override_address;
-		if (length(s_opt(s, "override_port")))    out.override_port    = s_num(s.override_port);
-		if (s_bool(s, "tcp_fast_open")) out.tcp_fast_open = true;
-		if (s_bool(s, "udp_fragment"))  out.udp_fragment  = true;
-		return out;
-	},
 });
 
 return {};
