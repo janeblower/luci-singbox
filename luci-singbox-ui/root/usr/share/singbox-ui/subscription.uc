@@ -165,29 +165,100 @@ function bbolt_available() {
 // cache.db (bucket rule_set) into out_path. Returns true on success (rc 0 and
 // non-empty file). Runs through /bin/sh with stdout redirection; every argument
 // is single-quoted via helpers.sq so a hostile tag/path cannot break out.
+//
+// The `>` redirect (S4-6) targets a sibling tmp path, not out_path directly, so
+// a bbolt failure or empty body never leaves a 0-byte rs_*.raw observable at the
+// real path; we fs.rename onto out_path only after rc==0 AND size>0. A failed
+// extract cleans up the tmp file and leaves any prior out_path untouched.
 function cache_extract_srs(db, tag, out_path) {
 	let bin = bbolt_available();
 	if (!bin) return false;
+	let tmp = sprintf("%s.tmp.%d", out_path, time());
 	let cmd = helpers.sq(bin) + " -r " + helpers.sq(db) + " rule_set " +
-	          helpers.sq(tag) + " > " + helpers.sq(out_path) + " 2>/dev/null";
-	if (system(["/bin/sh", "-c", cmd]) !== 0) { fs.unlink(out_path); return false; }
-	let st = fs.stat(out_path);
-	if (!st || st.size === 0) { fs.unlink(out_path); return false; }
+	          helpers.sq(tag) + " > " + helpers.sq(tmp) + " 2>/dev/null";
+	if (system(["/bin/sh", "-c", cmd]) !== 0) { fs.unlink(tmp); return false; }
+	let st = fs.stat(tmp);
+	if (!st || st.size === 0) { fs.unlink(tmp); return false; }
+	let renamed = false;
+	try { renamed = fs.rename(tmp, out_path); } catch (_) { renamed = false; }
+	if (!renamed) { fs.unlink(tmp); return false; }
 	return true;
 }
 
-// cache_has_key(db, tag) — is `tag` present in the rule_set bucket of cache.db?
-// Cheap presence probe: list keys (one per line) and exact-match.
-function cache_has_key(db, tag) {
+// cache_list_keys(db) — one bbolt-client list call returning a {tag:true} set of
+// the keys present in the rule_set bucket of cache.db, or null on probe failure.
+// Batching the list once per poll (S4-5) avoids forking bbolt-client per-tag.
+function cache_list_keys(db) {
 	let bin = bbolt_available();
-	if (!bin) return false;
+	if (!bin) return null;
 	let cmd = helpers.sq(bin) + " " + helpers.sq(db) + " rule_set 2>/dev/null";
 	let p = fs.popen(cmd, "r");
-	if (!p) return false;
+	if (!p) return null;
 	let raw = p.read("all") ?? "";
 	p.close();
-	for (let line in split(raw, "\n")) if (trim(line) === tag) return true;
-	return false;
+	let keys = {};
+	for (let line in split(raw, "\n")) {
+		let t = trim(line);
+		if (t !== "") keys[t] = true;
+	}
+	return keys;
+}
+
+// --- Cold-reload backoff (S4-1) ------------------------------------------
+// A remote nft rule-set whose URL is dead/404/typo'd never compiles into
+// cache.db, so its tag is forever cold. Without a backoff, cmd_refresh issued a
+// full stop+start `init.d reload` every 30-min cron cycle, dropping every live
+// proxy connection, then still failed. We persist the last cold-reload attempt
+// time per tag in a sentinel file and refuse to reload again for that tag until
+// its own update_interval has elapsed since the failure. Warm tags never reach
+// this path (they are not cold), so their behaviour is unchanged.
+//
+// Defined here (before cmd_fetch_rulesets) because cmd_fetch_rulesets clears the
+// sentinel on a successful extract and ucode has no function hoisting; the
+// consumer retry_eligible_cold_tags lives later next to cmd_refresh.
+
+// tag_update_interval(cur, tag) — the tag's configured refresh interval in
+// seconds (default 86400, mirroring any_rulesets_stale's fallback). This is the
+// minimum backoff before a still-cold tag may trigger another reload.
+function tag_update_interval(cur, tag) {
+	let iv = +helpers.uci_get_or_empty(cur, tag, "update_interval");
+	if (!(iv > 0)) iv = 86400;
+	return iv;
+}
+
+// cold_sentinel_path(tag) — per-tag sentinel under TMPDIR. The tag is a UCI
+// section name ([a-zA-Z0-9_]), so it is safe as a path component.
+function cold_sentinel_path(tag) {
+	return `${TMPDIR}/.rs_cold_${tag}.attempt`;
+}
+
+// record_cold_attempt(tag) — write the sentinel (mtime = now) so the next cycle
+// can measure elapsed time since this failed reload attempt.
+function record_cold_attempt(tag) {
+	let f = fs.open(cold_sentinel_path(tag), "w");
+	if (!f) return;
+	try { f.write(`${time()}\n`); } catch (_) {}
+	f.close();
+}
+
+// clear_cold_attempt(tag) — drop the sentinel once the tag has been successfully
+// extracted, so a tag that recovers immediately becomes eligible again.
+function clear_cold_attempt(tag) {
+	try { fs.unlink(cold_sentinel_path(tag)); } catch (_) {}
+}
+
+// cold_retry_eligible(cur, tag) — may this cold tag trigger a reload now? Yes if
+// it has no sentinel (never attempted, or just recovered) or its update_interval
+// has elapsed since the last recorded attempt. A future-dated/garbage sentinel
+// (clock skew) is treated as eligible rather than wedging the tag forever.
+function cold_retry_eligible(cur, tag) {
+	let st = fs.stat(cold_sentinel_path(tag));
+	if (!st) return true;
+	// A future-dated sentinel (clock skew: RTC-less router corrected by NTP
+	// after the stamp was written) would make time()-mtime negative and wedge
+	// the tag until wall-clock crawled past mtime+interval. Treat it as elapsed.
+	if (st.mtime > time()) return true;
+	return (time() - st.mtime) >= tag_update_interval(cur, tag);
 }
 
 function cmd_fetch_subs(cur) {
@@ -332,6 +403,11 @@ function cmd_fetch_rulesets(cur) {
 				log_err(`fetch_rulesets: ${name} not in cache.db yet (will appear after sing-box fetches it), skipping`);
 				continue;
 			}
+			// The tag is now warm in cache.db — drop any cold-reload backoff
+			// sentinel so a recovered rule-set is immediately retry-eligible
+			// (S4-1). A still-dead tag never reaches here, so its sentinel
+			// persists and keeps the reload backed off.
+			clear_cold_attempt(name);
 			// The cache always stores a compiled .srs → force binary decompile.
 			push(jobs, { name: name, raw_path: raw_path, out_path: out_path,
 			             rs_type: rs_type, target: target, force_binary: true });
@@ -467,8 +543,11 @@ function remote_nft_tags(cur) {
 }
 
 // any_tag_cold(db, tags) — true if at least one tag is missing from cache.db.
+// Single batched list call (cache_list_keys) instead of one fork per tag.
 function any_tag_cold(db, tags) {
-	for (let t in tags) if (!cache_has_key(db, t)) return true;
+	let keys = cache_list_keys(db);
+	if (keys == null) return true;     // probe failed → treat as cold
+	for (let t in tags) if (keys[t] !== true) return true;
 	return false;
 }
 
@@ -476,13 +555,43 @@ function any_tag_cold(db, tags) {
 // present or the deadline passes. Returns true if all appeared. Used after a
 // cold-cache reload so the just-restarted sing-box has time to fetch+cache the
 // remote rule-sets before we extract them.
+//
+// Pacing (S4-5): each iteration sleeps 1s via the external `sleep`. If `sleep`
+// is missing/unforkable, system() returns non-zero and would return instantly —
+// without a guard the loop would busy-spin (forking bbolt-client) until the
+// deadline. So we also bound the iteration count to deadline_s+1 and bail when
+// it's exhausted, guaranteeing termination even if `sleep` never paces us.
 function wait_for_tags(db, tags, deadline_s) {
 	let end = time() + deadline_s;
+	let iters = 0;
+	let max_iters = deadline_s + 1;
 	while (true) {
 		if (!any_tag_cold(db, tags)) return true;
 		if (time() >= end) return false;
-		system(["sleep", "1"]);
+		if (++iters > max_iters) return false;
+		if (system(["sleep", "1"]) !== 0) return false;
 	}
+}
+
+// retry_eligible_cold_tags(cur, db, tags, force) — the subset of `tags` that are
+// both cold AND outside their backoff window. An empty result means every cold
+// tag is still backing off, so cmd_refresh must NOT reload. An explicit
+// force-refresh (operator clicked Refresh in the UI, e.g. after fixing a typo'd
+// URL) treats every cold tag as eligible regardless of its backoff window —
+// otherwise a recovered URL could stay suppressed for up to a full
+// update_interval. The cron path (force=false) keeps the throttling intact.
+// (Backoff helpers cold_sentinel_path/cold_retry_eligible/record_cold_attempt/
+// clear_cold_attempt live up near cmd_fetch_rulesets, which also clears the
+// sentinel on success — ucode has no function hoisting, so a callee must precede
+// its caller.)
+function retry_eligible_cold_tags(cur, db, tags, force) {
+	let keys = cache_list_keys(db);
+	let out = [];
+	for (let t in tags) {
+		let cold = (keys == null) || (keys[t] !== true);
+		if (cold && (force || cold_retry_eligible(cur, t))) push(out, t);
+	}
+	return out;
 }
 
 function cmd_refresh(cur, what, force) {
@@ -504,14 +613,32 @@ function cmd_refresh(cur, what, force) {
 			// in boot mode (sing-box not up yet) and when reload is suppressed
 			// (tests). Warm tags skip the reload entirely so live connections
 			// survive a routine refresh.
+			//
+			// S4-1: a dead/404 remote rule-set is forever cold, so an unguarded
+			// any_tag_cold() reloaded (= stop+start, all connections dropped)
+			// every cron cycle and still failed. We only reload when at least one
+			// cold tag is *retry-eligible* — i.e. has never been tried or has been
+			// backing off for its own update_interval since the last failed
+			// attempt — and we stamp the sentinel for every tag still cold after
+			// wait_for_tags so the dead one backs off until its next interval.
 			let db = cache_mod.cache_db_path(cur);
 			let tags = remote_nft_tags(cur);
 			let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
-			if (db != null && length(tags) && !boot && !no_reload
-			    && any_tag_cold(db, tags)) {
-				log("refresh: cold rule-set in cache.db; reloading sing-box to populate it");
-				system([SINGBOX_INITD, "reload"]);
-				wait_for_tags(db, tags, RS_CACHE_WAIT);
+			if (db != null && length(tags) && !boot && !no_reload) {
+				let eligible = retry_eligible_cold_tags(cur, db, tags, force);
+				if (length(eligible)) {
+					log("refresh: cold rule-set in cache.db; reloading sing-box to populate it");
+					system([SINGBOX_INITD, "reload"]);
+					wait_for_tags(db, tags, RS_CACHE_WAIT);
+					// Stamp the backoff for tags that are STILL cold after the
+					// reload+poll (dead URLs); clear it for any that warmed up so
+					// a recovered tag is immediately eligible again.
+					let after = cache_list_keys(db);
+					for (let t in tags) {
+						if (after != null && after[t] === true) clear_cold_attempt(t);
+						else record_cold_attempt(t);
+					}
+				}
 			}
 			cmd_fetch_rulesets(cur);
 			// Re-apply nft so rebuilt rs_*.json reach the live ruleset (a routine
