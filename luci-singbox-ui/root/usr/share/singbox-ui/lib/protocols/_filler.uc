@@ -4,8 +4,9 @@
 // shared blocks. emit()/post() remain an escape-hatch for nesting/conditionals
 // (see protocols/registry.uc and outbound.uc build_constructor_for).
 
-let helpers  = require("helpers");
-let dial_blk = require("protocols._shared.dial");
+let helpers    = require("helpers");
+let dial_blk   = require("protocols._shared.dial");
+let users_blk  = require("protocols._shared.users");
 
 const s_opt    = helpers.s_opt;
 const s_num    = helpers.s_num;
@@ -173,6 +174,14 @@ function build(d, s) {
         _emit_scalar(out, s, f);
     }
     for (let g in (d.groups || [])) _emit_group(out, s, g);
+    if (d.users != null) {
+        let r = users_blk.build(s, d.users);
+        if (length(r.users)) {
+            out.users = r.users;
+            if (r.from_list && d.users.clear_on_multi != null)
+                for (let k in d.users.clear_on_multi) delete out[k];
+        }
+    }
     _emit_shared(out, s, d.kind, d);
     if (type(d.post) === "function") d.post(out, s);
     return out;
