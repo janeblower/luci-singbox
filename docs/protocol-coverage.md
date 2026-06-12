@@ -205,6 +205,22 @@ E2 DSL descriptor (`lib/protocols/direct.uc`). Replaces the legacy `type=interfa
 **Status:** нет.
 **Migration note:** `dns` outbound is deprecated since sing-box 1.11.0 and **removed in 1.13.0**. Modern equivalent is rule-action `action: hijack-dns`. Same handling as `block` above.
 
+### json outbound
+Verbatim passthrough type (Task 4): emits the UCI `raw_json` field as a literal
+sing-box outbound JSON object. No structured descriptor fields beyond the raw
+payload — the registry exposes exactly one field.
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| (verbatim object) | `raw_json` | есть | есть | Task 4 |
+
+### sharelink outbound
+Verbatim passthrough type (Task 4): stores a `raw_link` share-link URL that is
+expanded to a full outbound at generation time. No structured descriptor fields
+beyond the raw payload.
+| sing-box JSON | UCI | Inbound | Outbound | Phase |
+|---|---|---|---|---|
+| (expanded from share-link URL) | `raw_link` | есть | есть | Task 4 |
+
 ---
 
 ## Subscription / share-link parsers
