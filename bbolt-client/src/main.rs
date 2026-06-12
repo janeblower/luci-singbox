@@ -227,9 +227,34 @@ unsafe fn cstr(p: *const u8) -> &'static [u8] {
 }
 
 // ---------------- little-endian reads ----------------
-fn u16le(b: &[u8], o: usize) -> u16 { u16::from_le_bytes([b[o], b[o + 1]]) }
-fn u32le(b: &[u8], o: usize) -> u32 { u32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]]) }
+// S5.7: a forged cache.db must produce a clean "invalid database" exit, never
+// an out-of-bounds slice/index panic (which, on this no_std abort path, becomes
+// a SIGABRT-style abort). bad() is the shared clean-error exit; ck_add and sub
+// are the checked-arithmetic / bounds-checked-subslice primitives every page
+// parser below routes through, so a forged count/pos/ksize/vsize field can
+// never index past the page buffer.
+fn bad() -> ! { err(b"invalid database\n"); unsafe { sys_exit(1) } }
+fn ck_add(a: usize, b: usize) -> usize {
+    match a.checked_add(b) { Some(v) => v, None => bad() }
+}
+fn sub(p: &[u8], start: usize, len: usize) -> &[u8] {
+    let end = ck_add(start, len);
+    if end > p.len() { bad() }
+    &p[start..end]
+}
+
+// Bounds-checked little-endian readers. Any read that would fall outside the
+// buffer (e.g. an entry header past a forged `count`) is a corrupt db → bad().
+fn u16le(b: &[u8], o: usize) -> u16 {
+    if ck_add(o, 2) > b.len() { bad() }
+    u16::from_le_bytes([b[o], b[o + 1]])
+}
+fn u32le(b: &[u8], o: usize) -> u32 {
+    if ck_add(o, 4) > b.len() { bad() }
+    u32::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3]])
+}
 fn u64le(b: &[u8], o: usize) -> u64 {
+    if ck_add(o, 8) > b.len() { bad() }
     u64::from_le_bytes([b[o], b[o + 1], b[o + 2], b[o + 3], b[o + 4], b[o + 5], b[o + 6], b[o + 7]])
 }
 
@@ -252,6 +277,12 @@ unsafe fn open_db(path: *const u8) -> &'static [u8] {
         err(b"cannot lock database\n");
         sys_exit(1);
     }
+    // S7.5: on 32-bit targets sys_lseek_end uses the legacy lseek(2) with a
+    // 32-bit off_t, which returns EOVERFLOW (a negative value) for a file larger
+    // than 2 GiB — caught here by `size <= 0`. So `size as usize` (isize→usize,
+    // same width on every target) can never truncate a too-large length into an
+    // in-range one; a >2 GiB db is rejected, not silently half-mapped. cache.db
+    // on a router is KB–MB, so this is purely a hardening guard.
     let size = sys_lseek_end(fd);
     if size <= 0 { err(b"empty database\n"); sys_exit(1); }
     let addr = sys_mmap_read(fd, size as usize);
@@ -342,7 +373,7 @@ fn walk(m: &[u8], ps: usize, p: &[u8], buckets_only: bool, depth: u32) {
             if !buckets_only || (lflags & 0x01 != 0) {
                 let pos = u32le(p, eo + 4) as usize;
                 let ks = u32le(p, eo + 8) as usize;
-                line(&p[eo + pos..eo + pos + ks]);
+                line(sub(p, ck_add(eo, pos), ks));
             }
             i += 1;
         }
@@ -353,13 +384,13 @@ fn bkey(p: &[u8], i: usize) -> &[u8] {
     let eo = 16 + i * 16;
     let pos = u32le(p, eo) as usize;
     let ks = u32le(p, eo + 4) as usize;
-    &p[eo + pos..eo + pos + ks]
+    sub(p, ck_add(eo, pos), ks)
 }
 fn lkey(p: &[u8], i: usize) -> &[u8] {
     let eo = 16 + i * 16;
     let pos = u32le(p, eo + 4) as usize;
     let ks = u32le(p, eo + 8) as usize;
-    &p[eo + pos..eo + pos + ks]
+    sub(p, ck_add(eo, pos), ks)
 }
 
 // find `target` in a B+tree; returns (leaf flags, value bytes) on exact match.
@@ -392,7 +423,7 @@ fn search<'a>(m: &'a [u8], ps: usize, p: &'a [u8], target: &[u8], depth: u32) ->
             let pos = u32le(p, eo + 4) as usize;
             let ks = u32le(p, eo + 8) as usize;
             let vs = u32le(p, eo + 12) as usize;
-            Some((lflags, &p[eo + pos + ks..eo + pos + ks + vs]))
+            Some((lflags, sub(p, ck_add(ck_add(eo, pos), ks), vs)))
         } else {
             None
         }
@@ -405,8 +436,10 @@ enum BRoot<'a> { Page(u64), Inline(&'a [u8]) }
 fn find_bucket<'a>(m: &'a [u8], ps: usize, root: u64, name: &[u8]) -> Option<BRoot<'a>> {
     match search(m, ps, page(m, ps, root), name, 0) {
         Some((flags, val)) if flags & 0x01 != 0 => {
-            let broot = u64le(val, 0); // bucket{ root: u64, sequence: u64 }
-            if broot != 0 { Some(BRoot::Page(broot)) } else { Some(BRoot::Inline(&val[16..])) }
+            let broot = u64le(val, 0); // bucket{ root: u64, sequence: u64 } — needs len>=8
+            if broot != 0 { Some(BRoot::Page(broot)) }
+            else if val.len() >= 16 { Some(BRoot::Inline(&val[16..])) }  // inline bucket payload
+            else { bad() }                                              // forged: value too short
         }
         _ => None,
     }
@@ -441,9 +474,13 @@ fn unwrap_ruleset(b: &[u8]) -> Option<&[u8]> {
         err(b"bad content-length varint\n");
         return None;
     }
-    let start = 1 + off;
-    let end = start + n as usize;
-    if n == 0 || end > b.len() {
+    let start = 1 + off;   // off <= b.len()-1 (uvarint read from b[1..]), so start <= b.len()
+    // S7.4: compare the untrusted u64 length against the remaining bytes IN u64.
+    // `n as usize` would truncate a >4 GiB value to a small in-range number on
+    // 32-bit targets, then slice a wrong-length blob. Checking in u64 first makes
+    // the subsequent `n as usize` provably in range.
+    let remaining = (b.len() - start) as u64;
+    if n == 0 || n > remaining {
         err(b"content length ");
         err_u64(n);
         err(b" out of range (blob ");
@@ -451,6 +488,7 @@ fn unwrap_ruleset(b: &[u8]) -> Option<&[u8]> {
         err(b" bytes)\n");
         return None;
     }
+    let end = start + n as usize;   // n <= remaining <= b.len(), so this fits usize
     Some(&b[start..end])
 }
 

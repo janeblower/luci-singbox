@@ -76,6 +76,30 @@ echo "ok: bogus-overflow parity"
 printf 'garbage!' > "$TMP/g8"; adv "8-byte garbage" "$TMP/g8" "" 1
 head -c 100 "$DATA/cache.db" > "$TMP/tr"; adv "truncated cache.db" "$TMP/tr" "" 1
 
+# 2b. S5.7: forged element fields must clean-exit via the bounds-checked readers
+# and subslices, never an OOB-panic/abort. Patch the frozen cache.db with od/dd
+# (no extra deps). page header: count u16 @+10; element header (leaf) lflags@+0,
+# pos@+4, ksize@+8, vsize@+12 — a forged pos/ksize/count drives a read or slice
+# past the page. Pre-fix these aborted (exit 134); post-fix they exit 1.
+psf=$(od -An -tu4 -j24 -N4 "$DATA/cache.db" | tr -d ' ')
+szf=$(wc -c < "$DATA/cache.db")
+m0t=$(od -An -tu8 -j64        -N8 "$DATA/cache.db" | tr -d ' ')
+m1t=$(od -An -tu8 -j$((psf+64)) -N8 "$DATA/cache.db" | tr -d ' ')
+if [ "$m0t" -ge "$m1t" ]; then rootf=$(od -An -tu8 -j32 -N8 "$DATA/cache.db" | tr -d ' ')
+else rootf=$(od -An -tu8 -j$((psf+32)) -N8 "$DATA/cache.db" | tr -d ' '); fi
+reo=$(( rootf * psf + 16 ))   # first element header of the active root page
+# (a) every page's entry count -> 0xFFFF (meta pages ignore count, so the tree
+# still parses far enough to walk the root and overrun its element loop).
+cp "$DATA/cache.db" "$TMP/fc.db"
+o=10; while [ "$o" -lt "$szf" ]; do printf '\377\377' | dd of="$TMP/fc.db" bs=1 seek="$o" conv=notrunc 2>/dev/null; o=$(( o + psf )); done
+adv "forged page entry-count" "$TMP/fc.db" "" 1
+# (b) forged ksize of the root's first element -> key subslice runs OOB.
+cp "$DATA/cache.db" "$TMP/fk.db"; printf '\377\377\377\377' | dd of="$TMP/fk.db" bs=1 seek=$(( reo + 8 )) conv=notrunc 2>/dev/null
+adv "forged element ksize" "$TMP/fk.db" "" 1
+# (c) forged pos of the root's first element -> subslice base runs OOB.
+cp "$DATA/cache.db" "$TMP/fp.db"; printf '\377\377\377\377' | dd of="$TMP/fp.db" bs=1 seek=$(( reo + 4 )) conv=notrunc 2>/dev/null
+adv "forged element pos" "$TMP/fp.db" "" 1
+
 # 3. error texts + exit codes (known-good; no oracle)
 B1=$($RUN "$DATA/cache.db" | head -1)
 [ "$($RUN "$DATA/cache.db" __nb__ 2>&1)" = 'no bucket "__nb__"' ] || fail "no-bucket text"
