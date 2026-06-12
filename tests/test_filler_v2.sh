@@ -95,4 +95,31 @@ out=$(je '
 [ "$out" = "NULL" ] || die "inbound missing port null" "$out"
 ok "inbound returns null when listen_port missing"
 
+# nested group inside a group's fields (mutual recursion _emit_seq<->_emit_group)
+out=$(je '
+    let f = require("protocols._filler");
+    let d = { kind:"outbound", sing_box_type:"x", shared:null, fields:[],
+        groups:[ { json_key:"reality", gate:{ any_present:["pk"] }, fields:[
+            { json_key:"enabled", const:true },
+            { name:"pk", json_key:"public_key" },
+            { json_key:"hs", gate:{ any_present:["srv"] }, fields:[ { name:"srv", json_key:"server" } ] },
+        ] } ] };
+    print(sprintf("%J", f.build(d, { ".name":"t", pk:"K", srv:"e.com" })));
+')
+[ "$out" = '{ "type": "x", "tag": "t", "reality": { "enabled": true, "public_key": "K", "hs": { "server": "e.com" } } }' ] || die "nested group recursion" "$out"
+ok "nested group inside group fields (mutual recursion)"
+
+# nested group: outer gate fails -> nothing
+out=$(je '
+    let f = require("protocols._filler");
+    let d = { kind:"outbound", sing_box_type:"x", shared:null, fields:[],
+        groups:[ { json_key:"reality", gate:{ any_present:["pk"] }, fields:[
+            { json_key:"enabled", const:true },
+            { json_key:"hs", gate:{ any_present:["srv"] }, fields:[ { name:"srv", json_key:"server" } ] },
+        ] } ] };
+    print(sprintf("%J", f.build(d, { ".name":"t" })));
+')
+[ "$out" = '{ "type": "x", "tag": "t" }' ] || die "nested group outer gate" "$out"
+ok "nested group suppressed when outer gate fails"
+
 echo "test_filler_v2: scalar primitives PASS"
