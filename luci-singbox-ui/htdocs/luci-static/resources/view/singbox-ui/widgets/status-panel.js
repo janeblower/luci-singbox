@@ -24,11 +24,20 @@ function renderStatusPanel(holder) {
 		var rows = [];
 		rows.push(E('div', {}, [
 			E('strong', _('Status') + ': '),
-			E('span', { 'style': 'color:' + (res.running ? '#2e7d32' : '#c62828') },
+			// Status colour comes from the shared .sb-ok/.sb-error classes in
+			// style.css, not inline hex, so theming/dark-mode stays centralized
+			// (audit 9.7).
+			E('span', { 'class': res.running ? 'sb-ok' : 'sb-error' },
 			  res.running ? _('Service running') : _('Service stopped'))
 		]));
 		function entryList(label, items) {
 			if (!items || !items.length) return null;
+			// XSS invariant: `it.name` (subscription / rule-set names, ultimately
+			// admin-controlled UCI section names) and the joined string are passed
+			// as a STRING child of E(), which LuCI renders as an escaped text node
+			// (textContent) — safe (audit 8.2). If this label is ever moved into an
+			// innerHTML or attribute context, it must be routed through
+			// .textContent / explicit escaping instead.
 			return E('div', {}, [
 				E('strong', label + ': '),
 				items.map(function (it) {
