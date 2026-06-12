@@ -8,6 +8,9 @@ GENERATE_UC=/usr/share/singbox-ui/generate.uc
 SUBSCRIPTION_UC=/usr/share/singbox-ui/subscription.uc
 NFTABLES_UC=/usr/share/singbox-ui/nftables.uc
 UCODE_LIB=/usr/share/singbox-ui/lib
+# Overridable so tests can stub the binary (default is the packaged path used by
+# the procd command below). Used for both `check` (S6.1) and `run`.
+SINGBOX_BIN="${SINGBOX_BIN:-/usr/bin/sing-box}"
 
 start_service() {
 	mkdir -p /tmp/singbox-ui
@@ -35,7 +38,7 @@ start_service() {
 	# to start instead and let cron/reload retry in ≤30 min. S1.1: record the
 	# real apply outcome in apply_state.json (distinct from generate's state).
 	mkdir -p /var/lib/singbox-ui
-	if ! /usr/bin/sing-box check -c /tmp/singbox-ui.json 2>/tmp/singbox-ui.check.err; then
+	if ! "$SINGBOX_BIN" check -c /tmp/singbox-ui.json 2>/tmp/singbox-ui.check.err; then
 		logger -t singbox-ui "refusing to start: sing-box rejected config"
 		logger -t singbox-ui "sing-box check: $(head -c 300 /tmp/singbox-ui.check.err 2>/dev/null)"
 		echo "{\"last_apply_ts\":$(date +%s),\"last_apply_result\":\"failed\"}" \
@@ -68,7 +71,7 @@ start_service() {
 	# /tmp/singbox-ui/ subscription cache, which could break test envs.
 	# Capabilities-only is a real security win without that risk.
 	procd_set_param capabilities /etc/capabilities/singbox-ui.json
-	procd_set_param command /usr/bin/sing-box run -c /tmp/singbox-ui.json
+	procd_set_param command "$SINGBOX_BIN" run -c /tmp/singbox-ui.json
 	procd_set_param respawn
 	procd_close_instance
 

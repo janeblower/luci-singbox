@@ -57,6 +57,18 @@ EOF
     chmod +x "$TMPDIR/bin/$fn"
 done
 
+# sing-box stub: `check` succeeds by default (S6.1 gate passes on the happy
+# path). Records invocations so blocks can assert. Overwritten per-block to
+# exercise the rejection path. SINGBOX_BIN points the init.d at this stub.
+cat >"$TMPDIR/bin/sing-box" <<'EOF'
+#!/bin/sh
+echo "sing-box $*" >>"$SINGBOX_LOG"
+[ "$1" = "check" ] && exit 0
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/sing-box"
+export SINGBOX_BIN="$TMPDIR/bin/sing-box"
+
 # rc.common shim: defines stubs for start/stop, source the init.d.
 cat >"$TMPDIR/rc.common" <<'EOF'
 USE_PROCD=
@@ -68,7 +80,8 @@ EOF
 export UCODE_LOG="$TMPDIR/ucode.log"
 export LOGGER_LOG="$TMPDIR/logger.log"
 export PROCD_LOG="$TMPDIR/procd.log"
-: >"$UCODE_LOG"; : >"$LOGGER_LOG"; : >"$PROCD_LOG"
+export SINGBOX_LOG="$TMPDIR/singbox.log"
+: >"$UCODE_LOG"; : >"$LOGGER_LOG"; : >"$PROCD_LOG"; : >"$SINGBOX_LOG"
 
 # Pre-clear config.
 rm -f /tmp/singbox-ui.json
@@ -240,5 +253,40 @@ PATH="$TMPDIR/bin:$PATH" sh -c "
 grep -q 'refusing to start' "$LOGGER_LOG" || fail "expected logger message about refusal"
 grep -q 'procd_open_instance' "$PROCD_LOG" && fail "procd_open_instance must not be called on fail-fast"
 pass "fail-fast on missing config"
+
+# ---- S6.1: sing-box check rejects the config → refuse to start ----
+echo "-- S6.1: a config sing-box rejects must refuse to start (no respawn loop)"
+rm -f /tmp/singbox-ui.json
+: >"$UCODE_LOG"; : >"$LOGGER_LOG"; : >"$PROCD_LOG"; : >"$SINGBOX_LOG"
+# ucode stub creates a config so we pass the -s gate and reach the check.
+cat >"$TMPDIR/bin/ucode" <<'EOF'
+#!/bin/sh
+echo "ucode $*" >>"$UCODE_LOG"
+for _arg in "$@"; do
+    case "$_arg" in
+        */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json; exit 0 ;;
+    esac
+done
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/ucode"
+# sing-box stub now FAILS `check`.
+cat >"$TMPDIR/bin/sing-box" <<'EOF'
+#!/bin/sh
+echo "sing-box $*" >>"$SINGBOX_LOG"
+[ "$1" = "check" ] && { echo "decode config: unknown field" >&2; exit 1; }
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/sing-box"
+rc=0
+PATH="$TMPDIR/bin:$PATH" sh -c "
+    . '$PWD/$INIT'
+    start_service
+" || rc=$?
+[ "$rc" != 0 ] || fail "S6.1 start_service must return non-zero when sing-box check fails"
+grep -q 'check' "$SINGBOX_LOG" || fail "S6.1 sing-box check was not invoked"
+grep -q 'rejected config' "$LOGGER_LOG" || fail "S6.1 expected a 'rejected config' log"
+grep -q 'procd_open_instance' "$PROCD_LOG" && fail "S6.1 procd must not start a rejected config"
+pass "S6.1 invalid config refused before procd"
 
 echo "OK"
