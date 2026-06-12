@@ -96,13 +96,29 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release delete bbolt-latest --cleanup-tag --yes \
-            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-          gh release create bbolt-latest \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "bbolt-client (latest)" \
-            --notes "Static no-libc bbolt-client for OpenWrt (x86_64/aarch64/armv7/mipsel/mips). Auto-built from \`main\` @ \`${GITHUB_SHA::7}\`; replaced on every push to main." \
-            --prerelease \
+          # Update the persistent bbolt-latest release in place via
+          # `upload --clobber` instead of delete-then-create. delete-then-create
+          # left the release/tag deleted between the two steps — if the runner
+          # died there, bbolt_install / install.sh assets 404'd until the next
+          # push. We only `create` on first run (guarded by `release view`) and
+          # retarget the tag to the current SHA via `release edit`.
+          notes="Static no-libc bbolt-client for OpenWrt (x86_64/aarch64/armv7/mipsel/mips). Auto-built from \`main\` @ \`${GITHUB_SHA::7}\`; replaced on every push to main."
+          if ! gh release view bbolt-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create bbolt-latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "bbolt-client (latest)" \
+              --notes "$notes" \
+              --prerelease
+          else
+            gh release edit bbolt-latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "bbolt-client (latest)" \
+              --notes "$notes" \
+              --prerelease
+          fi
+          gh release upload bbolt-latest \
             bbolt-client-rs-x86_64 bbolt-client-rs-aarch64 bbolt-client-rs-armv7 \
-            bbolt-client-rs-mipsel bbolt-client-rs-mips sha256sums.txt
+            bbolt-client-rs-mipsel bbolt-client-rs-mips sha256sums.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber

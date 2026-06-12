@@ -42,11 +42,12 @@ printf '#!/bin/sh\necho 0\n' > "$BIN/id"; chmod +x "$BIN/id"
 # --- fixtures served ---
 echo "FAKE_APK" > "$TMP/serve/luci-singbox-ui.apk"
 echo "FAKE_AARCH64_BINARY" > "$TMP/serve/bbolt-client-rs-aarch64"
-# build a matching sha256sums.txt that the script must verify.
-# Generate from inside $TMP/serve so the line's path is the bare basename the
-# script's awk matches on. (Only the aarch64 line is needed; the real release
-# file carries all five arches but extra lines are harmless here.)
-( cd "$TMP/serve" && sha256sum bbolt-client-rs-aarch64 ) > "$TMP/serve/sha256sums.txt"
+# build a matching sha256sums.txt that the script must verify. The apk and the
+# bbolt helper share the served file here (APK_BASE==BBOLT_BASE in this test);
+# the real release has a separate sha256sums.txt per release, but extra lines
+# are harmless to the per-asset awk lookup. Generate from inside $TMP/serve so
+# each line's path is the bare basename the script's awk matches on.
+( cd "$TMP/serve" && sha256sum luci-singbox-ui.apk bbolt-client-rs-aarch64 ) > "$TMP/serve/sha256sums.txt"
 
 DEST="$TMP/dest"; mkdir -p "$DEST"
 
@@ -61,7 +62,7 @@ grep -q "luci-singbox-ui.apk" "$TMP/apk.log" || fail "apk add not called with th
 [ -x "$DEST/bbolt-client" ] || fail "bbolt-client not installed 0755"
 [ "$(cat "$DEST/bbolt-client")" = "FAKE_AARCH64_BINARY" ] || fail "wrong bbolt content"
 
-# sha mismatch must abort and NOT install
+# bbolt sha mismatch must abort and NOT install the helper
 echo "TAMPERED" > "$TMP/serve/bbolt-client-rs-aarch64"
 rm -f "$DEST/bbolt-client"
 if SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" BBOLT_BASE="http://x/" \
@@ -69,5 +70,20 @@ if SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" BBOLT_BASE="http://x/" \
   fail "install.sh accepted a tampered binary (sha mismatch not enforced)"
 fi
 [ ! -e "$DEST/bbolt-client" ] || fail "tampered binary was installed"
+
+# audit 12.3: a tampered MAIN apk must abort BEFORE `apk add` runs — its sha256
+# is verified against sha256sums.txt just like the bbolt helper. Restore the
+# bbolt fixture (so the apk check is the only thing that can fail), tamper the
+# apk, and assert apk add was never invoked for this run.
+( cd "$TMP/serve" && echo "FAKE_AARCH64_BINARY" > bbolt-client-rs-aarch64 \
+    && sha256sum luci-singbox-ui.apk bbolt-client-rs-aarch64 > sha256sums.txt )
+echo "TAMPERED_APK" > "$TMP/serve/luci-singbox-ui.apk"   # content now != recorded sha
+: > "$TMP/apk.log"
+if SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" BBOLT_BASE="http://x/" \
+   BBOLT_DEST="$DEST/bbolt-client" sh "$ROOT/install.sh" 2>/dev/null; then
+  fail "install.sh accepted a tampered apk (apk sha256 not enforced)"
+fi
+grep -q "luci-singbox-ui.apk" "$TMP/apk.log" 2>/dev/null && \
+  fail "apk add ran despite a tampered apk (verified after install, not before)"
 
 echo "ALL CHECKS PASSED (install.sh)"

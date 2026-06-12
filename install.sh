@@ -25,13 +25,19 @@ info() { echo ">> $1"; }
 [ "$(id -u)" = "0" ] || die "must run as root"
 
 # Downloader: prefer wget/uclient-fetch (present by default; curl is a package dep
-# and not installed yet). fetch <url> <out>
+# and not installed yet). On OpenWrt /usr/bin/wget is usually a symlink to
+# uclient-fetch, but a minimal image may ship only the uclient-fetch binary with
+# no wget alias — uclient-fetch takes the same -q -O flags, so probe it
+# explicitly rather than falling through to the (not-yet-installed) curl branch.
+# fetch <url> <out>
 if command -v wget >/dev/null 2>&1; then
   fetch() { wget -q -O "$2" "$1"; }
+elif command -v uclient-fetch >/dev/null 2>&1; then
+  fetch() { uclient-fetch -q -O "$2" "$1"; }
 elif command -v curl >/dev/null 2>&1; then
   fetch() { curl -sfL -o "$2" "$1"; }
 else
-  die "no downloader (need wget or curl)"
+  die "no downloader (need wget, uclient-fetch or curl)"
 fi
 
 # Arch detection: prefer apk --print-arch (distinguishes mips endianness).
@@ -64,9 +70,21 @@ info "detected arch: $ARCH"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT INT TERM
 
-# 1. main apk (deps resolved from configured feeds)
-info "downloading $APK_NAME"
+# 1. main apk (deps resolved from configured feeds), sha256-verified.
+# The apk is installed with --allow-untrusted (it is not signed by a key the
+# device trusts), so without this its integrity would rest on TLS alone — unlike
+# the bbolt helper below. Verify it against the release's sha256sums.txt (same
+# mechanism, published by build.yml) BEFORE apk add. Die on mismatch/missing.
+info "downloading $APK_NAME + sha256sums.txt"
 fetch "${APK_BASE}${APK_NAME}" "$TMP/$APK_NAME" || die "apk download failed"
+fetch "${APK_BASE}sha256sums.txt" "$TMP/apk_sha256sums.txt" || die "apk sha256sums.txt download failed"
+
+want=$(awk -v a="$APK_NAME" '$2==a || $2=="*"a {print $1; exit}' "$TMP/apk_sha256sums.txt")
+[ -n "$want" ] || die "no sha256 entry for $APK_NAME"
+have=$(sha256sum "$TMP/$APK_NAME" | cut -d' ' -f1)
+[ "$want" = "$have" ] || die "sha256 mismatch for $APK_NAME — refusing to install"
+info "verified $APK_NAME sha256"
+
 if [ "${SINGBOX_INSTALL_TEST:-}" != "1" ]; then apk update || die "apk update failed"; fi
 info "installing $APK_NAME (deps from feeds)"
 apk add --allow-untrusted "$TMP/$APK_NAME" || die "apk add failed"

@@ -16,8 +16,12 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Least privilege at the top level: every job is read-only by default. Only the
+# publishing `build` job gets contents: write (job-level override below), so the
+# PR-facing lint/test/browser-test jobs — including the privileged --device
+# /dev/kvm test container running untrusted PR code — cannot write to the repo.
 permissions:
-  contents: write   # required to publish releases on tag/main push
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
@@ -41,15 +45,54 @@ jobs:
       # relative globs resolve. Two invocations: the uci-defaults script must
       # be linted as busybox ash, not bash.
       - name: shellcheck
+        # Pin to an explicit shellcheck version rather than the mutable :stable
+        # tag — :stable is re-pointed upstream and pulled fresh each run, so the
+        # lint behaviour (and the image we execute) could change without a commit.
         run: |
-          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable \
+          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 \
             tests/*.sh scripts/*.sh \
             luci-singbox-ui/root/etc/init.d/singbox-ui
           # uci-defaults runs under busybox ash on OpenWrt, not bash. Lint
           # it with --shell=ash so bashisms (arrays, [[ ]], $'...') fail at
           # CI rather than silently at first-boot on the router.
-          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable --shell=ash \
+          docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 --shell=ash \
             luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui
+
+  js-unit:
+    name: JS unit tests (host node)
+    runs-on: ubuntu-24.04
+    needs: lint
+    # The node-gated *_js.sh / json_import tests carry real assertions for the
+    # XSS-relevant descriptor_form.js logic, the validators, and the share-link/
+    # JSON importer parsers. They SKIP inside the OpenWrt qemu VM (no node in the
+    # guest), so without a node-equipped host job their assertions never run in
+    # CI. Run them here, pre-merge, on a clean host with node only — ucode is
+    # absent, so json_import's ucode-half roundtrip gracefully SKIPs while its
+    # node-side import assertions still execute.
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run node-gated JS unit tests
+        run: |
+          set -eu
+          for t in \
+            tests/test_validators_js.sh \
+            tests/test_descriptor_form_js.sh \
+            tests/test_descriptor_form_dynamic_js.sh \
+            tests/test_json_import.sh \
+            tests/test_monitoring_js.sh \
+            tests/test_view_state_js.sh \
+            tests/test_common_notify_js.sh \
+            tests/test_status_panel_js.sh \
+            tests/test_transport_helper_js.sh \
+            tests/test_share_link_js.sh; do
+            echo "==> $t"
+            sh "$t"
+          done
 
   test:
     name: Test suite (OpenWrt VM)
@@ -61,8 +104,14 @@ jobs:
     # can boot the guest via -loadvm in ~3-5 s. The image is published by
     # .github/workflows/test-image.yml; CI just pulls it. See
     # docs/superpowers/specs/2026-06-09-unified-qemu-test-rig-design.md.
+    #
+    # Owner is taken from ${{ github.repository_owner }} (lowercased by GHCR's
+    # own normalisation) so this matches test-image.yml's published path after a
+    # rename or on a fork — a hardcoded owner would 404 on pull. container.image
+    # cannot reference a per-step output, but the repository_owner context is
+    # allowed here.
     container:
-      image: ghcr.io/janeblower/luci-singbox/openwrt-test:latest
+      image: ghcr.io/${{ github.repository_owner }}/luci-singbox/openwrt-test:latest
       options: --device /dev/kvm
 
     steps:
@@ -82,15 +131,21 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: oven-sh/setup-bun@v2
+      # Third-party actions pinned to full commit SHAs (version in comment) —
+      # they run with the repo checked out; a tag-repoint upstream must not be
+      # able to change what executes here without a commit to this repo.
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
           bun-version: '1.2.x'
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
-      # Cache Docker image layers across runs. Keyed on the contents of
-      # the browser-container/ source. Cache miss => apk add takes ~30s;
-      # cache hit => instant.
+      # Cache the Docker image's build layers across runs. test_browser.sh reads
+      # BUILDX_CACHE and passes it to `docker buildx build --cache-from/--cache-to
+      # type=local`, so this cache actually feeds the build (it used to save an
+      # empty dir — nothing wrote to it). A fresh runner has an empty image store,
+      # so the build always runs; the layer cache is what makes it fast (~few s on
+      # a hit vs the full ~30s apk add on a miss).
       - name: Cache Docker buildx layers
         uses: actions/cache@v5
         with:
@@ -113,6 +168,11 @@ jobs:
           bunx puppeteer browsers install chrome
 
       - name: Run browser suite
+        env:
+          # Point test_browser.sh's buildx layer cache at the same path the
+          # actions/cache step above restores/saves, so the build feeds and
+          # populates the cache.
+          BUILDX_CACHE: /tmp/.buildx-cache
         run: bash tests/test_browser.sh
 
       - name: Upload diagnostics on failure
@@ -129,6 +189,17 @@ jobs:
   build:
     name: Build OpenWrt packages (apk)
     runs-on: ubuntu-latest
+    # Gate the build (and its publish steps) on the full test suite. The publish
+    # steps are event-gated to push/main and tags, so PR builds still validate
+    # the package without publishing — but a red lint/js-unit/test/browser-test
+    # run now BLOCKS the rolling `latest` release instead of shipping a broken
+    # apk to install.sh consumers.
+    needs: [lint, js-unit, test, browser-test]
+    # Only this job publishes releases, so it is the only one that needs write.
+    # Top-level permissions are read-only (see header) — this override is the
+    # single place contents: write is granted.
+    permissions:
+      contents: write
 
     env:
       # Pin to a tagged OpenWrt 25.x release. Packages are LUCI_PKGARCH:=all
@@ -158,7 +229,15 @@ jobs:
           path: |
             ~/.cache/luci-singbox-ui/openwrt-sdk
             .build/sdk
-          key: openwrt-sdk-25.12.3-x86-64-v1
+          # Fold build-apk.sh's hash into the key: the cache holds the EXTRACTED
+          # SDK (po2lmo pre-built, feeds patched). When the script changes how it
+          # prepares that SDK, a static key would silently reuse a stale extract.
+          # restore-keys lets a script change still warm-start from the prior
+          # extract (then the build refreshes it) instead of a cold download.
+          key: openwrt-sdk-25.12.3-x86-64-v2-${{ hashFiles('scripts/build-apk.sh') }}
+          restore-keys: |
+            openwrt-sdk-25.12.3-x86-64-v2-
+            openwrt-sdk-25.12.3-x86-64-
 
       # apk-mkpkg enforces Alpine-style versions: <X.Y.Z>[-rN]. For tag pushes
       # we use the tag (allowing an explicit -rN suffix); for rolling builds
@@ -227,29 +306,65 @@ jobs:
           sudo chown "$(id -u):$(id -g)" dist/luci-singbox-ui.apk
           ls -1 dist/*.apk
 
+      # Checksums for every published apk (mirrors bbolt-client.yml). install.sh
+      # fetches this file and verifies the apk sha256 before `apk add`, closing
+      # the gap where the main package — unlike the bbolt helper — was installed
+      # --allow-untrusted with no integrity check. Runs AFTER the stable-named
+      # apk is staged so `luci-singbox-ui.apk` (the asset install.sh downloads)
+      # is covered. Names are basename-only (no dist/ prefix) so the file the
+      # release serves matches install.sh's lookup. dist/ is root-owned.
+      - name: Generate sha256sums.txt
+        if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          ( cd dist && sha256sum *.apk | sudo tee sha256sums.txt )
+          sudo chown "$(id -u):$(id -g)" dist/sha256sums.txt
+          cat dist/sha256sums.txt
+
       - name: Publish rolling "latest" release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          gh release delete latest --cleanup-tag --yes \
-            --repo "$GITHUB_REPOSITORY" 2>/dev/null || true
-
-          gh release create latest \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --title "Latest build (${{ steps.version.outputs.version }})" \
-            --notes "Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-singbox-ui.apk\` is the stable-named asset used by install.sh." \
-            --prerelease \
-            dist/*.apk
+          # Update the persistent `latest` release in place via `upload --clobber`
+          # instead of delete-then-create. The old pattern left the release/tag
+          # deleted in the window between delete and create — if the runner died
+          # there, install.sh's asset 404'd until the next push. `upload --clobber`
+          # overwrites assets atomically on an already-existing release; we only
+          # `create` it the first time (guarded by `release view`), and retarget
+          # the tag to the current SHA via `release edit` so the asset reflects
+          # the tip of main.
+          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-singbox-ui.apk\` is the stable-named asset used by install.sh; \`sha256sums.txt\` is verified by install.sh before \`apk add\`."
+          if ! gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Latest build (${{ steps.version.outputs.version }})" \
+              --notes "$notes" \
+              --prerelease
+          else
+            gh release edit latest \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$GITHUB_SHA" \
+              --title "Latest build (${{ steps.version.outputs.version }})" \
+              --notes "$notes" \
+              --prerelease
+          fi
+          gh release upload latest dist/*.apk dist/sha256sums.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.
       - name: Publish tagged release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        # Pinned to a full commit SHA (v2.4.1) rather than the mutable @v2 tag:
+        # this action runs with contents: write and the release-publishing token,
+        # and its assets are consumed by an unattended `wget | sh` installer.
+        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
         with:
-          files: dist/*.apk
+          files: |
+            dist/*.apk
+            dist/sha256sums.txt
           fail_on_unmatched_files: true
           generate_release_notes: true
         env:
