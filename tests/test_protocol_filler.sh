@@ -112,4 +112,54 @@ out=$(je '
 [ "$out" = '{ "type": "direct", "tag": "d1" }' ] || die "shared dial empty adds nothing" "$out"
 ok "shared dial merge no-op on empty section"
 
+# ---- registry: a descriptor with fields but no emit registers OK ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"declonly_t3", sing_box_type:"x",
+                       fields:[ { name:"f", type:"string", tab:"basic", json_key:"f" } ] });
+    } catch (e) { threw = true; }
+    print((!threw && reg.get("outbound","declonly_t3") != null) ? "OK" : "BAD");
+')
+[ "$out" = "OK" ] || die "registry accepts declarative (no emit) descriptor" "$out"
+ok "registry accepts emit-less declarative descriptor"
+
+# ---- registry: a descriptor with neither emit nor fields is rejected ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try { reg.register({ kind:"outbound", type:"empty_t3", sing_box_type:"x" }); }
+    catch (e) { threw = true; }
+    print(threw ? "THREW" : "NOTHREW");
+')
+[ "$out" = "THREW" ] || die "registry rejects descriptor with neither emit nor fields" "$out"
+ok "registry rejects emit-less + fields-less descriptor"
+
+# ---- registry: a non-function post is rejected ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"badpost_t3", sing_box_type:"x",
+                       fields:[ { name:"f", type:"string", tab:"basic" } ], post: 7 });
+    } catch (e) { threw = true; }
+    print(threw ? "THREW" : "NOTHREW");
+')
+[ "$out" = "THREW" ] || die "registry rejects non-function post" "$out"
+ok "registry rejects non-function post"
+
+# ---- validate_field: unknown coerce is rejected ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"badcoerce_t3", sing_box_type:"x",
+                       fields:[ { name:"f", type:"string", tab:"basic", json_key:"f", coerce:"bogus" } ] });
+    } catch (e) { threw = true; }
+    print(threw ? "THREW" : "NOTHREW");
+')
+[ "$out" = "THREW" ] || die "validate_field rejects unknown coerce" "$out"
+ok "validate_field rejects unknown coerce"
+
 echo "test_protocol_filler: all PASS"
