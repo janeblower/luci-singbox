@@ -25,8 +25,27 @@ IMG_HASH=$(cat tests/browser-container/Dockerfile \
                tests/browser-container/uhttpd.conf \
                | sha256sum | cut -c1-12)
 IMG="luci-singbox-ui-browser:${IMG_HASH}"
-docker image inspect "$IMG" >/dev/null 2>&1 \
-    || { echo "==> building $IMG"; docker build -t "$IMG" tests/browser-container; }
+# CI restores a local buildx layer cache into BUILDX_CACHE (the path the
+# actions/cache step in build.yml saves/restores) — but only buildx can read
+# --cache-from/--cache-to. On a fresh runner the Docker image store is empty, so
+# the `docker image inspect` guard always misses and we must actually build;
+# feeding the restored layer cache is what makes that build fast (and what makes
+# the cache step do real work instead of saving an empty dir). When buildx is
+# unavailable, or BUILDX_CACHE is unset (local dev), fall back to a plain build.
+BUILDX_CACHE="${BUILDX_CACHE:-}"
+if docker image inspect "$IMG" >/dev/null 2>&1; then
+    : # image already in the local store (warm local dev) — nothing to build
+elif [ -n "$BUILDX_CACHE" ] && docker buildx version >/dev/null 2>&1; then
+    echo "==> building $IMG (buildx, local layer cache: $BUILDX_CACHE)"
+    mkdir -p "$BUILDX_CACHE"
+    docker buildx build \
+        --cache-from "type=local,src=${BUILDX_CACHE}" \
+        --cache-to "type=local,dest=${BUILDX_CACHE},mode=max" \
+        --load -t "$IMG" tests/browser-container
+else
+    echo "==> building $IMG"
+    docker build -t "$IMG" tests/browser-container
+fi
 
 CNAME="singbox-ui-test-$$"
 
