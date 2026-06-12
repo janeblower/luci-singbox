@@ -230,7 +230,11 @@ out=$(echo '{"path":"/connections"}' | \
 printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: clash_get not ok; out=$out"; exit 1; }
 body=$(printf "%s\n" "$out" | jval 'd.body')
 printf "%s\n" "$body" | je 'd.downloadTotal == 10' || { echo "FAIL: body not passed through; out=$out"; exit 1; }
-grep -q 'Authorization: Bearer tok' "$tmpdir/curl.log" || { echo "FAIL: Bearer not sent"; cat "$tmpdir/curl.log"; exit 1; }
+# audit 6.2: the bearer secret must go through a 0600 tmpfile (`-H @file`), never
+# inline in argv. Assert the secure shape on the recorded argv (the header tmpfile
+# is unlinked after the call, so we can't read it back here).
+grep -q 'tok' "$tmpdir/curl.log" && { echo "FAIL: secret leaked inline into curl argv"; cat "$tmpdir/curl.log"; exit 1; }
+grep -q -- '-H @' "$tmpdir/curl.log" || { echo "FAIL: curl not using -H @file for Bearer"; cat "$tmpdir/curl.log"; exit 1; }
 grep -q '/connections' "$tmpdir/curl.log" || { echo "FAIL: path missing"; cat "$tmpdir/curl.log"; exit 1; }
 grep -q -- '-X GET' "$tmpdir/curl.log" || { echo "FAIL: method not GET"; cat "$tmpdir/curl.log"; exit 1; }
 echo "  PASS: clash_get proxies GET"

@@ -79,3 +79,54 @@ forks=$(wc -l < "$COUNTER" | tr -d ' ')
 [ "$forks" = "1" ] \
     || { echo "FAIL: expected exactly 1 apk fork (cache miss once), got $forks"; exit 1; }
 echo "PASS: status_detail caches package_version (1 apk fork)"
+
+# ---- audit 13.2: init.d sed and rpcd ucode pkg_version parsers must agree ----
+# Two prod sites prime the SAME /var/lib/singbox-ui/pkg_version cache from
+# `apk list --installed luci-singbox-ui`:
+#   * etc/init.d/singbox-ui::start_service  — a `sed` one-liner (warm path)
+#   * rpcd handler cached_pkg_version()     — split(line," ")[0] + prefix strip
+# CLAUDE.md flags these as a coupling that MUST yield identical format. Extract
+# the live sed expression from the init.d (so the test can't drift from it) and
+# feed the same fixture apk line through BOTH paths; assert byte-identical out.
+INITD="$PWD/luci-singbox-ui/root/etc/init.d/singbox-ui"
+[ -f "$INITD" ] || { echo "FAIL(13.2): init.d not found at $INITD"; exit 1; }
+
+# Pull the exact `sed -n '...'` script used by start_service. We grep the line
+# containing the pkg_version sed and isolate the single-quoted expression.
+SED_EXPR=$(grep -E "sed -n 's/\^luci-singbox-ui" "$INITD" | head -1 \
+    | sed -n "s/.*sed -n '\([^']*\)'.*/\1/p")
+[ -n "$SED_EXPR" ] \
+    || { echo "FAIL(13.2): could not extract the pkg_version sed expression from $INITD"; exit 1; }
+
+# pkg_parse_both LINE — run LINE through the init.d sed and through the rpcd
+# handler, printing "sed=<…> rpcd=<…>" so a mismatch is self-describing.
+assert_parsers_agree() {
+    _line="$1"; _want="$2"
+    _sed=$(printf '%s\n' "$_line" | sed -n "$SED_EXPR")
+    # rpcd side: stub apk to emit exactly $_line, drive status_detail with a
+    # fresh VARLIB (force a cache miss → the live ucode parser runs), read back
+    # package_version.
+    _vl=$(mktemp -d); _bin=$(mktemp -d)
+    cat >"$_bin/apk" <<APK
+#!/bin/sh
+printf '%s\n' "$_line"
+APK
+    chmod +x "$_bin/apk"
+    _rpcd=$(echo '{}' | env PATH="$_bin:$PATH" SINGBOX_VARLIB="$_vl" \
+        "$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" "$HANDLER" call status_detail 2>/dev/null \
+        | "$UCODE_BIN" -e 'let fs=require("fs");let d=json(fs.stdin.read("all")||"{}");print(d.package_version);')
+    rm -rf "$_vl" "$_bin"
+    [ "$_sed" = "$_rpcd" ] \
+        || { echo "FAIL(13.2): parsers disagree on [$_line]: sed=[$_sed] rpcd=[$_rpcd]"; exit 1; }
+    [ "$_sed" = "$_want" ] \
+        || { echo "FAIL(13.2): parsed [$_sed] for [$_line], want [$_want]"; exit 1; }
+}
+
+# Normal multi-field apk line (the common case).
+assert_parsers_agree \
+    "luci-singbox-ui-0.0.0-r337 noarch {luci-singbox-ui} (GPL-2.0-or-later) [installed]" \
+    "0.0.0-r337"
+# Edge case the old ` .*` sed regressed on: a single-token line with NO trailing
+# space. rpcd's split(line," ")[0] handled it; the hardened sed must too.
+assert_parsers_agree "luci-singbox-ui-1.2.3-r9" "1.2.3-r9"
+echo "PASS: init.d sed and rpcd pkg_version parsers are byte-identical (audit 13.2)"

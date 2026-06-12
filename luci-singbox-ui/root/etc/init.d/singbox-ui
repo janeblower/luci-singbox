@@ -88,10 +88,17 @@ start_service() {
 	# RPC) doesn't fork apk on every call. Refreshed here so an upgrade +
 	# restart re-derives it. (spec S5-PERF). OpenWrt 25.12.3 ships apk, not
 	# opkg; `apk list --installed` prints "<name>-<version> noarch {...}".
-	# Must yield the SAME cache format as cached_pkg_version in the rpcd
-	# handler: the version with the package-name prefix stripped.
+	# Must yield the SAME cache format as cached_pkg_version() in the rpcd
+	# handler (luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui): the version
+	# with the package-name prefix stripped. KEEP THE TWO IN SYNC — audit 13.2
+	# (cross-linked); test_status_detail.sh asserts byte-identical output of
+	# both paths for a fixture apk line.
+	# audit 13.2: `\([^ ]*\).*` (no leading space before `.*`) captures the
+	# first whitespace-delimited token even on a single-token line with no
+	# trailing space — matching the rpcd split(line," ")[0] behaviour. The old
+	# ` .*` form required a trailing space and would emit nothing on such a line.
 	apk list --installed luci-singbox-ui 2>/dev/null \
-		| sed -n 's/^luci-singbox-ui-\([^ ]*\) .*/\1/p' \
+		| sed -n 's/^luci-singbox-ui-\([^ ]*\).*/\1/p' \
 		> /var/lib/singbox-ui/pkg_version || true
 }
 

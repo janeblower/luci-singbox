@@ -219,6 +219,10 @@ function call_status() {
 //   "luci-singbox-ui-0.0.0-r337 noarch {luci-singbox-ui} (...) [installed]"
 // Версия = первый токен со снятым префиксом имени. (НЕ переиспользовать старый
 // opkg-парсер split(line," - ") — в apk нет поля " - ".)
+// audit 13.2: ЭТОТ парсер обязан давать тот же результат, что и sed в
+// etc/init.d/singbox-ui::start_service (прогрев того же кэша pkg_version).
+// Меняешь один — синхронь другой; test_status_detail.sh проверяет
+// byte-identical вывод обоих путей на одной фикстурной строке apk.
 function cached_pkg_version() {
 	let pkg_cache = `${VARLIB}/pkg_version`;
 	let pkg_ver = "unknown";
@@ -324,7 +328,31 @@ function call_read_config() {
 	emit({ status: "ok", content: sprintf("%.4J", obj) });
 }
 
+// clash_safe_listen(v) — sanitise a Clash listen host before it is interpolated
+// into the curl URL (audit 6.3). Accepts a dotted-quad / bracket-less IPv6 /
+// hostname charset only — no '@', '/', '?', '#', ':' or whitespace, so a crafted
+// value like "evil.com/x?" or "host@attacker" cannot reshape the URL into an
+// SSRF/exfil target. Returns the value unchanged when safe, else null. (IPv6
+// literals carry ':' and are intentionally rejected here — the loopback default
+// covers the only address the UI ever talks to.)
+function clash_safe_listen(v) {
+	if (type(v) !== "string" || !length(v) || length(v) > 255) return null;
+	if (!match(v, /^[A-Za-z0-9._-]+$/)) return null;
+	return v;
+}
+
+// clash_safe_port(p) — port must be numeric 1..65535 (audit 6.3). Mirrors
+// nftables.uc::validate_port. Returns the canonical string form or null.
+function clash_safe_port(p) {
+	if (p == null || p === "") return null;
+	let n = (type(p) === "int") ? p : +p;
+	if (type(n) !== "int" || n < 1 || n > 65535) return null;
+	return sprintf("%d", n);
+}
+
 // clash_params() — env overrides (tests) win, else read the clash_api UCI section.
+// listen/port are validated (audit 6.3) and fall back to loopback defaults on a
+// crafted/invalid value so a bad UCI write can never redirect the curl request.
 function clash_params() {
 	let listen = getenv("CLASH_LISTEN");
 	let port   = getenv("CLASH_PORT");
@@ -336,6 +364,8 @@ function clash_params() {
 		if (port   == null) port   = (s.port   != null && length(s.port))   ? s.port   : "9090";
 		if (secret == null) secret = s.secret ?? "";
 	}
+	listen = clash_safe_listen(listen) ?? "127.0.0.1";
+	port   = clash_safe_port(port)     ?? "9090";
 	return { listen: listen, port: port, secret: secret };
 }
 
@@ -447,6 +477,30 @@ function clash_path_ok(path) {
 	return false;
 }
 
+// clash_header_tmp(secret) — write `Authorization: Bearer <secret>` to a 0600
+// mktemp file so the secret never appears in curl's argv / the process table
+// (audit 6.2). curl reads it via `-H @<file>`. Returns the path or null; the
+// caller MUST unlink it unconditionally after the curl call (mirrors
+// preview_config's tmpfile cleanup). umask 0177 forces 0600 on the freshly
+// created file even before we write it.
+function clash_header_tmp(secret) {
+	let path = run_capture(["sh", "-c",
+	    "umask 0177 && mktemp -p /tmp singbox-ui-clash-hdr.XXXXXX"]);
+	if (path == null) return null;
+	let trimmed = trim(path);
+	if (!length(trimmed)) return null;
+	let f;
+	try { f = fs.open(trimmed, "w"); } catch (_) { f = null; }
+	if (!f) { try { fs.unlink(trimmed); } catch (_) {} return null; }
+	// Defense-in-depth: curl's `-H @file` treats every line as a separate header,
+	// so a CR/LF in the secret would inject extra headers. Strip them so the
+	// Authorization line is always single-line (audit 6.2 hardening).
+	let safe = replace(`${secret}`, /[\r\n]/g, "");
+	f.write(`Authorization: Bearer ${safe}\n`);
+	f.close();
+	return trimmed;
+}
+
 // clash_proxy(method, path, body) — shared low-level curl proxy. Inputs MUST
 // be pre-validated by the caller: `method` is one of the HTTP verbs accepted
 // by Clash, `path` starts with '/', and `body` is either null or a string.
@@ -454,10 +508,17 @@ function clash_path_ok(path) {
 function clash_proxy(method, path, body) {
 	let p = clash_params();
 	let url = `http://${p.listen}:${p.port}${path}`;
+	// audit 6.2: the bearer secret goes through a 0600 tmpfile (`-H @file`), not
+	// argv, so a co-located unprivileged user can't read it from /proc/<pid>/cmdline.
+	let hdr = clash_header_tmp(p.secret);
+	if (hdr == null) { emit_err("clash request failed (header tmpfile)"); return; }
 	let argv = [ CLASH_CURL, "-s", "-m", "5", "-X", method,
-	             "-H", `Authorization: Bearer ${p.secret}`, url ];
+	             "-H", `@${hdr}`, url ];
 	if (body != null && length(body)) { push(argv, "--data"); push(argv, body); }
 	let resp = run_capture(argv);
+	// Unlink unconditionally (success or popen failure) so the secret never
+	// lingers on disk — same discipline as call_preview_config's tmpfile.
+	try { fs.unlink(hdr); } catch (_) {}
 	if (resp == null) { emit_err("clash request failed"); return; }
 	emit({ status: "ok", body: resp });
 }
@@ -490,6 +551,14 @@ function call_clash_mutate() {
 	}
 	let path = args.path || "";
 	if (!clash_path_ok(path)) { emit_err("invalid path"); return; }
+	// audit 6.4: rpcd sigs are advisory, so guard `body` here. clash_proxy uses
+	// length(body) to decide whether to attach --data; a non-string (object/number)
+	// would be truthy under length() and get pushed into argv as a non-string token,
+	// stringified in an undefined way. null / "" stay valid (no --data, unchanged).
+	if (args.body != null && type(args.body) !== "string") {
+		emit_err("body must be a string");
+		return;
+	}
 	clash_proxy(method, path, args.body);
 }
 
