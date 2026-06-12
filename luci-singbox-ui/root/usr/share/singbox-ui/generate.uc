@@ -83,7 +83,14 @@ config.outbounds = out_block;
 // Centralised post-processing pipeline. See lib/post_process.uc.
 config = post_process.run_pipeline(config, { implicit_tags: implicit_tags });
 
-let r = route_mod.build_route_rules(uci);
+// S3.2: the set of outbound tags that actually exist in the final outbounds[]
+// (disabled/deleted ones are already excluded by outbound.uc). route.uc uses it
+// to drop route_rule/route_default outbound references that don't resolve,
+// rather than emitting a dangling tag that makes sing-box refuse to start.
+let valid_ob = {};
+for (let o in config.outbounds) if (length(o.tag)) valid_ob[o.tag] = true;
+
+let r = route_mod.build_route_rules(uci, valid_ob);
 // S3.1: route.rule_set must DEFINE every rule-set tag referenced anywhere —
 // route rules AND dns rules. route.uc reports only route-referenced rulesets,
 // so union in the dns-referenced ones (deduped) before building definitions;
@@ -106,7 +113,12 @@ if (length(rsets) || length(r.rules) || r.final) {
 // removed in sing-box 1.14". Resolve here: honour an explicit UCI
 // `dns.default_resolver` tag if present; otherwise auto-pick the first
 // enabled non-fakeip dns_server. Skipped if no resolver candidate exists.
-if (config.route && type(config.dns) === "object" && type(config.dns.servers) === "array") {
+// S3.3: do NOT gate this on config.route already existing. A config with DNS
+// servers but no route_rules/rulesets/route_default produces no route block,
+// which would skip the resolver and reintroduce the very 1.12 deprecation
+// warning (1.14 hard failure) this code exists to suppress. When a resolver
+// candidate exists, create a minimal route block to carry it.
+if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
 	let dns_section = uci.get_all("singbox-ui", "dns");
 	let resolver_tag = dns_section ? dns_section.default_resolver : null;
 	if (resolver_tag == null || resolver_tag === "") {
@@ -114,8 +126,10 @@ if (config.route && type(config.dns) === "object" && type(config.dns.servers) ==
 			if (s.type !== "fakeip" && length(s.tag)) { resolver_tag = s.tag; break; }
 		}
 	}
-	if (resolver_tag != null && length(resolver_tag))
+	if (resolver_tag != null && length(resolver_tag)) {
+		if (!config.route) config.route = {};
 		config.route.default_domain_resolver = { server: resolver_tag };
+	}
 }
 
 let experimental = {};
@@ -178,6 +192,13 @@ function publish_atomic(path, body) {
 	return true;
 }
 
+// Object key emission order (emitters put `type`/`tag` first) relies on ucode
+// preserving object insertion order through %.4J — guaranteed by ucode's
+// insertion-ordered objects, and load-bearing for test_generate.sh's
+// positional assertions and diff stability (S1.3). Array order (route rules,
+// outbounds) is the genuinely correctness-critical ordering and is safe via
+// push(). A future serializer swap or keys()-rebuild refactor could reorder
+// keys and break tests confusingly — keep this property in mind.
 if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 	exit(1);
 }

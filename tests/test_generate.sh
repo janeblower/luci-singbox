@@ -399,6 +399,43 @@ check "dns server fakeip" '"server": "fakeip"' "$TMPDIR/out.json"
 # its presence proves the definition was emitted from the DNS-side reference.
 check "route.rule_set defines dns-only ruleset" 'https://example.com/geosite-cn.srs' "$TMPDIR/out.json"
 
+# ---- S3.2: dangling outbound refs in route rules/final are dropped ----
+echo "-- route_rule/route_default outbound referencing a missing outbound is dropped (S3.2)"
+write_cfg "
+config ruleset 'rs32'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://example.com/rs32.srs'
+
+config route_rule 'r32'
+	option enabled '1'
+	list   ruleset 'rs32'
+	option action 'outbound'
+	option outbound 'ghostob'
+
+config route_default 'route_default'
+	option action 'outbound'
+	option outbound 'ghostfinal'
+"
+run_gen
+grep -q '"outbound": "ghostob"' "$TMPDIR/out.json" \
+    && { echo "FAIL(S3.2): dangling route_rule outbound must be dropped"; cat "$TMPDIR/out.json"; exit 1; }
+grep -q 'ghostfinal' "$TMPDIR/out.json" \
+    && { echo "FAIL(S3.2): dangling route_default outbound must not become final"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: dangling outbound refs dropped"
+
+# ---- S3.3: default_domain_resolver emitted even with no route block ----
+echo "-- default_domain_resolver for DNS-only config (no route content) (S3.3)"
+write_cfg "
+config dns_server 'up'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+"
+run_gen
+check "default_domain_resolver present"   '"default_domain_resolver":' "$TMPDIR/out.json"
+check "resolver points at dns_server tag"  '"server": "up"'             "$TMPDIR/out.json"
+
 echo "-- subscription urltest emits sub_urltest_url verbatim"
 write_cfg "
 config outbound 'subUT'
@@ -568,7 +605,11 @@ config route_default 'route_default'
 run_gen
 check "override resolver"    '\"server\": \"override_me\"'             "$TMPDIR/out.json"
 
-echo "-- no route block → no default_domain_resolver"
+# S3.3: previously this asserted the OPPOSITE (no resolver without a route
+# block) — that was the bug. A DNS-only config must still carry
+# default_domain_resolver in a minimal route block, or sing-box 1.12 warns and
+# 1.14 hard-fails.
+echo "-- DNS-only config still emits default_domain_resolver in a minimal route block (S3.3)"
 write_cfg "
 config dns_server 'upstream'
 	option enabled '1'
@@ -576,9 +617,8 @@ config dns_server 'upstream'
 	option server '1.1.1.1'
 "
 run_gen
-grep -q '"default_domain_resolver"' "$TMPDIR/out.json" \
-    && { echo "FAIL: default_domain_resolver must not appear without a route block"; exit 1; }
-echo "  PASS: no default_domain_resolver when route block absent"
+check "resolver present (no route content)" '\"default_domain_resolver\":' "$TMPDIR/out.json"
+check "resolver targets upstream tag"        '\"server\": \"upstream\"'     "$TMPDIR/out.json"
 
 echo "-- dns_server detour='direct' is scrubbed when 'direct' is auto-injected (empty)"
 # sing-box 1.12 fatally rejects a DNS detour pointing at an auto-injected empty

@@ -58,6 +58,22 @@ function read_subscription_urls(name) {
 function build_outbounds(cur) {
 	let outbounds = [];
 
+	// S1.5: guard against duplicate outbound tags. sing-box rejects the whole
+	// config at load on a duplicate tag (e.g. a user outbound literally named
+	// "mysub__0" colliding with subscription "mysub"'s first child). add_ob
+	// emits a clear generator-side warn and skips the collision instead of
+	// letting it surface as a cryptic daemon load failure at apply time.
+	let seen_tags = {};
+	function add_ob(ob) {
+		let t = ob.tag;
+		if (seen_tags[t]) {
+			warn(sprintf("outbound.uc: duplicate outbound tag '%s'; skipping (would break sing-box load)\n", t));
+			return;
+		}
+		seen_tags[t] = true;
+		push(outbounds, ob);
+	}
+
 	cur.foreach("singbox-ui", "outbound", function(section) {
 		if (section.enabled === "0") return;
 
@@ -95,7 +111,7 @@ function build_outbounds(cur) {
 					if (!parsed) { i++; continue; }
 					let tag = name + "__" + i;
 					parsed.tag = tag;
-					push(outbounds, parsed);
+					add_ob(parsed);
 					push(children, tag);
 					i++;
 				}
@@ -104,7 +120,7 @@ function build_outbounds(cur) {
 					let group = { tag: name, type: selector_type, outbounds: children };
 					if (selector_type === "urltest" && section.sub_urltest_url)
 						group.url = section.sub_urltest_url;
-					push(outbounds, group);
+					add_ob(group);
 				}
 				return;  // done with this section
 			}
@@ -120,7 +136,7 @@ function build_outbounds(cur) {
 		}
 
 		if (!outbound) return;
-		push(outbounds, outbound);
+		add_ob(outbound);
 	});
 
 	return outbounds;

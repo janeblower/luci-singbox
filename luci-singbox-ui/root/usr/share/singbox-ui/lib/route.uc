@@ -5,10 +5,17 @@
 //   final:      string tag of the final outbound, or null
 //   referenced: array of (deduped) ruleset names actually referenced by enabled route_rules,
 //               filtered to those whose ruleset section is enabled.
-function build_route_rules(cur) {
+// valid_ob (optional): a { tag: true } set of outbound tags that actually
+// exist in the generated outbounds[] (disabled/deleted ones already excluded
+// by outbound.uc). When provided, route_rule.outbound / route_default.outbound
+// references that don't resolve are dropped with a warn instead of being
+// emitted as a dangling tag that makes sing-box refuse to start (S3.2). When
+// omitted (direct unit-test callers), no outbound filtering is applied.
+function build_route_rules(cur, valid_ob) {
 	let rules = [];
 	let referenced = [];
 	let seen = {};
+	function ob_ok(tag) { return !valid_ob || valid_ob[tag]; }
 
 	// hijack-dns is requested by any enabled tproxy inbound with hijack_dns=1.
 	let hijack = false;
@@ -64,6 +71,11 @@ function build_route_rules(cur) {
 		if (action === "direct")        target = "direct";
 		else if (action === "outbound") target = section.outbound;
 		if (!target) return;
+		// S3.2: skip the rule if its outbound target no longer exists/enabled.
+		if (!ob_ok(target)) {
+			warn(sprintf("route.uc: route_rule '%s' outbound '%s' is not a defined outbound; dropping rule\n", section[".name"], target));
+			return;
+		}
 
 		push(rules, { action: "route", rule_set: resolved, outbound: target });
 	});
@@ -73,7 +85,14 @@ function build_route_rules(cur) {
 	if (rd) {
 		let action = rd.action ?? "direct";
 		if (action === "direct")        final = "direct";
-		else if (action === "outbound") final = rd.outbound ?? null;
+		else if (action === "outbound") {
+			final = rd.outbound ?? null;
+			// S3.2: drop a dangling final outbound (sing-box hard-fails on it).
+			if (final && !ob_ok(final)) {
+				warn(sprintf("route.uc: route_default outbound '%s' is not a defined outbound; omitting final\n", final));
+				final = null;
+			}
+		}
 		else if (action === "block") {
 			// No "block" outbound exists in sing-box 1.11+. Express
 			// "block by default" as a trailing catch-all reject rule and
