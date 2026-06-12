@@ -139,4 +139,34 @@ out=$(je '
 [ "$out" = "OK" ] || die "registry accepts v2 props" "$out"
 ok "registry accepts v2 field props + groups + users"
 
+# filler runs descriptor.users and applies clear_on_multi
+out=$(je '
+    let f = require("protocols._filler");
+    let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:null,
+        fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" },
+                 { name:"server_password", type:"string", json_key:"password", omit_when:"never" } ],
+        users:{ from:"ss_user",
+                columns:[ {key:"name",required:true}, {key:"method",validate:["aes-256-gcm"],discard:true}, {key:"password",tail:true,warn_if_empty:true} ],
+                clear_on_multi:["password"] } };
+    print(sprintf("%J", f.build(d, { ".name":"s", listen_port:"8388", server_password:"root", ss_user:["a:aes-256-gcm:pw"] })));
+')
+exp='{ "type": "shadowsocks", "tag": "s", "listen": "::", "listen_port": 8388, "users": [ { "name": "a", "password": "pw" } ] }'
+[ "$out" = "$exp" ] || die "filler users + clear_on_multi" "$out"
+ok "filler emits users[] and clears password on multi"
+
+# single fallback: users present, clear_on_multi NOT applied (from_list false)
+out=$(je '
+    let f = require("protocols._filler");
+    let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:null,
+        fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" },
+                 { name:"server_password", type:"string", json_key:"password", omit_when:"never" } ],
+        users:{ from:"ss_user",
+                columns:[ {key:"name",required:true}, {key:"method",validate:["aes-256-gcm"],discard:true}, {key:"password",tail:true,warn_if_empty:true} ],
+                clear_on_multi:["password"] } };
+    print(sprintf("%J", f.build(d, { ".name":"s", listen_port:"8388", server_password:"root" })));
+')
+exp='{ "type": "shadowsocks", "tag": "s", "listen": "::", "listen_port": 8388, "password": "root" }'
+[ "$out" = "$exp" ] || die "filler no-multi keeps password" "$out"
+ok "filler keeps top-level password when no multi-users"
+
 echo "test_filler_v2: scalar primitives PASS"
