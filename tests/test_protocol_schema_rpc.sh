@@ -162,4 +162,39 @@ itf=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
 [ "$itf" = "OK" ] || { echo "FAIL tproxy.interface selector ($itf)"; exit 1; }
 echo "PASS tproxy.interface is a de-virtualized device selector"
 
+# 10. No backend-only props leak through schema_dump's FIELD_WHITELIST projection.
+# Walks every field object in both outbound and inbound sections and fails if any
+# of the filler/registry backend-only keys (json_key, coerce, omit_when,
+# skip_value, requires, default_when_empty) appear in the projected output.
+leak_check=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
+	let fs = require("fs");
+	let raw = fs.stdin.read("all") || "";
+	let j;
+	try { j = json(raw); } catch (_) { print("FAIL_PARSE\n"); exit(0); }
+	if (j == null || j.schema == null) { print("FAIL_NO_SCHEMA\n"); exit(0); }
+	let backend_props = ["json_key","coerce","omit_when","skip_value","requires","default_when_empty"];
+	let leaks = [];
+	for (let kind in ["outbound","inbound"]) {
+		let section = j.schema[kind];
+		if (section == null) continue;
+		for (let proto in keys(section)) {
+			let entry = section[proto];
+			if (type(entry.fields) !== "array") continue;
+			for (let f in entry.fields) {
+				for (let bp in backend_props) {
+					if (f[bp] != null)
+						push(leaks, kind + "." + proto + "." + (f.name || "?") + ":" + bp);
+				}
+			}
+		}
+	}
+	if (length(leaks)) {
+		print("LEAK:" + join(",", leaks) + "\n");
+	} else {
+		print("CLEAN\n");
+	}
+')
+[ "$leak_check" = "CLEAN" ] || { echo "FAIL backend prop(s) leaked to schema: $leak_check"; exit 1; }
+echo "PASS schema dump strips all backend-only props"
+
 echo "PASS test_protocol_schema_rpc"
