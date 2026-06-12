@@ -270,8 +270,9 @@ function call_status_detail() {
 	drain_stdin();
 	let running = is_singbox_running();
 
-	let last_state = read_json_file(`${VARLIB}/last_state.json`);
-	let svc_state  = read_json_file(`${VARLIB}/service_state.json`);
+	let last_state  = read_json_file(`${VARLIB}/last_state.json`);
+	let apply_state = read_json_file(`${VARLIB}/apply_state.json`);
+	let svc_state   = read_json_file(`${VARLIB}/service_state.json`);
 
 	let schema = 0;
 	try {
@@ -285,7 +286,11 @@ function call_status_detail() {
 		status: "ok",
 		running: running,
 		last_generate_ts: last_state.last_generate_ts || 0,
-		last_apply_result: last_state.last_apply_result || "unknown",
+		// S1.1: last_generate_result = config was written; last_apply_result =
+		// sing-box accepted + procd started it (written by init.d, not generate).
+		last_generate_result: last_state.last_generate_result || "unknown",
+		last_apply_result: apply_state.last_apply_result || "unknown",
+		last_apply_ts: apply_state.last_apply_ts || 0,
 		config_hash: last_state.config_hash || "unknown",
 		schema_version: schema,
 		package_version: pkg_ver,

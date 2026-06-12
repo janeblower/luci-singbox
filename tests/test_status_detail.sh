@@ -24,7 +24,7 @@ echo "$out" | grep -q 'status_detail' \
 
 # Call status_detail and assert all required keys present.
 out=$(echo '{}' | "$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" "$HANDLER" call status_detail 2>/dev/null)
-for k in status running last_generate_ts last_apply_result config_hash schema_version package_version service_start_ts now; do
+for k in status running last_generate_ts last_generate_result last_apply_result last_apply_ts config_hash schema_version package_version service_start_ts now; do
     echo "$out" | grep -q "\"$k\":" \
         || { echo "FAIL: missing key $k in $out"; exit 1; }
 done
