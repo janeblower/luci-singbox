@@ -80,4 +80,34 @@ return {
     ],
 
     emit: emit,
+
+    emit_spec: {
+        variant: {
+            selector: "transport_type",
+            none_value: "none",
+            emit_selector_as: "type",
+            variants: {
+                ws: [
+                    { name: "transport_path", json_key: "path" },
+                    { json_key: "headers", gate: { any_present: ["transport_host"] },
+                      fields: [ { name: "transport_host", json_key: "Host" } ] },
+                ],
+                httpupgrade: [
+                    { name: "transport_path", json_key: "path" },
+                    { name: "transport_host_httpupgrade", json_key: "host" },
+                ],
+                grpc: [
+                    { name: "transport_service_name", json_key: "service_name" },
+                ],
+                xhttp: [
+                    { name: "transport_path", json_key: "path" },
+                    { name: "transport_xhttp_mode", json_key: "mode" },
+                ],
+                http: [
+                    { name: "transport_hosts", json_key: "host", coerce: "array" },
+                    { name: "transport_path", json_key: "path" },
+                ],
+            },
+        },
+    },
 };
