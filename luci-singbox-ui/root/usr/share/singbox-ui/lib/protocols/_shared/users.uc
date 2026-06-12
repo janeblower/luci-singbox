@@ -30,11 +30,15 @@ function _split(entry, ncols) {
 function _parse_row(entry, spec) {
     let cols = spec.columns;
     let parts = _split(entry, length(cols));
+    // Legacy invariant: every list parser requires the FIRST separator
+    // (index(entry,":") < 0 => drop). A colon-less single token is never a
+    // valid multi-column row.
+    let nparts = length(parts);
+    let ncols  = length(cols);
+    if (ncols >= 2 && nparts < 2) return null;
     // If fewer parts than columns, check whether the missing trailing columns
     // are all optional (no required, no warn_if_empty). If any missing column
     // is required/warn_if_empty, skip the row (shape mismatch).
-    let nparts = length(parts);
-    let ncols  = length(cols);
     if (nparts < ncols) {
         for (let i = nparts; i < ncols; i++) {
             if (cols[i].required || cols[i].warn_if_empty) return null;
