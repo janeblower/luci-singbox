@@ -106,6 +106,7 @@ echo "-- 12.2 build-apk.sh filters git describe to v* tags only"
 grep -q -- "git describe --tags --abbrev=0 --match 'v\\*'" "$BUILDSH" \
     || { echo "FAIL: build-apk.sh must restrict git describe to --match 'v*'"; fail=1; }
 echo "-- 12.2 build-apk.sh has a deterministic 0.0.0-r<N> fallback"
+# shellcheck disable=SC2016  # intentional: grep a literal '$(git rev-list ...)' substring in build-apk.sh
 grep -q '0.0.0-r\$(git rev-list --count HEAD' "$BUILDSH" \
     || { echo "FAIL: build-apk.sh must fall back to 0.0.0-r<rev-count>"; fail=1; }
 echo "-- 12.2 build-apk.sh validates the version against X.Y.Z[-rN]"
@@ -141,7 +142,7 @@ if command -v git >/dev/null 2>&1; then
         g6_version_resolve "$good" >/dev/null \
             || { echo "FAIL: valid version '$good' was rejected"; fail=1; }
     done
-    for bad in bbolt-latest latest 1.2 v1.2.3 1.2.3-beta 1.2.3.4 ''x; do
+    for bad in bbolt-latest latest 1.2 v1.2.3 1.2.3-beta 1.2.3.4 x; do
         if g6_version_resolve "$bad" >/dev/null 2>&1; then
             echo "FAIL: invalid version '$bad' was accepted"; fail=1
         fi

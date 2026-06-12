@@ -227,7 +227,7 @@ echo "-- 4.1 BUG2: force-refresh overrides the backoff; cron (no force) does not
 # override the window and reload now (operator fixed a dead URL).
 : >"$RELOAD_LOG"
 # Stamp a fresh sentinel (mtime = now) so the window is wide open.
-echo "$(date +%s)" >"$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
+date +%s >"$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
 touch "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
 # (a) cron path: refresh WITHOUT the "force" arg → still backing off → no reload.
 BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
