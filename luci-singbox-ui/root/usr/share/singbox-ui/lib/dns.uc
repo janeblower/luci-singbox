@@ -73,6 +73,30 @@ function build_rules(cur) {
 	return rules;
 }
 
+// referenced_rulesets(cur) -> [name, ...]
+// The deduped set of enabled rulesets referenced by enabled dns_rule sections.
+// Mirrors the ref-resolution in build_rules (same enabled/existence filter), so
+// generate.uc can UNION these with route.uc's referenced set before building
+// route.rule_set definitions. Without this, a ruleset referenced only by a
+// dns_rule is emitted as a dns.rules[].rule_set tag with no matching
+// route.rule_set definition, and sing-box refuses to start ("rule-set not
+// found"). Pure: no I/O. See S3.1.
+function referenced_rulesets(cur) {
+	let rs_enabled = {};
+	cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = (s.enabled !== "0"); });
+
+	let out = [];
+	let seen = {};
+	cur.foreach("singbox-ui", "dns_rule", function(s) {
+		if (s.enabled === "0") return;
+		let refs = s.ruleset ?? [];
+		if (type(refs) === "string") refs = [ refs ];
+		for (let n in refs)
+			if (rs_enabled[n] && !seen[n]) { push(out, n); seen[n] = true; }
+	});
+	return out;
+}
+
 // build_dns(cur) -> object | null
 function build_dns(cur) {
 	let out = {};
@@ -91,4 +115,4 @@ function build_dns(cur) {
 	return length(keys(out)) ? out : null;
 }
 
-return { build_dns, build_rules };
+return { build_dns, build_rules, referenced_rulesets };

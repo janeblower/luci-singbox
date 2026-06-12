@@ -393,6 +393,11 @@ check "dns block present" '\"dns\":'           "$TMPDIR/out.json"
 check "dns.rules present" '\"rules\":'         "$TMPDIR/out.json"
 check "dns rule_set cn"   '\"rule_set\":'      "$TMPDIR/out.json"
 check "dns server fakeip" '"server": "fakeip"' "$TMPDIR/out.json"
+# S3.1: a ruleset referenced ONLY by a dns_rule (no route_rule) must still be
+# DEFINED in route.rule_set, or sing-box rejects the config ("rule-set not
+# found"). The ruleset URL appears solely in a route.rule_set[].url entry, so
+# its presence proves the definition was emitted from the DNS-side reference.
+check "route.rule_set defines dns-only ruleset" 'https://example.com/geosite-cn.srs' "$TMPDIR/out.json"
 
 echo "-- subscription urltest emits sub_urltest_url verbatim"
 write_cfg "

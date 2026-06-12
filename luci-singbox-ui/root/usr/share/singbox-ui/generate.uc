@@ -84,7 +84,17 @@ config.outbounds = out_block;
 config = post_process.run_pipeline(config, { implicit_tags: implicit_tags });
 
 let r = route_mod.build_route_rules(uci);
-let rsets = ruleset_mod.build_rule_sets(uci, r.referenced);
+// S3.1: route.rule_set must DEFINE every rule-set tag referenced anywhere —
+// route rules AND dns rules. route.uc reports only route-referenced rulesets,
+// so union in the dns-referenced ones (deduped) before building definitions;
+// otherwise a ruleset used solely by a dns_rule is emitted as a dangling tag
+// and sing-box refuses to start ("rule-set not found").
+let referenced = r.referenced;
+let ref_seen = {};
+for (let n in referenced) ref_seen[n] = true;
+for (let n in dns_mod.referenced_rulesets(uci))
+	if (!ref_seen[n]) { push(referenced, n); ref_seen[n] = true; }
+let rsets = ruleset_mod.build_rule_sets(uci, referenced);
 if (length(rsets) || length(r.rules) || r.final) {
 	config.route = {};
 	if (length(rsets))   config.route.rule_set = rsets;
