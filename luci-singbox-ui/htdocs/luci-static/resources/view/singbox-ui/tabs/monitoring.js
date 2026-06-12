@@ -44,8 +44,13 @@ function buildMonitoring() {
 			_('Clash API unreachable — enable it in settings and restart.')));
 	}
 	function closeConn(id) {
+		// A per-connection DELETE failing does NOT mean the Clash API is down —
+		// the connection may simply have closed between repaint and click (audit
+		// 9.1). Re-poll to resync the view instead of wiping the whole table with
+		// showUnreachable(); only a rejected poll RPC (real ubus/API failure)
+		// clears the table, via poll()'s own .catch(showUnreachable).
 		return callClashMutate('DELETE', '/connections/' + id, '')
-			.then(poll).catch(showUnreachable);
+			.then(poll, poll);
 	}
 	function closeAll() {
 		return callClashMutate('DELETE', '/connections', '')
@@ -91,10 +96,14 @@ function buildMonitoring() {
 		return c._sbHay;
 	}
 
-	// renderRows(conns) -> array of <tr>. Filter/map kept from the old
-	// renderTable; the per-row Close button captures c.id by VALUE so a row
+	// renderRows(conns, showClose) -> array of <tr>. Filter/map kept from the
+	// old renderTable; the per-row Close button captures c.id by VALUE so a row
 	// rebuilt from later data never acts on a stale connection (spec S2-6).
-	function renderRows(conns) {
+	// Closed connections (showClose=false) are already terminated, so they get
+	// no Close button — clicking it would DELETE a non-existent id and (pre-fix)
+	// trip showUnreachable, wiping the table on a benign action (audit 9.1). The
+	// `closed` class also fades those rows via style.css (audit 9.6).
+	function renderRows(conns, showClose) {
 		var rows = conns.filter(function (c) {
 			var src = (c.metadata && c.metadata.sourceIP) || '';
 			if (state.filterDevice !== 'all' && src !== state.filterDevice) return false;
@@ -106,13 +115,13 @@ function buildMonitoring() {
 			var md = c.metadata || {};
 			var host = md.host || md.destinationIP || '?';
 			var chain = (c.chains || []).join(' / ');
-			return E('tr', {}, [
+			return E('tr', showClose ? {} : { 'class': 'closed' }, [
 				E('td', {}, host + (md.destinationPort ? ':' + md.destinationPort : '')),
 				E('td', {}, nameFor(md.sourceIP || '')),
 				E('td', {}, chain || md.network || ''),
 				E('td', {}, fmtBytes(c.download)),
 				E('td', {}, fmtBytes(c.upload)),
-				E('td', {}, c.id ? E('button', {
+				E('td', {}, (showClose && c.id) ? E('button', {
 					'class': 'btn cbi-button cbi-button-remove',
 					'click': ui.createHandlerFn(this, (function (cid) {
 						return function () { return closeConn(cid); };
@@ -173,6 +182,14 @@ function buildMonitoring() {
 		curConns().forEach(function (c) {
 			var s = c.metadata && c.metadata.sourceIP; if (s) devices[s] = true;
 		});
+		// If the device we are filtering on has vanished from the current set
+		// (all its connections closed), no <option> would be emitted for it, so
+		// the <select> would silently fall back to "All devices" while the active
+		// filter still held the stale IP — stranding the user at zero rows with a
+		// dropdown that disagrees with the filter (audit 9.2). Reset the filter so
+		// the select and the visible rows agree.
+		if (state.filterDevice !== 'all' && !devices[state.filterDevice])
+			state.filterDevice = 'all';
 		var sel = state.ui.deviceSel;
 		sel.innerHTML = '';
 		sel.appendChild(E('option', { 'value': 'all' }, _('All devices')));
@@ -185,11 +202,17 @@ function buildMonitoring() {
 
 	function updateRows() {
 		if (!state.ui) return;
-		var conns = state.tab === 'active' ? curConns() : state.closed;
+		var active = state.tab === 'active';
+		var conns = active ? curConns() : state.closed;
 		state.ui.tbody.innerHTML = '';
-		renderRows(conns).forEach(function (tr) { state.ui.tbody.appendChild(tr); });
+		// showClose only in the active tab: closed rows render no Close button.
+		renderRows(conns, active).forEach(function (tr) { state.ui.tbody.appendChild(tr); });
 		state.ui.btnActive.textContent = _('Active') + ' ' + curConns().length;
 		state.ui.btnClosed.textContent = _('Closed') + ' ' + state.closed.length;
+		// Selected-tab styling so the active/closed view is visually obvious
+		// (audit 9.6). cbi-button-active is LuCI's themed selected-button class.
+		state.ui.btnActive.className = 'btn cbi-button' + (active ? ' cbi-button-active' : '');
+		state.ui.btnClosed.className = 'btn cbi-button' + (active ? '' : ' cbi-button-active');
 	}
 
 	function repaint() {

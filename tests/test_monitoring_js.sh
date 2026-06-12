@@ -45,6 +45,11 @@ function makeEl(tag) {
     },
     scrollTop: 0,
     querySelectorAll: function () { return []; },
+    // monitoring.js sets el.className to toggle the selected-tab class (audit
+    // 9.6); mirror it into attrs.class so the DOM walker/tests can read it the
+    // same way they read the class passed to E().
+    set className(v) { this.attrs['class'] = String(v); },
+    get className() { return this.attrs['class'] || ''; },
   };
   return el;
 }
@@ -245,6 +250,95 @@ function ok(label, cond) {
   // "metadata"/"sourceIP"; the precomputed hay must not.
   typeSearch('metadata');
   ok('search does NOT match JSON keys like metadata (S2-9)', !hostCellMatches('special-host'));
+
+  // --- audit 9.1: Closed tab renders NO per-row Close button ----------------
+  // A connection that closes between polls moves into state.closed and is shown
+  // in the Closed tab. It must NOT carry a Close button: deleting an id that no
+  // longer exists previously tripped showUnreachable and wiped the whole table.
+  // Per-row Close buttons read exactly "Close"; the toolbar button reads
+  // "Close all" — both carry cbi-button-remove, so match on the precise label.
+  const isRowCloseBtn = (n) => n.tag === 'button' &&
+    n.attrs && /cbi-button-remove/.test(n.attrs['class'] || '') &&
+    typeof n.attrs.click === 'function' && (n.textContent || '') === 'Close';
+  let a91conns = [{ id: 'live1', metadata: { sourceIP: '10.0.0.5', host: 'h1' }, chains: [] }];
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: a91conns, downloadTotal: 0, uploadTotal: 0 }) }));
+  const m91 = Mon.buildMonitoring();
+  await m91.poll();                                   // conn live1 active
+  a91conns = [];                                      // it closed -> moves to state.closed
+  await m91.poll();
+  // Active tab still shows a Close button for current (now zero) conns: none here.
+  const closedTabBtn = ctx.__test.find(m91.node,
+    (n) => n.tag === 'button' && (n.textContent || '').indexOf('Closed') >= 0);
+  ok('Closed-tab toggle button is rendered (9.1)', !!closedTabBtn);
+  closedTabBtn.attrs.click();                          // switch to Closed tab
+  const closeBtnsInClosedTab = ctx.__test.findAll(m91.node, isRowCloseBtn);
+  ok('Closed tab renders NO per-row Close button (9.1)', closeBtnsInClosedTab.length === 0);
+  // And the closed row carries the `closed` class so the fade CSS applies (9.6).
+  const closedRow = ctx.__test.find(m91.node,
+    (n) => n.tag === 'tr' && n.attrs && /(^|\s)closed(\s|$)/.test(n.attrs['class'] || ''));
+  ok('closed rows carry the `closed` class (9.6)', !!closedRow);
+
+  // --- audit 9.1: a per-connection DELETE failure re-polls, NOT unreachable -
+  // Clicking Close on a row whose connection vanished server-side rejects the
+  // DELETE. That benign failure must re-poll and keep the table, not blow it
+  // away with the "Clash API unreachable" message.
+  let a91bConns = [{ id: 'x9', metadata: { sourceIP: '10.0.0.6', host: 'gone-soon' }, chains: [] }];
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: a91bConns, downloadTotal: 0, uploadTotal: 0 }) }));
+  ctx.__test.setClashMutate(() => Promise.reject(new Error('404 not found')));
+  const m91b = Mon.buildMonitoring();
+  await m91b.poll();
+  const rowBtn = ctx.__test.find(m91b.node, isRowCloseBtn);
+  ok('active row has a Close button to test against (9.1)', !!rowBtn);
+  await rowBtn.attrs.click();                          // DELETE rejects, then re-polls
+  ok('a failed per-row DELETE does NOT show unreachable (9.1)',
+     m91b.node.textContent.indexOf('Clash API unreachable') < 0);
+  ok('a failed per-row DELETE keeps the table mounted (9.1)',
+     !!ctx.__test.find(m91b.node, (n) => n.tag === 'table'));
+
+  // --- audit 9.2: a vanished filter device resets the filter to "all" -------
+  // Filter on a device, then let all its connections close. The select must not
+  // strand the user on a stale IP with zero rows; the filter resets to "all".
+  let a92conns = [{ id: 'p', metadata: { sourceIP: '10.0.0.7', host: 'dev-a' }, chains: [] },
+                  { id: 'q', metadata: { sourceIP: '10.0.0.8', host: 'dev-b' }, chains: [] }];
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: a92conns, downloadTotal: 0, uploadTotal: 0 }) }));
+  ctx.__test.setClashMutate(() => Promise.resolve({ status:'ok' }));
+  const m92 = Mon.buildMonitoring();
+  await m92.poll();
+  const sel92 = ctx.__test.find(m92.node, (n) => n.tag === 'select' && n.attrs && n.attrs.change);
+  sel92.attrs.change({ target: { value: '10.0.0.7' } });   // filter on dev-a
+  ok('rows are filtered to the selected device (9.2)',
+     ctx.__test.findAll(m92.node,
+       (n) => n.tag === 'td' && (n.textContent || '').indexOf('dev-a') >= 0).length >= 1 &&
+     ctx.__test.findAll(m92.node,
+       (n) => n.tag === 'td' && (n.textContent || '').indexOf('dev-b') >= 0).length === 0);
+  a92conns = [{ id: 'q', metadata: { sourceIP: '10.0.0.8', host: 'dev-b' }, chains: [] }]; // dev-a gone
+  await m92.poll();
+  ok('filter resets to all when its device vanishes (9.2 — dev-b now visible)',
+     ctx.__test.findAll(m92.node,
+       (n) => n.tag === 'td' && (n.textContent || '').indexOf('dev-b') >= 0).length >= 1);
+  ok('filter reset prevents a stranded zero-row table (9.2)',
+     ctx.__test.find(m92.node,
+       (n) => n.tag === 'td' && (n.textContent || '').indexOf('No connections') >= 0) === null);
+
+  // --- audit 9.6: selected Active/Closed tab gets cbi-button-active ----------
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: [], downloadTotal: 0, uploadTotal: 0 }) }));
+  const m96 = Mon.buildMonitoring();
+  await m96.poll();
+  const btnActive96 = ctx.__test.find(m96.node,
+    (n) => n.tag === 'button' && (n.textContent || '').indexOf('Active') >= 0);
+  const btnClosed96 = ctx.__test.find(m96.node,
+    (n) => n.tag === 'button' && (n.textContent || '').indexOf('Closed') >= 0);
+  ok('Active tab is marked selected by default (9.6)',
+     /cbi-button-active/.test(btnActive96.attrs['class'] || '') &&
+     !/cbi-button-active/.test(btnClosed96.attrs['class'] || ''));
+  btnClosed96.attrs.click();
+  ok('selected class moves to Closed after toggle (9.6)',
+     /cbi-button-active/.test(btnClosed96.attrs['class'] || '') &&
+     !/cbi-button-active/.test(btnActive96.attrs['class'] || ''));
 
   if (failures) { console.error('test_monitoring_js: ' + failures + ' failure(s)'); process.exit(1); }
   console.log('OK');

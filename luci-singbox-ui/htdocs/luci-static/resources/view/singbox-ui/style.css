@@ -43,13 +43,17 @@ button.cbi-button.busy {
 	color: #555;
 }
 
-/* Status colours. `.sb-error` and `.sb-ok` are used by the JSON modal copy-result
- * line and the monitoring tab; `.sb-warn` is reserved for non-fatal warnings. */
+/* Status colours. `.sb-ok`/`.sb-error` centralize status coloring (audit 9.7):
+ * the JSON modal copy-result line, the monitoring tab, the service status panel
+ * (status-panel.js) and the bbolt helper state (bbolt-panel.js) all use them
+ * instead of inline hex, so theming/dark-mode lives in one place. `.sb-warn` is
+ * reserved for non-fatal warnings. */
 .sb-ok    { color: #3a3; }
 .sb-warn  { color: #c80; }
 .sb-error { color: #c33; }
 
-/* Monitoring tab table — closed connections fade out. */
+/* Monitoring tab table — closed connections fade out. updateRows() tags rows
+ * in the Closed tab with the `closed` class so this rule applies (audit 9.6). */
 .sb-monitoring table         { width: 100%; }
 .sb-monitoring tr.closed td  { opacity: 0.6; }
 

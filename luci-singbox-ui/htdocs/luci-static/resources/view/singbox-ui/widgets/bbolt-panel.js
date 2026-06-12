@@ -19,11 +19,14 @@ function renderStatus(holder) {
 		var el = holder.querySelector('.sb-bbolt-state');
 		if (!el) return;
 		el.innerHTML = '';
+		// Status colour via the shared .sb-ok/.sb-error classes in style.css
+		// instead of inline hex, so coloring stays centralized/themeable (audit
+		// 9.7).
 		if (res && res.installed) {
-			el.appendChild(E('span', { 'style': 'color:#2e7d32' },
+			el.appendChild(E('span', { 'class': 'sb-ok' },
 				_('installed') + (res.arch ? ' (' + res.arch + ')' : '')));
 		} else {
-			el.appendChild(E('span', { 'style': 'color:#c62828' },
+			el.appendChild(E('span', { 'class': 'sb-error' },
 				_('not installed — required to build nft rules from cache')));
 		}
 	}).catch(function () {
