@@ -41,6 +41,7 @@ root/usr/share/singbox-ui/lib/log.uc	usr/share/singbox-ui/lib/log.uc	data
 root/usr/share/singbox-ui/lib/outbound.uc	usr/share/singbox-ui/lib/outbound.uc	data
 root/usr/share/singbox-ui/lib/plugins/registry.uc	usr/share/singbox-ui/lib/plugins/registry.uc	data
 root/usr/share/singbox-ui/lib/post_process.uc	usr/share/singbox-ui/lib/post_process.uc	data
+root/usr/share/singbox-ui/lib/protocols/_filler.uc	usr/share/singbox-ui/lib/protocols/_filler.uc	data
 root/usr/share/singbox-ui/lib/protocols/_shared/dial.uc	usr/share/singbox-ui/lib/protocols/_shared/dial.uc	data
 root/usr/share/singbox-ui/lib/protocols/_shared/multiplex.uc	usr/share/singbox-ui/lib/protocols/_shared/multiplex.uc	data
 root/usr/share/singbox-ui/lib/protocols/_shared/tls.uc	usr/share/singbox-ui/lib/protocols/_shared/tls.uc	data
