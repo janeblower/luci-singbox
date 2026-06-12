@@ -11,6 +11,7 @@
 
 let helpers = require("helpers");
 let reg     = require("protocols.registry");
+let filler  = require("protocols._filler");
 
 // Eagerly load every active inbound descriptor so register() fires. S2.1: each
 // require() is wrapped so one malformed descriptor file logs+skips instead of
@@ -84,7 +85,7 @@ function build_one(s) {
 		warn(sprintf("inbound.uc: no descriptor for '%s'\n", proto));
 		return null;
 	}
-	return d.emit(s);
+	return (type(d.emit) === "function") ? d.emit(s) : filler.build(d, s);
 }
 
 function build_inbounds(cur) {
