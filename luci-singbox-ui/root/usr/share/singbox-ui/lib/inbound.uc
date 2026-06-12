@@ -17,7 +17,7 @@ let reg     = require("protocols.registry");
 // throwing through require() and aborting generation for ALL protocols.
 for (let _m in ["protocols.trojan", "protocols.shadowsocks", "protocols.vless",
                 "protocols.hysteria2", "protocols.direct", "protocols.tproxy",
-                "protocols.mixed"]) {
+                "protocols.mixed", "protocols.json_raw"]) {
 	try { require(_m); }
 	catch (e) { warn(sprintf("inbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }
