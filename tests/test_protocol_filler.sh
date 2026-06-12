@@ -169,6 +169,17 @@ out=$(je '
 [ "$out" = "THREW" ] || die "registry rejects descriptor with neither emit nor fields" "$out"
 ok "registry rejects emit-less + fields-less descriptor"
 
+# ---- registry: emit-less descriptor with an EMPTY fields[] is rejected ----
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try { reg.register({ kind:"outbound", type:"emptyfields_t3", sing_box_type:"x", fields:[] }); }
+    catch (e) { threw = true; }
+    print(threw ? "THREW" : "NOTHREW");
+')
+[ "$out" = "THREW" ] || die "registry rejects emit-less descriptor with empty fields[]" "$out"
+ok "registry rejects emit-less + empty-fields descriptor"
+
 # ---- registry: a non-function post is rejected ----
 out=$(je '
     let reg = require("protocols.registry");
