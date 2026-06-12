@@ -169,4 +169,14 @@ exp='{ "type": "shadowsocks", "tag": "s", "listen": "::", "listen_port": 8388, "
 [ "$out" = "$exp" ] || die "filler no-multi keeps password" "$out"
 ok "filler keeps top-level password when no multi-users"
 
+# only_values drops a value not in the allowlist; keeps an allowed one
+out=$(je '
+    let f = require("protocols._filler");
+    let d = { kind:"outbound", sing_box_type:"x",
+        fields:[ { name:"network", type:"enum", json_key:"network", only_values:["tcp","udp"] } ], shared:null };
+    print(sprintf("%J|%J", f.build(d,{".name":"t",network:"sctp"}), f.build(d,{".name":"t",network:"udp"})));
+')
+[ "$out" = '{ "type": "x", "tag": "t" }|{ "type": "x", "tag": "t", "network": "udp" }' ] || die "only_values" "$out"
+ok "only_values drops disallowed, keeps allowed"
+
 echo "test_filler_v2: scalar primitives PASS"

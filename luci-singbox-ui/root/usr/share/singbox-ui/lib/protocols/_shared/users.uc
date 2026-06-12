@@ -54,7 +54,7 @@ function _parse_row(entry, spec) {
             return null;
         }
         if (col.validate != null && !(val in col.validate)) {
-            warn(sprintf("users.uc: row '%s' has unknown '%s'; skipping\n", entry, val));
+            warn(sprintf("users.uc: row '%s' has unknown %s '%s'; skipping\n", entry, col.key, val));
             return null;
         }
         if (col.warn_if_empty && !length(val)) {

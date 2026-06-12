@@ -71,6 +71,9 @@ function validate_field(f, ctx) {
     if (f.skip_value != null)
         assert(type(f.skip_value) === "string",
                sprintf("%s.%s: skip_value must be a string", ctx, f.name));
+    if (f.only_values != null)
+        assert(type(f.only_values) === "array",
+               sprintf("%s.%s: only_values must be an array", ctx, f.name));
     if (f.requires != null)
         assert(type(f.requires) === "string" ||
                (type(f.requires) === "object" && f.requires.field != null && f.requires.value != null),

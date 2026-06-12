@@ -60,6 +60,7 @@ function _emit_scalar(out, s, f) {
     // "str" (default)
     let v = s_opt(s, f.name);
     if (f.skip_value != null && v === f.skip_value) return;
+    if (f.only_values != null && !(v in f.only_values)) return;
     if (!length(v) && f.default_when_empty != null) v = f.default_when_empty;
     if (omit === "never" || length(v)) out[f.json_key] = v;
 }

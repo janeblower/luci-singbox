@@ -12,7 +12,7 @@ reg.register({
           validate: "port", default: 7895, ui_label: "Listen port" },
         { name: "network", type: "enum", tab: "basic",
           values: ["", "tcp", "udp"], default: "",
-          ui_label: "Network", json_key: "network" },
+          ui_label: "Network", json_key: "network", only_values: ["tcp", "udp"] },
         { name: "tcp_fast_open", type: "bool", tab: "basic",
           ui_label: "TCP fast open", default: 0, advanced: true,
           json_key: "tcp_fast_open", coerce: "bool" },

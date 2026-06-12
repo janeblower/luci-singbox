@@ -21,6 +21,17 @@ SANDBOX_CONFIG="$SANDBOX_DIR/singbox-ui.json"
 check() { grep -q "$2" "$TMPDIR/out.json" || { echo "FAIL: $1 — '$2'"; cat "$TMPDIR/out.json"; exit 1; }; echo "  PASS: $1"; }
 nocheck() { grep -q "$2" "$TMPDIR/out.json" && { echo "FAIL: $1 — '$2' present"; cat "$TMPDIR/out.json"; exit 1; }; echo "  PASS: $1"; }
 write_cfg() { printf '%s\n' "$1" > "$TMPDIR/singbox-ui"; }
+# canon_norm — key-sort a JSON string for order-agnostic compare. Key order is
+# NOT load-bearing under semantic parity (see tests/test_protocol_parity.sh);
+# the filler may emit groups (e.g. obfs) after scalar fields, so byte-exact
+# golden compare on those would spuriously fail. Normalize both sides instead.
+canon_norm() {  # $1 = JSON string; prints key-sorted canonical JSON
+	printf '%s' "$1" > "$TMPDIR/cn.json"
+	"$UCODE_BIN" -L tests/parity -e '
+		let fs=require("fs"); let canon=require("canon").canon;
+		let f=fs.open("'"$TMPDIR"'/cn.json","r"); let j=json(f.read("all")); f.close();
+		printf("%J", canon(j));'
+}
 run_gen() {
 	# shellcheck disable=SC2086
 	UCI_CONFIG_DIR="$TMPDIR" SINGBOX_TMPDIR="$SANDBOX_DIR/subs" SINGBOX_CONFIG="$SANDBOX_CONFIG" \
@@ -339,7 +350,7 @@ let s = { ".name":"hy2full", "server":"hy2.example.com", "server_port":"8443",
 printf("%J", ob.build_constructor_for(s, "hysteria2"));
 '
 )
-if [ "$actual_hy2" = "$golden_hy2" ]; then
+if [ "$(canon_norm "$actual_hy2")" = "$(canon_norm "$golden_hy2")" ]; then
 	echo "  PASS: hysteria2 parity (full)"
 else
 	echo "FAIL: hysteria2 parity (full)"

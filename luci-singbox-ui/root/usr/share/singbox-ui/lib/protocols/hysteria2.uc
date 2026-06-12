@@ -29,7 +29,7 @@ reg.register({
           parent_enabled: "obfs_type" },
         { name: "network", type: "enum", tab: "basic",
           values: ["", "tcp", "udp"], ui_label: "Network", advanced: true,
-          json_key: "network" },
+          json_key: "network", only_values: ["tcp", "udp"] },
         { name: "brutal_debug", type: "bool", tab: "basic",
           ui_label: "Brutal debug", default: 0, advanced: true,
           json_key: "brutal_debug", coerce: "bool" },

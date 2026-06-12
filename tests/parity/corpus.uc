@@ -131,4 +131,8 @@ return [
     { name: "trojan_in_certpaths", kind: "inbound", type: "trojan",
       section: { ".name": "tic", protocol: "trojan", listen_port: "443", server_password: "pw",
                  tls_enabled: "1", tls_certificate_path: "/etc/cert.pem", tls_key_path: "/etc/key.pem" } },
+    { name: "hy2_out_network_bogus", kind: "outbound", type: "hysteria2",
+      section: { ".name": "hnb", server: "ex.com", server_port: "443", server_password: "pw", network: "sctp" } },
+    { name: "tproxy_in_network_bogus", kind: "inbound", type: "tproxy",
+      section: { ".name": "tnb", protocol: "tproxy", listen_port: "7895", network: "sctp" } },
 ];

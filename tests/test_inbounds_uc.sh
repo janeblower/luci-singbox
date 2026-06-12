@@ -34,6 +34,17 @@ nocheck() {
 	echo "  PASS: $desc"
 }
 write_cfg() { printf '%s\n' "$1" > "$TMPDIR/singbox-ui"; }
+# canon_norm — key-sort a JSON string for order-agnostic compare. Key order is
+# NOT load-bearing under semantic parity (see tests/test_protocol_parity.sh);
+# the filler may emit groups (e.g. obfs) after scalar fields, so byte-exact
+# golden compare on those would spuriously fail. Normalize both sides instead.
+canon_norm() {  # $1 = JSON string; prints key-sorted canonical JSON
+	printf '%s' "$1" > "$TMPDIR/cn.json"
+	"$UCODE_BIN" -L tests/parity -e '
+		let fs=require("fs"); let canon=require("canon").canon;
+		let f=fs.open("'"$TMPDIR"'/cn.json","r"); let j=json(f.read("all")); f.close();
+		printf("%J", canon(j));'
+}
 run_gen() {
 	# shellcheck disable=SC2086
 	UCI_CONFIG_DIR="$TMPDIR" SINGBOX_TMPDIR="$SANDBOX_DIR/subs" SINGBOX_CONFIG="$SANDBOX_CONFIG" \
@@ -554,7 +565,7 @@ let s = { ".name":"h2_in1", "protocol":"hysteria2", "listen_port":"443",
 printf("%J", inb.build_one(s));
 '
 )
-if [ "$actual" = "$golden" ]; then
+if [ "$(canon_norm "$actual")" = "$(canon_norm "$golden")" ]; then
 	echo "  PASS: hysteria2 inbound parity (full)"
 else
 	echo "FAIL: hysteria2 inbound parity (full)"
