@@ -3,14 +3,6 @@
 // force_enabled so the JSON always carries a tls{} block.
 
 let reg = require("protocols.registry");
-let helpers = require("helpers");
-let tls_blk = require("protocols._shared.tls");
-let dial_blk = require("protocols._shared.dial");
-
-const s_opt = helpers.s_opt;
-const s_num = helpers.s_num;
-const s_bool = helpers.s_bool;
-const as_array = helpers.as_array;
 
 reg.register({
     kind: "outbound", type: "hysteria2", sing_box_type: "hysteria2",
@@ -75,53 +67,41 @@ reg.register({
           secret: true, ui_label: "Password" },
         { name: "inbound_user", type: "list", tab: "basic", secret: true,
           ui_label: "Users (name:password)", advanced: true },
-        { name: "up_mbps", type: "number", tab: "basic",
-          ui_label: "Uplink Mbps" },
-        { name: "down_mbps", type: "number", tab: "basic",
-          ui_label: "Downlink Mbps" },
+        { name: "up_mbps", type: "number", tab: "basic", ui_label: "Uplink Mbps",
+          json_key: "up_mbps", coerce: "num" },
+        { name: "down_mbps", type: "number", tab: "basic", ui_label: "Downlink Mbps",
+          json_key: "down_mbps", coerce: "num" },
         { name: "ignore_client_bandwidth", type: "bool", tab: "basic",
-          ui_label: "Ignore client bandwidth", default: 0, advanced: true },
+          ui_label: "Ignore client bandwidth", default: 0, advanced: true,
+          json_key: "ignore_client_bandwidth", coerce: "bool" },
         { name: "obfs_type", type: "enum", tab: "basic",
           values: ["", "salamander"], ui_label: "Obfs type", advanced: true },
         { name: "obfs_password", type: "string", tab: "basic",
           secret: true, ui_label: "Obfs password", advanced: true,
           parent_enabled: "obfs_type" },
         { name: "masquerade", type: "string", tab: "basic",
-          ui_label: "Masquerade URL", placeholder: "https://example.com",
-          advanced: true },
+          ui_label: "Masquerade URL", placeholder: "https://example.com", advanced: true,
+          json_key: "masquerade" },
         { name: "brutal_debug", type: "bool", tab: "basic",
-          ui_label: "Brutal debug", default: 0, advanced: true },
+          ui_label: "Brutal debug", default: 0, advanced: true,
+          json_key: "brutal_debug", coerce: "bool" },
     ],
 
-    emit: function(s) {
-        let out = dial_blk.build_listen_base(s, "hysteria2");
-        if (!out) return null;
-        let users = [];
-        for (let u in as_array(s.inbound_user)) {
-            let c = index(u, ":");
-            if (c >= 0) {
-                let nm = substr(u, 0, c);
-                let pw = substr(u, c + 1);
-                if (length(nm)) push(users, { name: nm, password: pw });
-            }
-        }
-        if (length(users)) {
-            out.users = users;
-        } else if (length(s_opt(s, "server_password"))) {
-            out.users = [ { name: s[".name"], password: s.server_password } ];
-        }
-        if (length(s_opt(s, "obfs_type")) && length(s_opt(s, "obfs_password")))
-            out.obfs = { type: s.obfs_type, password: s.obfs_password };
-        if (length(s_opt(s, "up_mbps")))   out.up_mbps   = s_num(s.up_mbps);
-        if (length(s_opt(s, "down_mbps"))) out.down_mbps = s_num(s.down_mbps);
-        if (length(s_opt(s, "masquerade")))
-            out.masquerade = s.masquerade;
-        if (s_bool(s, "brutal_debug")) out.brutal_debug = true;
-        if (s_bool(s, "ignore_client_bandwidth"))
-            out.ignore_client_bandwidth = true;
-        let t = tls_blk.emit_inbound(s, { force_enabled: true });
-        if (t) out.tls = t;
-        return out;
+    groups: [
+        { json_key: "obfs", gate: { all_present: ["obfs_type", "obfs_password"] },
+          fields: [
+              { name: "obfs_type",     json_key: "type" },
+              { name: "obfs_password", json_key: "password" },
+          ] },
+    ],
+
+    users: {
+        from: "inbound_user",
+        columns: [
+            { key: "name", required: true },
+            { key: "password", tail: true, always: true },
+        ],
+        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
     },
 });
 
