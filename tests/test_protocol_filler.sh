@@ -112,6 +112,18 @@ out=$(je '
 [ "$out" = '{ "type": "direct", "tag": "d1" }' ] || die "shared dial empty adds nothing" "$out"
 ok "shared dial merge no-op on empty section"
 
+# ---- golden parity: trojan outbound via the production dispatcher ----
+out=$(je '
+    let ob = require("outbound");
+    let got = ob.build_constructor_for(
+        { ".name":"trj1", server:"example.com", server_port:"443", server_password:"secret" },
+        "trojan");
+    let want = { type:"trojan", tag:"trj1", server:"example.com", server_port:443, password:"secret" };
+    print(sprintf("%J", got) === sprintf("%J", want) ? "MATCH" : sprintf("MISMATCH got=%J want=%J", got, want));
+')
+[ "$out" = "MATCH" ] || die "trojan outbound golden parity" "$out"
+ok "trojan outbound golden parity"
+
 # ---- registry: a descriptor with fields but no emit registers OK ----
 out=$(je '
     let reg = require("protocols.registry");

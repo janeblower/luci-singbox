@@ -1,14 +1,14 @@
 // lib/protocols/trojan.uc — Trojan outbound + inbound under the E2 DSL.
 
 let reg = require("protocols.registry");
-let helpers = require("helpers");
 let tls_blk = require("protocols._shared.tls");
 let tr_blk  = require("protocols._shared.transport");
 let mux_blk = require("protocols._shared.multiplex");
 let dial_blk = require("protocols._shared.dial");
 
-const s_opt = helpers.s_opt;
-const s_num = helpers.s_num;
+// Outbound is fully declarative (protocols._filler); the shared-block requires
+// above remain for the inbound emit() below. s_opt/s_num/helpers were dropped
+// with the outbound emit() — they are no longer referenced.
 
 // --- Outbound ------------------------------------------------------------
 
@@ -18,27 +18,18 @@ reg.register({
 
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
-          validate: "host", ui_label: "Server" },
+          validate: "host", ui_label: "Server",
+          json_key: "server", omit_when: "never" },
         { name: "server_port", type: "number", tab: "basic", required: true,
-          validate: "port", ui_label: "Server port", default: 443 },
+          validate: "port", ui_label: "Server port", default: 443,
+          json_key: "server_port", coerce: "num", omit_when: "never" },
         { name: "server_password", type: "string", tab: "basic", required: true,
-          secret: true, ui_label: "Password" },
+          secret: true, ui_label: "Password",
+          json_key: "password" },
     ],
-
-    emit: function(s) {
-        let out = {
-            type: "trojan",
-            tag:  s[".name"],
-            server:      s_opt(s, "server"),
-            server_port: s_num(s.server_port),
-        };
-        if (length(s_opt(s, "server_password"))) out.password = s.server_password;
-        let t = tls_blk.emit_outbound(s);  if (t) out.tls = t;
-        let r = tr_blk.emit(s);            if (r) out.transport = r;
-        let m = mux_blk.emit(s);           if (m) out.multiplex = m;
-        dial_blk.merge_dial(out, s);
-        return out;
-    },
+    // No emit(): protocols._filler builds {type,tag} + the three fields above +
+    // the declared tls/transport/multiplex/dial shared blocks, byte-identical to
+    // the former hand-written emit().
 });
 
 // --- Inbound -------------------------------------------------------------
