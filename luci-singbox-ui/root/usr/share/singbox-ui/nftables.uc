@@ -66,14 +66,51 @@ function classify_cidr(c) {
 // quotes, whitespace inside the literal. Centralised so both the fakeip
 // path (UCI dns_server.inet[46]_range, see G1) and the rule-set path
 // (rs_*.json ip_cidr entries, see G2) share one validator.
+// valid_ipv6(a) — structural IPv6 validator (no prefix). S5.3: the old
+// `[0-9A-Fa-f:]+` regex accepted nonsense like ":::" or a 9-group address,
+// which then aborts the WHOLE atomic `nft -f` (one bad element fails the load).
+// This rejects: triple colons, more than one "::", groups longer than 4 hex
+// digits, and the wrong group count. Embedded-IPv4 forms (::ffff:1.2.3.4) are
+// conservatively rejected — rare here, and dropping one is safer than letting
+// an invalid literal abort the ruleset.
+function valid_ipv6(a) {
+	if (a == null || a === "") return false;
+	if (!match(a, /^[0-9A-Fa-f:]+$/)) return false;
+	if (index(a, ":::") >= 0) return false;          // three+ consecutive colons
+	let has_dbl = index(a, "::") >= 0;
+	if (has_dbl && index(substr(a, index(a, "::") + 2), "::") >= 0)
+		return false;                                // more than one "::"
+	let groups = split(a, ":");
+	let nonempty = 0;
+	for (let g in groups) {
+		if (g === "") continue;
+		if (!match(g, /^[0-9A-Fa-f]{1,4}$/)) return false;
+		nonempty++;
+	}
+	if (has_dbl) return nonempty <= 7;               // "::" compresses 1+ groups
+	return length(groups) === 8 && nonempty === 8;   // full form: exactly 8
+}
+
 function safe_cidr(family, v) {
 	if (v == null) return null;
 	let t = trim(`${v}`);
 	if (t === "") return null;
-	if (family === "v4")
-		return match(t, /^[0-9]{1,3}(\.[0-9]{1,3}){3}(\/[0-9]{1,2})?$/) ? t : null;
-	if (family === "v6")
-		return match(t, /^[0-9A-Fa-f:]+(\/[0-9]{1,3})?$/) ? t : null;
+	if (family === "v4") {
+		let m = match(t, /^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})(\/([0-9]{1,2}))?$/);
+		if (!m) return null;
+		for (let i = 1; i <= 4; i++) if (+m[i] > 255) return null;   // octet range
+		if (m[6] != null && +m[6] > 32) return null;                 // prefix range
+		return t;
+	}
+	if (family === "v6") {
+		let slash = index(t, "/");
+		let addr = (slash < 0) ? t : substr(t, 0, slash);
+		if (slash >= 0) {
+			let pfx = substr(t, slash + 1);
+			if (!match(pfx, /^[0-9]{1,3}$/) || +pfx > 128) return null;
+		}
+		return valid_ipv6(addr) ? t : null;
+	}
 	return null;
 }
 
@@ -551,26 +588,71 @@ function rand_hex(n) {
 // (cron refresh racing a manual Apply) would otherwise interleave their
 // `nft -f` calls and hit the TOCTOU window in make_nft_tmp's fallback.
 const APPLY_LOCK = `${TMPDIR}/.apply.lock`;
+const APPLY_LOCK_OWNER = `${APPLY_LOCK}/owner`;
+// Per-process owner token, set when THIS process holds the lock. Used by
+// release to avoid removing a lock another apply reclaimed after our TTL.
+let _lock_token = null;
+
+function _set_lock_owner(token) {
+	let f = fs.open(APPLY_LOCK_OWNER, "w");
+	if (!f) return;
+	f.write(token); f.close();
+}
+function _get_lock_owner() {
+	let f = fs.open(APPLY_LOCK_OWNER, "r");
+	if (!f) return null;
+	let v = f.read("all"); f.close();
+	return v;
+}
 
 // acquire_apply_lock() — atomic create-or-fail via fs.mkdir. mkdir is the
 // portable lock primitive: it returns falsy on EEXIST without throwing (proven
 // by make_nft_tmp/subscription.uc calling it on an existing dir every run).
 // Returns true on success, false if another apply holds the lock. A lock dir
 // older than 60s is treated as stale (a crashed apply) and reclaimed, so we
-// never wedge permanently.
+// never wedge permanently. The winner stamps a unique owner token so release
+// only ever removes its own lock.
 function acquire_apply_lock() {
 	fs.mkdir(TMPDIR, 0o755);
-	if (fs.mkdir(APPLY_LOCK, 0o755)) return true;
-	// Lock dir exists — check age for staleness.
+	let token = rand_hex(8) ?? sprintf("%d-%d", time(), 0);
+	if (fs.mkdir(APPLY_LOCK, 0o755)) {
+		_set_lock_owner(token);
+		_lock_token = token;
+		return true;
+	}
+	// Lock dir exists — reclaim only if stale (a crashed apply). S5.1: a plain
+	// rmdir+mkdir reclaim is a TOCTOU race — two applies both observe "stale",
+	// both rmdir+mkdir, and both believe they won. Reclaim ATOMICALLY via
+	// rename instead: of N concurrent reclaimers, only one can rename the stale
+	// dir away (the rest get ENOENT — the source is already gone), so exactly
+	// one proceeds to recreate the lock.
 	let st = fs.stat(APPLY_LOCK);
 	if (st != null && (time() - st.mtime) > 60) {
-		fs.rmdir(APPLY_LOCK);
-		if (fs.mkdir(APPLY_LOCK, 0o755)) return true;
+		let moved = `${APPLY_LOCK}.stale.${rand_hex(6) ?? sprintf("%d", time())}`;
+		if (fs.rename(APPLY_LOCK, moved)) {
+			fs.unlink(`${moved}/owner`);
+			fs.rmdir(moved);
+			if (fs.mkdir(APPLY_LOCK, 0o755)) {
+				_set_lock_owner(token);
+				_lock_token = token;
+				return true;
+			}
+		}
 	}
 	return false;
 }
 
-function release_apply_lock() { fs.rmdir(APPLY_LOCK); }
+// release_apply_lock() — S5.2: only release a lock we still own. If our apply
+// outran the 60s stale TTL (e.g. a wedged nft -f) and another apply reclaimed
+// the lock, the owner token no longer matches ours — leave that lock intact
+// rather than stealing it out from under the new holder.
+function release_apply_lock() {
+	if (_lock_token != null && _get_lock_owner() === _lock_token) {
+		fs.unlink(APPLY_LOCK_OWNER);
+		fs.rmdir(APPLY_LOCK);
+	}
+	_lock_token = null;
+}
 
 // make_nft_tmp() — compose a unique tmp path inside TMPDIR without
 // invoking mktemp via fs.popen. fs.popen() in OpenWrt's ucode does not
@@ -680,10 +762,14 @@ function _cmd_apply_locked(cur) {
 	}
 	fd.write(ruleset);
 	fd.close();
-	let rc = system(["nft", "-f", tmp]);
+	// S5.4: bound nft -f with `timeout` so a wedged apply (e.g. nft blocked on a
+	// busy ruleset) can't hold the apply lock for its full 60s stale TTL. 30s is
+	// comfortably above a normal atomic load and well under the TTL. busybox and
+	// coreutils both return 124 on timeout.
+	let rc = system(["timeout", "30", "nft", "-f", tmp]);
 	fs.unlink(tmp);
 	if (rc !== 0) {
-		log_err("nftables: nft -f failed");
+		log_err(rc == 124 ? "nftables: nft -f timed out (30s)" : "nftables: nft -f failed");
 		return 1;
 	}
 	// Best-effort smoke check: warn (don't fail) when the host has no

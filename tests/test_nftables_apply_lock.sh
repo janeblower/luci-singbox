@@ -83,4 +83,22 @@ grep -qi 'another apply\|lock' "$TMPDIR/locked.err" \
 	|| { echo "FAIL: S1-4 expected a lock-contention message"; cat "$TMPDIR/locked.err"; exit 1; }
 echo "  PASS: S1-4 existing lock blocks apply"
 
+echo "-- S5.1/10.3: a stale (>60s) lock is reclaimed; apply succeeds and frees it"
+mkdir -p /tmp/singbox-ui/.apply.lock
+# Backdate the lock dir mtime well past the 60s TTL. touch -t is portable across
+# busybox (VM) and coreutils (host); '202001010000' is 2020-01-01, always stale.
+touch -t 202001010000 /tmp/singbox-ui/.apply.lock
+# shellcheck disable=SC2086
+if PATH="$TMPDIR/bin:$PATH" UCI_CONFIG_DIR="$UCI" \
+		"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply >/dev/null 2>"$TMPDIR/stale.err"; then
+	rc=0
+else
+	rc=$?
+fi
+[ "$rc" -eq 0 ] \
+	|| { echo "FAIL: S5.1 stale lock not reclaimed (apply rc=$rc)"; cat "$TMPDIR/stale.err"; exit 1; }
+[ ! -e /tmp/singbox-ui/.apply.lock ] \
+	|| { echo "FAIL: S5.1 lock not released after reclaimed apply"; exit 1; }
+echo "  PASS: S5.1 stale lock reclaimed and released"
+
 echo "OK"

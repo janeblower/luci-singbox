@@ -275,4 +275,21 @@ fi
 rm -f /tmp/emit-default.nft /tmp/emit-explicit.nft
 echo "ok"
 
+echo "-- emit: S5.3 syntactically-invalid CIDRs are dropped, valid ones kept"
+# A single bad element previously slipped through the loose v6 regex and aborted
+# the whole atomic nft -f. Mix valid + invalid v4/v6 ranges; the bad ones must
+# not reach the emitted sets while the good ones survive.
+# shellcheck disable=SC2086
+out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 \
+	"1.2.3.4/24,256.1.1.1,10.0.0.0/8" \
+	"fc00::/18,:::,1:2:3:4:5:6:7:8:9,2001:db8::1" br-lan 2>/dev/null)
+for keep in '1.2.3.4/24' '10.0.0.0/8' 'fc00::/18' '2001:db8::1'; do
+	echo "$out" | grep -q "$keep" || { echo "FAIL(S5.3): valid CIDR $keep was dropped"; echo "$out"; exit 1; }
+done
+for drop in '256.1.1.1' '1:2:3:4:5:6:7:8:9'; do
+	echo "$out" | grep -q "$drop" && { echo "FAIL(S5.3): invalid CIDR $drop leaked into ruleset"; echo "$out"; exit 1; }
+done
+echo "$out" | grep -q ':::' && { echo "FAIL(S5.3): ':::' leaked into ruleset"; echo "$out"; exit 1; }
+echo "  PASS: S5.3 invalid CIDRs dropped, valid CIDRs preserved"
+
 echo "OK"
