@@ -80,22 +80,28 @@ function _gate(s, gate, opts) {
     return true;
 }
 
+// _emit_seq / _emit_group are mutually recursive (a group's fields may contain
+// nested groups). ucode does NOT hoist `function` declarations, so a forward
+// reference would be a dangling name at definition time — forward-declare both
+// with `let` and assign function expressions so each can see the other.
+let _emit_seq, _emit_group;
+
 // _emit_seq(out, s, seq) — walk a sequence of entries (scalar | const | group).
-function _emit_seq(out, s, seq) {
+_emit_seq = function(out, s, seq) {
     for (let e in (seq || [])) {
         if ("const" in e) { out[e.json_key] = e.const; continue; }
         if (e.fields != null) { _emit_group(out, s, e); continue; }   // nested group
         if (e.json_key != null) { _emit_scalar(out, s, e); continue; }
     }
-}
+};
 
 // _emit_group(out, s, g) — gated nested object built from g.fields.
-function _emit_group(out, s, g) {
+_emit_group = function(out, s, g) {
     if (!_gate(s, g.gate, null)) return;
     let sub = {};
     _emit_seq(sub, s, g.fields);
     out[g.json_key] = sub;
-}
+};
 
 // _build_block(s, spec, kind, opts) — build a shared-block object from its
 // declarative emit_spec. Returns the object, or null when gated out.
