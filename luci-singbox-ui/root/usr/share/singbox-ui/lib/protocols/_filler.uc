@@ -13,14 +13,14 @@ const s_num    = helpers.s_num;
 const s_bool   = helpers.s_bool;
 const as_array = helpers.as_array;
 
-// Bridges the (intentionally inconsistent) shared-block export shapes to one
-// uniform call. `key`-style blocks return an object merged under out[key];
-// `merge`-style blocks mutate out in place. Shared modules are NOT modified.
+// Maps each shared block to its placement: `key`-style blocks nest their built
+// object under out[key]; `merge`-style blocks fold their keys into out directly.
+// Every block is built from its declarative emit_spec (see _emit_shared).
 const SHARED_DISPATCH = {
-    tls:       { key: "tls",       fn: { outbound: "emit_outbound", inbound: "emit_inbound" } },
-    transport: { key: "transport", fn: { outbound: "emit",          inbound: "emit" } },
-    multiplex: { key: "multiplex", fn: { outbound: "emit",          inbound: "emit" } },
-    dial:      { merge: "merge_dial" },
+    tls:       { key: "tls" },
+    transport: { key: "transport" },
+    multiplex: { key: "multiplex" },
+    dial:      { merge: true },
 };
 
 // _emit_scalar(out, s, f) — write one scalar field per its metadata:
@@ -125,8 +125,8 @@ function _build_block(s, spec, kind, opts) {
     return obj;
 }
 
-// _emit_shared(out, s, kind, d) — auto-invoke each declared shared block.
-// Prefers a declarative emit_spec on the module; falls back to legacy fn/merge.
+// _emit_shared(out, s, kind, d) — auto-invoke each declared shared block via
+// its declarative emit_spec. Modules without emit_spec are warned + skipped.
 function _emit_shared(out, s, kind, d) {
     if (d.shared == null) return;
     for (let blk in d.shared) {
@@ -140,20 +140,14 @@ function _emit_shared(out, s, kind, d) {
         catch (e) { warn(sprintf("_filler: shared '%s' failed to load: %s\n", blk, e)); continue; }
         if (mod == null) continue;
         let opts = (type(d.shared[blk]) === "object") ? d.shared[blk] : {};
-
-        if (mod.emit_spec != null) {                 // declarative path
-            if (spec.merge != null) {
-                let o = _build_block(s, mod.emit_spec, kind, opts);
-                for (let k in keys(o)) out[k] = o[k];
-            } else {
-                let res = _build_block(s, mod.emit_spec, kind, opts);
-                if (res != null) out[spec.key] = res;
-            }
-            continue;
+        if (mod.emit_spec == null) { warn(sprintf("_filler: shared '%s' has no emit_spec\n", blk)); continue; }
+        if (spec.merge) {
+            let o = _build_block(s, mod.emit_spec, kind, opts);
+            for (let k in keys(o)) out[k] = o[k];
+        } else {
+            let res = _build_block(s, mod.emit_spec, kind, opts);
+            if (res != null) out[spec.key] = res;
         }
-        if (spec.merge != null) { mod[spec.merge](out, s); continue; }   // legacy
-        let res = mod[spec.fn[kind]](s, opts);
-        if (res != null) out[spec.key] = res;
     }
 }
 

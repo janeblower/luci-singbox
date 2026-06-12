@@ -1,105 +1,5 @@
 // lib/protocols/_shared/tls.uc
 
-let helpers = require("helpers");
-const s_opt   = helpers.s_opt;
-const s_bool  = helpers.s_bool;
-const s_num   = helpers.s_num;
-const as_array = helpers.as_array;
-
-function _common_payload(s) {
-    let tls = { enabled: true };
-    if (length(s_opt(s, "tls_server_name")))
-        tls.server_name = s.tls_server_name;
-    if (s_bool(s, "tls_insecure"))
-        tls.insecure = true;
-    let alpn = as_array(s.tls_alpn);
-    if (length(alpn))
-        tls.alpn = alpn;
-    if (length(s_opt(s, "tls_min_version")))
-        tls.min_version = s.tls_min_version;
-    if (length(s_opt(s, "tls_max_version")))
-        tls.max_version = s.tls_max_version;
-    let ciphers = as_array(s.tls_cipher_suites);
-    if (length(ciphers))
-        tls.cipher_suites = ciphers;
-    return tls;
-}
-
-function _maybe_utls(tls, s) {
-    if (!s_bool(s, "utls_enabled")) return;
-    tls.utls = {
-        enabled: true,
-        fingerprint: length(s_opt(s, "utls_fingerprint")) ? s.utls_fingerprint : "chrome",
-    };
-}
-
-function _maybe_ech_outbound(tls, s) {
-    if (!s_bool(s, "tls_ech_enabled")) return;
-    let ech = { enabled: true };
-    let cfg = as_array(s.tls_ech_config);
-    if (length(cfg)) ech.config = cfg;
-    if (length(s_opt(s, "tls_ech_config_path"))) ech.config_path = s.tls_ech_config_path;
-    tls.ech = ech;
-}
-
-function _maybe_ech_inbound(tls, s) {
-    if (!s_bool(s, "tls_ech_enabled")) return;
-    let ech = { enabled: true };
-    let key = as_array(s.tls_ech_key);
-    if (length(key)) ech.key = key;
-    if (length(s_opt(s, "tls_ech_key_path"))) ech.key_path = s.tls_ech_key_path;
-    tls.ech = ech;
-}
-
-function _maybe_fragment(tls, s) {
-    if (s_bool(s, "tls_fragment")) tls.fragment = true;
-    if (length(s_opt(s, "tls_fragment_fallback_delay")))
-        tls.fragment_fallback_delay = s.tls_fragment_fallback_delay;
-    if (s_bool(s, "tls_record_fragment")) tls.record_fragment = true;
-}
-
-function _maybe_reality_outbound(tls, s) {
-    if (!s_bool(s, "reality_enabled")) return;
-    let r = { enabled: true };
-    if (length(s_opt(s, "reality_public_key"))) r.public_key = s.reality_public_key;
-    if (length(s_opt(s, "reality_short_id")))   r.short_id   = s.reality_short_id;
-    tls.reality = r;
-}
-
-function _maybe_reality_inbound(tls, s) {
-    if (!s_bool(s, "reality_enabled")) return;
-    let r = { enabled: true };
-    if (length(s_opt(s, "reality_private_key"))) r.private_key = s.reality_private_key;
-    if (length(s_opt(s, "reality_short_id")))    r.short_id    = s.reality_short_id;
-    let hs = {};
-    if (length(s_opt(s, "reality_handshake_server")))
-        hs.server = s.reality_handshake_server;
-    if (length(s_opt(s, "reality_handshake_server_port")))
-        hs.server_port = s_num(s.reality_handshake_server_port);
-    if (length(keys(hs))) r.handshake = hs;
-    tls.reality = r;
-}
-
-function emit_outbound(s, opts) {
-    if (!s_bool(s, "tls_enabled") && !(opts && opts.force_enabled)) return null;
-    let tls = _common_payload(s);
-    _maybe_utls(tls, s);
-    _maybe_ech_outbound(tls, s);
-    _maybe_fragment(tls, s);
-    _maybe_reality_outbound(tls, s);
-    return tls;
-}
-
-function emit_inbound(s, opts) {
-    if (!s_bool(s, "tls_enabled") && !(opts && opts.force_enabled)) return null;
-    let tls = _common_payload(s);
-    if (length(s_opt(s, "tls_certificate_path"))) tls.certificate_path = s.tls_certificate_path;
-    if (length(s_opt(s, "tls_key_path")))         tls.key_path         = s.tls_key_path;
-    _maybe_ech_inbound(tls, s);
-    _maybe_reality_inbound(tls, s);
-    return tls;
-}
-
 return {
     applies_to: { kinds: [ "inbound", "outbound" ] },
 
@@ -200,9 +100,6 @@ return {
           default: 443,
           parent_enabled: "reality_enabled", advanced: true },
     ],
-
-    emit_outbound: emit_outbound,
-    emit_inbound:  emit_inbound,
 
     emit_spec: {
         gate: { enabled_field: "tls_enabled", force_opt: "force_enabled" },
