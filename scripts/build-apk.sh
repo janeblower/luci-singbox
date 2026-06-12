@@ -30,12 +30,26 @@ PKG_MAINTAINER="Jyn"
 
 VERSION="${1:-}"
 if [ -z "$VERSION" ]; then
-    VERSION="$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')"
+    # Only semver tags (v1.2.3) are eligible. The repo also carries rolling
+    # release tags ('latest', 'bbolt-latest') which are NOT versions — an
+    # unfiltered `git describe` would happily return 'bbolt-latest' and feed
+    # apk-mkpkg a version it rejects (audit 12.2). Restrict to v* and, when no
+    # such tag exists, fall back to the same deterministic default CI uses.
+    VERSION="$(git describe --tags --abbrev=0 --match 'v*' 2>/dev/null | sed 's/^v//')"
     if [ -z "$VERSION" ]; then
-        echo "no git tag found and no version arg passed" >&2
-        exit 1
+        VERSION="0.0.0-r$(git rev-list --count HEAD 2>/dev/null || echo 0)"
+        echo "no v* git tag found — using deterministic fallback: $VERSION"
+    else
+        echo "using version from git tag: $VERSION"
     fi
-    echo "using version from git tag: $VERSION"
+fi
+
+# apk-mkpkg enforces Alpine-style versions <X.Y.Z>[-rN]; reject anything else
+# up front (mirrors the unknown-mode hard-fail below) so we never hand a
+# garbage version like 'bbolt-latest' to apk-mkpkg.
+if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$'; then
+    echo "invalid package version '$VERSION' (expected X.Y.Z or X.Y.Z-rN)" >&2
+    exit 1
 fi
 OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 
