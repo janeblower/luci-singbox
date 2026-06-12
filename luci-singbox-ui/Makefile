@@ -46,7 +46,8 @@ define Package/$(PKG_NAME)/install
 	    case "$$mode" in \
 	        bin)  install -m 0755 "./$$src" "$(1)/$$dst" ;; \
 	        conf) install -m 0644 "./$$src" "$(1)/$$dst" ;; \
-	        *)    install -m 0644 "./$$src" "$(1)/$$dst" ;; \
+	        data) install -m 0644 "./$$src" "$(1)/$$dst" ;; \
+	        *)    echo "install-manifest.txt: unknown mode '$$mode' for $$src" >&2 ; exit 1 ;; \
 	    esac ; \
 	done < $(INSTALL_MANIFEST)
 
