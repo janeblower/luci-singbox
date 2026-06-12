@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "tag": "tirs", "tls": { "enabled": true, "reality": { "enabled": true, "handshake": { "server": "ex.com" }, "private_key": "PRIV", "short_id": "ab12" } }, "type": "trojan", "users": [ { "name": "tirs", "password": "pw" } ] }

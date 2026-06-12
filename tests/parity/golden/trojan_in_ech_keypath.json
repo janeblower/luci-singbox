@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "tag": "tiek", "tls": { "ech": { "enabled": true, "key_path": "/etc/ech.key" }, "enabled": true }, "type": "trojan", "users": [ { "name": "tiek", "password": "pw" } ] }

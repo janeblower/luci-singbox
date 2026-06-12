@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "tag": "tic", "tls": { "certificate_path": "/etc/cert.pem", "enabled": true, "key_path": "/etc/key.pem" }, "type": "trojan", "users": [ { "name": "tic", "password": "pw" } ] }
