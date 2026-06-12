@@ -1,12 +1,6 @@
 // lib/protocols/tproxy.uc — TProxy inbound under the E2 DSL.
 
-let reg     = require("protocols.registry");
-let helpers = require("helpers");
-let dial_blk = require("protocols._shared.dial");
-
-const s_opt  = helpers.s_opt;
-const s_num  = helpers.s_num;
-const s_bool = helpers.s_bool;
+let reg = require("protocols.registry");
 
 reg.register({
     kind: "inbound", type: "tproxy", sing_box_type: "tproxy",
@@ -18,17 +12,18 @@ reg.register({
           validate: "port", default: 7895, ui_label: "Listen port" },
         { name: "network", type: "enum", tab: "basic",
           values: ["", "tcp", "udp"], default: "",
-          ui_label: "Network" },
+          ui_label: "Network", json_key: "network" },
         { name: "tcp_fast_open", type: "bool", tab: "basic",
-          ui_label: "TCP fast open", default: 0, advanced: true },
+          ui_label: "TCP fast open", default: 0, advanced: true,
+          json_key: "tcp_fast_open", coerce: "bool" },
         { name: "udp_fragment", type: "bool", tab: "basic",
-          ui_label: "UDP fragment", default: 0, advanced: true },
-        // Persisted to UCI and consumed by nftables.uc — NOT emitted to
-        // sing-box JSON (emit() below simply omits them). These must NOT be
-        // `virtual`: descriptor_form.makeVirtual() write-suppresses virtual
-        // fields, which silently discarded every modal edit to them. The
-        // interface set holds netdev DEVICE names (br-lan, eth0, eth0.100)
-        // because nftables matches them via `iifname @wan_ifaces`.
+          ui_label: "UDP fragment", default: 0, advanced: true,
+          json_key: "udp_fragment", coerce: "bool" },
+        // UI-only (no json_key) — persisted to UCI, consumed by nftables.uc,
+        // NOT emitted to sing-box JSON. Must NOT be `virtual`:
+        // descriptor_form.makeVirtual() write-suppresses virtual fields, which
+        // silently discarded every modal edit. The interface set holds netdev
+        // DEVICE names (br-lan, eth0, eth0.100) — nftables matches via iifname.
         { name: "interface", type: "list", tab: "basic",
           ui_label: "Interfaces to redirect (nftables)", dynamic: "devices" },
         { name: "nft_rules", type: "bool", tab: "basic",
@@ -36,16 +31,6 @@ reg.register({
         { name: "hijack_dns", type: "bool", tab: "basic",
           ui_label: "Hijack DNS via nftables", default: 0 },
     ],
-
-    emit: function(s) {
-        let out = dial_blk.build_listen_base(s, "tproxy");
-        if (!out) return null;
-        let net = s_opt(s, "network");
-        if (net == "tcp" || net == "udp") out.network = net;
-        if (s_bool(s, "tcp_fast_open")) out.tcp_fast_open = true;
-        if (s_bool(s, "udp_fragment"))  out.udp_fragment  = true;
-        return out;
-    },
 });
 
 return {};
