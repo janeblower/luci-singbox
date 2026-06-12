@@ -35,7 +35,7 @@ return view.extend({
 				if (r && r.status === 'ok') {
 					SbViewState.setSchema(r.schema);
 				} else {
-					L.ui.addNotification(null,
+					ui.addNotification(null,
 						E('p', _('Failed to load protocol schema. Some forms may be incomplete; restart rpcd or reinstall package.')),
 						'warning');
 				}

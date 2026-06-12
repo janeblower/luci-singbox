@@ -158,7 +158,11 @@ function _shareLinkImport(url) {
 		return { ok: true, fields: hf };
 	}
 	if (scheme === 'shadowsocks') {
-		match = url.match(/^ss:\/\/(?:([^@#]+)@)?(\[[0-9a-fA-F:]+\]|[^:#]+):(\d+)(?:#(.*))?$/);
+		// SIP002 links commonly carry ?plugin=name;opts before the #tag. The
+		// query group (?:\?([^#]*))? mirrors vless/trojan/hysteria2; without it
+		// the whole link failed to match and was rejected (audit 9.3). The host
+		// alternative also excludes '?' so the query is not swallowed into it.
+		match = url.match(/^ss:\/\/(?:([^@#?]+)@)?(\[[0-9a-fA-F:]+\]|[^:#?]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse shadowsocks URL')] };
 		var userinfo = match[1] ? safeDecode(match[1]) : '';
 		var mp = userinfo.split(':');
@@ -170,12 +174,30 @@ function _shareLinkImport(url) {
 				mp = decoded.split(':');
 			} catch (e) { /* keep plain mp */ }
 		}
-		return { ok: true, fields: {
+		var ssf = {
 			type: 'shadowsocks',
 			server: match[2], server_port: +match[3],
 			shadowsocks_method:  mp[0] || '2022-blake3-aes-128-gcm',
 			server_password:     mp.slice(1).join(':'),
-		} };
+		};
+		// SIP002 ?plugin=name;opt=val;... → UCI plugin / plugin_opts (the field
+		// names the shadowsocks descriptor and backend sharelink.uc both use).
+		// First ';'-segment is the plugin name, remainder is the opts string —
+		// matching parse_ss() in sharelink.uc so client pre-fill agrees with the
+		// config-generation parser.
+		if (match[4]) {
+			var qp = {};
+			match[4].split('&').forEach(function (p) {
+				var kv = p.split('='); qp[safeDecode(kv[0])] = safeDecode(kv.slice(1).join('='));
+			});
+			if (qp.plugin) {
+				var semi = qp.plugin.indexOf(';');
+				ssf.plugin = (semi >= 0) ? qp.plugin.slice(0, semi) : qp.plugin;
+				if (semi >= 0 && semi + 1 < qp.plugin.length)
+					ssf.plugin_opts = qp.plugin.slice(semi + 1);
+			}
+		}
+		return { ok: true, fields: ssf };
 	}
 	return { ok: false, errors: [_('Internal: unhandled scheme')] };
 }
