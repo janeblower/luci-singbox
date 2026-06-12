@@ -136,7 +136,13 @@ jobs:
       # able to change what executes here without a commit to this repo.
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:
-          bun-version: '1.2.x'
+          # Pin an exact version, not the '1.2.x' wildcard: setup-bun v2.0.2
+          # passes the version verbatim into the bun.sh download URL, and
+          # https://bun.sh/download/1.2.x/... now returns HTTP 400 (the literal
+          # "x" is no longer accepted as a version segment). A concrete patch
+          # (verified 200) keeps the job deterministic, matching the SHA-pin
+          # philosophy above. Bump deliberately when a newer bun is wanted.
+          bun-version: '1.2.21'
 
       - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
 
