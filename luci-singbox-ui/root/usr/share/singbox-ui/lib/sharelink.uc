@@ -58,7 +58,12 @@ function safe_tag(raw, seed) {
 function safe_host(raw) {
 	if (raw == null || !length(raw)) return null;
 	if (match(raw, /^[A-Za-z0-9.\-]+$/))   return raw;  // domain | IPv4
-	if (match(raw, /^\[[0-9a-fA-F:]+\]$/)) return raw;  // [IPv6]
+	// S4.2: a bracketed IPv6 literal ([::1]) must be stored WITHOUT brackets —
+	// sing-box's `server` field wants the bare address; a bracketed value is
+	// rejected. Strip them here so every parser (which captures host with the
+	// brackets) gets the canonical form.
+	let bm = match(raw, /^\[([0-9a-fA-F:]+)\]$/);
+	if (bm) return bm[1];                               // [IPv6] -> IPv6
 	if (match(raw, /^[0-9a-fA-F:]+$/) && index(raw, ":") >= 0)
 		return raw;                                     // bare IPv6
 	return null;
@@ -76,7 +81,10 @@ function parse_query(query_string) {
 	for (let part in split(query_string, "&")) {
 		let eq = index(part, "=");
 		if (eq < 0) continue;
-		let k = substr(part, 0, eq);
+		// S1.4/4.4: decode the KEY too — a producer that percent-encodes a key
+		// (e.g. %73ni=) would otherwise be stored under the literal "%73ni" and
+		// the lookup (params["sni"]) would silently miss it.
+		let k = url_decode(substr(part, 0, eq));
 		let v = substr(part, eq + 1);
 		params[k] = url_decode(v);
 	}
@@ -84,15 +92,21 @@ function parse_query(query_string) {
 }
 
 function parse_vless(url) {
-	// vless://uuid@host:port?params
-	let m = match(url, /^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?/);
+	// vless://uuid@host:port?params#name
+	let m = match(url, /^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let uuid = url_decode(m[1]);
 	let host = safe_host(m[2]);
 	let port = safe_port(m[3]);
 	if (!length(uuid) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
-	let out = { type: "vless", server: host, server_port: port, uuid: uuid };
+	// S4.3: capture the #fragment node name as the tag (consistent with
+	// ss/trojan), instead of silently discarding it.
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+	let out = {
+		type: "vless", server: host, server_port: port, uuid: uuid,
+		tag: safe_tag(length(frag) ? frag : host, url),
+	};
 	let security = params["security"];
 	if (security === "tls" || security === "reality") {
 		let sni = params["sni"] ?? host;
@@ -108,17 +122,19 @@ function parse_vless(url) {
 }
 
 function parse_hy2(url) {
-	// hy2://password@host:port?params  (also hysteria2://)
-	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?/) ||
-	        match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?/);
+	// hy2://password@host:port?params#name  (also hysteria2://)
+	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
+	        match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let password = url_decode(m[1]);
 	let host = safe_host(m[2]);
 	let port = safe_port(m[3]);
 	if (!length(password) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;   // S4.3: keep node name
 	let out = {
 		type: "hysteria2", server: host, server_port: port, password: password,
+		tag: safe_tag(length(frag) ? frag : host, url),
 		tls: { enabled: true, server_name: params["sni"] ?? host },
 	};
 	if (params["obfs"] === "salamander" && length(params["obfs-password"]))
@@ -156,6 +172,7 @@ function parse_ss(url) {
 	let frag = m[2] ? url_decode(substr(m[2], 1)) : null;
 
 	let method = null, password = null, host = null, port = null;
+	let query = "";   // S9.3: SIP002 ?plugin=... query, captured below
 
 	let at = index(body, "@");
 	if (at >= 0) {
@@ -167,6 +184,7 @@ function parse_ss(url) {
 		// Tail: host:port[?query]
 		let q = index(tail, "?");
 		let hp = q >= 0 ? substr(tail, 0, q) : tail;
+		if (q >= 0) query = substr(tail, q + 1);
 		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)$/);
 		if (!hpm) return null;
 		host = hpm[1]; port = +hpm[2];
@@ -195,6 +213,7 @@ function parse_ss(url) {
 		let tail = substr(dec, dat + 1);
 		let q = index(tail, "?");
 		let hp = q >= 0 ? substr(tail, 0, q) : tail;
+		if (q >= 0) query = substr(tail, q + 1);
 		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)$/);
 		if (!hpm) return null;
 		host = hpm[1]; port = +hpm[2];
@@ -217,6 +236,19 @@ function parse_ss(url) {
 		method: method,
 		password: password,
 	};
+	// S9.3: SIP002 ?plugin=name;opt=val;... → sing-box plugin / plugin_opts.
+	// The plugin value's first ';'-segment is the plugin name; the remainder is
+	// the opts string. parse_query splits on the first '=' only, so an
+	// unencoded (or %-encoded) ';'/'=' inside the value survives intact.
+	if (length(query)) {
+		let pl = parse_query(query)["plugin"];
+		if (length(pl)) {
+			let semi = index(pl, ";");
+			out.plugin = (semi >= 0) ? substr(pl, 0, semi) : pl;
+			if (semi >= 0 && semi + 1 < length(pl))
+				out.plugin_opts = substr(pl, semi + 1);
+		}
+	}
 	return out;
 }
 
@@ -270,8 +302,57 @@ function parse_trojan(url) {
 	return out;
 }
 
+// parse_vmess(url) — VMess share-link (v2rayN format): vmess://base64(json).
+// The decoded JSON is the v2rayN node object {v,ps,add,port,id,aid,net,type,
+// host,path,tls,sni,scy}. Mapped to a sing-box vmess outbound. S9.4.
+function parse_vmess(url) {
+	let dec = b64_decode(substr(url, 8));   // after "vmess://"
+	if (dec == null) return null;
+	let cfg;
+	try { cfg = json(drop_ctrl(dec)); } catch (e) { return null; }
+	if (type(cfg) !== "object") return null;
+
+	let host = safe_host(`${cfg.add ?? ""}`);
+	let port = safe_port(cfg.port);
+	let uuid = drop_ctrl(`${cfg.id ?? ""}`);
+	if (!host || !port || !length(uuid)) return null;
+
+	let scy = drop_ctrl(`${cfg.scy ?? ""}`);
+	let out = {
+		type: "vmess", server: host, server_port: port, uuid: uuid,
+		security: length(scy) ? scy : "auto",
+		alter_id: +(cfg.aid ?? 0) || 0,
+		tag: safe_tag(drop_ctrl(`${cfg.ps ?? ""}`), url),
+	};
+
+	let net = drop_ctrl(`${cfg.net ?? "tcp"}`);
+	let wpath = drop_ctrl(`${cfg.path ?? ""}`);
+	let whost = drop_ctrl(`${cfg.host ?? ""}`);
+	if (net === "ws") {
+		let tr = { type: "ws" };
+		if (length(wpath)) tr.path = wpath;
+		if (length(whost)) tr.headers = { Host: whost };
+		out.transport = tr;
+	} else if (net === "grpc") {
+		out.transport = { type: "grpc" };
+		if (length(wpath)) out.transport.service_name = wpath;
+	} else if (net === "h2" || net === "http") {
+		out.transport = { type: "http" };
+		if (length(wpath)) out.transport.path = wpath;
+		if (length(whost)) out.transport.host = [ whost ];
+	}
+
+	if (drop_ctrl(`${cfg.tls ?? ""}`) === "tls") {
+		let sni = drop_ctrl(`${cfg.sni ?? ""}`);
+		if (!length(sni)) sni = length(whost) ? whost : host;
+		out.tls = { enabled: true, server_name: sni };
+	}
+	return out;
+}
+
 function parse_proxy_url(url) {
 	if (match(url, /^vless:\/\//))     return parse_vless(url);
+	if (match(url, /^vmess:\/\//))     return parse_vmess(url);
 	if (match(url, /^ss:\/\//))        return parse_ss(url);
 	if (match(url, /^trojan:\/\//))    return parse_trojan(url);
 	if (match(url, /^hy2:\/\//) ||

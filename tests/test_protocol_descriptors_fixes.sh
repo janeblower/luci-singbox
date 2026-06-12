@@ -134,13 +134,16 @@ out=$(je '
 [ "$out" = "0" ] || die "S4-9 rewrite_ttl=0 must stay 0" "$out"
 ok "S4-9 rewrite_ttl=0 stays 0"
 
-# ---- S4-7: IPv6-literal hosts must parse in share-links ----
+# ---- S4-7: IPv6-literal hosts parse in share-links ----
+# S4.2: the host is stored WITHOUT the [...] brackets — sing-box's `server`
+# field wants the bare literal; a bracketed value is rejected. (Previously the
+# brackets were kept, which this block asserted; now corrected.)
 out=$(je '
     let ob = require("outbound");
     let r = ob.parse_proxy_url("vless://11111111-2222-3333-4444-555555555555@[2001:db8::1]:443?security=tls");
     print(r != null ? r.server : "NULL");
 ')
-[ "$out" = "[2001:db8::1]" ] || die "S4-7 vless IPv6 host must parse" "$out"
+[ "$out" = "2001:db8::1" ] || die "S4-7 vless IPv6 host must parse" "$out"
 ok "S4-7 vless IPv6 host parses"
 
 out=$(je '
@@ -148,7 +151,7 @@ out=$(je '
     let r = ob.parse_proxy_url("trojan://pw@[2001:db8::2]:8443#x");
     print(r != null ? r.server : "NULL");
 ')
-[ "$out" = "[2001:db8::2]" ] || die "S4-7 trojan IPv6 host must parse" "$out"
+[ "$out" = "2001:db8::2" ] || die "S4-7 trojan IPv6 host must parse" "$out"
 ok "S4-7 trojan IPv6 host parses"
 
 out=$(je '
@@ -156,7 +159,7 @@ out=$(je '
     let r = ob.parse_proxy_url("hysteria2://pw@[2001:db8::3]:443");
     print(r != null ? r.server : "NULL");
 ')
-[ "$out" = "[2001:db8::3]" ] || die "S4-7 hy2 IPv6 host must parse" "$out"
+[ "$out" = "2001:db8::3" ] || die "S4-7 hy2 IPv6 host must parse" "$out"
 ok "S4-7 hy2 IPv6 host parses"
 
 out=$(je '
@@ -164,7 +167,7 @@ out=$(je '
     let r = ob.parse_proxy_url("ss://aes-256-gcm:pw@[2001:db8::4]:8388#x");
     print(r != null ? r.server : "NULL");
 ')
-[ "$out" = "[2001:db8::4]" ] || die "S4-7 ss IPv6 host must parse" "$out"
+[ "$out" = "2001:db8::4" ] || die "S4-7 ss IPv6 host must parse" "$out"
 ok "S4-7 ss IPv6 host parses"
 
 # IPv4 share-links must still work (no regression).
