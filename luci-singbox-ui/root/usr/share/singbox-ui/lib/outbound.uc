@@ -12,12 +12,16 @@ let reg = require("protocols.registry");
 let sharelink = require("sharelink");
 
 // Eagerly load every active descriptor so register() fires. Anything not
-// listed here is permanently absent from the UI and the JSON.
-require("protocols.direct");
-require("protocols.shadowsocks");
-require("protocols.vless");
-require("protocols.trojan");
-require("protocols.hysteria2");
+// listed here is permanently absent from the UI and the JSON. S2.1: each
+// require() is wrapped so a single malformed descriptor file (its register()
+// asserting) logs+skips instead of throwing through require() and aborting
+// config generation for ALL protocols. The robustness net try_register
+// documents now actually exists on the production path.
+for (let _m in ["protocols.direct", "protocols.shadowsocks", "protocols.vless",
+                "protocols.trojan", "protocols.hysteria2"]) {
+	try { require(_m); }
+	catch (e) { warn(sprintf("outbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
+}
 
 const s_opt = helpers.s_opt;
 

@@ -12,14 +12,15 @@
 let helpers = require("helpers");
 let reg     = require("protocols.registry");
 
-// Eagerly load every active inbound descriptor so register() fires.
-require("protocols.trojan");
-require("protocols.shadowsocks");
-require("protocols.vless");
-require("protocols.hysteria2");
-require("protocols.direct");
-require("protocols.tproxy");
-require("protocols.mixed");
+// Eagerly load every active inbound descriptor so register() fires. S2.1: each
+// require() is wrapped so one malformed descriptor file logs+skips instead of
+// throwing through require() and aborting generation for ALL protocols.
+for (let _m in ["protocols.trojan", "protocols.shadowsocks", "protocols.vless",
+                "protocols.hysteria2", "protocols.direct", "protocols.tproxy",
+                "protocols.mixed"]) {
+	try { require(_m); }
+	catch (e) { warn(sprintf("inbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
+}
 
 const s_opt    = helpers.s_opt;
 const as_array = helpers.as_array;
