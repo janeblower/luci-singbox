@@ -212,10 +212,10 @@ rm -f "$TMPDIR/bin/sleep"   # undo the broken-sleep shim from the 4.5 block abov
 # rs_*.json must be absent so any_rulesets_stale lets the cron path reach the cold
 # logic (the 4.5 block left no json; be explicit so reordering can't mask this).
 rm -f "$SINGBOX_TMPDIR/rs_deadrs.json"
-# Stamp the sentinel ~1h into the future.
-touch -d '+1 hour' "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt" 2>/dev/null \
-	|| touch -t "$(date -d '+1 hour' +%Y%m%d%H%M 2>/dev/null || date +%Y%m%d%H%M)" \
-		"$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
+# Stamp the sentinel into the future. busybox touch has no -d '+1 hour' and
+# busybox date has no -d, so use a fixed far-future -t stamp (CCYYMMDDhhmm,
+# kept < 2038 to stay 32-bit-safe) to force mtime > now on every platform.
+touch -t 203501010000 "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
 BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "future-dated sentinel wedged the tag (got $(count_reloads), expected 1)"
 pass "future-dated sentinel is treated as eligible, not wedged"

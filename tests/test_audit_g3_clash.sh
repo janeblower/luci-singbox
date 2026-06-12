@@ -54,9 +54,12 @@ for a in "\$@"; do
 					f="\${a#@}"
 					[ -f "\$f" ] && {
 						cat "\$f" > "$tmpdir/hdrfile.content"
-						# octal perms, portable-ish: stat -c on Linux/busybox
-						stat -c '%a' "\$f" > "$tmpdir/hdrfile.mode" 2>/dev/null || \
-						stat -f '%Lp' "\$f" > "$tmpdir/hdrfile.mode" 2>/dev/null || true
+						# perms: stat(1) is NOT a stock busybox/OpenWrt applet, so
+						# fall back to ls -l's perm column (e.g. -rw-------).
+						{ stat -c '%a' "\$f" 2>/dev/null \
+							|| stat -f '%Lp' "\$f" 2>/dev/null \
+							|| ls -l "\$f" 2>/dev/null | awk 'NR==1{print \$1}'; } \
+							> "$tmpdir/hdrfile.mode" || true
 					}
 					;;
 				*) echo "INLINE-HEADER:\$a" >> "$tmpdir/curl.log" ;;
@@ -100,8 +103,9 @@ grep -q 'Authorization: Bearer supersecrettoken' "$tmpdir/hdrfile.content" \
 	|| { echo "FAIL(6.2): header file lacks bearer; content=$(cat "$tmpdir/hdrfile.content")"; exit 1; }
 # ...and it was mode 0600.
 mode=$(cat "$tmpdir/hdrfile.mode" 2>/dev/null || echo "?")
-[ "$mode" = "600" ] \
-	|| { echo "FAIL(6.2): header tmpfile mode is $mode, want 600"; exit 1; }
+# accept octal (stat) or the ls -l perm string (busybox fallback)
+{ [ "$mode" = "600" ] || [ "$mode" = "-rw-------" ]; } \
+	|| { echo "FAIL(6.2): header tmpfile mode is $mode, want 600 (-rw-------)"; exit 1; }
 # And it must be unlinked after the call (the @<file> path no longer exists).
 hdrpath=$(sed -n 's/.*-H @\([^ ]*\).*/\1/p' "$tmpdir/curl.log" | head -1)
 [ -n "$hdrpath" ] && [ -e "$hdrpath" ] \
