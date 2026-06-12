@@ -1,14 +1,6 @@
 // lib/protocols/vless.uc — VLESS outbound + inbound under the E2 DSL.
 
-let reg     = require("protocols.registry");
-let helpers = require("helpers");
-let tls_blk = require("protocols._shared.tls");
-let tr_blk  = require("protocols._shared.transport");
-let mux_blk = require("protocols._shared.multiplex");
-let dial_blk = require("protocols._shared.dial");
-
-const s_opt = helpers.s_opt;
-const s_num = helpers.s_num;
+let reg = require("protocols.registry");
 
 // --- Outbound ------------------------------------------------------------
 
@@ -59,16 +51,19 @@ reg.register({
           values: ["", "xtls-rprx-vision"], ui_label: "Flow (single-user)" },
     ],
 
-    emit: function(s) {
-        let inb = require("inbound");
-        let out = dial_blk.build_listen_base(s, "vless");
-        if (!out) return null;
-        let multi = inb.build_inbound_users(s, "vless");
-        out.users = length(multi) ? multi : [ inb.build_user(s) ];
-        let t = tls_blk.emit_inbound(s);  if (t) out.tls = t;
-        let r = tr_blk.emit(s);           if (r) out.transport = r;
-        let m = mux_blk.emit(s);          if (m) out.multiplex = m;
-        return out;
+    users: {
+        from: "inbound_user",
+        columns: [
+            { key: "name", required: true },
+            { key: "uuid", required: true, guard: "uuid" },
+            { key: "flow", tail: true },
+        ],
+        single_fallback: {
+            fields: [
+                { key: "uuid", from: "server_uuid" },
+                { key: "flow", from: "vless_flow" },
+            ],
+        },
     },
 });
 
