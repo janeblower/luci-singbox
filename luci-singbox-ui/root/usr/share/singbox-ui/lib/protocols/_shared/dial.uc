@@ -111,4 +111,24 @@ return {
     emit_outbound: emit_outbound,
     build_listen_base: build_listen_base,
     merge_dial: merge_dial,
+
+    emit_spec: {
+        merge: true,
+        seq: [
+            { name: "bind_interface",     json_key: "bind_interface" },
+            { name: "inet4_bind_address", json_key: "inet4_bind_address" },
+            { name: "inet6_bind_address", json_key: "inet6_bind_address" },
+            { name: "routing_mark",       json_key: "routing_mark", coerce: "num" },
+            { name: "reuse_addr",         json_key: "reuse_addr", coerce: "bool" },
+            { name: "connect_timeout",    json_key: "connect_timeout" },
+            { name: "tcp_fast_open",      json_key: "tcp_fast_open", coerce: "bool" },
+            { name: "tcp_multi_path",     json_key: "tcp_multi_path", coerce: "bool" },
+            { name: "udp_fragment",       json_key: "udp_fragment", coerce: "bool" },
+            { name: "domain_strategy",    json_key: "domain_strategy" },
+            { name: "network_strategy",   json_key: "network_strategy" },
+            { name: "fallback_delay",     json_key: "fallback_delay" },
+            { name: "detour",             json_key: "detour" },
+            { name: "netns",              json_key: "netns" },
+        ],
+    },
 };
