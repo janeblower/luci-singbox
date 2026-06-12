@@ -10,6 +10,7 @@ let fs = require("fs");
 let helpers = require("helpers");
 let reg = require("protocols.registry");
 let sharelink = require("sharelink");
+let filler = require("protocols._filler");
 
 // Eagerly load every active descriptor so register() fires. Anything not
 // listed here is permanently absent from the UI and the JSON. S2.1: each
@@ -39,7 +40,10 @@ function build_constructor_for(s, proto) {
 		warn(sprintf("outbound.uc: no descriptor for '%s'\n", proto));
 		return null;
 	}
-	return d.emit(s);
+	// Legacy / escape-hatch descriptors carry emit(); declarative descriptors
+	// (trojan/direct outbound, Phase F) build via protocols._filler from their
+	// fields[] metadata + declared shared blocks.
+	return d.emit ? d.emit(s) : filler.build(d, s);
 }
 
 function read_subscription_urls(name) {
