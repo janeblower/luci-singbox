@@ -96,11 +96,16 @@ reg.register({
             if (c1 < 0) continue;
             let rest = substr(u, c1 + 1);
             let c2 = index(rest, ":");
-            if (c2 < 0) continue;
+            if (c2 < 0) continue;          // require name:method:password shape
             let nm = substr(u, 0, c1);
-            let meth = substr(rest, 0, c2);
             let pw = substr(rest, c2 + 1);
-            if (length(nm)) push(users, { name: nm, method: meth, password: pw });
+            // S2.2: a sing-box shadowsocks inbound user has NO per-user `method`
+            // — the cipher is a single inbound-root property shared by all users
+            // (out.method above). Emitting a per-user method is an unknown field
+            // that sing-box rejects on strict parse, so the inbound never starts.
+            // The middle token is still parsed (kept in the UI format for
+            // back-compat) but discarded rather than emitted.
+            if (length(nm)) push(users, { name: nm, password: pw });
         }
         if (length(users)) {
             out.users = users;

@@ -36,7 +36,7 @@ function build_user(s) {
 	if (proto === "trojan" || proto === "hysteria2") {
 		if (length(s_opt(s, "server_password"))) u.password = s.server_password;
 	}
-	if (proto === "vless" && length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
+	if (proto === "vless" && length(s_opt(s, "vless_flow")))   // S2.3: dead !== "none" removed
 		u.flow = s.vless_flow;
 	return u;
 }
@@ -59,7 +59,7 @@ function build_inbound_users(s, proto) {
 		let flow = (c2 < 0) ? "" : substr(rest, c2 + 1);
 		if (!length(name) || !length(uuid)) continue;
 		let u = { name: name, uuid: uuid };
-		if (length(flow) && proto === "vless" && flow !== "none")
+		if (length(flow) && proto === "vless")   // S2.3: dead !== "none" removed
 			u.flow = flow;
 		push(out, u);
 	}

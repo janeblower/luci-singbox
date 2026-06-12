@@ -40,7 +40,9 @@ reg.register({
             server_port: s_num(s.server_port),
         };
         if (length(s_opt(s, "server_uuid"))) out.uuid = s.server_uuid;
-        if (length(s_opt(s, "vless_flow")) && s.vless_flow !== "none")
+        // vless_flow enum is ["", "xtls-rprx-vision"] — "none" is not a value,
+        // so the length() guard alone suffices (S2.3: dead !== "none" removed).
+        if (length(s_opt(s, "vless_flow")))
             out.flow = s.vless_flow;
         let net = s_opt(s, "network") || "tcp";
         if (net !== "tcp") out.network = net;

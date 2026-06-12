@@ -104,6 +104,7 @@ out=$(je '
     let cur = {
         foreach: function(pkg, kind, cb) {
             if (kind == "ruleset") cb({ ".name":"rs", "enabled":"1" });
+            if (kind == "dns_server") cb({ ".name":"fakeip", "enabled":"1", "type":"fakeip" });
             if (kind == "dns_rule")
                 cb({ ".name":"r", "enabled":"1", "ruleset":["rs"],
                      "server":"fakeip", "rewrite_ttl":"abc" });
@@ -121,6 +122,7 @@ out=$(je '
     let cur = {
         foreach: function(pkg, kind, cb) {
             if (kind == "ruleset") cb({ ".name":"rs", "enabled":"1" });
+            if (kind == "dns_server") cb({ ".name":"fakeip", "enabled":"1", "type":"fakeip" });
             if (kind == "dns_rule")
                 cb({ ".name":"r", "enabled":"1", "ruleset":["rs"],
                      "server":"fakeip", "rewrite_ttl":"0" });
@@ -205,9 +207,13 @@ out=$(je '
               "shadowsocks_method":"aes-128-gcm",
               "ss_user":["carol:aes-128-gcm:p:a:ss"] };
     let r = inb.build_one(s);
-    print(sprintf("%s|%s|%s", r.users[0].name, r.users[0].method, r.users[0].password));
+    // S2.2: a shadowsocks inbound user must carry NO per-user method (the cipher
+    // is the shared inbound-root out.method). Assert method is absent and the
+    // colon-bearing password tail is preserved (S4-8).
+    let m = r.users[0].method == null ? "NONE" : r.users[0].method;
+    print(sprintf("%s|%s|%s", r.users[0].name, m, r.users[0].password));
 ')
-[ "$out" = "carol|aes-128-gcm|p:a:ss" ] || die "S4-8 ss colon password truncated" "$out"
-ok "S4-8 ss colon password kept"
+[ "$out" = "carol|NONE|p:a:ss" ] || die "S2.2/S4-8 ss user method must be absent + colon password kept" "$out"
+ok "S2.2 ss user has no per-user method; S4-8 colon password kept"
 
 echo "ALL PASS: test_protocol_descriptors_fixes ($pass checks)"

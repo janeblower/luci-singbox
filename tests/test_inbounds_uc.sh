@@ -422,7 +422,9 @@ nocheck "no section single-user uuid leak" '"uuid": "section-uuid"'
 # D1.5.3: shadowsocks inbound descriptor parity (golden).
 # Must pass both before (legacy) and after (descriptor) the migration.
 echo "-- shadowsocks inbound descriptor parity: multi-user (D1.5.3 golden)"
-golden='{ "type": "shadowsocks", "tag": "ss_in1", "listen": "::", "listen_port": 8388, "method": "2022-blake3-aes-128-gcm", "network": "tcp", "users": [ { "name": "alice", "method": "2022-blake3-aes-128-gcm", "password": "pwA" }, { "name": "bob", "method": "2022-blake3-aes-128-gcm", "password": "pwB" } ] }'
+# S2.2: sing-box shadowsocks inbound users carry NO per-user method (the cipher
+# is the shared inbound-root "method"); golden updated to drop the invalid key.
+golden='{ "type": "shadowsocks", "tag": "ss_in1", "listen": "::", "listen_port": 8388, "method": "2022-blake3-aes-128-gcm", "network": "tcp", "users": [ { "name": "alice", "password": "pwA" }, { "name": "bob", "password": "pwB" } ] }'
 actual=$(
 	# shellcheck disable=SC2086
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
