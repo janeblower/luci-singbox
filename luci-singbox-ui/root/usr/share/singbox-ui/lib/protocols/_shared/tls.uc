@@ -203,4 +203,62 @@ return {
 
     emit_outbound: emit_outbound,
     emit_inbound:  emit_inbound,
+
+    emit_spec: {
+        gate: { enabled_field: "tls_enabled", force_opt: "force_enabled" },
+        outbound: [
+            { json_key: "enabled", const: true },
+            { name: "tls_server_name",   json_key: "server_name" },
+            { name: "tls_insecure",      json_key: "insecure",       coerce: "bool" },
+            { name: "tls_alpn",          json_key: "alpn",           coerce: "array" },
+            { name: "tls_min_version",   json_key: "min_version" },
+            { name: "tls_max_version",   json_key: "max_version" },
+            { name: "tls_cipher_suites", json_key: "cipher_suites",  coerce: "array" },
+            { json_key: "utls", gate: { flag: "utls_enabled" }, fields: [
+                { json_key: "enabled", const: true },
+                { name: "utls_fingerprint", json_key: "fingerprint",
+                  default_when_empty: "chrome", omit_when: "never" },
+            ] },
+            { json_key: "ech", gate: { flag: "tls_ech_enabled" }, fields: [
+                { json_key: "enabled", const: true },
+                { name: "tls_ech_config",      json_key: "config",       coerce: "array" },
+                { name: "tls_ech_config_path", json_key: "config_path" },
+            ] },
+            { name: "tls_fragment",                json_key: "fragment",                coerce: "bool" },
+            { name: "tls_fragment_fallback_delay", json_key: "fragment_fallback_delay" },
+            { name: "tls_record_fragment",         json_key: "record_fragment",         coerce: "bool" },
+            { json_key: "reality", gate: { flag: "reality_enabled" }, fields: [
+                { json_key: "enabled", const: true },
+                { name: "reality_public_key", json_key: "public_key" },
+                { name: "reality_short_id",   json_key: "short_id" },
+            ] },
+        ],
+        inbound: [
+            { json_key: "enabled", const: true },
+            { name: "tls_server_name",   json_key: "server_name" },
+            { name: "tls_insecure",      json_key: "insecure",       coerce: "bool" },
+            { name: "tls_alpn",          json_key: "alpn",           coerce: "array" },
+            { name: "tls_min_version",   json_key: "min_version" },
+            { name: "tls_max_version",   json_key: "max_version" },
+            { name: "tls_cipher_suites", json_key: "cipher_suites",  coerce: "array" },
+            { name: "tls_certificate_path", json_key: "certificate_path" },
+            { name: "tls_key_path",         json_key: "key_path" },
+            { json_key: "ech", gate: { flag: "tls_ech_enabled" }, fields: [
+                { json_key: "enabled", const: true },
+                { name: "tls_ech_key",      json_key: "key",      coerce: "array" },
+                { name: "tls_ech_key_path", json_key: "key_path" },
+            ] },
+            { json_key: "reality", gate: { flag: "reality_enabled" }, fields: [
+                { json_key: "enabled", const: true },
+                { name: "reality_private_key", json_key: "private_key" },
+                { name: "reality_short_id",    json_key: "short_id" },
+                { json_key: "handshake",
+                  gate: { any_present: ["reality_handshake_server", "reality_handshake_server_port"] },
+                  fields: [
+                    { name: "reality_handshake_server",      json_key: "server" },
+                    { name: "reality_handshake_server_port", json_key: "server_port", coerce: "num" },
+                ] },
+            ] },
+        ],
+    },
 };
