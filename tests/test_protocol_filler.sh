@@ -72,4 +72,44 @@ out=$(je '
 [ "$out" = '{ "type": "demo", "tag": "t", "a": "v", "extra": "added" }' ] || die "post hook mutates output" "$out"
 ok "post hook runs last"
 
+# ---- shared dispatch: tls merges under out.tls when enabled ----
+out=$(je '
+    let filler = require("protocols._filler");
+    let d = { kind:"outbound", sing_box_type:"vless", fields:[], shared:{ tls:{} } };
+    let got = filler.build(d, { ".name":"v1", tls_enabled:"1", tls_server_name:"sni.example" });
+    print((got.tls != null && got.tls.enabled === true && got.tls.server_name === "sni.example") ? "OK" : sprintf("BAD %J", got));
+')
+[ "$out" = "OK" ] || die "shared tls merges when enabled" "$out"
+ok "shared tls merges under out.tls"
+
+# ---- shared dispatch: tls disabled -> no tls key ----
+out=$(je '
+    let filler = require("protocols._filler");
+    let d = { kind:"outbound", sing_box_type:"vless", fields:[], shared:{ tls:{} } };
+    let got = filler.build(d, { ".name":"v1" });
+    print(got.tls == null ? "OK" : sprintf("BAD %J", got));
+')
+[ "$out" = "OK" ] || die "shared tls omitted when disabled" "$out"
+ok "shared tls omitted when disabled"
+
+# ---- shared dispatch: tls force_enabled opts passed through ----
+out=$(je '
+    let filler = require("protocols._filler");
+    let d = { kind:"outbound", sing_box_type:"hysteria2", fields:[], shared:{ tls:{ force_enabled:true } } };
+    let got = filler.build(d, { ".name":"h1" });   // tls_enabled NOT set
+    print((got.tls != null && got.tls.enabled === true) ? "OK" : sprintf("BAD %J", got));
+')
+[ "$out" = "OK" ] || die "shared tls force_enabled opts pass through" "$out"
+ok "shared tls force_enabled passes opts"
+
+# ---- shared dispatch: dial merge adds nothing on empty section ----
+out=$(je '
+    let filler = require("protocols._filler");
+    let d = { kind:"outbound", sing_box_type:"direct", fields:[], shared:{ dial:true } };
+    let got = filler.build(d, { ".name":"d1" });
+    print(sprintf("%J", got));
+')
+[ "$out" = '{ "type": "direct", "tag": "d1" }' ] || die "shared dial empty adds nothing" "$out"
+ok "shared dial merge no-op on empty section"
+
 echo "test_protocol_filler: all PASS"
