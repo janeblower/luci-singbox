@@ -122,4 +122,21 @@ out=$(je '
 [ "$out" = '{ "type": "x", "tag": "t" }' ] || die "nested group outer gate" "$out"
 ok "nested group suppressed when outer gate fails"
 
+# registry accepts skip_value/requires/default_when_empty + groups + users
+out=$(je '
+    let reg = require("protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"v2probe", sing_box_type:"x",
+            fields:[ { name:"n", type:"enum", tab:"basic", values:["","tcp","udp"], json_key:"network",
+                       skip_value:"tcp", requires:{ field:"n", value:"udp" }, default_when_empty:"smux" } ],
+            groups:[ { json_key:"obfs", gate:{ all_present:["a","b"] },
+                       fields:[ { name:"a", json_key:"type" } ] } ],
+            users:{ from:"u", columns:[ { key:"name", required:true } ] } });
+    } catch (e) { threw = true; print(sprintf("ERR %s\n", e)); }
+    print(threw ? "THREW" : "OK");
+')
+[ "$out" = "OK" ] || die "registry accepts v2 props" "$out"
+ok "registry accepts v2 field props + groups + users"
+
 echo "test_filler_v2: scalar primitives PASS"
