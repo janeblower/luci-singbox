@@ -18,54 +18,41 @@ reg.register({
 
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
-          validate: "host", ui_label: "Server" },
+          validate: "host", ui_label: "Server",
+          json_key: "server", omit_when: "never" },
         { name: "server_port", type: "number", tab: "basic", required: true,
-          validate: "port", default: 443, ui_label: "Server port" },
+          validate: "port", default: 443, ui_label: "Server port",
+          json_key: "server_port", coerce: "num", omit_when: "never" },
         { name: "server_password", type: "string", tab: "basic", required: true,
-          secret: true, ui_label: "Password" },
-        { name: "up_mbps", type: "number", tab: "basic",
-          ui_label: "Uplink Mbps", placeholder: "50" },
-        { name: "down_mbps", type: "number", tab: "basic",
-          ui_label: "Downlink Mbps", placeholder: "200" },
+          secret: true, ui_label: "Password",
+          json_key: "password", omit_when: "never" },
+        { name: "up_mbps", type: "number", tab: "basic", ui_label: "Uplink Mbps", placeholder: "50",
+          json_key: "up_mbps", coerce: "num" },
+        { name: "down_mbps", type: "number", tab: "basic", ui_label: "Downlink Mbps", placeholder: "200",
+          json_key: "down_mbps", coerce: "num" },
         { name: "obfs_type", type: "enum", tab: "basic",
           values: ["", "salamander"], ui_label: "Obfs type", advanced: true },
         { name: "obfs_password", type: "string", tab: "basic",
           secret: true, ui_label: "Obfs password", advanced: true,
           parent_enabled: "obfs_type" },
         { name: "network", type: "enum", tab: "basic",
-          values: ["", "tcp", "udp"], ui_label: "Network", advanced: true },
+          values: ["", "tcp", "udp"], ui_label: "Network", advanced: true,
+          json_key: "network" },
         { name: "brutal_debug", type: "bool", tab: "basic",
-          ui_label: "Brutal debug", default: 0, advanced: true },
+          ui_label: "Brutal debug", default: 0, advanced: true,
+          json_key: "brutal_debug", coerce: "bool" },
         { name: "masquerade", type: "string", tab: "basic",
-          ui_label: "Masquerade URL", placeholder: "https://example.com",
-          advanced: true },
+          ui_label: "Masquerade URL", placeholder: "https://example.com", advanced: true,
+          json_key: "masquerade" },
     ],
 
-    emit: function(s) {
-        let out = {
-            type: "hysteria2",
-            tag: s[".name"],
-            server: s_opt(s, "server"),
-            server_port: s_num(s.server_port),
-            password: s_opt(s, "server_password"),
-        };
-        if (length(s_opt(s, "obfs_type")) && length(s_opt(s, "obfs_password"))) {
-            out.obfs = {
-                type: s.obfs_type,
-                password: s.obfs_password,
-            };
-        }
-        if (length(s_opt(s, "up_mbps")))   out.up_mbps   = s_num(s.up_mbps);
-        if (length(s_opt(s, "down_mbps"))) out.down_mbps = s_num(s.down_mbps);
-        if (length(s_opt(s, "masquerade"))) out.masquerade = s.masquerade;
-        if (s_bool(s, "brutal_debug")) out.brutal_debug = true;
-        let net = s_opt(s, "network");
-        if (net === "tcp" || net === "udp") out.network = net;
-        let t = tls_blk.emit_outbound(s, { force_enabled: true });
-        if (t) out.tls = t;
-        dial_blk.merge_dial(out, s);
-        return out;
-    },
+    groups: [
+        { json_key: "obfs", gate: { all_present: ["obfs_type", "obfs_password"] },
+          fields: [
+              { name: "obfs_type",     json_key: "type" },
+              { name: "obfs_password", json_key: "password" },
+          ] },
+    ],
 });
 
 reg.register({
