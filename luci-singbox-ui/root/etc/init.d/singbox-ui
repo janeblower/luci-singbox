@@ -29,6 +29,20 @@ start_service() {
 		return 1
 	fi
 
+	# S6.1: validate the config semantically before handing it to procd. A
+	# well-formed-but-rejected config (unknown field, dangling reference, bad
+	# value) would otherwise make procd respawn sing-box in a tight loop. Refuse
+	# to start instead and let cron/reload retry in ≤30 min. S1.1: record the
+	# real apply outcome in apply_state.json (distinct from generate's state).
+	mkdir -p /var/lib/singbox-ui
+	if ! /usr/bin/sing-box check -c /tmp/singbox-ui.json 2>/tmp/singbox-ui.check.err; then
+		logger -t singbox-ui "refusing to start: sing-box rejected config"
+		logger -t singbox-ui "sing-box check: $(head -c 300 /tmp/singbox-ui.check.err 2>/dev/null)"
+		echo "{\"last_apply_ts\":$(date +%s),\"last_apply_result\":\"failed\"}" \
+			> /var/lib/singbox-ui/apply_state.json
+		return 1
+	fi
+
 	# Defensive: if a previous start_service installed nft rules and the
 	# user has since flipped every tproxy inbound to a non-tproxy protocol
 	# (or disabled the section), `needed` will now return "0" — but the
@@ -58,9 +72,14 @@ start_service() {
 	procd_set_param respawn
 	procd_close_instance
 
-	# C3.3: record service-start timestamp for status_detail RPC.
+	# C3.3: record service-start timestamp for status_detail RPC. S1.1: the
+	# config passed `sing-box check` above and was handed to procd, so record the
+	# real apply result here — status_detail surfaces this as last_apply_result,
+	# distinct from generate.uc's last_generate_result.
 	mkdir -p /var/lib/singbox-ui
 	echo "{\"service_start_ts\":$(date +%s)}" > /var/lib/singbox-ui/service_state.json
+	echo "{\"last_apply_ts\":$(date +%s),\"last_apply_result\":\"ok\"}" \
+		> /var/lib/singbox-ui/apply_state.json
 
 	# Cache the package version once per start so status_detail (a hot read
 	# RPC) doesn't fork apk on every call. Refreshed here so an upgrade +

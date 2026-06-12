@@ -203,18 +203,16 @@ if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 	exit(1);
 }
 
-// C3.3: record generate state for status_detail RPC.
+// C3.3 / S1.1 / S1.2: record GENERATE state for status_detail RPC, atomically
+// (publish_atomic, same durability as the main config — no truncated read).
+// This records only that a well-formed config was WRITTEN, NOT that sing-box
+// accepted and is running it; hence `last_generate_result`. The real apply
+// outcome is written by the init.d start path to apply_state.json
+// (last_apply_result) after a successful `sing-box check`.
 try {
-	let fs_mod = require("fs");
-	fs_mod.mkdir("/var/lib/singbox-ui", 0755);
-	let f = fs_mod.open("/var/lib/singbox-ui/last_state.json", "w");
-	if (f) {
-		let body = sprintf(
-			"{\"last_generate_ts\":%d,\"last_apply_result\":\"ok\",\"config_hash\":\"unknown\"}",
-			time());
-		f.write(body);
-		f.close();
-	}
+	fs.mkdir("/var/lib/singbox-ui", 0755);
+	publish_atomic("/var/lib/singbox-ui/last_state.json",
+		sprintf("{\"last_generate_ts\":%d,\"last_generate_result\":\"ok\",\"config_hash\":\"unknown\"}", time()));
 } catch (_) {}
 
 try { log_mod.log_event("info", "config.generated", {}); } catch (_) {}
