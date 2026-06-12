@@ -68,12 +68,39 @@ function validate_field(f, ctx) {
     if (f.omit_when != null)
         assert(KNOWN_OMIT[f.omit_when] != null,
                sprintf("%s.%s: unknown omit_when '%s'", ctx, f.name, f.omit_when));
+    if (f.skip_value != null)
+        assert(type(f.skip_value) === "string",
+               sprintf("%s.%s: skip_value must be a string", ctx, f.name));
+    if (f.requires != null)
+        assert(type(f.requires) === "string" ||
+               (type(f.requires) === "object" && f.requires.field != null && f.requires.value != null),
+               sprintf("%s.%s: requires must be a string or {field,value}", ctx, f.name));
 }
 
 function validate_shared(shared, ctx) {
     if (shared == null) return;
     for (let k in shared)
         assert(KNOWN_SHARED[k] != null, sprintf("%s: unknown shared key '%s'", ctx, k));
+}
+
+function _validate_seq(seq, ctx) {
+    for (let e in (seq || [])) {
+        if ("const" in e) { assert(e.json_key != null, sprintf("%s: const entry needs json_key", ctx)); continue; }
+        if (e.fields != null) { _validate_seq(e.fields, ctx); assert(e.json_key != null, sprintf("%s: group needs json_key", ctx)); continue; }
+        assert(e.json_key != null && e.name != null, sprintf("%s: scalar entry needs name+json_key", ctx));
+    }
+}
+function validate_groups(groups, ctx) {
+    if (groups == null) return;
+    for (let g in groups) {
+        assert(g.json_key != null, sprintf("%s: group needs json_key", ctx));
+        _validate_seq(g.fields, ctx);
+    }
+}
+function validate_users(u, ctx) {
+    if (u == null) return;
+    assert(type(u.columns) === "array" || u.single_fallback != null,
+           sprintf("%s: users needs columns[] or single_fallback", ctx));
 }
 
 function register(descriptor) {
@@ -88,7 +115,9 @@ function register(descriptor) {
     // A declarative descriptor needs at least one field to build anything
     // meaningful; an empty fields[] + no emit would silently emit just
     // {type,tag} — reject it so the omission fails loudly at registration.
-    let _has_decl = type(descriptor.fields) === "array" && length(descriptor.fields) > 0;
+    let _has_decl = (type(descriptor.fields) === "array" && length(descriptor.fields) > 0)
+                    || (type(descriptor.groups) === "array" && length(descriptor.groups) > 0)
+                    || (descriptor.users != null);
     assert(_has_emit || _has_decl,
         "descriptor must provide emit() or a non-empty declarative fields[]");
     if (descriptor.emit != null)
@@ -97,6 +126,8 @@ function register(descriptor) {
         assert(type(descriptor.post) === "function", "descriptor.post must be a function");
     let ctx = sprintf("%s:%s", descriptor.kind, descriptor.type);
     validate_shared(descriptor.shared, ctx);
+    validate_groups(descriptor.groups, ctx);
+    validate_users(descriptor.users, ctx);
     for (let f in (descriptor.fields || []))
         validate_field(f, ctx);
     _registry[ctx] = descriptor;
