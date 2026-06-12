@@ -29,6 +29,57 @@ check() {
 	echo "  PASS: $desc"
 }
 
+# Structural assertion (audit 10.7). Bare `grep` on the rendered JSON is
+# line-oriented, so a key can match in the WRONG nesting context (e.g. a
+# '"type": "block"' under some unrelated object would still pass). Where
+# correctness depends on a value living at an EXACT path, assert on the parsed
+# structure instead. ucode is guaranteed present whenever this test runs (it
+# SKIPs otherwise), so we navigate with ucode's json() at the precise path.
+#
+#   jpath_eq <desc> <expr> <want> <file>
+#     <expr> is a ucode expression over `d` (the parsed root), e.g.
+#     `d.route.rules[0].action`. PASS iff its string form == <want>.
+#   jpath_true <desc> <expr> <file>   — PASS iff <expr> is strictly true.
+#   jpath_absent <desc> <expr> <file> — PASS iff <expr> is null/undefined.
+_jeval() {
+	# Prints the evaluated expression's value (or the literal sentinel
+	# "<<UNDEF>>" when a path component is missing, so callers can tell an
+	# absent path from an empty string). Never aborts on a bad path.
+	_expr="$1"; _file="$2"
+	# shellcheck disable=SC2086
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+		let fs = require("fs");
+		let f = fs.open(ARGV[0], "r");
+		let d = json(f.read("all")); f.close();
+		let v;
+		try { v = ('"$_expr"'); } catch (e) { v = null; }
+		if (v === null) { print("<<UNDEF>>"); }
+		else if (type(v) == "bool") { print(v ? "true" : "false"); }
+		else { print(v); }
+	' "$_file"
+}
+jpath_eq() {
+	_d="$1"; _e="$2"; _w="$3"; _f="$4"
+	_got=$(_jeval "$_e" "$_f")
+	[ "$_got" = "$_w" ] \
+		|| { echo "FAIL: $_d — [$_e] = '$_got', want '$_w'"; cat "$_f"; exit 1; }
+	echo "  PASS: $_d"
+}
+jpath_true() {
+	_d="$1"; _e="$2"; _f="$3"
+	_got=$(_jeval "$_e" "$_f")
+	[ "$_got" = "true" ] \
+		|| { echo "FAIL: $_d — [$_e] = '$_got', want 'true'"; cat "$_f"; exit 1; }
+	echo "  PASS: $_d"
+}
+jpath_absent() {
+	_d="$1"; _e="$2"; _f="$3"
+	_got=$(_jeval "$_e" "$_f")
+	[ "$_got" = "<<UNDEF>>" ] \
+		|| { echo "FAIL: $_d — [$_e] present ('$_got'), expected absent"; cat "$_f"; exit 1; }
+	echo "  PASS: $_d"
+}
+
 # Hand the freshly-generated config to the actual sing-box daemon's
 # config validator. Catches the "shape looks right but sing-box rejects
 # it" class of bugs that grep-substring assertions miss (the canonical
@@ -512,9 +563,8 @@ config cache 'cache'
 	option enabled '0'
 "
 run_gen
-grep -q '"experimental":' "$TMPDIR/out.json" \
-    && { echo "FAIL: experimental emitted with cache disabled"; exit 1; }
-echo "  PASS: cache disabled → no experimental"
+# Structural (audit 10.7): the experimental block must be absent at the root.
+jpath_absent "experimental absent when cache disabled" 'd.experimental' "$TMPDIR/out.json"
 
 echo "-- cache.enabled=1 with fakeip dns_server and store_fakeip"
 write_cfg "
@@ -636,14 +686,16 @@ config dns 'dns'
 	option final 'out_dns'
 "
 run_gen
-check "dns servers"  '"servers":'           "$TMPDIR/out.json"
-check "dns tag"      '"tag": "out_dns"'     "$TMPDIR/out.json"
-check "dns server"   '"server": "dns.google"' "$TMPDIR/out.json"
-check "dns path"     '"path": "/dns-query"' "$TMPDIR/out.json"
-grep -q '"detour":' "$TMPDIR/out.json" \
-    && { echo "FAIL: dns detour to implicit direct must be scrubbed"; exit 1; }
-echo "  PASS: detour to implicit empty direct dropped"
-check "dns final"    '"final": "out_dns"'   "$TMPDIR/out.json"
+# Structural (audit 10.7): assert on dns.servers[0] at its exact path, not a
+# top-level grep that would match a "server"/"path"/"detour" key in any object
+# anywhere in the document.
+jpath_eq "dns.servers[0].tag == out_dns"      'd.dns.servers[0].tag'    'out_dns'    "$TMPDIR/out.json"
+jpath_eq "dns.servers[0].server == dns.google" 'd.dns.servers[0].server' 'dns.google' "$TMPDIR/out.json"
+jpath_eq "dns.servers[0].path == /dns-query"  'd.dns.servers[0].path'   '/dns-query' "$TMPDIR/out.json"
+# The detour to the implicit-empty direct must be scrubbed FROM THIS SERVER,
+# not merely absent from the whole file — assert at the server's own path.
+jpath_absent "dns.servers[0].detour scrubbed" 'd.dns.servers[0].detour' "$TMPDIR/out.json"
+jpath_eq "dns.final == out_dns"               'd.dns.final'             'out_dns'    "$TMPDIR/out.json"
 
 echo "-- dns_server detour='direct' preserved when a real 'direct' outbound exists"
 write_cfg "
@@ -716,18 +768,13 @@ config route_rule 'r1'
 	option action 'direct'
 "
 run_gen
-check "hijack protocol dns"   '"protocol": "dns"'        "$TMPDIR/out.json"
-check "hijack action"         '"action": "hijack-dns"'   "$TMPDIR/out.json"
-# Hijack must be FIRST. Find both lines and compare line numbers.
-# Use the rule-level "rule_set": (indented inside a rule object) not the top-level route rule_set array.
-hijack_ln=$(grep -n '"action": "hijack-dns"' "$TMPDIR/out.json" | head -n1 | cut -d: -f1)
-other_ln=$(grep -n '"outbound": "direct"' "$TMPDIR/out.json" | head -n1 | cut -d: -f1)
-if [ -z "$hijack_ln" ] || [ -z "$other_ln" ] || [ "$hijack_ln" -ge "$other_ln" ]; then
-    echo "FAIL: hijack rule must precede rule_set rules (hijack@$hijack_ln, other@$other_ln)"
-    cat "$TMPDIR/out.json"
-    exit 1
-fi
-echo "  PASS: hijack rule is first"
+# Structural (audit 10.7): assert the hijack rule lives at the EXACT first
+# slot of route.rules, with the right protocol+action — a bare grep would pass
+# if these keys appeared anywhere, in any rule, in any order.
+jpath_eq "route.rules[0].protocol == dns"        'd.route.rules[0].protocol' 'dns'        "$TMPDIR/out.json"
+jpath_eq "route.rules[0].action == hijack-dns"   'd.route.rules[0].action'   'hijack-dns' "$TMPDIR/out.json"
+# And the rule_set rule (r1 -> direct) must come AFTER it, never at index 0.
+jpath_eq "route.rules[1].outbound == direct"     'd.route.rules[1].outbound' 'direct'     "$TMPDIR/out.json"
 
 echo "-- hijack_dns=1 on an enabled tproxy inbound emits hijack rule"
 write_cfg "
@@ -766,10 +813,15 @@ config cache 'cache'
 	option enabled '1'
 "
 run_gen
-check "experimental block"   '"experimental":'                          "$TMPDIR/out.json"
-check "clash_api controller" '"external_controller": "127.0.0.1:9090"' "$TMPDIR/out.json"
-check "clash_api secret"     '"secret": "sekret"'                       "$TMPDIR/out.json"
-check "cache_file kept"      '"cache_file":'                            "$TMPDIR/out.json"
+# Structural (audit 10.7): the clash_api and cache_file objects must live
+# UNDER experimental, not just somewhere in the file. A top-level grep for
+# "external_controller" would pass even if it leaked to the wrong scope.
+jpath_eq "experimental.clash_api.external_controller" \
+	'd.experimental.clash_api.external_controller' '127.0.0.1:9090' "$TMPDIR/out.json"
+jpath_eq "experimental.clash_api.secret" \
+	'd.experimental.clash_api.secret' 'sekret' "$TMPDIR/out.json"
+jpath_true "experimental.cache_file present" \
+	'(type(d.experimental.cache_file) == "object")' "$TMPDIR/out.json"
 
 echo "-- clash_api disabled → no clash_api key"
 write_cfg "
@@ -777,9 +829,11 @@ config clash_api 'clash_api'
 	option enabled '0'
 "
 run_gen
-grep -q '"clash_api":' "$TMPDIR/out.json" \
-	&& { echo "FAIL: clash_api emitted while disabled"; exit 1; }
-echo "  PASS: clash_api absent when disabled"
+# Structural (audit 10.7): assert clash_api is absent at its real path under
+# experimental — a grep for '"clash_api":' is fine for the top-level scan but
+# the path check also proves it didn't reappear nested anywhere experimental.
+jpath_absent "experimental.clash_api absent when disabled" \
+	'd.experimental.clash_api' "$TMPDIR/out.json"
 
 # Phase C2 final sweep: after the full battery of generate runs, the sandbox
 # dir must contain no orphan tmpfiles. A single leaked tmpfile from any

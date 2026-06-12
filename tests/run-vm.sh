@@ -28,7 +28,27 @@ if [ ! -w /dev/kvm ]; then
 fi
 
 # Pull on demand. Docker caches layers, so subsequent runs are near-free.
-docker pull "$IMAGE" >/dev/null
+# Bounded retry (audit 10.6): a registry blip or a slow GHCR on a loaded CI
+# runner must not fail the whole job on the first transient. Three attempts
+# with 2s/4s/8s backoff; only the final failure is fatal.
+pull_image() {
+	attempt=1
+	delay=2
+	while :; do
+		if docker pull "$IMAGE" >/dev/null; then
+			return 0
+		fi
+		if [ "$attempt" -ge 3 ]; then
+			echo "ERROR: docker pull '$IMAGE' failed after 3 attempts." >&2
+			return 1
+		fi
+		echo "WARN: docker pull failed (attempt $attempt/3), retrying in ${delay}s..." >&2
+		sleep "$delay"
+		attempt=$((attempt + 1))
+		delay=$((delay * 2))
+	done
+}
+pull_image
 
 echo "==> running tests inside $IMAGE"
 exec docker run --rm \

@@ -91,14 +91,39 @@ else
 fi
 
 echo "==> wait for SSH"
-/opt/wait-ssh.sh 127.0.0.1 "$SSH_PORT" 30
+# Deadline raised 30s -> 90s (audit 10.6): a loaded GitHub runner can take
+# longer than 30s to reach the SSH banner after `-loadvm`, so a slow KVM boot
+# was flaking the whole job. 90s is generous headroom over a healthy ~5s boot
+# while still failing fast on a genuinely dead VM.
+/opt/wait-ssh.sh 127.0.0.1 "$SSH_PORT" 90
 
 # usermode SLIRP can lose its DHCP lease across loadvm — refresh it.
 SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR"
 SSH="sshpass -p $SSH_PASS ssh $SSH_OPTS -p $SSH_PORT $SSH_USER@127.0.0.1"
 
-# shellcheck disable=SC2086  # SSH_OPTS intentionally splits
-$SSH 'udhcpc -i eth0 -n -q >/dev/null 2>&1 || true'
+# wait-ssh confirms the SSH banner, but immediately after loadvm the SLIRP
+# DHCP lease may not have refreshed yet, so the FIRST guest exec (the udhcpc
+# refresh itself) can transiently fail to connect/authenticate. Retry it a few
+# times with a short backoff (audit 10.6) so a slow post-loadvm DHCP refresh
+# does not flake the run. This is a first-connectivity probe: once one exec
+# succeeds, the channel is up for the tar-stream and the suite run.
+first_exec() {
+	tries=1
+	while :; do
+		# shellcheck disable=SC2086  # SSH_OPTS intentionally splits
+		if $SSH 'udhcpc -i eth0 -n -q >/dev/null 2>&1 || true'; then
+			return 0
+		fi
+		if [ "$tries" -ge 5 ]; then
+			echo "FAIL: guest unreachable over SSH after 5 attempts (DHCP not up?)" >&2
+			return 1
+		fi
+		echo "WARN: first guest exec failed (attempt $tries/5), retrying in 2s..." >&2
+		sleep 2
+		tries=$((tries + 1))
+	done
+}
+first_exec
 
 echo "==> inject working tree into guest:/tmp/work"
 tar -czf - \
