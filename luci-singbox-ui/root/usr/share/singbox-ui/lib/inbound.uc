@@ -46,7 +46,12 @@ function build_user(s) {
 // vless (multi-user). Returns an array of user objects, or [] when no valid
 // entries.  Format per entry:
 //   vless: "name:uuid"          or "name:uuid:flow"
-// Invalid entries (missing name/uuid) are silently skipped.
+// Invalid entries (missing name/uuid) are silently skipped. 1.6: a uuid token
+// that is structurally impossible (whitespace, JSON-breaking chars, anything
+// outside the UUID character class) would be rejected loudly by sing-box at
+// load — warn+skip such an entry here so one bad row doesn't kill the inbound.
+// Kept deliberately permissive (not a strict canonical-UUID match): only
+// clearly-malformed tokens are dropped, plausible identifiers pass through.
 function build_inbound_users(s, proto) {
 	let entries = as_array(s.inbound_user);
 	let out = [];
@@ -59,6 +64,10 @@ function build_inbound_users(s, proto) {
 		let uuid = (c2 < 0) ? rest : substr(rest, 0, c2);
 		let flow = (c2 < 0) ? "" : substr(rest, c2 + 1);
 		if (!length(name) || !length(uuid)) continue;
+		if (!match(uuid, /^[0-9A-Za-z-]+$/)) {
+			warn(sprintf("inbound.uc: %s inbound_user '%s' has malformed uuid '%s'; skipping\n", proto, name, uuid));
+			continue;
+		}
 		let u = { name: name, uuid: uuid };
 		if (length(flow) && proto === "vless")   // S2.3: dead !== "none" removed
 			u.flow = flow;
