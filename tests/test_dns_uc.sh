@@ -173,4 +173,64 @@ config dns_server 'fakeip'
 run_gen
 check "rewrite_ttl 0 honoured" '"rewrite_ttl": 0'
 
+echo "-- dns_server invalid server_port is omitted, not coerced to 0 (S3.4)"
+write_cfg "
+config dns_server 'badport'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+	option server_port 'notaport'
+"
+run_gen
+nocheck "no server_port 0" '"server_port": 0'
+
+echo "-- dns_server valid server_port preserved (S3.4)"
+write_cfg "
+config dns_server 'okport'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+	option server_port '5353'
+"
+run_gen
+check "server_port 5353" '"server_port": 5353'
+
+echo "-- dns_rule referencing a disabled/missing dns_server is dropped (S3.2)"
+write_cfg "
+config ruleset 'rs'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://x/y.srs'
+
+config dns_server 'live'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+
+config dns_server 'dead'
+	option enabled '0'
+	option type 'udp'
+	option server '9.9.9.9'
+
+config dns_rule 'dangling'
+	option enabled '1'
+	list   ruleset 'rs'
+	option server 'dead'
+"
+run_gen
+nocheck "dangling dns_rule dropped" '"server": "dead"'
+
+echo "-- dns.final referencing a disabled/missing dns_server is dropped (S3.2)"
+write_cfg "
+config dns_server 'live'
+	option enabled '1'
+	option type 'udp'
+	option server '1.1.1.1'
+
+config dns 'dns'
+	option final 'ghost'
+"
+run_gen
+nocheck "dangling dns.final dropped" '"final": "ghost"'
+
 echo "OK"

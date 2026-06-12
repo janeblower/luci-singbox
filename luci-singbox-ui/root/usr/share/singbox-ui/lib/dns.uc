@@ -6,6 +6,19 @@ const s_opt    = helpers.s_opt;
 const s_num    = helpers.s_num;
 const csv_list = helpers.csv_list;
 
+// enabled_server_tags(cur) -> { tag: true } for every enabled dns_server.
+// Used to drop dns_rule.server / dns.final references that don't resolve to an
+// enabled server — sing-box hard-fails on a dangling server tag, the same way
+// it does on a dangling rule_set (which we already filter). See S3.2.
+function enabled_server_tags(cur) {
+	let tags = {};
+	cur.foreach("singbox-ui", "dns_server", function(s) {
+		if (s.enabled === "0") return;
+		tags[s[".name"]] = true;
+	});
+	return tags;
+}
+
 function build_servers(cur) {
 	let servers = [];
 	cur.foreach("singbox-ui", "dns_server", function(s) {
@@ -19,7 +32,15 @@ function build_servers(cur) {
 			if (length(s_opt(s, "inet6_range"))) srv.inet6_range = s.inet6_range;
 		} else if (t === "udp" || t === "tls" || t === "https") {
 			srv = { type: t, tag: tag, server: s_opt(s, "server") };
-			if (length(s_opt(s, "server_port"))) srv.server_port = s_num(s.server_port);
+			// S3.4: only emit server_port when it is a valid 1..65535 integer.
+			// A non-numeric value (typo / direct UCI edit) must be omitted, not
+			// coerced to 0 (port 0 is meaningless and sing-box mishandles it) —
+			// mirrors the rewrite_ttl NaN guard below.
+			if (length(s_opt(s, "server_port"))) {
+				let p = +s.server_port;
+				if (p == p && p >= 1 && p <= 65535) srv.server_port = int(p);
+				else warn(sprintf("dns.uc: dns_server '%s' invalid server_port '%s'; omitting\n", tag, s.server_port));
+			}
 			if (t === "https" && length(s_opt(s, "path"))) srv.path = s.path;
 			if (length(s_opt(s, "detour"))) srv.detour = s.detour;
 			if (length(s_opt(s, "domain_resolver"))) srv.domain_resolver = s.domain_resolver;
@@ -35,6 +56,7 @@ function build_servers(cur) {
 function build_rules(cur) {
 	let rs_enabled = {};
 	cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = (s.enabled !== "0"); });
+	let srv_tags = enabled_server_tags(cur);
 
 	let rules = [];
 	cur.foreach("singbox-ui", "dns_rule", function(s) {
@@ -57,6 +79,12 @@ function build_rules(cur) {
 		// Drop rules with no matcher or no target.
 		let has_match = rule.rule_set || rule.domain_suffix || rule.domain_keyword || rule.clash_mode;
 		if (!has_match || !length(server)) return;
+		// S3.2: drop the rule if its server tag doesn't resolve to an enabled
+		// dns_server — a dangling server reference makes sing-box refuse to start.
+		if (!srv_tags[server]) {
+			warn(sprintf("dns.uc: dns_rule '%s' server '%s' is not an enabled dns_server; dropping rule\n", s[".name"], server));
+			return;
+		}
 		rule.server = server;
 		// rewrite_ttl default = 60. Empty/absent → 60. "0" → 0 (explicit
 		// disable). A non-numeric value (+"abc" → NaN) also falls back to 60
@@ -107,7 +135,13 @@ function build_dns(cur) {
 
 	let d = cur.get_all("singbox-ui", "dns");
 	if (d != null) {
-		if (length(s_opt(d, "final")))    out.final = d.final;
+		// S3.2: only emit dns.final when it names an enabled dns_server; a
+		// dangling final tag makes sing-box refuse to start.
+		if (length(s_opt(d, "final"))) {
+			let srv_tags = enabled_server_tags(cur);
+			if (srv_tags[d.final]) out.final = d.final;
+			else warn(sprintf("dns.uc: dns.final '%s' is not an enabled dns_server; omitting\n", d.final));
+		}
 		if (length(s_opt(d, "strategy"))) out.strategy = d.strategy;
 		if (d.independent_cache === "1")  out.independent_cache = true;
 	}
