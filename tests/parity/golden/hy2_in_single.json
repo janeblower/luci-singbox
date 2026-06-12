@@ -1,0 +1,1 @@
+{ "brutal_debug": true, "down_mbps": 200, "ignore_client_bandwidth": true, "listen": "::", "listen_port": 443, "obfs": { "password": "op", "type": "salamander" }, "tag": "hi1", "tls": { "enabled": true }, "type": "hysteria2", "up_mbps": 50, "users": [ { "name": "hi1", "password": "pw" } ] }

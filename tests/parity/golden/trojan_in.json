@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "tag": "ti1", "tls": { "enabled": true, "server_name": "sni" }, "transport": { "path": "/w", "type": "ws" }, "type": "trojan", "users": [ { "name": "ti1", "password": "pw" } ] }

@@ -1,0 +1,1 @@
+{ "password": "pw", "server": "ex.com", "server_port": 443, "tag": "h3", "tls": { "enabled": true }, "type": "hysteria2" }

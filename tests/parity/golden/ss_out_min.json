@@ -1,0 +1,1 @@
+{ "method": "2022-blake3-aes-128-gcm", "password": "pw", "server": "ex.com", "server_port": 8388, "tag": "s1", "type": "shadowsocks" }

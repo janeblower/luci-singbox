@@ -1,0 +1,1 @@
+{ "flow": "xtls-rprx-vision", "network": "udp", "packet_encoding": "xudp", "server": "ex.com", "server_port": 443, "tag": "v2", "type": "vless", "uuid": "uuid-x" }

@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "tag": "hi2", "tls": { "enabled": true }, "type": "hysteria2", "users": [ { "name": "alice", "password": "pw1" }, { "name": "bob", "password": "pw:2" } ] }

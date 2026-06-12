@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 7895, "network": "tcp", "tag": "tp1", "tcp_fast_open": true, "type": "tproxy", "udp_fragment": true }

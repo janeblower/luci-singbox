@@ -1,0 +1,1 @@
+{ "listen": "127.0.0.1", "listen_port": 1080, "tag": "m2", "type": "mixed", "users": [ { "password": "secret", "username": "alice" }, { "password": "pa:ss", "username": "bob" } ] }

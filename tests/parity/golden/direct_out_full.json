@@ -1,0 +1,1 @@
+{ "override_address": "1.1.1.1", "override_port": 5353, "proxy_protocol": 2, "tag": "d2", "type": "direct" }

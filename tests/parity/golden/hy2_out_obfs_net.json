@@ -1,0 +1,1 @@
+{ "brutal_debug": true, "down_mbps": 200, "masquerade": "https://x", "network": "udp", "obfs": { "password": "op", "type": "salamander" }, "password": "pw", "server": "ex.com", "server_port": 443, "tag": "h2", "tls": { "enabled": true }, "type": "hysteria2", "up_mbps": 50 }

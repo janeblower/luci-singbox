@@ -1,0 +1,1 @@
+{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "t3", "tls": { "ech": { "config": [ "A", "B" ], "config_path": "/e", "enabled": true }, "enabled": true, "fragment": true, "fragment_fallback_delay": "500ms", "record_fragment": true, "utls": { "enabled": true, "fingerprint": "firefox" } }, "type": "trojan" }

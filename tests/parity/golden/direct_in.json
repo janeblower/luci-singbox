@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 5353, "network": "udp", "override_address": "1.1.1.1", "override_port": 53, "tag": "di1", "tcp_fast_open": true, "type": "direct", "udp_fragment": true }

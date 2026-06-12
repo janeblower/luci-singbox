@@ -1,0 +1,1 @@
+{ "bind_interface": "eth0", "connect_timeout": "5s", "detour": "other", "domain_strategy": "ipv4_only", "password": "p", "routing_mark": 100, "server": "ex.com", "server_port": 443, "tag": "t6", "tcp_fast_open": true, "type": "trojan", "udp_fragment": true }

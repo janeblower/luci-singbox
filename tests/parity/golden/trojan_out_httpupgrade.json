@@ -1,0 +1,1 @@
+{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "t7", "transport": { "host": "hu.com", "path": "/hu", "type": "httpupgrade" }, "type": "trojan" }

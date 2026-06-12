@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "tag": "vi2", "type": "vless", "users": [ { "flow": "xtls-rprx-vision", "name": "alice", "uuid": "uuid-a" }, { "name": "bob", "uuid": "uuid-b" } ] }

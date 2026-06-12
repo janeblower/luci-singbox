@@ -1,0 +1,1 @@
+{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "t8", "transport": { "mode": "stream-up", "path": "/x", "type": "xhttp" }, "type": "trojan" }

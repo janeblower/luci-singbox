@@ -1,0 +1,1 @@
+{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "t4", "transport": { "headers": { "Host": "h.com" }, "path": "/ws", "type": "ws" }, "type": "trojan" }
