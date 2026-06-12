@@ -92,4 +92,72 @@ ubus -v list singbox-ui 2>/dev/null | grep -q '"status"' \
 	|| { echo "FAIL: ubus does not advertise singbox-ui methods; rpcd failed to parse handler list"; exit 1; }
 echo "  PASS: rpcd parsed handler method list via shebang"
 
+# 4) Extra method coverage through the REAL ubus prod-path (audit 10.4).
+#    Only 3 reference methods (status/protocol_schema/list) used to be called
+#    here; the bulk of the require()/fork chain lived only in
+#    test_rpcd_handler.sh, which runs the handler via `ucode -L <handler>` and
+#    thereby BYPASSES the shebang. Methods that require()-chain or read files
+#    at call time can regress in ways only the prod path surfaces (argv/env/cwd
+#    differences under rpcd). We exercise the require-heavy / fork-heavy /
+#    file-reading ones over `ubus call` so the shebang+require+child-exec path
+#    is validated for them too.
+#
+# Helper: call a method, assert the handler launched (non-zero rc == the
+# interpreter never came up, the exact shebang-regression symptom) and that the
+# JSON body is parseable and free of a require()-failure marker. We deliberately
+# do NOT require status:"ok" for every method — e.g. read_config legitimately
+# returns status:"error","config not generated yet" on a box that has not run
+# generate — but it must still return a CLEAN JSON envelope, never a
+# require(...) failed / interpreter crash.
+assert_clean() {
+	_m="$1"; _out="$2"
+	# A require() failure surfaces as an error envelope whose message contains
+	# the literal marker `require(<module>) failed`. Match `require(` (not the
+	# bare word "require") so a future CLEAN status:"error" message that merely
+	# contains "require"/"required" (e.g. a "field is required" validation
+	# error) cannot false-FAIL this assertion.
+	if printf '%s' "$_out" | grep -q 'require(' && printf '%s' "$_out" | grep -q '"error"'; then
+		echo "FAIL: $_m hit a require() failure via prod path; out=$_out"; exit 1
+	fi
+	# Must be a JSON object envelope with a status field (proves the handler
+	# emitted, i.e. the shebang launched and the dispatcher ran).
+	printf '%s' "$_out" | grep -q '"status"' \
+		|| { echo "FAIL: $_m did not return a JSON status envelope via prod path; out=$_out"; exit 1; }
+}
+
+# 4a) read_config — opens /tmp/singbox-ui.json with fs builtins. Either
+#     status:ok (config present) or status:error (not generated yet); both are
+#     CLEAN. A broken shebang would make even this fail to launch.
+out=$(ubus call singbox-ui read_config 2>/dev/null) \
+	|| { echo "FAIL: 'ubus call singbox-ui read_config' returned non-zero (shebang/require regressed?)"; exit 1; }
+assert_clean read_config "$out"
+echo "  PASS: ubus call singbox-ui read_config returns a clean JSON envelope"
+
+# 4b) subscription_expand — require()s the subscription_expand lib module at
+#     call time (the canonical -L-shebang-dependent require). Passing a name
+#     for a non-existent section yields a clean status:error, never a
+#     require(...) failed, IF the shebang carries -L.
+out=$(ubus call singbox-ui subscription_expand '{"name":"nonexistent_sub"}' 2>/dev/null) \
+	|| { echo "FAIL: 'ubus call singbox-ui subscription_expand' returned non-zero"; exit 1; }
+assert_clean subscription_expand "$out"
+echo "  PASS: ubus call singbox-ui subscription_expand require()s lib via -L shebang"
+
+# 4c) export_section — FORKS export_section.uc (a child ucode process that
+#     itself require()s lib/ via its own shebang). This is the fork+child-exec
+#     chain no direct `ucode -L handler` test can cover. An unknown section
+#     returns a clean error envelope.
+out=$(ubus call singbox-ui export_section '{"kind":"outbound","name":"nonexistent_out"}' 2>/dev/null) \
+	|| { echo "FAIL: 'ubus call singbox-ui export_section' returned non-zero"; exit 1; }
+assert_clean export_section "$out"
+echo "  PASS: ubus call singbox-ui export_section forks helper via shebang"
+
+# 4d) bbolt_status — read-only fs.stat + host_arch() (forks `apk --print-arch`).
+#     Always status:ok; installed:true/false depending on the box.
+out=$(ubus call singbox-ui bbolt_status 2>/dev/null) \
+	|| { echo "FAIL: 'ubus call singbox-ui bbolt_status' returned non-zero"; exit 1; }
+assert_clean bbolt_status "$out"
+printf '%s' "$out" | grep -q '"status": *"ok"' \
+	|| { echo "FAIL: bbolt_status did not return ok via prod path; out=$out"; exit 1; }
+echo "  PASS: ubus call singbox-ui bbolt_status ok via shebang path"
+
 echo "OK"

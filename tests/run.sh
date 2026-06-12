@@ -23,21 +23,42 @@ export UCODE_STUB_DIR
 export UCODE_APP_LIB_DIR
 
 echo "==> Shell tests"
-# Max number of SKIP lines tolerated across the whole suite. A healthy VM run
-# (CI's real path) ALREADY produces ~6 legitimate SKIPs: node is not installed
-# in the OpenWrt guest, so the 5 node-gated tests SKIP (test_descriptor_form_js,
-# test_main_js_syntax, test_validators_js, test_share_link_js, test_json_import),
-# plus test_browser always SKIPs inside the VM. A few more are conditionally
-# env-gated (test_acl_coverage without jsonfilter, test_nftables_emit when
-# `nft -c` is unavailable, test_migration_drop_removed). That puts a healthy run
-# around 6-9 SKIPs. When `ucode` is missing instead, 22+ ucode-gated tests SKIP
-# at once (~28+ SKIP lines) — zero real coverage masquerading as green, which we
-# must fail. Threshold 15 sits well above the healthy ceiling (~9, leaving
-# headroom for future env-gated tests) and far below the degenerate ~28+.
-# See spec S5-3. NOTE: the plan's literal 5 would FAIL a healthy VM run (it
-# under-counted the node-gated *_js* tests), so we raise it to 15 here.
-MAX_SKIPS="${SINGBOX_MAX_SKIPS:-15}"
+# SKIP gate — two independent guards (audit 10.2):
+#
+#   (A) ucode-gated SKIPs => HARD FAIL, unconditionally. A SKIP line that
+#       mentions "ucode" can only come from a test that needs the interpreter
+#       and didn't find it — i.e. the degenerate "no coverage masquerading as
+#       green" case the gate exists to catch (22+ tests SKIP at once when
+#       `ucode` is missing). This is the robust per-category signal the audit
+#       asked for: we fail on the SKIPs that indicate a degraded interpreter,
+#       NOT on legitimately-absent node/jsonfilter/browser.
+#
+#   (B) a global SKIP ceiling as defense-in-depth, to catch a NEW degraded
+#       dependency we haven't special-cased into (A) yet.
+#
+# True healthy-VM baseline (recounted 2026-06-12, audit 10.2): node is not
+# installed in the OpenWrt guest, so all 14 node-gated test files SKIP
+# (test_json_import, test_common_notify_js, test_main_js_syntax,
+# test_monitoring_js, test_descriptor_form_dynamic_js, test_validators_js,
+# test_descriptor_form_js, test_view_state_js, test_status_panel_js,
+# test_transport_helper_js, test_share_link_js, test_audit_2_4, test_audit_8_3,
+# test_audit_9_3 — one SKIP line each in the VM, since the guest HAS ucode so
+# json_import's 2nd ucode-gated SKIP does not fire). The count grew from 11 to
+# 14 as parallel audit work added node-gated units (test_audit_2_4 / _8_3 /
+# _9_3); recount with `grep -lE 'NODE_BIN|node ' tests/test_*.sh` and drop the
+# ucode-gated false positive test_sharelink_parsers (matches "node1" test data,
+# not a node gate). test_browser also SKIPs in the VM. The real built bbolt
+# binary is absent in a stock guest, so test_audit_10_5_bbolt_golden SKIPs too.
+# That is ~16 legitimate SKIPs (14 node + browser + bbolt-golden). A few
+# env-gated tests (nftables_emit on `nft -c` unavailable, migration_drop on
+# missing uci, acl_coverage without jsonfilter) can add 1-3 more, so the
+# realistic worst-case healthy-VM baseline is ~19. We keep the ceiling at 25
+# (documented headroom of ~6 over the ~19 worst-case baseline), and rely on
+# guard (A) — not the line count — to catch the degenerate ucode-missing case
+# (which trips (A) on the very first ucode SKIP). See spec S5-3 and audit 10.2.
+MAX_SKIPS="${SINGBOX_MAX_SKIPS:-25}"
 skip_total=0
+ucode_skips=0
 for t in tests/test_*.sh; do
   [ -e "$t" ] || continue
   echo "-- $t"
@@ -61,16 +82,29 @@ for t in tests/test_*.sh; do
   # NOTE: `-E` is REQUIRED — with POSIX BRE the `|` in `^SKIP|SKIP:` is a
   # literal pipe, so on BusyBox grep (OpenWrt default) the pattern would
   # match nothing and the counter would stay 0, silently defeating the gate.
-  n=$(printf '%s\n' "$out" | grep -cE '^[[:space:]]*SKIP|SKIP:') || true
+  skips=$(printf '%s\n' "$out" | grep -E '^[[:space:]]*SKIP|SKIP:') || true
+  n=$(printf '%s\n' "$skips" | grep -cE '.' ) || true
   skip_total=$((skip_total + n))
+  # Guard (A): any SKIP that mentions "ucode" (case-insensitive) is the
+  # degraded-interpreter signal — count it separately and fail hard below.
+  un=$(printf '%s\n' "$skips" | grep -ciE 'ucode') || true
+  ucode_skips=$((ucode_skips + un))
 done
 
-if [ "$skip_total" -gt "$MAX_SKIPS" ]; then
-  echo "FAIL: $skip_total tests SKIPped (>$MAX_SKIPS) — environment is degraded"
-  echo "      (ucode/jsonfilter likely missing; this is NOT a pass)."
+if [ "$ucode_skips" -gt 0 ]; then
+  echo "FAIL: $ucode_skips test(s) SKIPped for a MISSING ucode interpreter —"
+  echo "      that is zero real coverage masquerading as green, NOT a pass."
   echo "      Run inside the OpenWrt VM via 'sh tests/run.sh' on a host"
-  echo "      without ucode, or set SINGBOX_MAX_SKIPS to override knowingly."
+  echo "      without ucode (it auto-delegates to tests/run-vm.sh)."
   exit 1
 fi
 
-echo "All tests passed. ($skip_total SKIP, threshold $MAX_SKIPS)"
+if [ "$skip_total" -gt "$MAX_SKIPS" ]; then
+  echo "FAIL: $skip_total tests SKIPped (>$MAX_SKIPS) — environment is degraded"
+  echo "      (a build dependency is likely missing; this is NOT a pass)."
+  echo "      Inspect the SKIP lines above, or set SINGBOX_MAX_SKIPS to"
+  echo "      override knowingly."
+  exit 1
+fi
+
+echo "All tests passed. ($skip_total SKIP, threshold $MAX_SKIPS; ucode-gated SKIP=$ucode_skips)"
