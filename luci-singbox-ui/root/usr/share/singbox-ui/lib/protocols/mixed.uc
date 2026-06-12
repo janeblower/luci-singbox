@@ -1,12 +1,6 @@
 // lib/protocols/mixed.uc — Mixed inbound (HTTP + SOCKS5) under the E2 DSL.
 
 let reg = require("protocols.registry");
-let helpers = require("helpers");
-let dial_blk = require("protocols._shared.dial");
-
-const s_opt    = helpers.s_opt;
-const s_num    = helpers.s_num;
-const as_array = helpers.as_array;
 
 reg.register({
 	kind: "inbound", type: "mixed", sing_box_type: "mixed",
@@ -21,20 +15,12 @@ reg.register({
 		  placeholder: "alice:secret" },
 	],
 
-	emit: function(s) {
-		let out = dial_blk.build_listen_base(s, "mixed");
-		if (!out) return null;
-		let users = [];
-		for (let u in as_array(s.mixed_user)) {
-			let c = index(u, ":");
-			if (c >= 0) {
-				let nm = substr(u, 0, c);
-				let pw = substr(u, c + 1);
-				if (length(nm)) push(users, { username: nm, password: pw });
-			}
-		}
-		if (length(users)) out.users = users;
-		return out;
+	users: {
+		from: "mixed_user",
+		columns: [
+			{ key: "username", required: true },
+			{ key: "password", tail: true, always: true },
+		],
 	},
 });
 
