@@ -4,6 +4,31 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## Package rename — `luci-app-singbox-ui` → `luci-singbox-ui` (2026-06-12)
+
+**Breaking (packaging / integrators):** the package and repository were renamed
+in commit `3aa0ffe`.
+
+- **Package renamed** `luci-app-singbox-ui` → `luci-singbox-ui` (`PKG_NAME` in
+  `luci-singbox-ui/Makefile`). The new name keeps the LuCI-app convention while
+  matching the `singbox-ui` identifier already used everywhere internally (rpcd
+  object, nft table `inet singbox_ui`, service name, log tag — none of those
+  changed). The Russian i18n sub-package name is unchanged
+  (`luci-i18n-singbox-ui-ru`): LuCI derives it from the basename with the
+  `luci-app-` prefix already stripped, so the rename did not affect it.
+- **apk asset name changed** accordingly: release assets and the `apk add`
+  target are now `luci-singbox-ui_*.apk` (was `luci-app-singbox-ui_*.apk`).
+  `install.sh` and the README install commands were updated.
+- **Repository renamed** `luci-app-sing-box` → `luci-singbox`; GitHub repo
+  references and the GHCR test-image path were updated in the same commit.
+- **Upgrade implication for existing installs:** `apk` treats the new name as a
+  distinct package — it will **not** auto-replace an old `luci-app-singbox-ui`
+  install. Operators on the old package should remove it first
+  (`apk del luci-app-singbox-ui`) and install `luci-singbox-ui`. The on-disk
+  paths (`/etc/config/singbox-ui`, `/usr/share/singbox-ui/`, the rpcd handler,
+  the init script) are unchanged, so existing UCI configuration is preserved
+  across the swap.
+
 ## Phase G — Unified qemu test rig (2026-06-09)
 
 - **CI test surface unified** to a single environment: a pre-built ghcr.io

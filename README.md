@@ -8,6 +8,67 @@ LuCI-интерфейс для [sing-box](https://sing-box.sagernet.org/) на O
 > ломаться, схема UCI и API ещё устаканиваются. Предложения, хотелки и
 > баг-репорты — в [issues](../../issues) или PR, буду рад.
 
+---
+
+## English (summary)
+
+LuCI web UI for [sing-box](https://sing-box.sagernet.org/) on OpenWrt.
+Configure inbounds/outbounds with forms — no hand-edited JSON, no bash glue,
+no fw3. The backend (written in `ucode`) generates sing-box `config.json`
+directly from UCI sections. The full README below is in Russian; the technical
+reference in `docs/` is mostly English.
+
+> ⚠️ **Status: early development (0.1.x).** Rough edges expected; the UCI
+> schema and RPC API are still settling.
+
+**Features**
+
+- Inbounds: `tproxy`, `mixed` (socks/http), `direct`, plus server-side
+  `vless` / `trojan` / `hysteria2` / `shadowsocks`.
+- Proxy outbounds: `vless`, `trojan`, `hysteria2`, `shadowsocks`, `direct`,
+  with shared TLS (uTLS / ALPN / Reality / ECH), multiplex, transports
+  (ws / grpc / http / httpupgrade / xhttp) and dial blocks.
+- Share-link import (`vless://`, `ss://`, `trojan://`, `hy2://`), per-section
+  JSON import/export (export masks secrets), subscriptions and rule-sets with
+  `.srs`/`.json` auto-detect, and live monitoring via the Clash API.
+- Russian translation bundled. After install the page appears under
+  **Services → Singbox-UI**.
+
+**Install** (noarch `.apk`, OpenWrt 24.10+; prebuilt in
+[Releases](../../releases)):
+
+```sh
+apk add --allow-untrusted ./luci-singbox-ui_*.apk
+# optional Russian translation:
+apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
+```
+
+> ⚠️ **Conflicts with `firewall` (fw3).** This package drives nftables
+> directly, so installing it removes the `firewall` package and your
+> `/etc/config/firewall` rules stop being applied — make sure nothing depends
+> on fw3 first (the installer prints a warning before proceeding). Only `apk`
+> is supported; there is no `opkg`/`.ipk` build.
+
+> ⚠️ **TPROXY requires an `ip rule` you must add yourself.** The ruleset marks
+> packets with `fwmark` (default `0x1/0x1`, UCI options
+> `singbox-ui.@global[0].fwmark` / `fwmark_mask`), but the package does **not**
+> install the policy route that delivers them to the local TPROXY socket. Add,
+> for both families:
+>
+> ```sh
+> ip -4 rule add fwmark 0x1/0x1 lookup 100
+> ip -4 route add local default dev lo table 100
+> ip -6 rule add fwmark 0x1/0x1 lookup 100
+> ip -6 route add local default dev lo table 100
+> ```
+>
+> After applying a ruleset the service logs a warning if no matching
+> `ip rule fwmark…` is found — check `logread -e singbox-ui`. See the Russian
+> section **«fwmark и `ip rule` для TPROXY»** below for details and how to use a
+> different mark bit.
+
+---
+
 ## Возможности
 
 - **Inbound:** `tproxy`, `mixed` (socks/http), `direct`, а также серверные

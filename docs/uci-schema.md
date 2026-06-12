@@ -311,7 +311,7 @@ Applies to `vless`, `trojan`, `shadowsocks` (inbound) when `multiplex_enabled=1`
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `multiplex_enabled` | bool | `0`/`1` | no | `protocol=vless/vmess/trojan/shadowsocks` | Enables multiplex. |
+| `multiplex_enabled` | bool | `0`/`1` | no | `protocol=vless/trojan/shadowsocks` | Enables multiplex. |
 | `multiplex_protocol` | enum | `smux`, `yamux`, `h2mux` | no | `multiplex_enabled=1` | Multiplex protocol. Defaults to `smux`. |
 | `multiplex_max_connections` | integer | — | no | `multiplex_enabled=1` | Maximum number of multiplexed connections. |
 | `multiplex_min_streams` | integer | — | no | `multiplex_enabled=1` | Minimum concurrent streams before opening a new connection. |
