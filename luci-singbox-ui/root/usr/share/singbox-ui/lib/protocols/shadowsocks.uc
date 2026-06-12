@@ -22,44 +22,28 @@ reg.register({
 
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
-          validate: "host", ui_label: "Server" },
+          validate: "host", ui_label: "Server",
+          json_key: "server", omit_when: "never" },
         { name: "server_port", type: "number", tab: "basic", required: true,
-          validate: "port", ui_label: "Server port" },
+          validate: "port", ui_label: "Server port",
+          json_key: "server_port", coerce: "num", omit_when: "never" },
         { name: "shadowsocks_method", type: "enum", tab: "basic", required: true,
-          values: METHODS, default: "2022-blake3-aes-128-gcm",
-          ui_label: "Method" },
+          values: METHODS, default: "2022-blake3-aes-128-gcm", ui_label: "Method",
+          json_key: "method", omit_when: "never" },
         { name: "server_password", type: "string", tab: "basic", required: true,
-          secret: true, ui_label: "Password" },
-        { name: "plugin", type: "string", tab: "basic",
-          ui_label: "Plugin",
-          values: ["obfs-local", "v2ray-plugin", "shadow-tls"], advanced: true },
-        { name: "plugin_opts", type: "string", tab: "basic",
-          ui_label: "Plugin opts", advanced: true },
+          secret: true, ui_label: "Password",
+          json_key: "password", omit_when: "never" },
+        { name: "plugin", type: "string", tab: "basic", ui_label: "Plugin",
+          values: ["obfs-local", "v2ray-plugin", "shadow-tls"], advanced: true,
+          json_key: "plugin" },
+        { name: "plugin_opts", type: "string", tab: "basic", ui_label: "Plugin opts", advanced: true,
+          json_key: "plugin_opts", requires: "plugin" },
         { name: "network", type: "enum", tab: "basic",
-          values: ["", "tcp", "udp"], ui_label: "Network", advanced: true },
-        { name: "udp_over_tcp", type: "bool", tab: "basic",
-          ui_label: "UDP over TCP", advanced: true },
+          values: ["", "tcp", "udp"], ui_label: "Network", advanced: true,
+          json_key: "network" },
+        { name: "udp_over_tcp", type: "bool", tab: "basic", ui_label: "UDP over TCP", advanced: true,
+          json_key: "udp_over_tcp", coerce: "bool" },
     ],
-
-    emit: function(s) {
-        let out = {
-            type: "shadowsocks",
-            tag: s[".name"],
-            server: s_opt(s, "server"),
-            server_port: s_num(s.server_port),
-            method: s_opt(s, "shadowsocks_method"),
-            password: s_opt(s, "server_password"),
-        };
-        if (length(s_opt(s, "network"))) out.network = s.network;
-        if (length(s_opt(s, "plugin"))) {
-            out.plugin = s.plugin;
-            if (length(s_opt(s, "plugin_opts"))) out.plugin_opts = s.plugin_opts;
-        }
-        if (helpers.s_bool(s, "udp_over_tcp")) out.udp_over_tcp = true;
-        let m = mux_blk.emit(s); if (m) out.multiplex = m;
-        dial_blk.merge_dial(out, s);
-        return out;
-    },
 });
 
 reg.register({
