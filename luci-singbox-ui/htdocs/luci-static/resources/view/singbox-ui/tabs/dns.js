@@ -2,9 +2,28 @@
 'require form';
 'require uci';
 'require view.singbox-ui.lib.common as SbCommon';
+'require view.singbox-ui.lib.descriptor_form as descriptor_form';
+'require view.singbox-ui.lib.view_state as SbViewState';
 
-var addRenameField   = SbCommon.addRenameField;
-var loadOutboundList = SbCommon.loadOutboundList;
+var addRenameField = SbCommon.addRenameField;
+
+// All 14 DNS server types with display labels.
+var DNS_SERVER_TYPES = [
+	['udp',        'UDP'],
+	['tcp',        'TCP'],
+	['tls',        'DNS-over-TLS'],
+	['quic',       'DNS-over-QUIC'],
+	['https',      'DNS-over-HTTPS'],
+	['h3',         'DNS-over-HTTP/3'],
+	['fakeip',     'FakeIP'],
+	['local',      _('Local system')],
+	['hosts',      _('Hosts file')],
+	['dhcp',       'DHCP'],
+	['mdns',       'mDNS'],
+	['tailscale',  'Tailscale'],
+	['resolved',   'systemd-resolved'],
+	['legacy',     _('Legacy (address string)')],
+];
 
 function loadDnsServerList(o, includeNone) {
 	o.load = function (section_id) {
@@ -20,7 +39,7 @@ function loadDnsServerList(o, includeNone) {
 
 function buildDnsMap() {
 	var m = new form.Map('singbox-ui', _('DNS'),
-		_('DNS servers (udp/tls/https/fakeip), rules, and global settings.'));
+		_('DNS servers, rules, and global settings.'));
 	var s, o;
 
 	// -- Servers --
@@ -33,32 +52,19 @@ function buildDnsMap() {
 	addRenameField(s);
 	o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 	o = s.option(form.ListValue, 'type', _('Type'));
-	['udp','tls','https','fakeip'].forEach(function (v) { o.value(v, v); });
+	DNS_SERVER_TYPES.forEach(function (kv) { o.value(kv[0], kv[1]); });
 	o.default = 'https'; o.rmempty = false;
-	o = s.option(form.Value, 'server', _('Server')); o.modalonly = true;
-	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
-	o = s.option(form.Value, 'server_port', _('Server port')); o.modalonly = true; o.datatype = 'port';
-	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
-	o = s.option(form.Value, 'path', _('HTTPS path')); o.modalonly = true; o.placeholder = '/dns-query';
-	o.depends('type','https');
-	// Pinning a DNS query to a specific outbound. Dropdown of user-defined
-	// outbound tags only — the auto-injected implicit `direct` is intentionally
-	// not selectable because sing-box 1.12 rejects detour to a field-less
-	// direct outbound at startup. Leave empty to let route rules decide.
-	o = s.option(form.ListValue, 'detour', _('Detour (outbound)'));
-	o.modalonly = true;
-	loadOutboundList(o, true);
-	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
-	// Resolver used for this server's own domain — points at another DNS
-	// server tag. Dropdown of defined dns_server sections (+ none) instead of
-	// a free-text tag the user has to copy by hand.
-	o = s.option(form.ListValue, 'domain_resolver', _('Domain resolver')); o.modalonly = true;
-	loadDnsServerList(o, true);
-	o.depends('type','udp'); o.depends('type','tls'); o.depends('type','https');
-	o = s.option(form.Value, 'inet4_range', _('FakeIP IPv4 range')); o.modalonly = true;
-	o.datatype = 'cidr4'; o.placeholder = '198.18.0.0/15'; o.depends('type','fakeip');
-	o = s.option(form.Value, 'inet6_range', _('FakeIP IPv6 range')); o.modalonly = true;
-	o.datatype = 'cidr6'; o.placeholder = 'fc00::/18'; o.depends('type','fakeip');
+
+	// Descriptor-driven fields for all 14 DNS server types.
+	// applyMaterialized(s, 'dns', typeName, mat) gates every field from the
+	// descriptor with depends({type: typeName}) — same mechanism as outbounds —
+	// because kind='dns' resolves the discriminator field to 'type'.
+	var dnsSchema = (SbViewState.getSchema() || {}).dns || {};
+	DNS_SERVER_TYPES.forEach(function (kv) {
+		var typeName = kv[0];
+		var mat = dnsSchema[typeName];
+		if (mat) descriptor_form.applyMaterialized(s, 'dns', typeName, mat);
+	});
 
 	// -- Rules --
 	s = m.section(form.GridSection, 'dns_rule', _('DNS Rules'));

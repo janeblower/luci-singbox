@@ -80,15 +80,17 @@ grep -q "nft_rules"       "$RULESETS_TAB" || { echo "FAIL: no nft_rules field (c
 grep -q "update_interval" "$RULESETS_TAB" || { echo "FAIL: no update_interval field (checked tabs/rulesets.js)"; exit 1; }
 
 echo "-- references DNS tab sections"
-# dns_server, dns_rule, loadOutboundList(o, true), default_resolver live in tabs/dns.js after modularization (Task 11)
+# dns_server, dns_rule, descriptor-driven fields, default_resolver live in tabs/dns.js after modularization (Task 11)
 DNS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
 grep -q "'dns_server'"          "$DNS_TAB" || { echo "FAIL: no dns_server section type (checked tabs/dns.js)"; exit 1; }
 grep -q "'dns_rule'"            "$DNS_TAB" || { echo "FAIL: no dns_rule section type (checked tabs/dns.js)"; exit 1; }
 grep -q "data-tab.*dns"         "$JS" || { echo "FAIL: no dns tab marker"; exit 1; }
-# detour must be a dropdown of existing outbounds, not a freeform Value that
-# tempts users to type "direct" (which sing-box rejects when direct is the
-# auto-injected empty outbound).
-grep -q "loadOutboundList(o, true)" "$DNS_TAB" || { echo "FAIL: detour dropdown must reuse loadOutboundList with includeNone (checked tabs/dns.js)"; exit 1; }
+# detour for dns_server must be a dropdown of existing outbounds. Since WS4 Task B4
+# the dns server section is descriptor-driven: detour carries dynamic:'outbounds' in
+# the descriptor, so descriptor_form.attachDynamic renders it as a ListValue populated
+# from UCI outbound sections. Verify the descriptor-driven path is wired up.
+grep -q "applyMaterialized"     "$DNS_TAB" || { echo "FAIL: dns.js must use descriptor_form.applyMaterialized for descriptor-driven fields (checked tabs/dns.js)"; exit 1; }
+grep -q "dnsSchema"             "$DNS_TAB" || { echo "FAIL: dns.js must read dnsSchema from SbViewState (checked tabs/dns.js)"; exit 1; }
 grep -q "'default_resolver'"    "$DNS_TAB" || { echo "FAIL: dns.default_resolver UI option missing (checked tabs/dns.js)"; exit 1; }
 
 echo "-- references Monitoring tab"

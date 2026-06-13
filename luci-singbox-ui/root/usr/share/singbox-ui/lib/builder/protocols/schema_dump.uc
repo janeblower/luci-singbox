@@ -26,9 +26,10 @@ function project_materialized(m) {
 }
 
 function dump_all() {
-    let reg = require("protocols.registry");
-    let out = { outbound: {}, inbound: {} };
-    for (let k in [ "outbound", "inbound" ])
+    let reg = require("builder.protocols.registry");
+    require("builder.dns.registry");   // ensure dns descriptors are registered
+    let out = { outbound: {}, inbound: {}, dns: {} };
+    for (let k in [ "outbound", "inbound", "dns" ])
         for (let proto in reg.types_for_kind(k)) {
             let m = reg.materialize(k, proto);
             if (m != null) out[k][proto] = project_materialized(m);
