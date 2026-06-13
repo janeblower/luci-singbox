@@ -94,6 +94,34 @@ function ok(l,c){if(c)console.log('  PASS:',l);else{console.log('  FAIL:',l);fai
   d3.node.isConnected=false; ctx.__test.fireInterval(ids[0]);
   ok('interval clears itself when root detached', Object.keys(ctx.__test.intervals).length===0);
 
+  // --- proxy groups render from /proxies ---
+  const PROXIES = { proxies: {
+    'GW':   { type:'Selector', now:'A', all:['A','B'] },
+    'A':    { type:'Shadowsocks', history:[{delay:120}] },
+    'B':    { type:'Vmess', history:[{delay:900}] },
+    'AUTO': { type:'URLTest', now:'A', all:['A','B'] }
+  }};
+  ctx.__test.setGet((path)=>{
+    if(path==='/proxies')return Promise.resolve({status:'ok',body:JSON.stringify(PROXIES)});
+    if(path==='/connections')return Promise.resolve({status:'ok',body:'{"connections":[]}'});
+    if(path==='/version')return Promise.resolve({status:'ok',body:'{"version":"1.12.0"}'});
+    return Promise.resolve({status:'ok',body:'{}'});
+  });
+  const g=Dash.buildDashboard();
+  await g.poll();                       // connections+version
+  await g.refreshProxies();            // force-fetch /proxies
+  const isGroup=(n)=>n.attrs&&/sb-dashboard-group\b/.test(n.attrs['class']||'');
+  ok('renders selector + urltest groups', ctx.__test.findAll(g.node,isGroup).length===2);
+  const isCurrent=(n)=>n.attrs&&/sb-dashboard-node-current/.test(n.attrs['class']||'');
+  ok('highlights current node', ctx.__test.findAll(g.node,isCurrent).length>=2);
+  const hasGood=ctx.__test.find(g.node,(n)=>n.attrs&&/sb-lat-good/.test(n.attrs['class']||''));
+  const hasBad =ctx.__test.find(g.node,(n)=>n.attrs&&/sb-lat-bad/.test(n.attrs['class']||''));
+  ok('latency badge colored good (<300)', !!hasGood);
+  ok('latency badge colored bad (>=800)', !!hasBad);
+  const urltestRows=ctx.__test.findAll(g.node,(n)=>n.attrs&&/sb-dashboard-node\b/.test(n.attrs['class']||'')&&n.attrs['data-group']==='AUTO');
+  ok('urltest rows are read-only (no click handler)',
+     urltestRows.length>=1 && urltestRows.every((r)=>typeof r.attrs.click!=='function'));
+
   process.exit(failures?1:0);
 })();
 NODE

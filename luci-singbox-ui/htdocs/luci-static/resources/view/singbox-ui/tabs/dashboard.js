@@ -24,6 +24,34 @@ function buildDashboard() {
 		return n.toFixed(i ? 1 : 0) + u[i];
 	}
 
+	function fetchProxies() {
+		return callClashGet('/proxies').then(function (res) {
+			if (res && res.status === 'ok') {
+				var d; try { d = JSON.parse(res.body); } catch (e) { d = {}; }
+				state.proxies = (d && d.proxies) || {};
+			}
+		});
+	}
+	function refreshProxies() { return fetchProxies().then(repaint); }
+	// chooseNode/testGroup are implemented in Task 6; stubs keep render wiring valid.
+	function chooseNode(_g, _m) { return Promise.resolve(); }
+	function testGroup(_g) { return Promise.resolve(); }
+
+	function latClass(ms) {
+		if (!(ms > 0)) return 'sb-lat-none';
+		if (ms < 300) return 'sb-lat-good';
+		if (ms < 800) return 'sb-lat-mid';
+		return 'sb-lat-bad';
+	}
+	function latText(ms) { return (ms > 0) ? (ms + 'ms') : '—'; }
+	function isGroupType(t) {
+		t = (t || '').toLowerCase();
+		return t === 'selector' || t === 'urltest';
+	}
+	function memberDelay(p) {
+		return (p && p.history && p.history[0] && p.history[0].delay) || 0;
+	}
+
 	function showUnreachable() {
 		root.innerHTML = '';
 		// The mounted chrome (state.ui) was just detached by innerHTML=''.
@@ -76,9 +104,66 @@ function buildDashboard() {
 		state.totDown = down; state.totUp = up;
 	}
 
-	// renderGroups() is defined in a later task; declared here so repaint() can
-	// call it once it exists. Until then it is a no-op.
-	function renderGroups() {}
+	function nodeRow(groupName, isSelector, member, proxies, currentNow) {
+		var p = proxies[member] || {};
+		var ms = memberDelay(p);
+		var attrs = { 'class': 'sb-dashboard-node', 'data-group': groupName,
+		              'data-name': member };
+		if (member === currentNow) attrs['class'] += ' sb-dashboard-node-current';
+		if (isSelector) {
+			attrs['class'] += ' sb-dashboard-node-sel';
+			attrs.click = ui.createHandlerFn(this, (function (g, m) {
+				return function () { return chooseNode(g, m); };
+			})(groupName, member));
+		}
+		return E('div', attrs, [
+			E('span', { 'class': 'sb-dashboard-node-name' }, member),
+			E('span', { 'class': 'sb-dashboard-node-type' }, p.type || ''),
+			E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
+		]);
+	}
+
+	function sortMembers(members, proxies) {
+		if (!state.sortByLatency) return members;
+		return members.slice().sort(function (a, b) {
+			var da = memberDelay(proxies[a]); var db = memberDelay(proxies[b]);
+			var na = (da > 0) ? da : Infinity; var nb = (db > 0) ? db : Infinity;
+			return na - nb;
+		});
+	}
+
+	function renderGroups() {
+		if (!state.ui) return;
+		var proxies = state.proxies || {};
+		var box = state.ui.groups;
+		box.innerHTML = '';
+		var names = Object.keys(proxies).filter(function (k) {
+			return isGroupType(proxies[k].type) && (proxies[k].all || []).length;
+		});
+		if (!names.length) {
+			box.appendChild(E('em', {}, _('No proxy groups. Configure selector/urltest outbounds.')));
+			return;
+		}
+		names.forEach(function (gname) {
+			var grp = proxies[gname];
+			var isSel = (grp.type || '').toLowerCase() === 'selector';
+			var members = sortMembers(grp.all || [], proxies);
+			var header = E('div', { 'class': 'sb-dashboard-grp-head' }, [
+				E('b', {}, gname),
+				E('span', { 'class': 'sb-dashboard-grp-type' },
+					isSel ? _('selector') : _('auto')),
+				E('button', { 'class': 'btn cbi-button',
+					'click': ui.createHandlerFn(this, (function (g) {
+						return function () { return testGroup(g); };
+					})(gname)) }, _('Test'))
+			]);
+			var rows = members.map(function (m) {
+				return nodeRow(gname, isSel, m, proxies, grp.now);
+			});
+			box.appendChild(E('div', { 'class': 'sb-dashboard-group', 'data-group': gname },
+				[ header ].concat(rows)));
+		});
+	}
 
 	function repaint() {
 		if (!state.ui) mountChrome();
@@ -103,6 +188,7 @@ function buildDashboard() {
 			}, function () { state.running = false; })
 		];
 		state.proxiesEvery = (state.proxiesEvery + 1) % 3;
+		if (state.proxiesEvery === 1) p.push(fetchProxies());
 		return Promise.all(p).then(repaint).catch(showUnreachable);
 	}
 
@@ -127,7 +213,8 @@ function buildDashboard() {
 			window.removeEventListener('pagehide', onPageHide);
 	}
 
-	return { node: root, start: start, stop: stop, poll: poll };
+	return { node: root, start: start, stop: stop, poll: poll,
+	         refreshProxies: refreshProxies };
 }
 
 return L.Class.extend({ buildDashboard: buildDashboard });
