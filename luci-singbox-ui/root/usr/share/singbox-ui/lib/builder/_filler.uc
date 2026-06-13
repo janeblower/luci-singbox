@@ -20,6 +20,7 @@ const SHARED_DISPATCH = {
     tls:       { key: "tls" },
     transport: { key: "transport" },
     multiplex: { key: "multiplex" },
+    quic:      { merge: true },
     dial:      { merge: true },
 };
 
