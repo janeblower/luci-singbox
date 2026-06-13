@@ -9,7 +9,6 @@
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
-'require view.singbox-ui.lib.subscription_view as SbSubView';
 'require view.singbox-ui.lib.view_state as SbViewState';
 
 var addRenameField      = SbCommon.addRenameField;
@@ -200,19 +199,6 @@ function buildOutboundsMap() {
 	o.modalonly   = true;
 	o.placeholder = 'https://www.gstatic.com/generate_204';
 	o.depends({ type: 'subscription', sub_multi: '1', sub_selector_type: 'urltest' });
-
-	// E2: auto-inject subscription child rows whenever the form renders.
-	// loadAllExpansions is called once during main.js bootstrap; we re-run
-	// injectChildRows here so child rows appear without requiring the user to
-	// click action-bar Refresh.
-	m._sb_render_hook = m.render;
-	m.render = function () {
-		return m._sb_render_hook.apply(m, arguments).then(function (node) {
-			try { SbSubView.injectChildRows(node, SbViewState.getSubExpand()); }
-			catch (e) { /* render hook should never break the page */ }
-			return node;
-		});
-	};
 
 	return m;
 }

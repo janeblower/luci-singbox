@@ -5,11 +5,8 @@
 // once and shared by every 'require', so this closed-over object is a stable
 // singleton — no window globals, no cross-test leakage, no re-render races.
 var _schema = {};
-var _subExpand = {};
 
 return L.Class.extend({
-	getSchema:     function () { return _schema; },
-	setSchema:     function (s) { _schema = s || {}; },
-	getSubExpand:  function () { return _subExpand; },
-	setSubExpand:  function (c) { _subExpand = c || {}; },
+	getSchema: function () { return _schema; },
+	setSchema: function (s) { _schema = s || {}; },
 });
