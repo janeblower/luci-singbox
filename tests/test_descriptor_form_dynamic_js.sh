@@ -148,6 +148,44 @@ function keysOf(opt) { return opt._values.map(v => v[0]); }
 }
 
 // ---------------------------------------------------------------------------
+// 1b. dynamic:"outbounds" + type:"list" → DynamicList (free-entry multi-select).
+//     load() populates outbound suggestions (excluding own section_id), free entry ok.
+// ---------------------------------------------------------------------------
+{
+	const { s, opts } = makeSection();
+	applyMaterialized(s, 'outbound', 'selector', {
+		tabs: ['basic'],
+		fields: [{ name: 'outbounds', type: 'list', tab: 'basic', dynamic: 'outbounds' }],
+	});
+	const o = findOpt(opts, 'outbounds');
+	if (o && o._widget === form.DynamicList) pass('outbounds list: dynamic outbounds + type list → DynamicList widget');
+	else fail('outbounds list widget', 'got ' + (o && o._widget && o._widget._tag));
+
+	if (o && typeof o.load === 'function') {
+		o.load.call(o, 'proxy_a');
+		const k = keysOf(o);
+		// section_id 'proxy_a' is excluded; 'proxy_b' must appear; no (none) sentinel
+		if (k.indexOf('proxy_b') >= 0 && k.indexOf('proxy_a') < 0)
+			pass('outbounds list: load() suggests tags, excludes own section_id');
+		else fail('outbounds list load values', JSON.stringify(o._values));
+	} else fail('outbounds list load', 'no load function attached');
+}
+
+// ---------------------------------------------------------------------------
+// 1c. dynamic:"outbounds" + type:"string" → ListValue (single-select, unchanged).
+// ---------------------------------------------------------------------------
+{
+	const { s, opts } = makeSection();
+	applyMaterialized(s, 'outbound', 'vless', {
+		tabs: ['dial'],
+		fields: [{ name: 'detour2', type: 'string', tab: 'dial', dynamic: 'outbounds' }],
+	});
+	const o = findOpt(opts, 'detour2');
+	if (o && o._widget === form.ListValue) pass('detour string: dynamic outbounds + type string → ListValue (single-select unchanged)');
+	else fail('detour string widget', 'got ' + (o && o._widget && o._widget._tag));
+}
+
+// ---------------------------------------------------------------------------
 // 2. dynamic:"interfaces" → ListValue, logical ifaces minus loopback.
 // ---------------------------------------------------------------------------
 {
