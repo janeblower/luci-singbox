@@ -33,6 +33,35 @@ function buildDashboard() {
 		});
 	}
 	function refreshProxies() { return fetchProxies().then(repaint); }
+
+	function fetchSubs() {
+		return callSubStatus().then(function (res) {
+			var map = {};
+			var arr = (res && res.subscriptions) || [];
+			(Array.isArray(arr) ? arr : []).forEach(function (s) { map[s.name] = s; });
+			state.subs = map;
+		}, function () { /* keep last known */ });
+	}
+	function refreshSubs() { return fetchSubs().then(repaint); }
+
+	function agoText(ts) {
+		if (!ts) return _('never updated');
+		var secs = Math.floor(Date.now() / 1000) - ts;
+		if (secs < 0) secs = 0;
+		if (secs < 60)   return _('updated %ds ago').format(secs);
+		if (secs < 3600) return _('updated %dm ago').format(Math.floor(secs / 60));
+		if (secs < 86400)return _('updated %dh ago').format(Math.floor(secs / 3600));
+		return _('updated %dd ago').format(Math.floor(secs / 86400));
+	}
+
+	function updateSub(name) {
+		return callRefresh('subscriptions', name).then(function () {
+			return Promise.all([ fetchSubs(), fetchProxies() ]).then(repaint);
+		}, function () {
+			ui.addNotification(null, E('p', {}, _('Subscription update failed')));
+		});
+	}
+
 	function setSortByLatency(on) { state.sortByLatency = !!on; repaint(); }
 	function chooseNode(groupName, member) {
 		// optimistic: reflect selection immediately, then resync from /proxies
@@ -196,11 +225,23 @@ function buildDashboard() {
 						return function () { return testGroup(g); };
 					})(gname)) }, _('Test'))
 			]);
+			var subInfo = state.subs[gname];
+			var children = [ header ];
+			if (subInfo) {
+				children.push(E('div', { 'class': 'sb-dashboard-sub' }, [
+					E('span', {}, _('%d nodes').format(subInfo.node_count || 0)),
+					E('span', {}, agoText(subInfo.last_update)),
+					E('button', { 'class': 'btn cbi-button sb-dashboard-sub-update',
+						'click': ui.createHandlerFn(this, (function (n) {
+							return function () { return updateSub(n); };
+						})(gname)) }, _('Update'))
+				]));
+			}
 			var rows = members.map(function (m) {
 				return nodeRow(gname, isSel, m, proxies, grp.now);
 			});
 			box.appendChild(E('div', { 'class': 'sb-dashboard-group', 'data-group': gname },
-				[ header ].concat(rows)));
+				children.concat(rows)));
 		});
 	}
 
@@ -227,7 +268,7 @@ function buildDashboard() {
 			}, function () { state.running = false; })
 		];
 		state.proxiesEvery = (state.proxiesEvery + 1) % 3;
-		if (state.proxiesEvery === 1) p.push(fetchProxies());
+		if (state.proxiesEvery === 1) { p.push(fetchProxies()); p.push(fetchSubs()); }
 		return Promise.all(p).then(repaint).catch(showUnreachable);
 	}
 
@@ -253,7 +294,8 @@ function buildDashboard() {
 	}
 
 	return { node: root, start: start, stop: stop, poll: poll,
-	         refreshProxies: refreshProxies, setSortByLatency: setSortByLatency };
+	         refreshProxies: refreshProxies, refreshSubs: refreshSubs,
+	         setSortByLatency: setSortByLatency };
 }
 
 return L.Class.extend({ buildDashboard: buildDashboard });
