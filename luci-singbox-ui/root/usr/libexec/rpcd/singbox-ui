@@ -281,6 +281,13 @@ function call_status_detail() {
 
 	let pkg_ver = cached_pkg_version();
 
+	let core_ver = "";
+	try {
+		let v = run_capture(["sing-box", "version"]) ?? "";
+		let mm = match(v, /version ([0-9]+\.[0-9]+\.[0-9]+)/);
+		if (mm) core_ver = mm[1];
+	} catch (_) {}
+
 	emit({
 		status: "ok",
 		running: running,
@@ -293,6 +300,7 @@ function call_status_detail() {
 		config_hash: last_state.config_hash || "unknown",
 		schema_version: schema,
 		package_version: pkg_ver,
+		core_version: core_ver,
 		service_start_ts: svc_state.service_start_ts || 0,
 		now: time(),
 	});

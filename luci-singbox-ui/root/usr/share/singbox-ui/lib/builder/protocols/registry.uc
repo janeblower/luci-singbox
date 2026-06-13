@@ -233,6 +233,7 @@ function materialize(kind, type_) {
         fields: with_adv,
         tabs: _tabs_for(with_adv),
     };
+    if (d.min_version != null) result.min_version = d.min_version;
     _materialize_cache[key] = result;
     return result;
 }

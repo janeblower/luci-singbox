@@ -17,12 +17,14 @@ function project_field(f) {
 function project_materialized(m) {
     let fields = [];
     for (let f in m.fields) push(fields, project_field(f));
-    return {
+    let out = {
         sing_box_type: m.sing_box_type,
         tabs: m.tabs,
         shared: m.shared,
         fields: fields,
     };
+    out.min_version = m.min_version ?? "";
+    return out;
 }
 
 function dump_all() {
