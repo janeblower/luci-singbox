@@ -1,6 +1,6 @@
 #!/bin/sh
 # tests/test_subscription_uc.sh
-# Drives subscription.uc with a fake curl on PATH and a synthetic UCI dir.
+# Drives subscription.uc with a fake `sing-box tools fetch` stub and a synthetic UCI dir.
 set -e
 
 # Mirror test_generate.sh: skip if ucode/uci-mod unavailable on dev box.
@@ -24,33 +24,29 @@ trap 'rm -rf "$TMPDIR"' EXIT
 export SINGBOX_TMPDIR="$TMPDIR/runtime"
 mkdir -p "$SINGBOX_TMPDIR"
 
-# Fake curl: writes the contents of $FAKE_CURL_BODY_FILE to the -o argument,
-# and records its full argv to $FAKE_CURL_LOG for assertions.
+# Fake sing-box: logs full argv to $FAKE_SINGBOX_LOG; for 'tools fetch' writes
+# $FAKE_SINGBOX_BODY_FILE to STDOUT (production code redirects stdout to outpath).
+# For any other subcommand (e.g. 'rule-set decompile') exits 0 silently.
 mkdir -p "$TMPDIR/bin"
 
-# setup_curl_stub_basic — (re)install the default fake curl: copies
-# $FAKE_CURL_BODY_FILE to the -o target and logs argv to $FAKE_CURL_LOG.
-# Called once up front; later tests that restore the default after a
-# timing/failure-specific curl call it again instead of repeating the heredoc.
-setup_curl_stub_basic() {
-	cat >"$TMPDIR/bin/curl" <<'EOF'
+# setup_singbox_stub_basic — (re)install the default fake sing-box.
+# Called once up front; later tests that install a failure-variant call it
+# again to restore the default without repeating the heredoc.
+setup_singbox_stub_basic() {
+	cat >"$TMPDIR/bin/sing-box" <<'EOF'
 #!/bin/sh
-echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
-out=""
-while [ $# -gt 0 ]; do
-	case "$1" in
-		-o) out="$2"; shift 2 ;;
-		*)  shift ;;
-	esac
-done
-[ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
+echo "$@" >>"${FAKE_SINGBOX_LOG:-/dev/null}"
+if [ "$1" = "tools" ] && [ "$2" = "fetch" ]; then
+	cat "${FAKE_SINGBOX_BODY_FILE:-/dev/null}"
+fi
 exit 0
 EOF
-	chmod +x "$TMPDIR/bin/curl"
+	chmod +x "$TMPDIR/bin/sing-box"
 }
-setup_curl_stub_basic
+setup_singbox_stub_basic
 export PATH="$TMPDIR/bin:$PATH"
-export FAKE_CURL_LOG="$TMPDIR/curl.log"
+export SINGBOX="$TMPDIR/bin/sing-box"
+export FAKE_SINGBOX_LOG="$TMPDIR/singbox.log"
 
 pass() { echo "  PASS: $1"; }
 fail() { echo "FAIL: $1"; exit 1; }
@@ -88,8 +84,8 @@ config outbound 'subA'
 EOF
 # base64("vless://uuid@host:443?security=tls#A\n")
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzP3NlY3VyaXR5PXRscyNBCg==' >"$TMPDIR/body"
-export FAKE_CURL_BODY_FILE="$TMPDIR/body"
-: >"$FAKE_CURL_LOG"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
+: >"$FAKE_SINGBOX_LOG"
 
 run_uc fetch-subs
 
@@ -97,12 +93,6 @@ run_uc fetch-subs
 grep -q '^vless://uuid@host:443' "$SINGBOX_TMPDIR/sub_subA.txt" \
 	|| { echo "got:"; cat "$SINGBOX_TMPDIR/sub_subA.txt"; fail "decoded URL not found"; }
 pass "base64 body decoded"
-
-# ---- default UA is Mozilla-flavoured ----
-echo "-- default User-Agent passed to curl starts with Mozilla/5.0"
-grep -q -- '-A Mozilla/5.0' "$FAKE_CURL_LOG" \
-	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "-A Mozilla/5.0 not in curl argv"; }
-pass "Mozilla UA used"
 
 # ---- fetch-subs with plain (non-base64) body ----
 echo "-- fetch-subs accepts plain-text body when base64 decode is empty"
@@ -127,39 +117,26 @@ run_uc fetch-rulesets
 grep -q '"rules"' "$SINGBOX_TMPDIR/rs_rA.json" || fail "rs_rA.json content wrong"
 pass "local source ruleset"
 
-# ---- SINGBOX_BOOT_FETCH=1 shortens timeout ----
-echo "-- SINGBOX_BOOT_FETCH=1 uses --max-time 5 for subs"
+# ---- SINGBOX_BOOT_FETCH=1 still fetches ----
+echo "-- SINGBOX_BOOT_FETCH=1 still fetches subs (boot path active)"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subA'
 	option type 'subscription'
 	option sub_url 'https://example.test/sub'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
-: >"$FAKE_CURL_LOG"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
+rm -f "$SINGBOX_TMPDIR/sub_subA.txt"
+: >"$FAKE_SINGBOX_LOG"
 SINGBOX_BOOT_FETCH=1 run_uc fetch-subs
-grep -q -- '--max-time 5' "$FAKE_CURL_LOG" \
-    || { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "--max-time 5 missing in boot mode"; }
-pass "boot mode shortens timeout to 5s"
+[ -s "$SINGBOX_TMPDIR/sub_subA.txt" ] \
+    || { echo "singbox.log:"; cat "$FAKE_SINGBOX_LOG"; fail "boot fetch did not produce sub_subA.txt"; }
+grep -q 'tools fetch' "$FAKE_SINGBOX_LOG" \
+    || { echo "singbox.log:"; cat "$FAKE_SINGBOX_LOG"; fail "boot fetch did not invoke tools fetch"; }
+pass "boot fetch produces sub_subA.txt via tools fetch"
 
-# ---- parallel curl ----
-echo "-- two subscriptions are fetched in parallel"
-# Replace curl stub with one that sleeps 2s and records timestamp.
-cat >"$TMPDIR/bin/curl" <<'EOF'
-#!/bin/sh
-date +%s%N >>"${FAKE_CURL_LOG:-/dev/null}"
-sleep 2
-echo "$@" >>"${FAKE_CURL_LOG:-/dev/null}"
-out=""
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -o) out="$2"; shift 2 ;;
-        *)  shift ;;
-    esac
-done
-[ -n "$out" ] && cp "${FAKE_CURL_BODY_FILE:-/dev/null}" "$out"
-exit 0
-EOF
-chmod +x "$TMPDIR/bin/curl"
+# ---- two subscriptions are both fetched (sequential) ----
+echo "-- two subscriptions are both fetched"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subA'
 	option type 'subscription'
@@ -168,21 +145,18 @@ config outbound 'subB'
 	option type 'subscription'
 	option sub_url 'https://example.test/b'
 EOF
+# b64("vless://uuid@host:443\n")
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
-: >"$FAKE_CURL_LOG"
-start=$(date +%s)
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
+rm -f "$SINGBOX_TMPDIR/sub_subA.txt" "$SINGBOX_TMPDIR/sub_subB.txt"
+: >"$FAKE_SINGBOX_LOG"
 run_uc fetch-subs
-end=$(date +%s)
-elapsed=$((end - start))
-# Sequential = ~4s, parallel = ~2s. Allow some headroom.
-[ "$elapsed" -lt 4 ] || fail "expected parallel (<4s), got ${elapsed}s"
-pass "two curls run in parallel (${elapsed}s)"
+[ -s "$SINGBOX_TMPDIR/sub_subA.txt" ] || fail "sub_subA.txt not written"
+[ -s "$SINGBOX_TMPDIR/sub_subB.txt" ] || fail "sub_subB.txt not written"
+pass "both subscriptions are fetched"
 
-# Restore the simple stub for following tests.
-setup_curl_stub_basic
-
-# ---- failed curl preserves existing sub_*.txt ----
-echo "-- failed curl does not clobber existing sub_<name>.txt"
+# ---- failed fetch preserves existing sub_*.txt ----
+echo "-- failed fetch does not clobber existing sub_<name>.txt"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subA'
 	option type 'subscription'
@@ -191,18 +165,19 @@ EOF
 # Seed an existing sub_subA.txt
 mkdir -p "$SINGBOX_TMPDIR"
 printf 'vless://kept@host:1\n' >"$SINGBOX_TMPDIR/sub_subA.txt"
-# Curl stub returns failure.
-cat >"$TMPDIR/bin/curl" <<'EOF'
+# sing-box stub returns failure (non-zero exit, no body written to stdout).
+cat >"$TMPDIR/bin/sing-box" <<'EOF'
 #!/bin/sh
-exit 22
+echo "$@" >>"${FAKE_SINGBOX_LOG:-/dev/null}"
+exit 1
 EOF
-chmod +x "$TMPDIR/bin/curl"
+chmod +x "$TMPDIR/bin/sing-box"
 run_uc fetch-subs
 grep -q '^vless://kept@host:1' "$SINGBOX_TMPDIR/sub_subA.txt" \
-    || fail "cached sub_subA.txt was clobbered by failed curl"
-pass "cache preserved on curl failure"
-# Restore curl stub.
-setup_curl_stub_basic
+    || fail "cached sub_subA.txt was clobbered by failed fetch"
+pass "cache preserved on fetch failure"
+# Restore stub.
+setup_singbox_stub_basic
 
 # ---- refresh: no-op when fresh, runs when stale, runs with force ----
 echo "-- refresh respects mtime"
@@ -213,18 +188,19 @@ config outbound 'subA'
 	option sub_interval '3600'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
 run_uc fetch-subs                                  # warm cache
 old_mt=$(F="$SINGBOX_TMPDIR/sub_subA.txt" "$UCODE_BIN" -e 'let s=require("fs").stat(getenv("F")); print(s ? s.mtime : 0)')
 sleep 1
-: >"$FAKE_CURL_LOG"
+: >"$FAKE_SINGBOX_LOG"
 SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions   # fresh → no-op
 new_mt=$(F="$SINGBOX_TMPDIR/sub_subA.txt" "$UCODE_BIN" -e 'let s=require("fs").stat(getenv("F")); print(s ? s.mtime : 0)')
 [ "$old_mt" = "$new_mt" ] || fail "fresh refresh re-downloaded"
-[ ! -s "$FAKE_CURL_LOG" ] || fail "fresh refresh called curl"
+[ ! -s "$FAKE_SINGBOX_LOG" ] || fail "fresh refresh called sing-box fetch"
 pass "fresh refresh is no-op"
 
 SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions force
-[ -s "$FAKE_CURL_LOG" ] || fail "forced refresh did not call curl"
+[ -s "$FAKE_SINGBOX_LOG" ] || fail "forced refresh did not call sing-box fetch"
 pass "forced refresh re-downloads"
 
 # ---- regression: tproxy inbound with nft_rules='1' must NOT trigger a
@@ -239,30 +215,35 @@ config inbound 'tproxy_in'
 	option listen_port '7893'
 	option nft_rules '1'
 EOF
-: >"$FAKE_CURL_LOG"
+: >"$FAKE_SINGBOX_LOG"
 SINGBOX_NO_RELOAD=1 run_uc refresh rulesets force
-[ ! -s "$FAKE_CURL_LOG" ] || { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "ruleset refresh fired on inbound"; }
+[ ! -s "$FAKE_SINGBOX_LOG" ] || { echo "singbox.log:"; cat "$FAKE_SINGBOX_LOG"; fail "ruleset refresh fired on inbound"; }
 pass "inbound nft_rules='1' ignored by ruleset refresh"
 
-# ---- sub_update_via outbound: curl --interface receives the resolved netdev,
-# not the UCI logical name. helpers.resolve_iface_device honours
-# SINGBOX_DEV_<iface> so this test can pin the translation.
-echo "-- sub_update_via outbound resolves UCI iface to real netdev"
+# ---- sub_update_via: outbound tag is passed to 'tools fetch -o' ----
+echo "-- sub_update_via outbound tag is passed to 'tools fetch -o'"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
-config outbound 'via_wan'
-	option type 'interface'
-	option interface 'wan'
+config outbound 'my_proxy'
+	option type 'trojan'
+	option server 'proxy.example.com'
+	option server_port '443'
+	option server_password 'secret'
 config outbound 'subA'
 	option type 'subscription'
 	option sub_url 'https://example.test/sub'
-	option sub_update_via 'via_wan'
+	option sub_update_via 'my_proxy'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
-: >"$FAKE_CURL_LOG"
-SINGBOX_DEV_wan='pppoe-wan' run_uc fetch-subs
-grep -q -- '--interface pppoe-wan' "$FAKE_CURL_LOG" \
-	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "expected --interface pppoe-wan"; }
-pass "sub_update_via resolves to pppoe-wan"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
+: >"$FAKE_SINGBOX_LOG"
+run_uc fetch-subs
+grep -q 'tools fetch' "$FAKE_SINGBOX_LOG" \
+	|| { echo "singbox.log:"; cat "$FAKE_SINGBOX_LOG"; fail "tools fetch not invoked"; }
+grep -q -- '-o my_proxy' "$FAKE_SINGBOX_LOG" \
+	|| { echo "singbox.log:"; cat "$FAKE_SINGBOX_LOG"; fail "expected -o my_proxy in sing-box argv"; }
+grep -q -- '-c ' "$FAKE_SINGBOX_LOG" \
+	|| { echo "singbox.log:"; cat "$FAKE_SINGBOX_LOG"; fail "expected -c <cfgpath> in sing-box argv"; }
+pass "sub_update_via tag passed as -o to tools fetch"
 
 # ---- share-link parsers (Phase B7): ss://, trojan://, vless://, hy2:// ----
 # A small probe imports lib/outbound.uc and prints the JSON the dispatcher
@@ -532,7 +513,7 @@ config outbound 'subA'
 	option sub_url 'https://example.test/sub'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"   # b64("vless://uuid@host:443\n")
-export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
 rm -f "$SINGBOX_TMPDIR"/sub_subA.txt "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.* 2>/dev/null || true
 run_uc fetch-subs
 [ -s "$SINGBOX_TMPDIR/sub_subA.txt" ] || fail "S3-1: sub_subA.txt missing"
@@ -543,7 +524,13 @@ for _f in "$SINGBOX_TMPDIR"/sub_subA.txt.tmp.*; do
 	[ -e "$_f" ] && leftovers=$((leftovers + 1))
 done
 [ "$leftovers" -eq 0 ] || { ls "$SINGBOX_TMPDIR"; fail "S3-1: tmp file left behind ($leftovers)"; }
-pass "S3-1: atomic write leaves no tmp file"
+# Also assert the ephemeral .cfg fetch-config file was cleaned up (Part A I1).
+cfg_leftovers=0
+for _f in "$SINGBOX_TMPDIR"/*.cfg; do
+	[ -e "$_f" ] && cfg_leftovers=$((cfg_leftovers + 1))
+done
+[ "$cfg_leftovers" -eq 0 ] || { ls "$SINGBOX_TMPDIR"; fail "S3-1: .cfg temp file left behind ($cfg_leftovers)"; }
+pass "S3-1: atomic write leaves no tmp or .cfg file"
 
 # Structural: production must route the subs output through a tmp+rename
 # helper (fs.rename), not a bare fs.open(out_path,"w") write loop.
@@ -555,7 +542,7 @@ pass "S3-1: subscription.uc uses fs.rename for atomic publish"
 # CRITICAL: the body must be VALID (contain a real proxy URL) so it would pass
 # the URL filter and be written if the size guard were missing. Only then does
 # "no output file" prove the post-stat size guard fired (not an empty URL list).
-echo "-- S3-2: curl gets --max-filesize and oversize VALID body is dropped by the size guard"
+echo "-- S3-2: oversize body is dropped by the post-read size guard"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
 config outbound 'subBig'
 	option type 'subscription'
@@ -565,8 +552,7 @@ EOF
 # This proves the URL filter accepts the body, so the oversize rejection below
 # can only be attributable to the size guard.
 printf 'vless://uuid@host:443\n' >"$TMPDIR/body"
-export FAKE_CURL_BODY_FILE="$TMPDIR/body"
-: >"$FAKE_CURL_LOG"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
 rm -f "$SINGBOX_TMPDIR/sub_subBig.txt"
 run_uc fetch-subs
 [ -s "$SINGBOX_TMPDIR/sub_subBig.txt" ] \
@@ -577,16 +563,14 @@ pass "S3-2(control): under-cap valid body is written"
 
 # Now the oversize variant: SAME valid first line, then >8 MiB of padding on a
 # second line. The vless:// line still passes the URL filter, so the ONLY thing
-# that can stop the file from being written is the size guard.
+# that can stop the file from being written is the post-read size guard.
 { printf 'vless://uuid@host:443\n'; head -c 9000000 /dev/zero | tr '\0' 'a'; printf '\n'; } >"$TMPDIR/body"
-: >"$FAKE_CURL_LOG"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
 rm -f "$SINGBOX_TMPDIR/sub_subBig.txt"
 run_uc fetch-subs
-grep -q -- '--max-filesize' "$FAKE_CURL_LOG" \
-	|| { echo "curl.log:"; cat "$FAKE_CURL_LOG"; fail "S3-2: --max-filesize not passed to curl"; }
 [ ! -f "$SINGBOX_TMPDIR/sub_subBig.txt" ] \
 	|| fail "S3-2: oversize body (with a valid URL line) was NOT rejected by the size guard"
-pass "S3-2: oversize valid body rejected by post-stat guard and --max-filesize set"
+pass "S3-2: oversize valid body rejected by post-read size guard"
 
 # ---- S3-3: symlink whose target escapes the whitelist is rejected ----
 # The symlink path itself is under /tmp (whitelisted), but its target resolves
@@ -638,14 +622,14 @@ config outbound 'subN'
 	option sub_interval 'abc'
 EOF
 printf '%s' 'dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==' >"$TMPDIR/body"
-export FAKE_CURL_BODY_FILE="$TMPDIR/body"
+export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
 # Seed a stale cache file dated in 1970 so even the 3600s default is exceeded.
 printf 'vless://old@host:1\n' >"$SINGBOX_TMPDIR/sub_subN.txt"
 touch -t 197001020000 "$SINGBOX_TMPDIR/sub_subN.txt"
-: >"$FAKE_CURL_LOG"
+: >"$FAKE_SINGBOX_LOG"
 SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions
-[ -s "$FAKE_CURL_LOG" ] \
-	|| { echo "curl.log empty — refresh treated NaN interval as never-stale"; fail "S3-4: NaN interval disabled refresh"; }
+[ -s "$FAKE_SINGBOX_LOG" ] \
+	|| { echo "singbox.log empty — refresh treated NaN interval as never-stale"; fail "S3-4: NaN interval disabled refresh"; }
 pass "S3-4: NaN interval clamped to default, refresh fired"
 
 # ---- S3-8: log_err is a distinct channel (tagged) vs log ----

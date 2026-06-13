@@ -13,10 +13,9 @@
 
 const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 const SINGBOX    = getenv("SINGBOX")        || "/usr/bin/sing-box";
-const DEFAULT_UA = "Mozilla/5.0";
 // Cap subscription/ruleset bodies so a hostile or runaway source cannot OOM
-// a 128–256 MB router. curl aborts past --max-filesize; the post-stat guard
-// catches bodies with no Content-Length (chunked) and local cp sources.
+// a 128–256 MB router. The post-stat guard (Phase 3) enforces MAX_BODY for
+// subscription bodies; local cp sources are also covered.
 const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
 
 // nft_rules remote rule-sets are no longer curl'd; we read the already-compiled
@@ -45,10 +44,11 @@ function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn("error: " + msg + "\n"); }
 
 // I/O seams — overridable for tests, mirroring log._set_logger_for_test.
-// _reader(path) returns the raw body string (or null); _downloader(specs)
-// runs the parallel curl transaction. BOTH `let` bindings are declared here,
-// BEFORE the setter helpers below close over and assign to them — a forward
-// reference would hit the temporal dead zone and throw at call time.
+// _reader(path) returns the raw body string (or null); _fetcher(jobs) runs
+// one `sing-box tools fetch` per job sequentially. BOTH `let` bindings are
+// declared here, BEFORE the setter helpers below close over and assign to
+// them — a forward reference would hit the temporal dead zone and throw at
+// call time.
 let _reader = function(path) {
 	let fd = fs.open(path, "r");
 	if (!fd) return null;
@@ -58,39 +58,41 @@ let _reader = function(path) {
 	return body;
 };
 
-// Default _downloader is the old parallel_download body, unchanged (it keeps
-// the --max-filesize token from S3-2). Kicks off multiple curls under
-// /bin/sh and waits for all in one transaction. Each spec: {url, outpath,
-// opts}. Failures surface via the caller's fs.stat().
-let _downloader = function(specs) {
-	if (!length(specs)) return;
-	let parts = [];
-	for (let spec in specs) {
-		let opts = spec.opts || {};
-		let argv = [
-			"curl", "-sfL",
-			"--max-filesize", `${MAX_BODY}`,
-			"--max-time", `${opts.timeout ?? 15}`,
-			"-A", opts.user_agent || DEFAULT_UA,
-			"-o", spec.outpath,
-		];
-		if (opts.interface) push(argv, "--interface", opts.interface);
-		push(argv, spec.url);
+// _fetcher(jobs) — for each job runs `sing-box tools fetch -c <cfg> -o <via>
+// <url>` capturing stdout to job.outpath. The ephemeral cfg (job.cfg_json) is
+// written to a sibling temp file. `timeout` is optional on stock OpenWrt (not a
+// busybox applet) — guarded with `command -v`, mirroring nftables.uc's apply.
+let _fetcher = function(jobs) {
+	if (!length(jobs)) return;
+	let has_timeout = (system(["/bin/sh", "-c", "command -v timeout >/dev/null 2>&1"]) === 0);
+	for (let j in jobs) {
+		let cfgpath = sprintf("%s.cfg", j.outpath);
+		let cf = fs.open(cfgpath, "w");
+		if (!cf) { log_err(`fetch: cannot write cfg for ${j.name}`); continue; }
+		try { cf.write(j.cfg_json); } catch (_) {}
+		cf.close();
+		let argv = [ SINGBOX, "tools", "fetch", "-c", cfgpath,
+		             "-o", (j.via !== "" ? j.via : "direct"), j.url ];
 		let quoted = [];
 		for (let a in argv) push(quoted, helpers.sq(a));
-		push(parts, join(" ", quoted) + " &");
+		let line = join(" ", quoted) + " > " + helpers.sq(j.outpath) + " 2>/dev/null";
+		let to = (j.opts && j.opts.timeout) ? j.opts.timeout : 15;
+		if (has_timeout) line = sprintf("timeout %d ", to) + line;
+		try { system(["/bin/sh", "-c", line]); } catch (_) {}
+		fs.unlink(cfgpath);
 	}
-	push(parts, "wait");
-	system(["/bin/sh", "-c", join(" ", parts)]);
 };
 
-// _set_io_for_test(downloader, reader) — install mock I/O. Either arg may be
-// null to keep the current implementation. Declared AFTER _downloader/_reader
+// _set_io_for_test(fetcher, reader) — install mock I/O. Either arg may be
+// null to keep the current implementation. Declared AFTER _fetcher/_reader
 // so both targets are already in scope when this assigns to them.
-function _set_io_for_test(downloader, reader) {
-	if (downloader != null) _downloader = downloader;
-	if (reader != null)     _reader = reader;
+function _set_io_for_test(fetcher, reader) {
+	if (fetcher != null) _fetcher = fetcher;
+	if (reader != null)  _reader  = reader;
 }
+
+// _set_fetcher_for_test(fn) — dedicated seam to inject a mock fetcher.
+function _set_fetcher_for_test(fn) { _fetcher = fn; }
 
 // _read_raw_for_test(path) — thin wrapper so a test can verify the reader
 // seam without a uci cursor.
@@ -262,7 +264,35 @@ function cold_retry_eligible(cur, tag) {
 	return (time() - st.mtime) >= tag_update_interval(cur, tag);
 }
 
+// build_fetch_config(cur, via) -> JSON string for `sing-box tools fetch -c`.
+// Minimal config: the selected via-outbound (tag forced to `via`) + a direct
+// outbound. via="" / "direct" -> just direct. Returns null if via is set but
+// its section can't be built (caller logs + skips). No I/O.
+function build_fetch_config(cur, via) {
+	let direct = { tag: "direct", type: "direct" };
+	let outbounds = [];
+	if (via !== "" && via !== "direct") {
+		let kind = helpers.uci_get_or_empty(cur, via, "type");
+		if (kind === "") return null;
+		let sec = cur.get_all("singbox-ui", via);
+		if (sec == null) return null;
+		let obj;
+		try { obj = ob_mod.build_constructor_for(sec, kind); }
+		catch (e) { return null; }
+		if (obj == null) return null;
+		obj.tag = via;
+		push(outbounds, obj);
+	}
+	push(outbounds, direct);
+	return sprintf("%J", { outbounds: outbounds });
+}
+
 function cmd_fetch_subs(cur) {
+	// Ensure TMPDIR exists whether invoked via CLI (module-level mkdir above)
+	// or via the test wrapper (_cmd_fetch_subs_for_test) which require()s the
+	// module, bypassing the ARGV-gated module-level fs.mkdir call.
+	fs.mkdir(TMPDIR, 0o755);
+
 	let names = helpers.sections_of_kind(cur, "outbound", "type", "subscription");
 	if (!length(names)) {
 		log_err("fetch_subs: no subscription outbounds configured");
@@ -272,8 +302,9 @@ function cmd_fetch_subs(cur) {
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
 	let timeout = boot ? 5 : 15;
 
-	// Phase 1: build one job per subscription (download spec + metadata in a
-	// single struct — no more index-parallel specs/meta arrays to desync).
+	// Phase 1: build one job per subscription. Each job carries the ephemeral
+	// fetch-config JSON (outbounds: [via-outbound, direct]) so sing-box can
+	// route the download through the selected outbound.
 	let jobs = [];
 	for (let name in names) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
@@ -286,29 +317,22 @@ function cmd_fetch_subs(cur) {
 			continue;
 		}
 		let via = helpers.uci_get_or_empty(cur, name, "sub_update_via");
-		let iface = null;
-		if (via !== "" && via !== "direct") {
-			let logical = helpers.uci_get_or_empty(cur, via, "interface");
-			if (logical === "") {
-				log_err(`fetch_subs: outbound '${via}' has no interface`);
-				continue;
-			}
-			// `curl --interface` needs a real netdev (e.g. pppoe-wan); the
-			// outbound stores a UCI logical name (e.g. wan). Translate so
-			// the request leaves through the requested uplink.
-			iface = helpers.resolve_iface_device(logical);
+		let cfg_json = build_fetch_config(cur, via);
+		if (cfg_json == null) {
+			log_err(`fetch_subs: ${name} via outbound '${via}' could not be built, skipping`);
+			continue;
 		}
 		let raw_path = `${TMPDIR}/sub_${name}.raw`;
 		let out_path = `${TMPDIR}/sub_${name}.txt`;
 		push(jobs, {
 			name: name, raw_path: raw_path, out_path: out_path,
-			url: url, outpath: raw_path,
-			opts: { timeout: timeout, interface: iface },
+			url: url, via: via, cfg_json: cfg_json, outpath: raw_path,
+			opts: { timeout: timeout },
 		});
 	}
 
-	// Phase 2: parallel curl (each job is also a valid download spec).
-	_downloader(jobs);
+	// Phase 2: fetch each subscription via sing-box tools fetch.
+	_fetcher(jobs);
 
 	// Phase 3: parse each result; on failure, leave existing out_path alone.
 	for (let m in jobs) {
@@ -458,9 +482,9 @@ function cmd_fetch_rulesets(cur) {
 		}
 	}
 
-	// No network download here anymore: remote rule-sets were extracted from
+	// No network download here: remote rule-sets were extracted from
 	// cache.db (.srs → raw_path) and local ones cp'd inline above. Subscriptions
-	// still use _downloader (cmd_fetch_subs); rule-sets no longer do.
+	// use _fetcher (sing-box tools fetch); rule-sets do not — they read from cache.
 
 	// Decompile / promote each raw file.
 	for (let m in jobs) {
@@ -497,29 +521,6 @@ function cmd_fetch_rulesets(cur) {
 	}
 	return 0;
 }
-// build_fetch_config(cur, via) -> JSON string for `sing-box tools fetch -c`.
-// Minimal config: the selected via-outbound (tag forced to `via`) + a direct
-// outbound. via="" / "direct" -> just direct. Returns null if via is set but
-// its section can't be built (caller logs + skips). No I/O.
-function build_fetch_config(cur, via) {
-	let direct = { tag: "direct", type: "direct" };
-	let outbounds = [];
-	if (via !== "" && via !== "direct") {
-		let kind = helpers.uci_get_or_empty(cur, via, "type");
-		if (kind === "") return null;
-		let sec = cur.get_all("singbox-ui", via);
-		if (sec == null) return null;
-		let obj;
-		try { obj = ob_mod.build_constructor_for(sec, kind); }
-		catch (e) { return null; }
-		if (obj == null) return null;
-		obj.tag = via;
-		push(outbounds, obj);
-	}
-	push(outbounds, direct);
-	return sprintf("%J", { outbounds: outbounds });
-}
-
 // is_stale(path, interval_s, force) -> bool. Missing file / zero interval / no
 // interval => stale.
 function is_stale(path, interval_s, force) {
@@ -705,6 +706,8 @@ return {
 	path_under_whitelist,
 	is_stale,
 	_set_io_for_test,
+	_set_fetcher_for_test,
 	_read_raw_for_test,
 	_build_fetch_config_for_test: build_fetch_config,
+	_cmd_fetch_subs_for_test: function(cur) { return cmd_fetch_subs(cur); },
 };
