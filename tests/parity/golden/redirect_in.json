@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 7894, "tag": "rd_in", "type": "redirect" }

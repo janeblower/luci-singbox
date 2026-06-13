@@ -213,4 +213,6 @@ return [
       section: { ".name": "nv_in", protocol: "naive", listen_port: "443", network: "udp",
                  naive_user: ["alice:secret"],
                  tls_certificate_path: "/c.pem", tls_key_path: "/k.pem" } },
+    { name: "redirect_in", kind: "inbound", type: "redirect",
+      section: { ".name": "rd_in", protocol: "redirect", listen_port: "7894" } },
 ];

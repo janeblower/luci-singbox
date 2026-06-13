@@ -19,7 +19,7 @@ let filler  = require("builder._filler");
 for (let _m in ["builder.protocols.trojan", "builder.protocols.shadowsocks", "builder.protocols.vless",
                 "builder.protocols.hysteria2", "builder.protocols.hysteria", "builder.protocols.tuic",
                 "builder.protocols.anytls", "builder.protocols.shadowtls", "builder.protocols.direct",
-                "builder.protocols.tproxy", "builder.protocols.mixed", "builder.protocols.json_raw",
+                "builder.protocols.tproxy", "builder.protocols.redirect", "builder.protocols.mixed", "builder.protocols.json_raw",
                 "builder.protocols.socks", "builder.protocols.http", "builder.protocols.vmess",
                 "builder.protocols.naive"]) {
 	try { require(_m); }
