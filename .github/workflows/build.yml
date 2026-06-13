@@ -267,6 +267,18 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Using version: $VERSION"
 
+      - name: Fetch bbolt-client binaries
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .bbolt-bin
+          gh release download bbolt-latest --repo "$GITHUB_REPOSITORY" \
+            --dir .bbolt-bin \
+            -p 'bbolt-client-rs-*' -p 'sha256sums.txt'
+          ( cd .bbolt-bin && sha256sum -c sha256sums.txt )
+          ls -la .bbolt-bin
+
       - name: Build apk packages
         # sudo -E so the SDK cache (SDK_CACHE_DIR via $HOME) and ~/.cache
         # paths line up with the cache action above. Required: Ubuntu 24.04
@@ -276,7 +288,7 @@ jobs:
         # hijacks LD_PRELOAD and silently produced nobody:nogroup packages
         # (see scripts/build-apk.sh comments). Real root is the reliable
         # path.
-        run: sudo -E bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
+        run: sudo -E env BBOLT_BIN_DIR="$PWD/.bbolt-bin" bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
 
       - name: List produced packages
         id: pkg
@@ -298,18 +310,28 @@ jobs:
           retention-days: 30
 
       # Push to main → rolling pre-release `latest` (recreated each push so the
-      # asset always reflects the tip of main).
-      - name: Stage stable-named apk
+      # asset always reflects the tip of main). Stage fixed-named (version-less)
+      # copies so --clobber can overwrite the SAME asset names each push and the
+      # `latest` release never accumulates version-suffixed garbage.
+      - name: Stage fixed-named assets
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
-          # dist/ is root-owned (build-apk.sh runs under sudo); pick the MAIN
-          # package (not luci-i18n-*) and copy it to a stable, version-less name.
-          src=""
-          for f in dist/luci-singbox-ui_*.apk; do src="$f"; break; done
-          [ -n "$src" ] || { echo "no main apk found in dist/"; exit 1; }
-          sudo cp "$src" dist/luci-singbox-ui.apk
-          sudo chown "$(id -u):$(id -g)" dist/luci-singbox-ui.apk
+          VERSION="${{ steps.version.outputs.version }}"
+          ls dist/luci-singbox-ui_*.apk >/dev/null 2>&1 || { echo "no per-arch apks found in dist/"; exit 1; }
+          # dist/ is root-owned (build-apk.sh runs under sudo).
+          # Per-arch apks: luci-singbox-ui_<version>_<exact-arch>.apk
+          # <exact-arch> may contain underscores (e.g. mipsel_24kc,
+          # arm_cortex-a7_neon-vfpv4), so strip the known prefix+version
+          # rather than splitting on the last underscore.
+          for f in dist/luci-singbox-ui_*.apk; do
+            base="${f##*/}"
+            arch="${base#luci-singbox-ui_${VERSION}_}"
+            arch="${arch%.apk}"
+            sudo cp "$f" "dist/luci-singbox-ui-${arch}.apk"
+          done
+          sudo cp dist/luci-i18n-singbox-ui-ru_*.apk dist/luci-i18n-singbox-ui-ru.apk
+          sudo chown "$(id -u):$(id -g)" dist/luci-singbox-ui-*.apk dist/luci-i18n-singbox-ui-ru.apk
           ls -1 dist/*.apk
 
       # Checksums for every published apk (mirrors bbolt-client.yml). install.sh
@@ -323,9 +345,14 @@ jobs:
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/')
         run: |
           set -euo pipefail
-          ( cd dist && sha256sum *.apk | sudo tee sha256sums.txt )
-          sudo chown "$(id -u):$(id -g)" dist/sha256sums.txt
-          cat dist/sha256sums.txt
+          cd dist
+          if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
+            sha256sum luci-singbox-ui-*.apk luci-i18n-singbox-ui-ru.apk | sudo tee sha256sums.txt
+          else
+            sha256sum luci-singbox-ui_*.apk luci-i18n-singbox-ui-ru_*.apk | sudo tee sha256sums.txt
+          fi
+          sudo chown "$(id -u):$(id -g)" sha256sums.txt
+          cat sha256sums.txt
 
       - name: Publish rolling "latest" release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -341,7 +368,7 @@ jobs:
           # `create` it the first time (guarded by `release view`), and retarget
           # the tag to the current SHA via `release edit` so the asset reflects
           # the tip of main.
-          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-singbox-ui.apk\` is the stable-named asset used by install.sh; \`sha256sums.txt\` is verified by install.sh before \`apk add\`."
+          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-singbox-ui-<arch>.apk\` is the per-arch asset install.sh downloads (e.g. \`luci-singbox-ui-x86_64.apk\`); \`luci-i18n-singbox-ui-ru.apk\` is the Russian translation package; \`sha256sums.txt\` is verified by install.sh before \`apk add\`."
           if ! gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create latest \
               --repo "$GITHUB_REPOSITORY" \
@@ -357,7 +384,8 @@ jobs:
               --notes "$notes" \
               --prerelease
           fi
-          gh release upload latest dist/*.apk dist/sha256sums.txt \
+          gh release upload latest \
+            dist/luci-singbox-ui-*.apk dist/luci-i18n-singbox-ui-ru.apk dist/sha256sums.txt \
             --repo "$GITHUB_REPOSITORY" --clobber
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.
