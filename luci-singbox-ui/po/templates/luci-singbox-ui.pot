@@ -210,7 +210,7 @@ msgstr ""
 msgid "Direct"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:172
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:173
 msgid "Direct (WAN)"
 msgstr ""
 
@@ -267,7 +267,7 @@ msgstr ""
 msgid "Error: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:186
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:189
 msgid "Expand to selector"
 msgstr ""
 
@@ -292,6 +292,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
 msgid "FakeIP IPv6 range"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:169
+msgid "Fetch the subscription through this outbound (proxy or direct)."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:51
@@ -617,7 +621,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:191
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:194
 msgid "Selector type"
 msgstr ""
 
@@ -694,7 +698,7 @@ msgstr ""
 msgid "URL"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:198
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:201
 msgid "URL-test URL"
 msgstr ""
 
@@ -718,7 +722,7 @@ msgstr ""
 msgid "Up"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:180
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:183
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:48
 msgid "Update interval (s)"
 msgstr ""

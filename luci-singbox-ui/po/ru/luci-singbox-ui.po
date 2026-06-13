@@ -208,7 +208,7 @@ msgstr "Исходящее подключение"
 msgid "Direct"
 msgstr "Прямое подключение"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:172
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:173
 msgid "Direct (WAN)"
 msgstr "Напрямую (WAN)"
 
@@ -268,7 +268,7 @@ msgstr "Включить кэш-файл"
 msgid "Error: "
 msgstr "Ошибка: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:186
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:189
 msgid "Expand to selector"
 msgstr "Развернуть в selector"
 
@@ -296,6 +296,10 @@ msgstr "Диапазон FakeIP IPv4"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
 msgid "FakeIP IPv6 range"
 msgstr "Диапазон FakeIP IPv6"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:169
+msgid "Fetch the subscription through this outbound (proxy or direct)."
+msgstr "Загружать подписку через этот аутбаунд (прокси или direct)."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:51
 msgid "Final route applied to traffic that does not match any rule."
@@ -636,7 +640,7 @@ msgstr "Наборы правил"
 msgid "Search"
 msgstr "Поиск"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:191
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:194
 msgid "Selector type"
 msgstr "Тип селектора"
 
@@ -714,7 +718,7 @@ msgstr "Тип"
 msgid "URL"
 msgstr "URL"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:198
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:201
 msgid "URL-test URL"
 msgstr "URL для url-test"
 
@@ -738,7 +742,7 @@ msgstr "Неподдерживаемая схема: "
 msgid "Up"
 msgstr "Отдача"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:180
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:183
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:48
 msgid "Update interval (s)"
 msgstr "Интервал обновления (с)"
