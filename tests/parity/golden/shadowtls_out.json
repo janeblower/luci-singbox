@@ -1,0 +1,1 @@
+{ "password": "pw", "server": "ex.com", "server_port": 443, "tag": "st1", "tls": { "enabled": true, "server_name": "google.com" }, "type": "shadowtls", "version": 3 }

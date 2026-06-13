@@ -18,7 +18,7 @@ let filler  = require("builder._filler");
 // throwing through require() and aborting generation for ALL protocols.
 for (let _m in ["builder.protocols.trojan", "builder.protocols.shadowsocks", "builder.protocols.vless",
                 "builder.protocols.hysteria2", "builder.protocols.hysteria", "builder.protocols.tuic",
-                "builder.protocols.anytls", "builder.protocols.direct",
+                "builder.protocols.anytls", "builder.protocols.shadowtls", "builder.protocols.direct",
                 "builder.protocols.tproxy", "builder.protocols.mixed", "builder.protocols.json_raw",
                 "builder.protocols.socks", "builder.protocols.http", "builder.protocols.vmess"]) {
 	try { require(_m); }
