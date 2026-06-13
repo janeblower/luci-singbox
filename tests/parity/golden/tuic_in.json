@@ -1,0 +1,1 @@
+{ "auth_timeout": "3s", "congestion_control": "cubic", "listen": "::", "listen_port": 443, "tag": "tu_in", "tls": { "certificate_path": "/c.pem", "enabled": true, "key_path": "/k.pem" }, "type": "tuic", "users": [ { "name": "alice", "password": "hello", "uuid": "059032A9-7D40-4A96-9BB1-36823D848068" } ] }

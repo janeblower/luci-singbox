@@ -1,0 +1,1 @@
+{ "congestion_control": "bbr", "heartbeat": "10s", "password": "hello", "server": "ex.com", "server_port": 443, "tag": "tu1", "tls": { "enabled": true, "server_name": "ex.com" }, "type": "tuic", "udp_relay_mode": "native", "uuid": "2DD61D93-75D8-4DA4-AC0E-6AECE7EAC365", "zero_rtt_handshake": true }
