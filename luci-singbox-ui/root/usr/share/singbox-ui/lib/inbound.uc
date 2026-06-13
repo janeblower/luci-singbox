@@ -18,7 +18,7 @@ let filler  = require("builder._filler");
 // throwing through require() and aborting generation for ALL protocols.
 for (let _m in ["builder.protocols.trojan", "builder.protocols.shadowsocks", "builder.protocols.vless",
                 "builder.protocols.hysteria2", "builder.protocols.direct", "builder.protocols.tproxy",
-                "builder.protocols.mixed", "builder.protocols.json_raw"]) {
+                "builder.protocols.mixed", "builder.protocols.json_raw", "builder.protocols.socks"]) {
 	try { require(_m); }
 	catch (e) { warn(sprintf("inbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }

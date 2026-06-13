@@ -139,4 +139,12 @@ return [
       section: { ".name": "hnb", server: "ex.com", server_port: "443", server_password: "pw", network: "sctp" } },
     { name: "tproxy_in_network_bogus", kind: "inbound", type: "tproxy",
       section: { ".name": "tnb", protocol: "tproxy", listen_port: "7895", network: "sctp" } },
+    { name: "socks_out_min", kind: "outbound", type: "socks",
+      section: { ".name": "sk1", server: "ex.com", server_port: "1080" } },
+    { name: "socks_out_auth", kind: "outbound", type: "socks",
+      section: { ".name": "sk2", server: "ex.com", server_port: "1080",
+                 socks_version: "5", username: "u", password: "p", network: "udp", udp_over_tcp: "1" } },
+    { name: "socks_in_users", kind: "inbound", type: "socks",
+      section: { ".name": "sk_in", protocol: "socks", listen_port: "1080",
+                 socks_user: ["alice:secret", "bob:pw"] } },
 ];

@@ -1,0 +1,1 @@
+{ "network": "udp", "password": "p", "server": "ex.com", "server_port": 1080, "tag": "sk2", "type": "socks", "udp_over_tcp": true, "username": "u", "version": "5" }
