@@ -17,7 +17,8 @@ let filler  = require("builder._filler");
 // require() is wrapped so one malformed descriptor file logs+skips instead of
 // throwing through require() and aborting generation for ALL protocols.
 for (let _m in ["builder.protocols.trojan", "builder.protocols.shadowsocks", "builder.protocols.vless",
-                "builder.protocols.hysteria2", "builder.protocols.hysteria", "builder.protocols.direct",
+                "builder.protocols.hysteria2", "builder.protocols.hysteria", "builder.protocols.tuic",
+                "builder.protocols.direct",
                 "builder.protocols.tproxy", "builder.protocols.mixed", "builder.protocols.json_raw",
                 "builder.protocols.socks", "builder.protocols.http", "builder.protocols.vmess"]) {
 	try { require(_m); }
