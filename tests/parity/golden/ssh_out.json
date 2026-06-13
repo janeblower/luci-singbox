@@ -1,0 +1,1 @@
+{ "client_version": "SSH-2.0-OpenSSH_7.4p1", "host_key": [ "ssh-ed25519 AAAA..." ], "password": "admin", "server": "ex.com", "server_port": 22, "tag": "ssh1", "type": "ssh", "user": "root" }

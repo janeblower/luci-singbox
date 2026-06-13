@@ -202,4 +202,8 @@ return [
                  shadowtls_version: "3", shadowtls_user: ["alice:secret"],
                  handshake_server: "google.com", handshake_server_port: "443",
                  strict_mode: "1", wildcard_sni: "all" } },
+    { name: "ssh_out", kind: "outbound", type: "ssh",
+      section: { ".name": "ssh1", server: "ex.com", server_port: "22",
+                 ssh_user: "root", server_password: "admin",
+                 host_key: ["ssh-ed25519 AAAA..."], client_version: "SSH-2.0-OpenSSH_7.4p1" } },
 ];
