@@ -1,6 +1,6 @@
 #!/bin/sh
-# tests/test_view_state_js.sh — the schema/sub-expand caches must live in a
-# module singleton (lib/view_state.js), not on window (spec S2-5).
+# tests/test_view_state_js.sh — the schema cache must live in a module
+# singleton (lib/view_state.js), not on window (spec S2-5).
 set -e
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
@@ -31,12 +31,8 @@ vm.runInContext('(function(){'+body+'})();', ctx, { filename:'view_state.js' });
 const VS = ctx.__moduleExports;
 let f=0; function ok(l,c){ if(c)console.log('  PASS:',l); else {console.log('  FAIL:',l);f++;} }
 ok('exports getSchema/setSchema', typeof VS.getSchema==='function' && typeof VS.setSchema==='function');
-ok('exports getSubExpand/setSubExpand', typeof VS.getSubExpand==='function' && typeof VS.setSubExpand==='function');
 VS.setSchema({ inbound: { tproxy: {} } });
 ok('schema round-trips', VS.getSchema().inbound.tproxy !== undefined);
-ok('schema defaults to {} before set on subExpand', JSON.stringify(VS.getSubExpand()) === '{}');
-VS.setSubExpand({ x: 1 });
-ok('subExpand round-trips', VS.getSubExpand().x === 1);
 if(f){ console.error('test_view_state_js: '+f+' failure(s)'); process.exit(1); }
 console.log('OK');
 NODE

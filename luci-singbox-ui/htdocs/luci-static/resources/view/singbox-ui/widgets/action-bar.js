@@ -4,9 +4,6 @@
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
-'require view.singbox-ui.lib.subscription_view as SbSubView';
-'require view.singbox-ui.lib.view_state as SbViewState';
-
 var callRefresh    = SbRpc.callRefresh;
 var callRestart    = SbRpc.callRestart;
 var callReadConfig = SbRpc.callReadConfig;
@@ -43,18 +40,7 @@ function renderActionBar(statusHolder) {
 	}
 	return E('div', { 'class': 'sb-actionbar', 'style': 'display:flex;gap:.5em;margin:.5em 0' }, [
 		btn(_('Refresh subscriptions'), _('Refreshing…'), function () {
-			return notify(callRefresh('subscriptions'), 'Done', _('Refresh subscriptions failed'))
-				.then(function (r) {
-					if (r && r.status === 'ok') {
-						return SbSubView.loadAllExpansions().then(function (cache) {
-							SbViewState.setSubExpand(cache);
-							var node = document.querySelector('#cbi-singbox-ui-outbound');
-							if (node) SbSubView.injectChildRows(node, cache);
-							return r;  // pass through so notify() still sees status:ok
-						});
-					}
-					return r;
-				});
+			return notify(callRefresh('subscriptions'), 'Done', _('Refresh subscriptions failed'));
 		}),
 		btn(_('Refresh rule-sets'), _('Refreshing…'), function () {
 			return notify(callRefresh('rulesets'),      'Done', _('Refresh rule-sets failed'));
