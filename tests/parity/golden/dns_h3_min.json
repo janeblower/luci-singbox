@@ -1,0 +1,1 @@
+{ "path": "/dns-query", "server": "dns.cloudflare.com", "server_port": 443, "tag": "h3s", "type": "h3" }
