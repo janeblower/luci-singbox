@@ -185,7 +185,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `server_port` | `server_port` | есть | matrix |
 | `version` | `socks_version` | есть | matrix |
 | `username` | `username` | есть | matrix |
-| `password` | `password` | есть | matrix |
+| `password` | `server_password` | есть | matrix |
 | `network` | `network` | есть | matrix |
 | `udp_over_tcp` | `udp_over_tcp` | есть | matrix |
 
@@ -195,7 +195,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `server` | `server` | есть | matrix |
 | `server_port` | `server_port` | есть | matrix |
 | `username` | `username` | есть | matrix |
-| `password` | `password` | есть | matrix |
+| `password` | `server_password` | есть | matrix |
 | `path` | `http_path` | есть | matrix |
 
 ### vmess outbound (`lib/builder/protocols/vmess.uc` — protocol matrix)
@@ -287,7 +287,7 @@ Re-added after E2 removal.
 | `server` | `server` | есть | matrix |
 | `server_port` | `server_port` | есть | matrix |
 | `username` | `username` | есть | matrix |
-| `password` | `password` | есть | matrix |
+| `password` | `server_password` | есть | matrix |
 | `network` | `network` | есть | matrix |
 | `insecure_concurrency` | `insecure_concurrency` | есть | matrix |
 | `quic_congestion_control` | `quic_congestion_control` | есть | matrix |

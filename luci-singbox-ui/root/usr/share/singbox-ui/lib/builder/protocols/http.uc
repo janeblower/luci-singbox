@@ -11,7 +11,7 @@ reg.register({
           validate: "port", default: 8080, ui_label: "Server port",
           json_key: "server_port", coerce: "num", omit_when: "never" },
         { name: "username", type: "string", tab: "basic", ui_label: "Username", json_key: "username" },
-        { name: "password", type: "string", tab: "basic", secret: true, ui_label: "Password", json_key: "password" },
+        { name: "server_password", type: "string", tab: "basic", secret: true, ui_label: "Password", json_key: "password" },
         { name: "http_path", type: "string", tab: "basic", ui_label: "Path", advanced: true,
           placeholder: "/", json_key: "path" },
     ],

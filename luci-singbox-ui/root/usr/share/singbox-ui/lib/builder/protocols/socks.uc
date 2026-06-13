@@ -15,7 +15,7 @@ reg.register({
           json_key: "version", default_when_empty: "5" },
         { name: "username", type: "string", tab: "basic", ui_label: "Username",
           json_key: "username" },
-        { name: "password", type: "string", tab: "basic", secret: true, ui_label: "Password",
+        { name: "server_password", type: "string", tab: "basic", secret: true, ui_label: "Password",
           json_key: "password" },
         { name: "network", type: "enum", tab: "basic", values: ["", "tcp", "udp"],
           ui_label: "Network", advanced: true, json_key: "network", only_values: ["tcp", "udp"] },
