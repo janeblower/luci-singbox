@@ -18,7 +18,7 @@
 let _registry = {};
 let _materialize_cache = {};
 
-const KNOWN_SHARED  = { tls: 1, transport: 1, multiplex: 1, dial: 1 };
+const KNOWN_SHARED  = { tls: 1, transport: 1, multiplex: 1, quic: 1, dial: 1 };
 const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
 // `dynamic` marks a selector whose choices are populated at render time from
 // live UCI / network state (see descriptor_form.js attachDynamic), not from a
