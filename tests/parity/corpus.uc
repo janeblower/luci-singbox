@@ -187,4 +187,11 @@ return [
                  tuic_user: ["alice:059032A9-7D40-4A96-9BB1-36823D848068:hello"],
                  congestion_control: "cubic", auth_timeout: "3s",
                  tls_certificate_path: "/c.pem", tls_key_path: "/k.pem" } },
+    { name: "anytls_out", kind: "outbound", type: "anytls",
+      section: { ".name": "at1", server: "ex.com", server_port: "443", server_password: "pw",
+                 idle_session_timeout: "30s", min_idle_session: "5", tls_server_name: "ex.com" } },
+    { name: "anytls_in", kind: "inbound", type: "anytls",
+      section: { ".name": "at_in", protocol: "anytls", listen_port: "443",
+                 anytls_user: ["alice:secret"], padding_scheme: ["stop=8"],
+                 tls_certificate_path: "/c.pem", tls_key_path: "/k.pem" } },
 ];

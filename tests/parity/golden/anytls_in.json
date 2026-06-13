@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "padding_scheme": [ "stop=8" ], "tag": "at_in", "tls": { "certificate_path": "/c.pem", "enabled": true, "key_path": "/k.pem" }, "type": "anytls", "users": [ { "name": "alice", "password": "secret" } ] }
