@@ -287,7 +287,7 @@ function build_fetch_config(cur, via) {
 	return sprintf("%J", { outbounds: outbounds });
 }
 
-function cmd_fetch_subs(cur) {
+function cmd_fetch_subs(cur, only) {
 	// Ensure TMPDIR exists whether invoked via CLI (module-level mkdir above)
 	// or via the test wrapper (_cmd_fetch_subs_for_test) which require()s the
 	// module, bypassing the ARGV-gated module-level fs.mkdir call.
@@ -311,6 +311,7 @@ function cmd_fetch_subs(cur) {
 			log_err(`fetch_subs: ${name} disabled, skipping`);
 			continue;
 		}
+		if (only != null && name !== only) continue;
 		let url = helpers.uci_get_or_empty(cur, name, "sub_url");
 		if (url === "") {
 			log_err(`fetch_subs: ${name} has no sub_url, skipping`);
@@ -531,8 +532,9 @@ function is_stale(path, interval_s, force) {
 	return (time() - st.mtime) >= interval_s;
 }
 
-function any_subs_stale(cur, force) {
+function any_subs_stale(cur, force, only) {
 	for (let name in helpers.sections_of_kind(cur, "outbound", "type", "subscription")) {
+		if (only != null && name !== only) continue;
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "sub_interval");
 		// !(iv > 0) catches NaN/0/negatives — +"abc" yields NaN and `iv === 0`
@@ -642,13 +644,13 @@ function cmd_sub_status(cur) {
 	return out;
 }
 
-function cmd_refresh(cur, what, force) {
+function cmd_refresh(cur, what, force, name) {
 	let subs_refreshed = false;
 	let no_reload = getenv("SINGBOX_NO_RELOAD") === "1";
 
 	if (what === "subscriptions" || what === "all") {
-		if (any_subs_stale(cur, force)) {
-			cmd_fetch_subs(cur);
+		if (any_subs_stale(cur, force, name)) {
+			cmd_fetch_subs(cur, name);
 			subs_refreshed = true;
 		}
 	}
@@ -717,7 +719,7 @@ if (length(ARGV)) {
 	switch (sub) {
 	case "fetch-subs":     cmd_fetch_subs(cur); break;
 	case "fetch-rulesets": cmd_fetch_rulesets(cur); break;
-	case "refresh":        cmd_refresh(cur, argv[1] || "all", argv[2] === "force"); break;
+	case "refresh":        cmd_refresh(cur, argv[1] || "all", argv[2] === "force", argv[3]); break;
 	case "sub-status":     printf("%J\n", cmd_sub_status(cur)); break;
 	default:
 		log_err("usage: subscription.uc {fetch-subs|fetch-rulesets|refresh [what] [force]|sub-status}");
@@ -735,4 +737,5 @@ return {
 	_build_fetch_config_for_test: build_fetch_config,
 	_cmd_fetch_subs_for_test: function(cur) { return cmd_fetch_subs(cur); },
 	_cmd_sub_status_for_test: function(cur) { return cmd_sub_status(cur); },
+	_any_subs_stale_for_test: function(cur, force, only) { return any_subs_stale(cur, force, only); },
 };
