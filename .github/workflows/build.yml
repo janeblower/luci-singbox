@@ -198,6 +198,80 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Builds the 5 static, libc-free bbolt-client-rs binaries (x86_64, aarch64,
+  # armv7, mipsel, mips) and runs the golden test suite under qemu-user for each
+  # cross arch. The resulting binaries are uploaded as a workflow artifact and
+  # consumed by the `build` job via download-artifact, replacing the standalone
+  # bbolt-client.yml workflow and the bbolt-latest rolling-release dependency.
+  bbolt:
+    name: Build bbolt-client (5 arches)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bbolt-client
+
+    steps:
+      - uses: actions/checkout@v6
+
+      # Nightly + rust-src are required for -Z build-std (the toolchain is also
+      # pinned in bbolt-client/rust-toolchain.toml). aarch64 cross-links with the
+      # bundled rust-lld, so no cross-gcc is needed. llvm-tools provides
+      # rust-objcopy, which build.sh uses to strip the MIPS .pdr section.
+      - name: Install nightly + rust-src + llvm-tools
+        run: |
+          rustup toolchain install nightly --profile minimal --component rust-src --component llvm-tools
+          rustc +nightly --version
+
+      # Cache Cargo registry, git sources, and the Rust target directory.
+      # cache `path:` is repo-root-relative (not affected by working-directory).
+      - name: Cache Cargo + build artifacts
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            bbolt-client/target
+          key: bbolt-${{ runner.os }}-${{ hashFiles('bbolt-client/Cargo.lock', 'bbolt-client/build.sh', 'bbolt-client/rust-toolchain.toml') }}
+          restore-keys: bbolt-${{ runner.os }}-
+
+      # qemu-user lets us run cross-compiled binaries in the test steps below.
+      - name: Install qemu-user
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-user
+
+      - name: Build (all 5 arches)
+        run: ./build.sh
+
+      - name: Test x86_64 (native)
+        run: ./test.sh
+
+      - name: Test aarch64 (qemu)
+        run: RUN="qemu-aarch64 target/aarch64-unknown-linux-gnu/release/bbolt-client-rs" ./test.sh
+
+      - name: Test armv7 (qemu)
+        run: RUN="qemu-arm target/armv7-unknown-linux-gnueabihf/release/bbolt-client-rs" ./test.sh
+
+      - name: Test mipsel (qemu)
+        run: RUN="qemu-mipsel target/mipsel-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
+
+      - name: Test mips (qemu)
+        run: RUN="qemu-mips target/mips-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
+
+      # Upload binaries as a workflow artifact for the `build` job to consume.
+      # upload-artifact `path:` is repo-root-relative (not affected by working-directory).
+      - name: Upload bbolt binaries
+        uses: actions/upload-artifact@v7
+        with:
+          name: bbolt-binaries
+          path: |
+            bbolt-client/bbolt-client-rs-x86_64
+            bbolt-client/bbolt-client-rs-aarch64
+            bbolt-client/bbolt-client-rs-armv7
+            bbolt-client/bbolt-client-rs-mipsel
+            bbolt-client/bbolt-client-rs-mips
+          if-no-files-found: error
+
   build:
     name: Build OpenWrt packages (apk)
     runs-on: ubuntu-latest
@@ -206,7 +280,7 @@ jobs:
     # the package without publishing — but a red lint/js-unit/test/browser-test
     # run now BLOCKS the rolling `latest` release instead of shipping a broken
     # apk to install.sh consumers.
-    needs: [lint, js-unit, test, browser-test]
+    needs: [lint, js-unit, test, browser-test, bbolt]
     # Only this job publishes releases, so it is the only one that needs write.
     # Top-level permissions are read-only (see header) — this override is the
     # single place contents: write is granted.
@@ -273,17 +347,26 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Using version: $VERSION"
 
-      - name: Fetch bbolt-client binaries
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Binaries built by the `bbolt` job above — no external release download needed.
+      - name: Download bbolt-client binaries
+        uses: actions/download-artifact@v7
+        with:
+          name: bbolt-binaries
+          path: .bbolt-bin
+
+      # upload-artifact@v4+ strips the longest common directory prefix, so the 5
+      # files uploaded as bbolt-client/bbolt-client-rs-* land at
+      # .bbolt-bin/bbolt-client-rs-* (the common bbolt-client/ prefix is removed).
+      # This step locates the actual directory robustly and exports it as a step
+      # output, protecting against any future change in artifact layout.
+      - name: Locate bbolt binaries
+        id: bbolt
         run: |
           set -euo pipefail
-          mkdir -p .bbolt-bin
-          gh release download bbolt-latest --repo "$GITHUB_REPOSITORY" \
-            --dir .bbolt-bin \
-            -p 'bbolt-client-rs-*' -p 'sha256sums.txt'
-          ( cd .bbolt-bin && sha256sum -c sha256sums.txt )
-          ls -la .bbolt-bin
+          dir="$(dirname "$(find .bbolt-bin -name 'bbolt-client-rs-x86_64' | head -1)")"
+          [ -n "$dir" ] || { echo "bbolt binaries not found in artifact"; ls -R .bbolt-bin; exit 1; }
+          echo "dir=$dir" >> "$GITHUB_OUTPUT"
+          ls -la "$dir"
 
       - name: Build apk packages
         # sudo -E so the SDK cache (SDK_CACHE_DIR via $HOME) and ~/.cache
@@ -294,7 +377,7 @@ jobs:
         # hijacks LD_PRELOAD and silently produced nobody:nogroup packages
         # (see scripts/build-apk.sh comments). Real root is the reliable
         # path.
-        run: sudo -E env BBOLT_BIN_DIR="$PWD/.bbolt-bin" bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
+        run: sudo -E env BBOLT_BIN_DIR="$PWD/${{ steps.bbolt.outputs.dir }}" bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
 
       - name: List produced packages
         id: pkg

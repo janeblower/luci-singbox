@@ -36,6 +36,7 @@ je() {
 echo "-- dump_all() includes dns key with 14 types"
 
 # 1. dump_all() returns an object with a 'dns' key
+# shellcheck disable=SC2086
 out="$("$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 	let dump = require("builder.protocols.schema_dump").dump_all();
 	print(sprintf("%J", dump));
@@ -46,6 +47,7 @@ printf '%s\n' "$out" | je 'type(d.dns) === "object"' \
 echo "PASS dump_all() has dns key"
 
 # 2. Spot-check: expected DNS types present
+# shellcheck disable=SC2086
 dns_json="$(printf '%s\n' "$out" | "$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 	let fs = require("fs");
 	let raw = fs.stdin.read("all") || "";
@@ -60,6 +62,7 @@ done
 echo "PASS all 14 dns types present (udp, tls, https, fakeip, legacy, tcp, quic, h3, local, hosts, dhcp, mdns, tailscale, resolved)"
 
 # 3. Each dns type has fields[] array and sing_box_type string
+# shellcheck disable=SC2086
 printf '%s\n' "$dns_json" | "$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 	let fs = require("fs");
 	let raw = fs.stdin.read("all") || "";
@@ -82,6 +85,7 @@ echo "PASS all dns type entries have fields[] and sing_box_type"
 
 # 4. No backend-only props leak through FIELD_WHITELIST projection.
 # Walks every field in every dns type and fails if any backend-only key appears.
+# shellcheck disable=SC2086
 leak_check="$(printf '%s\n' "$dns_json" | "$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 	let fs = require("fs");
 	let raw = fs.stdin.read("all") || "";

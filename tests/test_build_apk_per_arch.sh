@@ -16,9 +16,9 @@ OUT="$WORK/dist"
 APK_MKPKG_STUB=1 BBOLT_BIN_DIR="$BIN" WORK_DIR="$WORK/.build" \
   bash "$ROOT/scripts/build-apk.sh" 0.0.0-r1 "$OUT" >/dev/null 2>"$WORK/err" || {
     echo "build-apk.sh failed:"; cat "$WORK/err"; exit 1; }
-mains=$(ls "$OUT"/luci-singbox-ui_0.0.0-r1_*.apk 2>/dev/null | wc -l | tr -d ' ')
+mains=$(find "$OUT" -maxdepth 1 -name 'luci-singbox-ui_0.0.0-r1_*.apk' 2>/dev/null | wc -l | tr -d ' ')
 [ "$mains" = "20" ] || { echo "expected 20 per-arch main apks, got $mains"; ls "$OUT"; exit 1; }
-i18n=$(ls "$OUT"/luci-i18n-singbox-ui-ru_0.0.0-r1.apk 2>/dev/null | wc -l | tr -d ' ')
+i18n=$(find "$OUT" -maxdepth 1 -name 'luci-i18n-singbox-ui-ru_0.0.0-r1.apk' 2>/dev/null | wc -l | tr -d ' ')
 [ "$i18n" = "1" ] || { echo "expected 1 i18n apk"; exit 1; }
 root="$WORK/.build/pkg-root-app-aarch64_cortex-a53"
 grep -q "BBOLT-aarch64" "$root/usr/libexec/singbox-ui/bbolt-client" \
