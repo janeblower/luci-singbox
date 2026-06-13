@@ -11,11 +11,11 @@ APP_LIB="${UCODE_APP_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_descriptor_resilience (ucode missing)"; exit 0; }
 
 TMPDIR=$(mktemp -d); trap 'rm -rf "$TMPDIR"' EXIT
-mkdir -p "$TMPDIR/overlay/protocols"
+mkdir -p "$TMPDIR/overlay/builder/protocols"
 # A broken outbound descriptor: register() asserts emit is a function; this file
 # provides none, so require()-ing it throws at load. Placed first on the -L path
 # so it shadows the real trojan descriptor.
-cat > "$TMPDIR/overlay/protocols/trojan.uc" <<'EOF'
+cat > "$TMPDIR/overlay/builder/protocols/trojan.uc" <<'EOF'
 require("builder.protocols.registry").register({ kind: "outbound", type: "trojan" });
 return {};
 EOF

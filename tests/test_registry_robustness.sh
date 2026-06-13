@@ -56,18 +56,18 @@ ok "S4-3 register() still strict"
 # descriptor that references it, then materialize and capture stderr.
 S44_DIR=$(mktemp -d)
 trap 'rm -rf "$S44_DIR"' EXIT
-mkdir -p "$S44_DIR/protocols/_shared"
+mkdir -p "$S44_DIR/builder/protocols" "$S44_DIR/builder/_shared"
 # Copy the registry + helpers so require() resolves inside the throwaway tree.
-cp "$UCODE_LIB_DIR/protocols/registry.uc" "$S44_DIR/protocols/registry.uc"
+cp "$UCODE_LIB_DIR/builder/protocols/registry.uc" "$S44_DIR/builder/protocols/registry.uc"
 cp "$UCODE_LIB_DIR/helpers.uc" "$S44_DIR/helpers.uc"
 # A shared module that throws on load (references an undefined symbol).
-printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/protocols/_shared/boom.uc"
+printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/builder/_shared/boom.uc"
 # Teach the registry's KNOWN_SHARED about "boom" is not needed: _shared_fields
 # only loads modules named in d.shared, and validate_shared would reject an
 # unknown key. So we register with a KNOWN key whose module we shadow: shadow
 # multiplex.uc with a broken file.
-printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/protocols/_shared/multiplex.uc"
-rm -f "$S44_DIR/protocols/_shared/boom.uc"
+printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/builder/_shared/multiplex.uc"
+rm -f "$S44_DIR/builder/_shared/boom.uc"
 s44=$("$UCODE_BIN" -L "$S44_DIR" -e '
     let reg = require("builder.protocols.registry");
     reg.register({
