@@ -182,6 +182,52 @@ function showJsonModal(title, contentOrPromise) {
 	});
 }
 
+// compareVersions('1.13.0','1.12.5') -> 1 ; equal -> 0 ; older -> -1.
+// Empty/unknown either side -> 0 (fail open: never gate when version unknown).
+function compareVersions(a, b) {
+	if (!a || !b) return 0;
+	var pa = String(a).split('.'), pb = String(b).split('.');
+	for (var i = 0; i < 3; i++) {
+		var na = parseInt(pa[i] || '0', 10), nb = parseInt(pb[i] || '0', 10);
+		if (na > nb) return 1;
+		if (na < nb) return -1;
+	}
+	return 0;
+}
+
+// applyVersionGate(o, schemaByType, coreVersion): for each <option> whose
+// protocol min_version is newer than coreVersion, disable it and suffix the
+// label with " (requires X.Y+)". Also reject a gated value on validate.
+function applyVersionGate(o, schemaByType, coreVersion) {
+	var gated = {};
+	Object.keys(schemaByType || {}).forEach(function (k) {
+		var mv = schemaByType[k] && schemaByType[k].min_version;
+		if (mv && compareVersions(coreVersion, mv) < 0) {
+			var minor = mv.split('.').slice(0, 2).join('.');
+			gated[k] = minor;
+		}
+	});
+	var origRender = o.renderWidget;
+	o.renderWidget = function (section_id, option_index, cfgvalue) {
+		var node = origRender.call(this, section_id, option_index, cfgvalue);
+		var sel = (node.tagName === 'SELECT') ? node
+			: (node.querySelector && node.querySelector('select'));
+		if (sel) Array.prototype.forEach.call(sel.options, function (opt) {
+			if (gated[opt.value]) {
+				opt.disabled = true;
+				if (opt.textContent.indexOf('(requires') < 0)
+					opt.textContent += ' (' + _('requires') + ' ' + gated[opt.value] + '+)';
+			}
+		});
+		return node;
+	};
+	o.validate = function (_section_id, value) {
+		if (gated[value])
+			return _('Protocol requires sing-box') + ' ' + gated[value] + '+';
+		return true;
+	};
+}
+
 function notify(promise, okLabel, errPrefix) {
 	return promise.then(function (res) {
 		if (res && res.status === 'ok') {
@@ -201,12 +247,14 @@ function notify(promise, okLabel, errPrefix) {
 }
 
 return L.Class.extend({
-    loadOutboundList: loadOutboundList,
-    addRenameField:   addRenameField,
-    wireTabs:         wireTabs,
-    notify:           notify,
-    showJsonModal:    showJsonModal,
-    copyToClipboard:  copyToClipboard,
-    fallbackCopy:     fallbackCopy,
-    withBusy:         withBusy,
+    loadOutboundList:  loadOutboundList,
+    addRenameField:    addRenameField,
+    wireTabs:          wireTabs,
+    notify:            notify,
+    showJsonModal:     showJsonModal,
+    copyToClipboard:   copyToClipboard,
+    fallbackCopy:      fallbackCopy,
+    withBusy:          withBusy,
+    compareVersions:   compareVersions,
+    applyVersionGate:  applyVersionGate,
 });

@@ -156,6 +156,9 @@ function buildOutboundsMap() {
 	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
 	SB_OUTBOUND_PROTOCOLS.forEach(function (e) { o.value(e[0], _(e[1])); });
 	o.rmempty = false;
+	SbCommon.applyVersionGate(o,
+		(SbViewState.getSchema() || {}).outbound || {},
+		SbViewState.getCoreVersion());
 
 	// E2: descriptor-driven UI for all stored outbound types.
 	// subscription has its own UCI shape and is handled by the fields below.

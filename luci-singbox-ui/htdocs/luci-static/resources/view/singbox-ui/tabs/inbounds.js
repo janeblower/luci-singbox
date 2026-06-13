@@ -152,6 +152,9 @@ function buildInboundsMap() {
 	o = s.taboption('basic', form.ListValue, 'protocol', _('Protocol'));
 	SB_INBOUND_PROTOCOLS.forEach(function (p) { o.value(p[0], _(p[1])); });
 	o.default = 'tproxy'; o.rmempty = false;
+	SbCommon.applyVersionGate(o,
+		(SbViewState.getSchema() || {}).inbound || {},
+		SbViewState.getCoreVersion());
 
 	o = s.taboption('basic', form.DummyValue, '_address', _('Address'));
 	o.modalonly = false;
