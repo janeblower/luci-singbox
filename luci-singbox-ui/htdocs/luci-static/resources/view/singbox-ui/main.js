@@ -16,6 +16,7 @@
 'require view.singbox-ui.tabs.dns as SbTabDns';
 'require view.singbox-ui.tabs.general as SbTabGeneral';
 'require view.singbox-ui.tabs.monitoring as SbTabMon';
+'require view.singbox-ui.tabs.dashboard as SbTabDash';
 'require view.singbox-ui.widgets.action-bar as SbActionBar';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
 'require view.singbox-ui.lib.view_state as SbViewState';
@@ -55,6 +56,7 @@ return view.extend({
 		var mDns          = SbTabDns.buildDnsMap();
 		var mGeneral      = SbTabGeneral.buildGeneralMap();
 		var mon           = SbTabMon.buildMonitoring();
+		var dash          = SbTabDash.buildDashboard();
 
 		self._maps = [ mInbounds, mOutbounds, mRulesets, mRouteRules, mRouteDefault, mDns, mGeneral ];
 
@@ -101,12 +103,14 @@ return view.extend({
 					E('li', { 'data-tab': 'inbounds'   }, _('Inbounds')),
 					E('li', { 'data-tab': 'output'     }, _('Output')),
 					E('li', { 'data-tab': 'dns'        }, _('DNS')),
+					E('li', { 'data-tab': 'dashboard'  }, _('Dashboard')),
 					E('li', { 'data-tab': 'monitoring' }, _('Monitoring')),
 					E('li', { 'data-tab': 'general'    }, _('General'))
 				]),
 				inboundsNode,
 				outputWrap,
 				dnsNode,
+				dash.node,
 				mon.node,
 				generalNode
 			]);
@@ -125,13 +129,16 @@ return view.extend({
 					inbounds:   inboundsNode,
 					output:     outputWrap,
 					dns:        dnsNode,
+					dashboard:  dash.node,
 					monitoring: mon.node,
 					general:    generalNode
 				}, 'inbounds');
 				root.querySelectorAll('.sb-tab-header > li').forEach(function (el) {
 					el.addEventListener('click', function () {
-						if (el.getAttribute('data-tab') === 'monitoring') mon.start();
-						else mon.stop();
+						var tab = el.getAttribute('data-tab');
+						if (tab === 'monitoring') { mon.start(); dash.stop(); }
+						else if (tab === 'dashboard') { dash.start(); mon.stop(); }
+						else { mon.stop(); dash.stop(); }
 					});
 				});
 				SbStatusPanel.renderStatusPanel(statusHolder);
