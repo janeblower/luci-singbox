@@ -38,6 +38,12 @@ jobs:
       - name: main.js syntax check (host node)
         run: sh tests/test_main_js_syntax.sh
 
+      # build-apk.sh is a host bash build script; its per-arch packaging test
+      # needs bash (absent in the OpenWrt qemu guest, where it SKIPs). Run it
+      # here on the bash-equipped host so its assertions actually execute in CI.
+      - name: build-apk per-arch packaging test (host bash)
+        run: sh tests/test_build_apk_per_arch.sh
+
       # Lint via the official shellcheck image instead of apt-installing the
       # binary on every run (saves the apt-get update/install round-trip and
       # pins a known shellcheck version). The repo is mounted at /mnt — the

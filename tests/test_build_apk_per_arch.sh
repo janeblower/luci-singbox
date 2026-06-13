@@ -2,6 +2,10 @@
 # Asserts build-apk.sh produces one main apk per covered OpenWrt arch, each
 # embedding the correct bbolt binary, plus exactly one noarch i18n apk.
 set -eu
+# build-apk.sh is a host build script (#!/usr/bin/env bash) and uses bash-only
+# features. The OpenWrt qemu guest has no bash, so this test SKIPs there (it runs
+# for real in the bash-equipped CI lint job and on dev hosts). See tests/run.sh.
+command -v bash >/dev/null 2>&1 || { echo "SKIP test_build_apk_per_arch: bash not available (build-apk.sh needs bash)"; exit 0; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORK="$(mktemp -d)"
 BIN="$WORK/bins"; mkdir -p "$BIN"
