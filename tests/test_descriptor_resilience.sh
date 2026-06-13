@@ -16,7 +16,7 @@ mkdir -p "$TMPDIR/overlay/protocols"
 # provides none, so require()-ing it throws at load. Placed first on the -L path
 # so it shadows the real trojan descriptor.
 cat > "$TMPDIR/overlay/protocols/trojan.uc" <<'EOF'
-require("protocols.registry").register({ kind: "outbound", type: "trojan" });
+require("builder.protocols.registry").register({ kind: "outbound", type: "trojan" });
 return {};
 EOF
 

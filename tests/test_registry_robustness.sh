@@ -23,7 +23,7 @@ die() { echo "FAIL: $1 [$2]"; exit 1; }
 
 # ---- S4-3: try_register swallows a malformed descriptor (no throw) ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.try_register({
@@ -40,7 +40,7 @@ ok "S4-3 try_register skips malformed descriptor"
 
 # ---- S4-3: plain register() still throws (contract relied on by other tests) ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"strict_s43", sing_box_type:"x",
@@ -69,7 +69,7 @@ printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/protocols/_shared/boom
 printf '%s\n' 'this_symbol_is_not_defined();' > "$S44_DIR/protocols/_shared/multiplex.uc"
 rm -f "$S44_DIR/protocols/_shared/boom.uc"
 s44=$("$UCODE_BIN" -L "$S44_DIR" -e '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     reg.register({
         kind: "outbound", type: "s44", sing_box_type: "x",
         shared: { multiplex: {} },
@@ -90,7 +90,7 @@ esac
 
 # ---- S4-5: enum field without values[] is rejected ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45a", sing_box_type:"x",
@@ -104,7 +104,7 @@ ok "S4-5 enum without values rejected"
 
 # ---- S4-5: non-enum field carrying values[] is rejected ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45b", sing_box_type:"x",
@@ -118,7 +118,7 @@ ok "S4-5 number+values rejected"
 
 # ---- S4-5: enum default not in values[] is rejected ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45c", sing_box_type:"x",
@@ -133,7 +133,7 @@ ok "S4-5 enum default outside values rejected"
 
 # ---- S4-5: valid enum with default in values[] still accepted ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45d", sing_box_type:"x",
@@ -148,7 +148,7 @@ ok "S4-5 valid enum accepted"
 
 # ---- combobox: list/string MAY carry values[] (datalist suggestions) ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45e", sing_box_type:"x",
@@ -161,7 +161,7 @@ out=$(je '
 ok "list+values accepted"
 
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45f", sing_box_type:"x",
@@ -175,7 +175,7 @@ ok "string+values accepted"
 
 # ---- dynamic selector source: unknown discriminator rejected, known accepted ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45g", sing_box_type:"x",
@@ -188,7 +188,7 @@ out=$(je '
 ok "unknown dynamic source rejected"
 
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"s45h", sing_box_type:"x",

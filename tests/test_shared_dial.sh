@@ -13,7 +13,7 @@ je() { "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e "$1"; }
 
 # Test 1: no fields set → merged object adds nothing (only type+tag present).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ dial:true } },
         { ".name":"t" }
@@ -26,7 +26,7 @@ out=$(je '
 
 # Test 2: bind_interface only folds into top-level.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ dial:true } },
         { ".name":"t", bind_interface:"wan" }
@@ -37,7 +37,7 @@ out=$(je '
 
 # Test 3: advanced — routing_mark + connect_timeout + udp_fragment.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ dial:true } },
         { ".name":"t", bind_interface:"wan", routing_mark:"100",
@@ -51,7 +51,7 @@ out=$(je '
 
 # Test 4: every remaining field — covers detour, netns, network_strategy, fallback_delay, reuse_addr, tcp_fast_open, tcp_multi_path, inet4/inet6_bind_address.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ dial:true } },
         { ".name":"t",
@@ -78,7 +78,7 @@ echo "PASS: dial full coverage"
 # renders dropdowns (detour→existing outbounds, bind_interface→logical
 # interfaces) instead of free-text tags the user has to type by hand.
 out=$(je '
-    let d = require("protocols._shared.dial");
+    let d = require("builder._shared.dial");
     let dyn = {};
     for (let f in d.fields) if (f.dynamic) dyn[f.name] = f.dynamic;
     print(sprintf("%s|%s", dyn.detour, dyn.bind_interface));

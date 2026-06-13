@@ -12,7 +12,7 @@ je() { "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e "$1"; }
 
 # Test 1: disabled → no multiplex key.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ multiplex:true } },
         { ".name":"t", multiplex_enabled:"0" }
@@ -23,7 +23,7 @@ out=$(je '
 
 # Test 2: enabled default protocol smux.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ multiplex:true } },
         { ".name":"t", multiplex_enabled:"1" }
@@ -34,7 +34,7 @@ out=$(je '
 
 # Test 3: full advanced.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ multiplex:true } },
         { ".name":"t", multiplex_enabled:"1", multiplex_protocol:"yamux",

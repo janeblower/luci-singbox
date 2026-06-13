@@ -11,7 +11,7 @@ die() { echo "FAIL: $1 [$2]"; exit 1; }
 
 # skip_value drops a matching scalar
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x",
         fields:[ { name:"network", type:"enum", json_key:"network", skip_value:"tcp" } ], shared:null };
     print(sprintf("%J", f.build(d, { ".name":"t", network:"tcp" })));
@@ -21,7 +21,7 @@ ok "skip_value drops matching scalar"
 
 # requires(string): plugin_opts dropped without plugin
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x", fields:[
         { name:"plugin", type:"string", json_key:"plugin" },
         { name:"plugin_opts", type:"string", json_key:"plugin_opts", requires:"plugin" },
@@ -33,7 +33,7 @@ ok "requires(string) gates on sibling presence"
 
 # requires({field,value}): packet_encoding only when network==udp
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x", fields:[
         { name:"network", type:"enum", json_key:"network", skip_value:"tcp" },
         { name:"packet_encoding", type:"enum", json_key:"packet_encoding", requires:{ field:"network", value:"udp" } },
@@ -45,7 +45,7 @@ ok "requires({field,value}) gates on sibling value"
 
 # default_when_empty fills a constant but still emits
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x", fields:[
         { name:"proto", type:"enum", json_key:"protocol", default_when_empty:"smux", omit_when:"never" },
     ], shared:null };
@@ -56,7 +56,7 @@ ok "default_when_empty fills constant"
 
 # group with all_present gate emits nested object
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x", shared:null, fields:[],
         groups:[ { json_key:"obfs", gate:{ all_present:["obfs_type","obfs_password"] },
                    fields:[ { name:"obfs_type", json_key:"type" }, { name:"obfs_password", json_key:"password" } ] } ] };
@@ -67,7 +67,7 @@ ok "group emits nested object when gate passes"
 
 # group gate fails -> no key
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x", shared:null, fields:[],
         groups:[ { json_key:"obfs", gate:{ all_present:["obfs_type","obfs_password"] },
                    fields:[ { name:"obfs_type", json_key:"type" }, { name:"obfs_password", json_key:"password" } ] } ] };
@@ -78,7 +78,7 @@ ok "group omitted when gate fails"
 
 # inbound base: type/tag/listen/listen_port with :: default
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"inbound", sing_box_type:"mixed", shared:null,
         fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" } ] };
     print(sprintf("%J", f.build(d, { ".name":"m", listen_port:"1080" })));
@@ -88,7 +88,7 @@ ok "inbound base builds listen/listen_port"
 
 # inbound base: missing port -> null
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"inbound", sing_box_type:"mixed", shared:null, fields:[] };
     print(f.build(d, { ".name":"m" }) == null ? "NULL" : "NOTNULL");
 ')
@@ -97,7 +97,7 @@ ok "inbound returns null when listen_port missing"
 
 # nested group inside a group's fields (mutual recursion _emit_seq<->_emit_group)
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x", shared:null, fields:[],
         groups:[ { json_key:"reality", gate:{ any_present:["pk"] }, fields:[
             { json_key:"enabled", const:true },
@@ -111,7 +111,7 @@ ok "nested group inside group fields (mutual recursion)"
 
 # nested group: outer gate fails -> nothing
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x", shared:null, fields:[],
         groups:[ { json_key:"reality", gate:{ any_present:["pk"] }, fields:[
             { json_key:"enabled", const:true },
@@ -124,7 +124,7 @@ ok "nested group suppressed when outer gate fails"
 
 # registry accepts skip_value/requires/default_when_empty + groups + users
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"v2probe", sing_box_type:"x",
@@ -141,7 +141,7 @@ ok "registry accepts v2 field props + groups + users"
 
 # filler runs descriptor.users and applies clear_on_multi
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:null,
         fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" },
                  { name:"server_password", type:"string", json_key:"password", omit_when:"never" } ],
@@ -156,7 +156,7 @@ ok "filler emits users[] and clears password on multi"
 
 # single fallback: users present, clear_on_multi NOT applied (from_list false)
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:null,
         fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" },
                  { name:"server_password", type:"string", json_key:"password", omit_when:"never" } ],
@@ -171,7 +171,7 @@ ok "filler keeps top-level password when no multi-users"
 
 # only_values drops a value not in the allowlist; keeps an allowed one
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"x",
         fields:[ { name:"network", type:"enum", json_key:"network", only_values:["tcp","udp"] } ], shared:null };
     print(sprintf("%J|%J", f.build(d,{".name":"t",network:"sctp"}), f.build(d,{".name":"t",network:"udp"})));

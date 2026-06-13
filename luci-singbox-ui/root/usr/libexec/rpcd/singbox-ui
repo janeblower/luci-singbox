@@ -300,8 +300,8 @@ function call_status_detail() {
 
 function call_protocol_schema() {
     let dump;
-    try { dump = require("protocols.schema_dump"); }
-    catch (e) { emit_err("require(protocols.schema_dump) failed"); return; }
+    try { dump = require("builder.protocols.schema_dump"); }
+    catch (e) { emit_err("require(builder.protocols.schema_dump) failed"); return; }
     // Ensure all descriptors are eager-loaded into the registry.
     try { require("outbound"); require("inbound"); }
     catch (e) { emit_err("registry load failed"); return; }

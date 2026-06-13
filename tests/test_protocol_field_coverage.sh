@@ -22,13 +22,13 @@ if ! command -v "$UCODE_BIN" >/dev/null 2>&1; then
 fi
 
 # Dump registered outbound fields per protocol via ucode.
-# require("outbound") triggers all try{require("protocols.*")} eager-loads,
+# require("outbound") triggers all try{require("builder.protocols.*")} eager-loads,
 # registering every descriptor. We then enumerate types_for_kind("outbound")
 # and emit "<proto>\t<field1>,<field2>,..." lines.
 # shellcheck disable=SC2086
 dumped=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
 	require("outbound");
-	let reg = require("protocols.registry");
+	let reg = require("builder.protocols.registry");
 	for (let proto in reg.types_for_kind("outbound")) {
 		let d = reg.get("outbound", proto);
 		if (d == null || type(d.fields) !== "array") continue;

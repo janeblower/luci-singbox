@@ -16,7 +16,7 @@ je() { "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e "$1"; }
 
 # Test 1: transport_type=none → no transport key.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
         { ".name":"t", transport_type:"none" }
@@ -27,7 +27,7 @@ out=$(je '
 
 # Test 2: ws with path + host header.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
         { ".name":"t", transport_type:"ws", transport_path:"/v", transport_host:"cdn.example.com" }
@@ -38,7 +38,7 @@ out=$(je '
 
 # Test 3: grpc.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
         { ".name":"t", transport_type:"grpc", transport_service_name:"MyService" }
@@ -49,7 +49,7 @@ out=$(je '
 
 # Test 4: httpupgrade.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
         { ".name":"t", transport_type:"httpupgrade", transport_path:"/u",
@@ -61,7 +61,7 @@ out=$(je '
 
 # Test 5: xhttp with mode.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
         { ".name":"t", transport_type:"xhttp", transport_path:"/x",
@@ -73,7 +73,7 @@ out=$(je '
 
 # Test 6: http (hosts array).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
         { ".name":"t", transport_type:"http",

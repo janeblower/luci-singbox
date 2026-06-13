@@ -87,7 +87,7 @@ ok "S4-6 empty proxy_protocol absent"
 # the UI renders a dropdown rather than a free number input).
 out=$(je '
     require("outbound");
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let d = reg.get("outbound","direct");
     let t = "";
     for (let f in d.fields) if (f.name == "proxy_protocol") t = f.type;

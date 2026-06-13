@@ -21,7 +21,7 @@ DESC="$ROOT/docs/protocol-descriptors.md"
 SCHEMA="$ROOT/docs/uci-schema.md"
 CHANGELOG="$ROOT/CHANGELOG.md"
 README="$ROOT/README.md"
-PROTODIR="$ROOT/luci-singbox-ui/root/usr/share/singbox-ui/lib/protocols"
+PROTODIR="$ROOT/luci-singbox-ui/root/usr/share/singbox-ui/lib/builder/protocols"
 
 fail() { echo "FAIL: $1"; exit 1; }
 

@@ -20,7 +20,7 @@ je() { "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e "$1"; }
 
 # Test 1: tls_enabled=0 → no tls key in result (block gated out).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{} } },
         { ".name":"t", tls_enabled:"0" }
@@ -32,7 +32,7 @@ echo "PASS: tls disabled → null"
 
 # Test 2: tls_enabled=1 + tls_server_name → enabled+server_name.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{} } },
         { ".name":"t", tls_enabled:"1", tls_server_name:"ex.com" }
@@ -44,7 +44,7 @@ echo "PASS: tls minimal enabled"
 
 # Test 2b: alpn arrives as a JSON array (guard against as_array() regressions).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{} } },
         { ".name":"t", tls_enabled:"1", tls_alpn:["h2","http/1.1"] }
@@ -56,7 +56,7 @@ echo "PASS: tls alpn is array"
 
 # Test 3: Reality client.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{} } },
         { ".name":"t", tls_enabled:"1", reality_enabled:"1",
@@ -69,7 +69,7 @@ echo "PASS: tls Reality client"
 
 # Regression guard: tls.reality.short_id must be a string, not an array (Phase B fix).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{} } },
         { ".name":"t", tls_enabled:"1", reality_enabled:"1",
@@ -82,7 +82,7 @@ echo "PASS: tls Reality short_id is string not array"
 
 # Test 3b: inbound Reality — private_key + handshake server.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"inbound", sing_box_type:"trojan", fields:[], shared:{ tls:{} } },
         { ".name":"t", listen_port:"443", tls_enabled:"1", reality_enabled:"1",
@@ -98,7 +98,7 @@ echo "PASS: tls Reality inbound server"
 
 # Test 4: uTLS client.
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{} } },
         { ".name":"t", tls_enabled:"1", utls_enabled:"1", utls_fingerprint:"firefox" }
@@ -110,7 +110,7 @@ echo "PASS: tls uTLS"
 
 # Test 5: hysteria2 force-enabled (tls_enabled=0 ignored).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{ force_enabled:true } } },
         { ".name":"t", tls_enabled:"0" }
@@ -122,7 +122,7 @@ echo "PASS: tls force_enabled (hysteria2)"
 
 # Test 6: TLS fragment (advanced).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ tls:{} } },
         { ".name":"t", tls_enabled:"1", tls_fragment:"1",
@@ -135,7 +135,7 @@ echo "PASS: tls fragment"
 
 # Test 7: server-side ECH (key path, not config path).
 out=$(je '
-    let f = require("protocols._filler");
+    let f = require("builder._filler");
     let got = f.build(
         { kind:"inbound", sing_box_type:"trojan", fields:[], shared:{ tls:{} } },
         { ".name":"t", listen_port:"443", tls_enabled:"1", tls_ech_enabled:"1",
@@ -148,7 +148,7 @@ echo "PASS: tls inbound ECH key_path"
 
 # Test 8: fields[] includes the gate + reality sub-toggle + ECH advanced.
 out=$(je '
-    let tls = require("protocols._shared.tls");
+    let tls = require("builder._shared.tls");
     let names = "";
     for (let f in tls.fields) names += f.name + ",";
     print(names);
@@ -166,7 +166,7 @@ echo "PASS: fields[] includes gate + reality_enabled"
 # Test 9: tls_alpn stays a free-entry list but now carries combobox
 # suggestions (h2 / http/1.1 / h3); tls_cipher_suites carries suggestions too.
 out=$(je '
-    let tls = require("protocols._shared.tls");
+    let tls = require("builder._shared.tls");
     let alpn = null, cs = null;
     for (let f in tls.fields) {
         if (f.name == "tls_alpn")          alpn = f;
