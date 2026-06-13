@@ -9,7 +9,6 @@ import {
 const SID = '_e2bt_sub';
 // A working subscription URL would be a flaky external dependency; we just
 // verify that injectChildRows runs by stubbing the cache in window.
-// (The actual RPC fetch path is covered by test_subscription_expand_rpc.sh.)
 
 containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=subscription; uci set singbox-ui.${SID}.sub_url='https://example.invalid/sub'; uci commit singbox-ui`);
 

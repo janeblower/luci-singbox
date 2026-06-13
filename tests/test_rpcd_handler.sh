@@ -660,7 +660,7 @@ printf "%s\n" "$out" | je 'd.status == "error"' \
 out=$(echo '{"kind":"inbound","name":"in/../etc"}' | UCI_CONFIG_DIR="$uci_dir" run_h call export_section)
 printf "%s\n" "$out" | je 'd.status == "error"' \
 	|| { echo "FAIL: S1-3 slash export_section name should error; out=$out"; exit 1; }
-# A well-formed name (matching subscription_expand's regex) still works.
+# A well-formed name still works.
 out=$(echo '{"kind":"inbound","name":"in_ss"}' | UCI_CONFIG_DIR="$uci_dir" \
 	UCODE_LIB="$UCODE_APP_LIB_DIR" EXPORT_SECTION_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc" \
 	run_h call export_section)
@@ -690,21 +690,5 @@ printf "%s\n" "$out" | je 'd.status == "ok"' \
 printf "%s\n" "$out" | je 'd.schema != null' \
 	|| { echo "FAIL: protocol_schema missing schema; out=$out"; exit 1; }
 echo "  PASS: protocol_schema dispatches"
-
-echo "-- call subscription_expand dispatches + validates name"
-# Valid name reaches the module (require/expand may error in the test env, but
-# dispatch must NOT fall through to the generic 'unknown method' branch).
-out=$(echo '{"name":"mysub"}' | run_h call subscription_expand)
-printf "%s\n" "$out" | je 'd.status != null' \
-	|| { echo "FAIL: subscription_expand did not dispatch; out=$out"; exit 1; }
-printf "%s\n" "$out" | je 'index(d.message ?? "", "unknown method") < 0' \
-	|| { echo "FAIL: subscription_expand hit unknown-method branch; out=$out"; exit 1; }
-# Injection / traversal / empty names are rejected with error (valid_section_name).
-for bad in 'a; rm -rf /' 'a/../b' ''; do
-	out=$(printf '{"name":"%s"}' "$bad" | run_h call subscription_expand)
-	printf "%s\n" "$out" | je 'd.status == "error"' \
-		|| { echo "FAIL: subscription_expand should reject name=[$bad]; out=$out"; exit 1; }
-done
-echo "  PASS: subscription_expand dispatch + name validation"
 
 echo "OK"
