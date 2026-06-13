@@ -331,6 +331,16 @@ function call_status_detail() {
 	});
 }
 
+// sub_status — pass through subscription.uc's aggregation (UCI + tmp files).
+function call_sub_status() {
+	drain_stdin();
+	let raw = run_capture(uc_argv(SUBSCRIPTION_UC, "sub-status"));
+	let arr;
+	try { arr = json(raw || "[]"); } catch (e) { arr = []; }
+	if (type(arr) !== "array") arr = [];
+	emit({ status: "ok", subscriptions: arr });
+}
+
 function call_protocol_schema() {
     let dump;
     try { dump = require("builder.protocols.schema_dump"); }
@@ -632,6 +642,7 @@ const METHODS = {
 	refresh:             { sig: { what: "string" },                                   handler: call_refresh },
 	status:              { sig: {},                                                   handler: call_status },
 	status_detail:       { sig: {},                                                   handler: call_status_detail },
+	sub_status:          { sig: {},                                                   handler: call_sub_status },
 	read_config:         { sig: {},                                                   handler: call_read_config },
 	clash_get:           { sig: { path: "string" },                                   handler: call_clash_get },
 	clash_mutate:        { sig: { method: "string", path: "string", body: "string" }, handler: call_clash_mutate },

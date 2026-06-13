@@ -619,6 +619,29 @@ function retry_eligible_cold_tags(cur, db, tags, force) {
 	return out;
 }
 
+// cmd_sub_status(cur) — pure read aggregation for the dashboard. For every
+// type=subscription outbound: its enabled flag, the mtime of its fetched
+// sub_<name>.txt (last_update, null if never fetched), and node_count (number of
+// non-empty lines in that file). No network, no UCI writes.
+function cmd_sub_status(cur) {
+	let out = [];
+	for (let name in helpers.sections_of_kind(cur, "outbound", "type", "subscription")) {
+		let enabled = (helpers.uci_get_or_empty(cur, name, "enabled") === "0") ? "0" : "1";
+		let path = `${TMPDIR}/sub_${name}.txt`;
+		let last_update = null, node_count = 0;
+		let st = fs.stat(path);
+		if (st && st.type === "file") {
+			last_update = st.mtime;
+			let body = "";
+			try { let f = fs.open(path, "r"); if (f) { body = f.read("all") || ""; f.close(); } } catch (_) {}
+			for (let line in split(body, "\n")) if (trim(line) !== "") node_count++;
+		}
+		push(out, { name: name, enabled: enabled,
+		            last_update: last_update, node_count: node_count });
+	}
+	return out;
+}
+
 function cmd_refresh(cur, what, force) {
 	let subs_refreshed = false;
 	let no_reload = getenv("SINGBOX_NO_RELOAD") === "1";
@@ -695,8 +718,9 @@ if (length(ARGV)) {
 	case "fetch-subs":     cmd_fetch_subs(cur); break;
 	case "fetch-rulesets": cmd_fetch_rulesets(cur); break;
 	case "refresh":        cmd_refresh(cur, argv[1] || "all", argv[2] === "force"); break;
+	case "sub-status":     printf("%J\n", cmd_sub_status(cur)); break;
 	default:
-		log_err("usage: subscription.uc {fetch-subs|fetch-rulesets|refresh [what] [force]}");
+		log_err("usage: subscription.uc {fetch-subs|fetch-rulesets|refresh [what] [force]|sub-status}");
 		exit(2);
 	}
 }
@@ -710,4 +734,5 @@ return {
 	_read_raw_for_test,
 	_build_fetch_config_for_test: build_fetch_config,
 	_cmd_fetch_subs_for_test: function(cur) { return cmd_fetch_subs(cur); },
+	_cmd_sub_status_for_test: function(cur) { return cmd_sub_status(cur); },
 };
