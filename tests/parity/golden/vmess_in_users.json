@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "tag": "vm_in", "tls": { "certificate_path": "/c.pem", "enabled": true, "key_path": "/k.pem" }, "type": "vmess", "users": [ { "name": "alice", "uuid": "11111111-1111-1111-1111-111111111111" } ] }

@@ -20,7 +20,7 @@ let filler = require("builder._filler");
 // documents now actually exists on the production path.
 for (let _m in ["builder.protocols.direct", "builder.protocols.shadowsocks", "builder.protocols.vless",
                 "builder.protocols.trojan", "builder.protocols.hysteria2", "builder.protocols.json_raw",
-                "builder.protocols.socks", "builder.protocols.http"]) {
+                "builder.protocols.socks", "builder.protocols.http", "builder.protocols.vmess"]) {
 	try { require(_m); }
 	catch (e) { warn(sprintf("outbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }
