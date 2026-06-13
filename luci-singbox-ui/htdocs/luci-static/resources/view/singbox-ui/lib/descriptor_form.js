@@ -30,8 +30,13 @@ function widgetFor(field) {
     // Dynamic selectors populate their choices at load() time (see
     // attachDynamic). `devices` is a free-entry multi list; every other
     // source is a single-select reference to an existing section.
-    if (field.dynamic)
-        return (field.dynamic === 'devices') ? form.DynamicList : form.ListValue;
+    if (field.dynamic) {
+        // devices and multi-select outbound lists are free-entry DynamicLists;
+        // every other dynamic source is a single-select reference.
+        if (field.dynamic === 'devices') return form.DynamicList;
+        if (field.dynamic === 'outbounds' && field.type === 'list') return form.DynamicList;
+        return form.ListValue;
+    }
     if (t === 'enum') return form.ListValue;
     if (t === 'list') return form.DynamicList;
     // A string/list field carrying a static `values` array still renders as a
@@ -72,6 +77,21 @@ function attachDynamic(opt, field) {
                 });
                 return form.DynamicList.prototype.load.apply(self, args);
             });
+        };
+        return;
+    }
+    // Multi-select free-entry DynamicList for outbound tag lists (e.g.
+    // selector/urltest `outbounds`). Suggestions come from existing singbox-ui
+    // outbound sections, but free text is always allowed.
+    if (field.dynamic === 'outbounds' && field.type === 'list') {
+        opt.load = function (section_id) {
+            this.keylist = [];
+            this.vallist = [];
+            var self = this;
+            uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
+                if (sec['.name'] !== section_id) self.value(sec['.name'], sec['.name']);
+            });
+            return form.DynamicList.prototype.load.apply(this, arguments);
         };
         return;
     }
