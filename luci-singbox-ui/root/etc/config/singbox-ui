@@ -85,3 +85,6 @@ config clash_api 'clash_api'
 	option enabled '0'
 	option listen '127.0.0.1'
 	option port '9090'
+
+config subscriptions 'subscriptions'
+	option auto_update '1'
