@@ -2,7 +2,7 @@
 // outbound (interface bind via dial fields). Replaces the old
 // type=interface outbound.
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 reg.register({
 	kind: "outbound", type: "direct", sing_box_type: "direct",

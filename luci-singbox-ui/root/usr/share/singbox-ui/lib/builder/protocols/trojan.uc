@@ -1,6 +1,6 @@
 // lib/protocols/trojan.uc — Trojan outbound + inbound under the E2 DSL.
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 // --- Outbound ------------------------------------------------------------
 
@@ -19,7 +19,7 @@ reg.register({
           secret: true, ui_label: "Password",
           json_key: "password" },
     ],
-    // No emit(): protocols._filler builds {type,tag} + the three fields above +
+    // No emit(): builder._filler builds {type,tag} + the three fields above +
     // the declared tls/transport/multiplex/dial shared blocks, byte-identical to
     // the former hand-written emit().
 });

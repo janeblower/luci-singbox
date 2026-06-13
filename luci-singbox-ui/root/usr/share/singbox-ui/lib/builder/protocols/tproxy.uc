@@ -1,6 +1,6 @@
 // lib/protocols/tproxy.uc — TProxy inbound under the E2 DSL.
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "inbound", type: "tproxy", sing_box_type: "tproxy",

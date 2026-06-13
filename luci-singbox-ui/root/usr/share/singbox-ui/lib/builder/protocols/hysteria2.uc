@@ -2,7 +2,7 @@
 // TLS is mandatory for hysteria2; the shared TLS block is invoked with
 // force_enabled so the JSON always carries a tls{} block.
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "outbound", type: "hysteria2", sing_box_type: "hysteria2",

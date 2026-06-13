@@ -14,7 +14,7 @@
 // tag embedded in the raw input — route rules / dns.detour reference the
 // section name, so the emitted object must carry it.
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 // emit_json(s) — parse the raw JSON object and stamp the section tag.
 function emit_json(s) {

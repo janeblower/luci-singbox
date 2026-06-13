@@ -1,6 +1,6 @@
 // lib/protocols/shadowsocks.uc — Shadowsocks outbound + inbound (E2 DSL).
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 const METHODS = [
     "none", "aes-128-gcm", "aes-192-gcm", "aes-256-gcm",

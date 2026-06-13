@@ -1,6 +1,6 @@
 // lib/protocols/vless.uc — VLESS outbound + inbound under the E2 DSL.
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 // --- Outbound ------------------------------------------------------------
 

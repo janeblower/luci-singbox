@@ -1,6 +1,6 @@
 // lib/protocols/mixed.uc — Mixed inbound (HTTP + SOCKS5) under the E2 DSL.
 
-let reg = require("protocols.registry");
+let reg = require("builder.protocols.registry");
 
 reg.register({
 	kind: "inbound", type: "mixed", sing_box_type: "mixed",
