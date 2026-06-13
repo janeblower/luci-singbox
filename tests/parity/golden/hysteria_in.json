@@ -1,0 +1,1 @@
+{ "down_mbps": 200, "listen": "::", "listen_port": 443, "tag": "hy_in", "tls": { "certificate_path": "/c.pem", "enabled": true, "key_path": "/k.pem" }, "type": "hysteria", "up_mbps": 100, "users": [ { "auth_str": "secret", "name": "alice" } ] }

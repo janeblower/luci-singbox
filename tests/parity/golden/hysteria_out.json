@@ -1,0 +1,1 @@
+{ "auth_str": "secret", "down_mbps": 100, "hop_interval": "30s", "initial_packet_size": 1200, "obfs": "xplus", "server": "ex.com", "server_port": 443, "server_ports": [ "2080:3000" ], "tag": "hy1", "tls": { "enabled": true, "server_name": "ex.com" }, "type": "hysteria", "up_mbps": 100 }
