@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 8080, "tag": "h_in", "type": "http", "users": [ { "password": "secret", "username": "alice" } ] }

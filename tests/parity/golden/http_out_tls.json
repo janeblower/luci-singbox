@@ -1,0 +1,1 @@
+{ "password": "p", "path": "/proxy", "server": "ex.com", "server_port": 8080, "tag": "h_out", "tls": { "enabled": true, "server_name": "ex.com" }, "type": "http", "username": "u" }

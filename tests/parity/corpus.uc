@@ -147,4 +147,11 @@ return [
     { name: "socks_in_users", kind: "inbound", type: "socks",
       section: { ".name": "sk_in", protocol: "socks", listen_port: "1080",
                  socks_user: ["alice:secret", "bob:pw"] } },
+    { name: "http_out_tls", kind: "outbound", type: "http",
+      section: { ".name": "h_out", server: "ex.com", server_port: "8080",
+                 username: "u", password: "p", http_path: "/proxy",
+                 tls_enabled: "1", tls_server_name: "ex.com" } },
+    { name: "http_in_users", kind: "inbound", type: "http",
+      section: { ".name": "h_in", protocol: "http", listen_port: "8080",
+                 http_user: ["alice:secret"] } },
 ];
