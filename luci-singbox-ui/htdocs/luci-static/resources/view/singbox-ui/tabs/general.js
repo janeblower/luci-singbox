@@ -51,6 +51,28 @@ function buildGeneralMap() {
 	o = s.option(form.Value, 'output', _('Output file (empty = procd stdout)'));
 	o.depends('enabled', '1');
 
+	// --- Clash API (drives the Dashboard tab) ---
+	s = m.section(form.NamedSection, 'clash_api', 'clash_api', _('Clash API'),
+		_('Enables sing-box experimental.clash_api. Required by the Dashboard tab. ' +
+		  'Restart the service after changing.'));
+
+	o = s.option(form.Flag, 'enabled', _('Enable'));
+	o.default = '0';
+
+	o = s.option(form.Value, 'listen', _('Listen address'));
+	o.default = '127.0.0.1';
+	o.depends('enabled', '1');
+
+	o = s.option(form.Value, 'port', _('Port'));
+	o.default = '9090';
+	o.datatype = 'port';
+	o.depends('enabled', '1');
+
+	o = s.option(form.Value, 'secret', _('API secret (optional)'));
+	o.password = true;
+	o.depends('enabled', '1');
+	o.description = _('Bearer token for the Clash API. Leave empty for no auth.');
+
 	return m;
 }
 
