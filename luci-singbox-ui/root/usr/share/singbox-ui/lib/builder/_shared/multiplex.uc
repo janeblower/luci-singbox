@@ -23,6 +23,15 @@ return {
         { name: "multiplex_padding", type: "bool", tab: "multiplex",
           ui_label: "Padding", default: 0,
           parent_enabled: "multiplex_enabled", advanced: true },
+        { name: "brutal_enabled", type: "bool", tab: "multiplex",
+          ui_label: "Enable TCP Brutal", default: 0,
+          parent_enabled: "multiplex_enabled", advanced: true },
+        { name: "brutal_up_mbps", type: "number", tab: "multiplex",
+          ui_label: "Brutal uplink Mbps",
+          parent_enabled: "brutal_enabled", advanced: true },
+        { name: "brutal_down_mbps", type: "number", tab: "multiplex",
+          ui_label: "Brutal downlink Mbps",
+          parent_enabled: "brutal_enabled", advanced: true },
     ],
 
     emit_spec: {
@@ -34,6 +43,11 @@ return {
             { name: "multiplex_min_streams",     json_key: "min_streams", coerce: "num" },
             { name: "multiplex_max_streams",     json_key: "max_streams", coerce: "num" },
             { name: "multiplex_padding",         json_key: "padding", coerce: "bool" },
+            { json_key: "brutal", gate: { flag: "brutal_enabled" }, fields: [
+                { json_key: "enabled", const: true },
+                { name: "brutal_up_mbps",   json_key: "up_mbps",   coerce: "num" },
+                { name: "brutal_down_mbps", json_key: "down_mbps", coerce: "num" },
+            ] },
         ],
     },
 };

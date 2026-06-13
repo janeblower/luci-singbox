@@ -1,0 +1,1 @@
+{ "multiplex": { "brutal": { "down_mbps": 50, "enabled": true, "up_mbps": 100 }, "enabled": true, "protocol": "smux" }, "password": "p", "server": "ex.com", "server_port": 443, "tag": "tb1", "type": "trojan" }
