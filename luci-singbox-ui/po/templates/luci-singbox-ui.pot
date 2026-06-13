@@ -25,7 +25,7 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:83
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:225
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:243
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:13
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr ""
 
@@ -47,7 +47,7 @@ msgstr ""
 msgid "All devices"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:81
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:87
 msgid "Any"
 msgstr ""
 
@@ -99,7 +99,7 @@ msgstr ""
 msgid "Clash API unreachable — enable it in settings and restart."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:79
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:85
 msgid "Clash mode"
 msgstr ""
 
@@ -142,42 +142,42 @@ msgid "Custom path"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:99
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:22
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:41
 msgid "DNS"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:66
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:72
 msgid "DNS Rule"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:64
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:70
 msgid "DNS Rules"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:31
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:50
 msgid "DNS Server"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:27
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:46
 msgid "DNS Servers"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:94
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:100
 msgid "DNS Settings"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:23
-msgid "DNS servers (udp/tls/https/fakeip), rules, and global settings."
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:42
+msgid "DNS servers, rules, and global settings."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:84
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:107
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:113
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:50
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:53
 msgid "Default"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:102
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:108
 msgid "Default domain resolver (bootstrap)"
 msgstr ""
 
@@ -191,10 +191,6 @@ msgstr ""
 msgid ""
 "Define outbounds: direct via interface, share-link URL, subscription, or "
 "proxy constructor."
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:48
-msgid "Detour (outbound)"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:144
@@ -218,15 +214,11 @@ msgstr ""
 msgid "Direct (interface bind)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:78
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:84
 msgid "Domain keyword (comma-separated)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:55
-msgid "Domain resolver"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:77
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:83
 msgid "Domain suffix (comma-separated)"
 msgstr ""
 
@@ -248,8 +240,8 @@ msgstr ""
 msgid "Empty URL"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:34
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:68
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:53
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:74
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:42
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:126
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:111
@@ -286,14 +278,6 @@ msgid ""
 "or reinstall package."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:58
-msgid "FakeIP IPv4 range"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
-msgid "FakeIP IPv6 range"
-msgstr ""
-
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:169
 msgid "Fetch the subscription through this outbound (proxy or direct)."
 msgstr ""
@@ -302,7 +286,7 @@ msgstr ""
 msgid "Final route applied to traffic that does not match any rule."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:96
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:102
 msgid "Final server"
 msgstr ""
 
@@ -310,7 +294,7 @@ msgstr ""
 msgid "Flash (/etc/sing-box/, persistent)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:90
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:96
 msgid ""
 "Forces this TTL on responses matched by the rule. 0 disables rewriting. "
 "Default is 60."
@@ -329,10 +313,6 @@ msgstr ""
 msgid "Global sing-box settings: cache file, log."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:42
-msgid "HTTPS path"
-msgstr ""
-
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:117
 msgid "Hide"
 msgstr ""
@@ -343,6 +323,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:38
 msgid "Host must not be empty"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:20
+msgid "Hosts file"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:83
@@ -378,7 +362,7 @@ msgstr ""
 msgid "Inbounds"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:109
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:115
 msgid "Independent cache"
 msgstr ""
 
@@ -399,6 +383,10 @@ msgstr ""
 msgid "JSON"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:25
+msgid "Legacy (address string)"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:45
 msgid "Level"
 msgstr ""
@@ -411,6 +399,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:26
 msgid "Local"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:19
+msgid "Local system"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:40
@@ -592,7 +584,7 @@ msgstr ""
 msgid "Restarting…"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:85
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:91
 msgid "Rewrite TTL (s)"
 msgstr ""
 
@@ -610,7 +602,7 @@ msgid "Rule-Set"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:82
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:69
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:75
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:25
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:9
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:50
@@ -623,14 +615,6 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:194
 msgid "Selector type"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:38
-msgid "Server"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:40
-msgid "Server port"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:31
@@ -659,7 +643,7 @@ msgstr ""
 msgid "Storage"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:104
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:110
 msgid "Strategy"
 msgstr ""
 
@@ -676,7 +660,7 @@ msgstr ""
 msgid "TLS"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:84
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:90
 msgid "Target server"
 msgstr ""
 
@@ -688,7 +672,7 @@ msgstr ""
 msgid "Transport"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:35
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:54
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:140
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:24
 msgid "Type"

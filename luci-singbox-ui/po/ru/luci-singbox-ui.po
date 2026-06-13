@@ -18,7 +18,7 @@ msgstr " объект. Поля будут разобраны и создана 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:83
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:225
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:243
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:13
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr "(нет)"
 
@@ -40,7 +40,7 @@ msgstr "Адрес"
 msgid "All devices"
 msgstr "Все устройства"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:81
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:87
 msgid "Any"
 msgstr "Любой"
 
@@ -93,7 +93,7 @@ msgid "Clash API unreachable — enable it in settings and restart."
 msgstr ""
 "Clash API недоступен — включите его в настройках и перезапустите службу."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:79
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:85
 msgid "Clash mode"
 msgstr "Clash-режим"
 
@@ -136,42 +136,42 @@ msgid "Custom path"
 msgstr "Свой путь"
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:99
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:22
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:41
 msgid "DNS"
 msgstr "DNS"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:66
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:72
 msgid "DNS Rule"
 msgstr "DNS-правило"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:64
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:70
 msgid "DNS Rules"
 msgstr "DNS-правила"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:31
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:50
 msgid "DNS Server"
 msgstr "DNS-сервер"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:27
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:46
 msgid "DNS Servers"
 msgstr "DNS-серверы"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:94
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:100
 msgid "DNS Settings"
 msgstr "Настройки DNS"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:23
-msgid "DNS servers (udp/tls/https/fakeip), rules, and global settings."
-msgstr "DNS-серверы (udp/tls/https/fakeip), правила и глобальные настройки."
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:42
+msgid "DNS servers, rules, and global settings."
+msgstr "DNS-серверы, правила и глобальные настройки."
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:84
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:107
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:113
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:50
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:53
 msgid "Default"
 msgstr "По умолчанию"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:102
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:108
 msgid "Default domain resolver (bootstrap)"
 msgstr "Резолвер по умолчанию (bootstrap)"
 
@@ -190,10 +190,6 @@ msgid ""
 msgstr ""
 "Настройка outbound: прямое подключение через интерфейс, share-link URL, "
 "подписка или конструктор прокси."
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:48
-msgid "Detour (outbound)"
-msgstr "Маршрут (outbound)"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:144
 msgid "Device"
@@ -216,15 +212,11 @@ msgstr "Напрямую (WAN)"
 msgid "Direct (interface bind)"
 msgstr "Прямой (привязка к интерфейсу)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:78
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:84
 msgid "Domain keyword (comma-separated)"
 msgstr "Ключевое слово домена (через запятую)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:55
-msgid "Domain resolver"
-msgstr "Резолвер домена"
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:77
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:83
 msgid "Domain suffix (comma-separated)"
 msgstr "Суффикс домена (через запятую)"
 
@@ -249,8 +241,8 @@ msgid "Empty URL"
 msgstr "Пустой URL"
 
 # Common fields
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:34
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:68
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:53
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:74
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:42
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:126
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:111
@@ -289,14 +281,6 @@ msgstr ""
 "Не удалось загрузить схему протоколов. Некоторые формы могут быть неполны; "
 "перезапустите rpcd или переустановите пакет."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:58
-msgid "FakeIP IPv4 range"
-msgstr "Диапазон FakeIP IPv4"
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
-msgid "FakeIP IPv6 range"
-msgstr "Диапазон FakeIP IPv6"
-
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:169
 msgid "Fetch the subscription through this outbound (proxy or direct)."
 msgstr "Загружать подписку через этот аутбаунд (прокси или direct)."
@@ -305,7 +289,7 @@ msgstr "Загружать подписку через этот аутбаунд
 msgid "Final route applied to traffic that does not match any rule."
 msgstr "Финальное правило для трафика, не совпавшего ни с одним правилом."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:96
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:102
 msgid "Final server"
 msgstr "Финальный сервер"
 
@@ -313,7 +297,7 @@ msgstr "Финальный сервер"
 msgid "Flash (/etc/sing-box/, persistent)"
 msgstr "Flash (/etc/sing-box/, сохраняется)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:90
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:96
 msgid ""
 "Forces this TTL on responses matched by the rule. 0 disables rewriting. "
 "Default is 60."
@@ -335,10 +319,6 @@ msgstr "Создание…"
 msgid "Global sing-box settings: cache file, log."
 msgstr "Глобальные настройки sing-box: кэш-файл, лог."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:42
-msgid "HTTPS path"
-msgstr "HTTPS-путь"
-
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:117
 msgid "Hide"
 msgstr "Скрыть"
@@ -350,6 +330,10 @@ msgstr "Хост"
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:38
 msgid "Host must not be empty"
 msgstr "Поле «Хост» не должно быть пустым"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:20
+msgid "Hosts file"
+msgstr "Файл hosts"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:83
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:62
@@ -386,7 +370,7 @@ msgstr "Inbound"
 msgid "Inbounds"
 msgstr "Входящие"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:109
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:115
 msgid "Independent cache"
 msgstr "Независимый кэш"
 
@@ -407,6 +391,10 @@ msgstr "Неверный формат UUID"
 msgid "JSON"
 msgstr "JSON"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:25
+msgid "Legacy (address string)"
+msgstr "Legacy (строка адреса)"
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:45
 msgid "Level"
 msgstr "Уровень"
@@ -420,6 +408,10 @@ msgstr "Загрузка…"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:26
 msgid "Local"
 msgstr "Локальный"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:19
+msgid "Local system"
+msgstr "Локальная система"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:40
 msgid "Log"
@@ -609,7 +601,7 @@ msgstr "Перезапустить службу"
 msgid "Restarting…"
 msgstr "Перезапуск…"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:85
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:91
 msgid "Rewrite TTL (s)"
 msgstr "Переопределить TTL (с)"
 
@@ -629,7 +621,7 @@ msgid "Rule-Set"
 msgstr "Набор правил"
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:82
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:69
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:75
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:25
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:9
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:50
@@ -643,14 +635,6 @@ msgstr "Поиск"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:194
 msgid "Selector type"
 msgstr "Тип селектора"
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:38
-msgid "Server"
-msgstr "Сервер"
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:40
-msgid "Server port"
-msgstr "Порт сервера"
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:31
 msgid "Service running"
@@ -679,7 +663,7 @@ msgstr "Статус недоступен"
 msgid "Storage"
 msgstr "Хранилище"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:104
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:110
 msgid "Strategy"
 msgstr "Стратегия"
 
@@ -696,7 +680,7 @@ msgstr "Подписки"
 msgid "TLS"
 msgstr "TLS"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:84
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:90
 msgid "Target server"
 msgstr "Целевой сервер"
 
@@ -708,7 +692,7 @@ msgstr "Переключить видимость"
 msgid "Transport"
 msgstr "Транспорт"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:35
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:54
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:140
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:24
 msgid "Type"
@@ -826,14 +810,23 @@ msgstr "↓"
 #~ msgid "Credentials"
 #~ msgstr "Учётные данные"
 
+#~ msgid "DNS servers (udp/tls/https/fakeip), rules, and global settings."
+#~ msgstr "DNS-серверы (udp/tls/https/fakeip), правила и глобальные настройки."
+
 #~ msgid "Default (cubic)"
 #~ msgstr "По умолчанию (cubic)"
 
 #~ msgid "Default (native)"
 #~ msgstr "По умолчанию (native)"
 
+#~ msgid "Detour (outbound)"
+#~ msgstr "Маршрут (outbound)"
+
 #~ msgid "Direct (interface)"
 #~ msgstr "Прямое (интерфейс)"
+
+#~ msgid "Domain resolver"
+#~ msgstr "Резолвер домена"
 
 #~ msgid "Down Mbps"
 #~ msgstr "Нисх. Мбит/с"
@@ -848,6 +841,12 @@ msgstr "↓"
 #~ "Endpoint развёрнут из подписки. Чтобы внести изменения, правьте URL "
 #~ "подписки."
 
+#~ msgid "FakeIP IPv4 range"
+#~ msgstr "Диапазон FakeIP IPv4"
+
+#~ msgid "FakeIP IPv6 range"
+#~ msgstr "Диапазон FakeIP IPv6"
+
 #~ msgid "Flow"
 #~ msgstr "Flow"
 
@@ -860,6 +859,9 @@ msgstr "↓"
 
 #~ msgid "HTTP hosts"
 #~ msgstr "HTTP-хосты"
+
+#~ msgid "HTTPS path"
+#~ msgstr "HTTPS-путь"
 
 #~ msgid "Handshake server"
 #~ msgstr "Сервер handshake"
@@ -978,6 +980,12 @@ msgstr "↓"
 
 #~ msgid "Security"
 #~ msgstr "Безопасность"
+
+#~ msgid "Server"
+#~ msgstr "Сервер"
+
+#~ msgid "Server port"
+#~ msgstr "Порт сервера"
 
 #~ msgid "Share-link URL"
 #~ msgstr "Share-link URL"
