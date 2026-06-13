@@ -1,8 +1,10 @@
 name: bbolt-client
 
 # Builds the standalone bbolt-client-rs reader as static, libc-free binaries for
-# OpenWrt on x86_64, aarch64, armv7, mipsel and mips. Binary only — no apk
-# packaging (yet).
+# OpenWrt on x86_64, aarch64, armv7, mipsel and mips. The binaries are published
+# to the rolling `bbolt-latest` release and consumed by build.yml at apk-build
+# time (embedded per-arch into the main apk). They are NOT fetched at device
+# runtime — bbolt_install / install.sh no longer exist.
 on:
   push:
     branches: [main]
@@ -16,9 +18,8 @@ on:
       - '.github/workflows/bbolt-client.yml'
   workflow_dispatch:
 
-# Release publishing (the rolling bbolt-latest tag) needs write; the rpcd
-# bbolt_install handler downloads the attached assets from
-# /releases/download/bbolt-latest.
+# Release publishing (the rolling bbolt-latest tag) needs write; the assets are
+# downloaded by build.yml at apk-build time from /releases/download/bbolt-latest.
 permissions:
   contents: write
 
@@ -83,9 +84,9 @@ jobs:
           if-no-files-found: error
 
       # On push to main: recreate a rolling `bbolt-latest` prerelease with all 5
-      # binaries + checksums. bbolt_install (rpcd) and install.sh fetch from
-      # /releases/download/bbolt-latest/<asset> — a fixed tag, not the fragile
-      # /releases/latest (which picks the newest non-prerelease across all tags).
+      # binaries + checksums. build.yml downloads from
+      # /releases/download/bbolt-latest/<asset> at apk-build time — a fixed tag,
+      # not the fragile /releases/latest (newest non-prerelease across all tags).
       - name: Generate checksums
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: sha256sum bbolt-client-rs-x86_64 bbolt-client-rs-aarch64 bbolt-client-rs-armv7 bbolt-client-rs-mipsel bbolt-client-rs-mips > sha256sums.txt
@@ -99,10 +100,10 @@ jobs:
           # Update the persistent bbolt-latest release in place via
           # `upload --clobber` instead of delete-then-create. delete-then-create
           # left the release/tag deleted between the two steps — if the runner
-          # died there, bbolt_install / install.sh assets 404'd until the next
+          # died there, build.yml binary downloads 404'd until the next
           # push. We only `create` on first run (guarded by `release view`) and
           # retarget the tag to the current SHA via `release edit`.
-          notes="Static no-libc bbolt-client for OpenWrt (x86_64/aarch64/armv7/mipsel/mips). Auto-built from \`main\` @ \`${GITHUB_SHA::7}\`; replaced on every push to main."
+          notes="Static no-libc bbolt-client for OpenWrt (x86_64/aarch64/armv7/mipsel/mips). Auto-built from \`main\` @ \`${GITHUB_SHA::7}\`; replaced on every push to main. Consumed by build.yml at apk-build time (embedded per-arch into the main apk) — not fetched at device runtime."
           if ! gh release view bbolt-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create bbolt-latest \
               --repo "$GITHUB_REPOSITORY" \
