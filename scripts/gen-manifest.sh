@@ -34,7 +34,11 @@ dst_for() {
 	cd "$PKG"
 	# root + htdocs trees. Exclude po/templates and po/ru (handled separately
 	# by the po2lmo install step in Makefile).
-	find root htdocs -type f 2>/dev/null | sort | while read -r src; do
+	# LC_ALL=C: deterministic byte-order sort regardless of the caller's locale.
+	# The OpenWrt VM (BusyBox sort) and a default host both collate in C order; a
+	# runner with en_US.UTF-8 would otherwise produce a different order and make
+	# test_install_manifest_fresh fail only in the VM. Pin it so host/CI/VM agree.
+	find root htdocs -type f 2>/dev/null | LC_ALL=C sort | while read -r src; do
 		# Apply override if present. Match the source column as a FIXED
 		# string on the first TAB-separated field — never as a regex —
 		# so path metacharacters (. * [ + …) can't false-match another
