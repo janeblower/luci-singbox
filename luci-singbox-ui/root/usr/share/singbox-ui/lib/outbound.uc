@@ -23,7 +23,8 @@ for (let _m in ["builder.protocols.direct", "builder.protocols.shadowsocks", "bu
                 "builder.protocols.tuic", "builder.protocols.anytls", "builder.protocols.shadowtls",
                 "builder.protocols.json_raw",
                 "builder.protocols.socks", "builder.protocols.http", "builder.protocols.vmess",
-                "builder.protocols.ssh", "builder.protocols.naive"]) {
+                "builder.protocols.ssh", "builder.protocols.naive",
+                "builder.protocols.groups"]) {
 	try { require(_m); }
 	catch (e) { warn(sprintf("outbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }
@@ -113,6 +114,8 @@ function build_outbounds(cur) {
 			// Task 4: raw passthrough types. Their descriptor emit() parses the
 			// stored raw_json / raw_link and stamps the section tag. Own dispatch
 			// branch (like direct) — not in OUTBOUND_PROXY_KINDS.
+			outbound = build_constructor_for(section, kind);
+		} else if (kind === "selector" || kind === "urltest") {
 			outbound = build_constructor_for(section, kind);
 		} else if (helpers.is_outbound_proxy_kind(kind)) {
 			outbound = build_constructor_for(section, kind);

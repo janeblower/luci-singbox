@@ -1,0 +1,1 @@
+{ "default": "proxy-a", "interrupt_exist_connections": true, "outbounds": [ "proxy-a", "proxy-b", "sub__0" ], "tag": "sel1", "type": "selector" }

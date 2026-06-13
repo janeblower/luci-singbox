@@ -218,4 +218,11 @@ return [
     { name: "cloudflared_in", kind: "inbound", type: "cloudflared",
       section: { ".name": "cf_in", protocol: "cloudflared", token: "eyToken",
                  cf_protocol: "quic", ha_connections: "4", post_quantum: "1" } },
+    { name: "selector_out", kind: "outbound", type: "selector",
+      section: { ".name": "sel1", group_outbounds: ["proxy-a", "proxy-b", "sub__0"],
+                 group_default: "proxy-a", interrupt_exist_connections: "1" } },
+    { name: "urltest_out", kind: "outbound", type: "urltest",
+      section: { ".name": "ut1", group_outbounds: ["proxy-a", "proxy-b"],
+                 group_url: "https://www.gstatic.com/generate_204",
+                 group_interval: "3m", group_tolerance: "50" } },
 ];
