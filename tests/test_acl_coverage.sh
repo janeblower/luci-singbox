@@ -22,7 +22,7 @@ fi
 # above invariants hold in the handler.
 # bbolt_status only reads fs.stat(BBOLT_PATH) + uname -m and emits JSON; no UCI
 # write, no nft, no service restart — safe for read.ubus.
-SAFE_READ_METHODS="status status_detail read_config clash_get export_section preview_config protocol_schema subscription_expand bbolt_status"
+SAFE_READ_METHODS="status status_detail read_config clash_get export_section preview_config protocol_schema bbolt_status"
 
 # Whitelist of methods expected in write.ubus. bbolt_install downloads + installs
 # the bbolt-client helper binary (fs mutation), so it is correctly write-side.

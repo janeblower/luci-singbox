@@ -58,7 +58,7 @@ function parse_args() {
 function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
 
 // valid_section_name(name) — контракт имени UCI-секции, общий для
-// export_section и subscription_expand: непустая строка ≤64 символов,
+// export_section: непустая строка ≤64 символов,
 // ^[A-Za-z0-9_-]+$. Чистый предикат (bool), ничего не печатает — emit остаётся
 // на call-site, чтобы сохранить разные сообщения об ошибке.
 function valid_section_name(name) {
@@ -382,7 +382,7 @@ function call_export_section() {
 		emit_err("invalid kind: " + (length(kind) ? kind : "<missing>"));
 		return;
 	}
-	// Mirror subscription_expand's contract (S1-3): a UCI section name must be
+	// UCI section name contract (S1-3): a UCI section name must be
 	// a non-empty ^[A-Za-z0-9_-]+$ string of at most 64 chars — defense-in-depth
 	// against injection/traversal (shared predicate valid_section_name).
 	if (!valid_section_name(name)) {
@@ -562,22 +562,6 @@ function call_clash_mutate() {
 	clash_proxy(method, path, args.body);
 }
 
-function call_subscription_expand() {
-	let args = parse_args();
-	let name = args.name;
-	if (!valid_section_name(name)) {
-		emit_err("invalid or missing 'name'");
-		return;
-	}
-	let mod;
-	try { mod = require("subscription_expand"); }
-	catch (e) { emit_err("require(subscription_expand) failed: " + e); return; }
-	let endpoints;
-	try { endpoints = mod.expand(name); }
-	catch (e) { emit_err("expand failed: " + e); return; }
-	emit({ status: "ok", name: name, endpoints: endpoints });
-}
-
 // host_arch() → bbolt asset arch ("x86_64"|"aarch64"|"armv7"|"mipsel"|"mips") or
 // null. Prefers `apk --print-arch` (distinguishes mips endianness, which uname -m
 // cannot — both report "mips"); falls back to uname -m for x86_64/aarch64.
@@ -700,7 +684,6 @@ const METHODS = {
 	export_section:      { sig: { kind: "string", name: "string" },                   handler: call_export_section },
 	preview_config:      { sig: {},                                                   handler: call_preview_config },
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
-	subscription_expand: { sig: { name: "string" },                                   handler: call_subscription_expand },
 	bbolt_status:        { sig: {},                                                   handler: call_bbolt_status },
 	bbolt_install:       { sig: {},                                                   handler: call_bbolt_install },
 };
