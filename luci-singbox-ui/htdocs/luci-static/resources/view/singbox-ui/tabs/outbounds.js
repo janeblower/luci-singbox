@@ -166,13 +166,16 @@ function buildOutboundsMap() {
 	o = s.taboption('basic', form.ListValue, 'sub_update_via', _('Update via'));
 	o.modalonly = true;
 	o.depends('type', 'subscription');
+	o.description = _('Fetch the subscription through this outbound (proxy or direct).');
 	o.load = function (section_id) {
 		this.keylist = [];
 		this.vallist = [];
 		this.value('direct', _('Direct (WAN)'));
 		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
-			if (sec.type === 'direct')
-				this.value(sec['.name'], sec['.name'] + ' (' + (sec.bind_interface || '?') + ')');
+			if (sec['.name'] === section_id) return;       // not itself
+			if (sec.type === 'subscription') return;        // can't fetch through a subscription
+			var label = sec['.name'] + ' (' + (sec.type || '?') + ')';
+			this.value(sec['.name'], label);
 		}.bind(this));
 		return form.ListValue.prototype.load.apply(this, arguments);
 	};
