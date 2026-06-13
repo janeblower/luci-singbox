@@ -35,6 +35,7 @@ let fs  = require("fs");
 let uci_mod = require("uci");
 let helpers = require("helpers");
 let cache_mod = require("cache");
+let ob_mod = require("outbound");
 
 // Two channels: log() is ops-info, log_err() is errors. They both write to
 // stderr (init.d/cron route it to syslog) but log_err tags severity so an
@@ -496,6 +497,29 @@ function cmd_fetch_rulesets(cur) {
 	}
 	return 0;
 }
+// build_fetch_config(cur, via) -> JSON string for `sing-box tools fetch -c`.
+// Minimal config: the selected via-outbound (tag forced to `via`) + a direct
+// outbound. via="" / "direct" -> just direct. Returns null if via is set but
+// its section can't be built (caller logs + skips). No I/O.
+function build_fetch_config(cur, via) {
+	let direct = { tag: "direct", type: "direct" };
+	let outbounds = [];
+	if (via !== "" && via !== "direct") {
+		let kind = helpers.uci_get_or_empty(cur, via, "type");
+		if (kind === "") return null;
+		let sec = cur.get_all("singbox-ui", via);
+		if (sec == null) return null;
+		let obj;
+		try { obj = ob_mod.build_constructor_for(sec, kind); }
+		catch (e) { return null; }
+		if (obj == null) return null;
+		obj.tag = via;
+		push(outbounds, obj);
+	}
+	push(outbounds, direct);
+	return sprintf("%J", { outbounds: outbounds });
+}
+
 // is_stale(path, interval_s, force) -> bool. Missing file / zero interval / no
 // interval => stale.
 function is_stale(path, interval_s, force) {
@@ -682,4 +706,5 @@ return {
 	is_stale,
 	_set_io_for_test,
 	_read_raw_for_test,
+	_build_fetch_config_for_test: build_fetch_config,
 };
