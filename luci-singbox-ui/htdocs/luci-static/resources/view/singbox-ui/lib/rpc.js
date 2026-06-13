@@ -13,8 +13,6 @@ return L.Class.extend({
     callExportSection: rpc.declare({ object: 'singbox-ui', method: 'export_section',
                                      params: [ 'kind', 'name' ] }),
     callPreviewConfig: rpc.declare({ object: 'singbox-ui', method: 'preview_config' }),
-    callBboltStatus:   rpc.declare({ object: 'singbox-ui', method: 'bbolt_status' }),
-    callBboltInstall:  rpc.declare({ object: 'singbox-ui', method: 'bbolt_install' }),
     callDhcpLeases: rpc.declare({ object: 'luci-rpc',   method: 'getDHCPLeases',
                                   expect: { '': {} } }),
 

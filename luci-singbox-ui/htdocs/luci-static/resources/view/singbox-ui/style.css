@@ -45,7 +45,7 @@ button.cbi-button.busy {
 
 /* Status colours. `.sb-ok`/`.sb-error` centralize status coloring (audit 9.7):
  * the JSON modal copy-result line, the monitoring tab, the service status panel
- * (status-panel.js) and the bbolt helper state (bbolt-panel.js) all use them
+ * (status-panel.js) all use them
  * instead of inline hex, so theming/dark-mode lives in one place. `.sb-warn` is
  * reserved for non-fatal warnings. */
 .sb-ok    { color: #3a3; }
