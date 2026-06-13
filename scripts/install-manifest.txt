@@ -19,7 +19,6 @@ htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js	www/luci-static/r
 htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js	www/luci-static/resources/view/singbox-ui/tabs/routing.js	data
 htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js	www/luci-static/resources/view/singbox-ui/tabs/rulesets.js	data
 htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js	www/luci-static/resources/view/singbox-ui/widgets/action-bar.js	data
-htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js	www/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js	data
 htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js	www/luci-static/resources/view/singbox-ui/widgets/status-panel.js	data
 root/etc/capabilities/singbox-ui.json	etc/capabilities/singbox-ui.json	data
 root/etc/config/singbox-ui	etc/config/singbox-ui	conf
