@@ -141,7 +141,7 @@ msgstr ""
 msgid "Custom path"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:104
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:99
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:22
 msgid "DNS"
 msgstr ""
@@ -170,7 +170,7 @@ msgstr ""
 msgid "DNS servers (udp/tls/https/fakeip), rules, and global settings."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:89
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:84
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:107
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:50
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:53
@@ -234,10 +234,6 @@ msgstr ""
 msgid "Down"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:55
-msgid "Download bbolt-client"
-msgstr ""
-
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:37
 msgid "Effective only when a DNS server of type fakeip is enabled."
 msgstr ""
@@ -284,7 +280,7 @@ msgstr ""
 msgid "Export JSON"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:38
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:37
 msgid ""
 "Failed to load protocol schema. Some forms may be incomplete; restart rpcd "
 "or reinstall package."
@@ -316,7 +312,7 @@ msgid ""
 "Default is 60."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:106
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:101
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:6
 msgid "General"
 msgstr ""
@@ -373,7 +369,7 @@ msgstr ""
 msgid "Inbound"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:102
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:97
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:89
 msgid "Inbounds"
 msgstr ""
@@ -438,7 +434,7 @@ msgstr ""
 msgid "Missing \"type\" field"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:105
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:100
 msgid "Monitoring"
 msgstr ""
 
@@ -479,12 +475,12 @@ msgstr ""
 msgid "Outbound"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:86
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:81
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:68
 msgid "Outbounds"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:103
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:98
 msgid "Output"
 msgstr ""
 
@@ -600,7 +596,7 @@ msgstr ""
 msgid "Route Rule"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:88
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:83
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:10
 msgid "Route Rules"
 msgstr ""
@@ -609,7 +605,7 @@ msgstr ""
 msgid "Rule-Set"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:87
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:82
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:69
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js:25
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js:9
@@ -735,29 +731,8 @@ msgstr ""
 msgid "WebSocket transport requires a non-empty path"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:58
-msgid "bbolt-client helper"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:48
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:52
-msgid "bbolt-client install failed"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:45
-msgid "bbolt-client installed"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:60
-msgid "checking…"
-msgstr ""
-
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:79
 msgid "expected http/1.1, h2, or h3"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:27
-msgid "installed"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:10
@@ -768,16 +743,8 @@ msgstr ""
 msgid "not generated"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:30
-msgid "not installed — required to build nft rules from cache"
-msgstr ""
-
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:72
 msgid "preview failed"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/bbolt-panel.js:34
-msgid "status unavailable"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:224
