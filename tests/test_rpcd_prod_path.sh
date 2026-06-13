@@ -7,8 +7,7 @@
 # and thereby BYPASSING the shebang. That cannot catch the historical bug
 # where the handler shipped with a bare `#!/usr/bin/ucode` (no -L): rpcd
 # launches the handler through its shebang, so in-handler require()s
-# (log / protocols.schema_dump / outbound / inbound / uci / subscription_
-# expand) fail and methods return errors.
+# (log / protocols.schema_dump / outbound / inbound / uci) fail and methods return errors.
 #
 # This test installs the handler + lib into the guest's REAL system paths,
 # restarts rpcd, and calls `ubus call singbox-ui ...`. rpcd execs the
@@ -132,15 +131,6 @@ out=$(ubus call singbox-ui read_config 2>/dev/null) \
 	|| { echo "FAIL: 'ubus call singbox-ui read_config' returned non-zero (shebang/require regressed?)"; exit 1; }
 assert_clean read_config "$out"
 echo "  PASS: ubus call singbox-ui read_config returns a clean JSON envelope"
-
-# 4b) subscription_expand — require()s the subscription_expand lib module at
-#     call time (the canonical -L-shebang-dependent require). Passing a name
-#     for a non-existent section yields a clean status:error, never a
-#     require(...) failed, IF the shebang carries -L.
-out=$(ubus call singbox-ui subscription_expand '{"name":"nonexistent_sub"}' 2>/dev/null) \
-	|| { echo "FAIL: 'ubus call singbox-ui subscription_expand' returned non-zero"; exit 1; }
-assert_clean subscription_expand "$out"
-echo "  PASS: ubus call singbox-ui subscription_expand require()s lib via -L shebang"
 
 # 4c) export_section — FORKS export_section.uc (a child ucode process that
 #     itself require()s lib/ via its own shebang). This is the fork+child-exec
