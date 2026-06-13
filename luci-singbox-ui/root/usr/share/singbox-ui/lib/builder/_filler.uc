@@ -53,8 +53,18 @@ function _emit_scalar(out, s, f) {
         return;
     }
     if (coerce === "num") {
-        if (omit === "never" || length(s_opt(s, f.name)))
-            out[f.json_key] = s_num(s[f.name]);
+        // Use raw `+` conversion instead of s_num(): non-numeric strings become
+        // NaN. For omit:empty we DROP NaN (don't coerce garbage to 0). For
+        // omit:never the field must always be present, so NaN falls back to 0
+        // (matching the legacy s_num `n || 0` behaviour — never-omit is a hard
+        // contract that a bad value must not silently break).
+        if (omit === "never") {
+            let n = +s[f.name];
+            out[f.json_key] = (n == n) ? n : 0;
+        } else if (length(s_opt(s, f.name))) {
+            let n = +s[f.name];
+            if (n == n) out[f.json_key] = n;   // n==n is false for NaN -> drop
+        }
         return;
     }
     // "str" (default)

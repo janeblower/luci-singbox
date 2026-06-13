@@ -1,0 +1,1 @@
+{ "service": "systemd-resolved", "tag": "res1", "type": "resolved" }

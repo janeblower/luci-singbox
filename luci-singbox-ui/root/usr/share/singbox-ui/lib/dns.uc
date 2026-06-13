@@ -1,7 +1,10 @@
 // lib/dns.uc — sing-box typed DNS (1.12+): servers, rules, settings.
 // Built from dns_server / dns_rule / dns UCI sections. Pure: no I/O.
 
-let helpers = require("helpers");
+let helpers  = require("helpers");
+let dns_reg  = require("builder.dns.registry");   // eager-loads all 14 DNS descriptors
+let filler   = require("builder._filler");
+
 const s_opt    = helpers.s_opt;
 const s_num    = helpers.s_num;
 const csv_list = helpers.csv_list;
@@ -24,31 +27,13 @@ function build_servers(cur) {
 	cur.foreach("singbox-ui", "dns_server", function(s) {
 		if (s.enabled === "0") return;
 		let t = s_opt(s, "type");
-		let tag = s[".name"];
-		let srv = null;
-		if (t === "fakeip") {
-			srv = { type: "fakeip", tag: tag };
-			if (length(s_opt(s, "inet4_range"))) srv.inet4_range = s.inet4_range;
-			if (length(s_opt(s, "inet6_range"))) srv.inet6_range = s.inet6_range;
-		} else if (t === "udp" || t === "tls" || t === "https") {
-			srv = { type: t, tag: tag, server: s_opt(s, "server") };
-			// S3.4: only emit server_port when it is a valid 1..65535 integer.
-			// A non-numeric value (typo / direct UCI edit) must be omitted, not
-			// coerced to 0 (port 0 is meaningless and sing-box mishandles it) —
-			// mirrors the rewrite_ttl NaN guard below.
-			if (length(s_opt(s, "server_port"))) {
-				let p = +s.server_port;
-				if (p == p && p >= 1 && p <= 65535) srv.server_port = int(p);
-				else warn(sprintf("dns.uc: dns_server '%s' invalid server_port '%s'; omitting\n", tag, s.server_port));
-			}
-			if (t === "https" && length(s_opt(s, "path"))) srv.path = s.path;
-			if (length(s_opt(s, "detour"))) srv.detour = s.detour;
-			if (length(s_opt(s, "domain_resolver"))) srv.domain_resolver = s.domain_resolver;
-		} else {
-			warn(sprintf("dns.uc: unknown dns_server type '%s' for '%s'; skipping\n", t, tag));
+		let d = dns_reg.get("dns", t);
+		if (d == null) {
+			warn(sprintf("dns.uc: unknown dns_server type '%s' for '%s'; skipping\n", t, s[".name"]));
 			return;
 		}
-		push(servers, srv);
+		let srv = (type(d.emit) === "function") ? d.emit(s) : filler.build(d, s);
+		if (srv != null) push(servers, srv);
 	});
 	return servers;
 }

@@ -1,0 +1,1 @@
+{ "interface": [ "eth0", "eth1" ], "tag": "md1", "type": "mdns" }
