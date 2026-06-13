@@ -1,0 +1,1 @@
+{ "detour": "proxy", "domain_resolver": "u1", "server": "1.1.1.1", "server_port": 853, "tag": "t1", "type": "tls" }

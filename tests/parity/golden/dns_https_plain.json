@@ -1,0 +1,1 @@
+{ "server": "dns.google", "server_port": 443, "tag": "h2", "type": "https" }

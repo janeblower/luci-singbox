@@ -1,0 +1,1 @@
+{ "domain_resolver": "u1", "server": "dns.example", "server_port": 53, "tag": "u2", "type": "udp" }
