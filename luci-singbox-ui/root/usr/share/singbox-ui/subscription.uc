@@ -644,9 +644,22 @@ function cmd_sub_status(cur) {
 	return out;
 }
 
+// refresh_gate_what(cur, what, force) — apply the subscriptions.auto_update gate.
+// UI refresh always passes force=true (rpcd appends "force"), so it is never
+// gated. Cron calls non-force; when auto_update='0' the subscriptions portion is
+// suppressed by rewriting `what`: "all" -> "rulesets", "subscriptions" -> "".
+// Returns the effective `what`.
+function refresh_gate_what(cur, what, force) {
+	if (force) return what;
+	if (what !== "subscriptions" && what !== "all") return what;
+	if (helpers.uci_get_or_empty(cur, "subscriptions", "auto_update") !== "0") return what;
+	return (what === "all") ? "rulesets" : "";
+}
+
 function cmd_refresh(cur, what, force, name) {
 	let subs_refreshed = false;
 	let no_reload = getenv("SINGBOX_NO_RELOAD") === "1";
+	what = refresh_gate_what(cur, what, force);
 
 	if (what === "subscriptions" || what === "all") {
 		if (any_subs_stale(cur, force, name)) {
@@ -738,4 +751,5 @@ return {
 	_cmd_fetch_subs_for_test: function(cur) { return cmd_fetch_subs(cur); },
 	_cmd_sub_status_for_test: function(cur) { return cmd_sub_status(cur); },
 	_any_subs_stale_for_test: function(cur, force, only) { return any_subs_stale(cur, force, only); },
+	_refresh_gate_what_for_test: function(cur, what, force) { return refresh_gate_what(cur, what, force); },
 };

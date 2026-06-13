@@ -73,6 +73,12 @@ function buildGeneralMap() {
 	o.depends('enabled', '1');
 	o.description = _('Bearer token for the Clash API. Leave empty for no auth.');
 
+	// --- Subscriptions ---
+	s = m.section(form.NamedSection, 'subscriptions', 'subscriptions', _('Subscriptions'));
+	o = s.option(form.Flag, 'auto_update', _('Auto-update subscriptions'));
+	o.default = '1';
+	o.description = _('Periodically refresh subscriptions via cron (each sub honors its own update interval).');
+
 	return m;
 }
 

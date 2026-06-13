@@ -1,0 +1,21 @@
+#!/bin/sh
+# Install a crond entry that periodically refreshes subscriptions. The */15 tick
+# is only the CHECK cadence; subscription.uc honors each sub's sub_interval and
+# the global subscriptions.auto_update flag, so it's cheap when nothing is due.
+# Idempotent: never duplicates its own line.
+CRONTAB="${SINGBOX_CRONTAB:-/etc/crontabs/root}"
+RELOAD="${SINGBOX_CRON_RELOAD:-/etc/init.d/cron}"
+LINE='*/15 * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh subscriptions'
+
+mkdir -p "$(dirname "$CRONTAB")"
+touch "$CRONTAB"
+if ! grep -qF 'subscription.uc refresh subscriptions' "$CRONTAB"; then
+	printf '%s\n' "$LINE" >> "$CRONTAB"
+fi
+
+if [ "$RELOAD" = "true" ]; then
+	true
+else
+	[ -x "$RELOAD" ] && { "$RELOAD" enable 2>/dev/null; "$RELOAD" restart 2>/dev/null; }
+fi
+exit 0

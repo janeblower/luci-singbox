@@ -678,4 +678,35 @@ scope() {
 rm -rf "$TMPS"
 echo "  PASS: any_subs_stale honors per-section scoping"
 
+# --- auto_update gate: cron (non-force) subscriptions skipped when flag=0 ---
+echo "-- auto_update gate: cron non-force skipped when flag=0"
+SINGBOX_DIR="$(dirname "$SUB_UC")"
+TMPG=$(mktemp -d); mkdir -p "$TMPG/uci"
+cat >"$TMPG/uci/singbox-ui" <<'EOF'
+config subscriptions 'subscriptions'
+	option auto_update '0'
+EOF
+gate() { env UCI_CONFIG_DIR="$TMPG/uci" GATE_WHAT="$1" GATE_FORCE="$2" \
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -L "$SINGBOX_DIR" -e '
+  let s=require("subscription"); let uci=require("uci");
+  let cur=uci.cursor(getenv("UCI_CONFIG_DIR"));
+  print(s._refresh_gate_what_for_test(cur, getenv("GATE_WHAT"), getenv("GATE_FORCE")==="1"));'; }
+[ "$(gate all 0)" = "rulesets" ]       || { echo "FAIL: all+noforce+flag0 -> rulesets, got $(gate all 0)"; rm -rf "$TMPG"; exit 1; }
+[ "$(gate subscriptions 0)" = "" ]     || { echo "FAIL: subs+noforce+flag0 -> '', got [$(gate subscriptions 0)]"; rm -rf "$TMPG"; exit 1; }
+[ "$(gate all 1)" = "all" ]            || { echo "FAIL: force bypasses gate, got $(gate all 1)"; rm -rf "$TMPG"; exit 1; }
+rm -rf "$TMPG"
+# flag=1 (enabled) leaves what unchanged
+TMPG2=$(mktemp -d); mkdir -p "$TMPG2/uci"
+cat >"$TMPG2/uci/singbox-ui" <<'EOF'
+config subscriptions 'subscriptions'
+	option auto_update '1'
+EOF
+gate2() { env UCI_CONFIG_DIR="$TMPG2/uci" GATE_WHAT="$1" \
+	"$UCODE_BIN" $UCODE_LIB_FLAGS -L "$SINGBOX_DIR" -e '
+  let s=require("subscription"); let uci=require("uci"); let cur=uci.cursor(getenv("UCI_CONFIG_DIR"));
+  print(s._refresh_gate_what_for_test(cur, getenv("GATE_WHAT"), false));'; }
+[ "$(gate2 all)" = "all" ] || { echo "FAIL: flag1 all -> all, got $(gate2 all)"; rm -rf "$TMPG2"; exit 1; }
+rm -rf "$TMPG2"
+echo "PASS: auto_update gate rewrites what for cron only"
+
 echo "OK"
