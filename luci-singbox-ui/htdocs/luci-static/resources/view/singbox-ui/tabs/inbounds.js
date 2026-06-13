@@ -15,11 +15,21 @@ var addRenameField   = SbCommon.addRenameField;
 var SB_INBOUND_PROTOCOLS = [
 	['direct',      'Direct (DNS / port-forward)'],
 	['tproxy',      'TProxy (transparent)'],
+	['redirect',    'Redirect (transparent)'],
 	['mixed',       'Mixed (HTTP + SOCKS5)'],
+	['socks',       'SOCKS'],
+	['http',        'HTTP'],
 	['shadowsocks', 'Shadowsocks'],
+	['vmess',       'VMess'],
 	['vless',       'VLESS'],
 	['trojan',      'Trojan'],
-	['hysteria2',   'Hysteria2']
+	['hysteria',    'Hysteria'],
+	['hysteria2',   'Hysteria2'],
+	['tuic',        'TUIC'],
+	['anytls',      'AnyTLS'],
+	['shadowtls',   'ShadowTLS'],
+	['naive',       'Naive'],
+	['cloudflared', 'Cloudflared']
 ];
 
 function openJsonImportModal(kind, m) {

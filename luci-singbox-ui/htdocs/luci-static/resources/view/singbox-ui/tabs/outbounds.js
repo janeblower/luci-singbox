@@ -16,10 +16,21 @@ var openJsonImportModal = SbTabInbounds.openJsonImportModal;
 
 var SB_OUTBOUND_PROTOCOLS = [
 	['direct',       'Direct (interface bind)'],
+	['socks',        'SOCKS'],
+	['http',         'HTTP'],
 	['shadowsocks',  'Shadowsocks'],
+	['vmess',        'VMess'],
 	['vless',        'VLESS'],
 	['trojan',       'Trojan'],
+	['hysteria',     'Hysteria'],
 	['hysteria2',    'Hysteria2'],
+	['tuic',         'TUIC'],
+	['anytls',       'AnyTLS'],
+	['shadowtls',    'ShadowTLS'],
+	['naive',        'Naive'],
+	['ssh',          'SSH'],
+	['selector',     'Selector'],
+	['urltest',      'URLTest'],
 	['subscription', 'Subscription URL']
 ];
 
@@ -132,18 +143,18 @@ function buildOutboundsMap() {
 		var t = uci.get('singbox-ui', section_id, 'type') || '';
 		if (t === 'subscription') return uci.get('singbox-ui', section_id, 'sub_url') || '—';
 		if (t === 'direct')       return uci.get('singbox-ui', section_id, 'bind_interface') || '(default)';
+		if (t === 'selector' || t === 'urltest') {
+			var members = uci.get('singbox-ui', section_id, 'group_outbounds');
+			var n = Array.isArray(members) ? members.length : (members ? 1 : 0);
+			return _('group') + ' (' + n + ')';
+		}
 		var srv = uci.get('singbox-ui', section_id, 'server')      || '';
 		var prt = uci.get('singbox-ui', section_id, 'server_port') || '';
 		return srv && prt ? srv + ':' + prt : (srv || '—');
 	};
 
 	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
-	o.value('direct',       _('Direct (interface bind)'));
-	o.value('shadowsocks',  'Shadowsocks');
-	o.value('vless',        'VLESS');
-	o.value('trojan',       'Trojan');
-	o.value('hysteria2',    'Hysteria2');
-	o.value('subscription', _('Subscription URL'));
+	SB_OUTBOUND_PROTOCOLS.forEach(function (e) { o.value(e[0], _(e[1])); });
 	o.rmempty = false;
 
 	// E2: descriptor-driven UI for all stored outbound types.
