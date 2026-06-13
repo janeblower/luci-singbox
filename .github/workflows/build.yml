@@ -62,7 +62,8 @@ jobs:
           # it with --shell=ash so bashisms (arrays, [[ ]], $'...') fail at
           # CI rather than silently at first-boot on the router.
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 --shell=ash \
-            luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui
+            luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui \
+            luci-singbox-ui/root/etc/uci-defaults/91-singbox-ui-cron
 
   js-unit:
     name: JS unit tests (host node)

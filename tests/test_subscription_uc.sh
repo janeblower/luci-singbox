@@ -686,6 +686,7 @@ cat >"$TMPG/uci/singbox-ui" <<'EOF'
 config subscriptions 'subscriptions'
 	option auto_update '0'
 EOF
+# shellcheck disable=SC2086
 gate() { env UCI_CONFIG_DIR="$TMPG/uci" GATE_WHAT="$1" GATE_FORCE="$2" \
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -L "$SINGBOX_DIR" -e '
   let s=require("subscription"); let uci=require("uci");
@@ -701,6 +702,7 @@ cat >"$TMPG2/uci/singbox-ui" <<'EOF'
 config subscriptions 'subscriptions'
 	option auto_update '1'
 EOF
+# shellcheck disable=SC2086
 gate2() { env UCI_CONFIG_DIR="$TMPG2/uci" GATE_WHAT="$1" \
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -L "$SINGBOX_DIR" -e '
   let s=require("subscription"); let uci=require("uci"); let cur=uci.cursor(getenv("UCI_CONFIG_DIR"));
