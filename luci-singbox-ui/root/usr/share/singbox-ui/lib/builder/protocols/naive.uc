@@ -12,7 +12,7 @@ reg.register({
           validate: "port", default: 443, ui_label: "Server port",
           json_key: "server_port", coerce: "num", omit_when: "never" },
         { name: "username", type: "string", tab: "basic", ui_label: "Username", json_key: "username" },
-        { name: "password", type: "string", tab: "basic", secret: true, ui_label: "Password", json_key: "password" },
+        { name: "server_password", type: "string", tab: "basic", secret: true, ui_label: "Password", json_key: "password" },
         { name: "network", type: "enum", tab: "basic", values: ["", "tcp", "udp"],
           ui_label: "Network", advanced: true, json_key: "network", only_values: ["tcp", "udp"] },
         { name: "insecure_concurrency", type: "number", tab: "basic",
