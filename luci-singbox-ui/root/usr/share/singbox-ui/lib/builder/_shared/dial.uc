@@ -23,7 +23,7 @@ function build_listen_base(s, type_) {
 }
 
 return {
-    applies_to: { kinds: [ "outbound" ] },
+    applies_to: { kinds: [ "outbound", "dns" ] },
 
     fields: [
         { name: "bind_interface", type: "string", tab: "dial",

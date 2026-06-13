@@ -108,11 +108,11 @@ function validate_users(u, ctx) {
 
 function register(descriptor) {
     assert(descriptor.kind != null,            "descriptor.kind required");
-    assert(descriptor.kind === "inbound" || descriptor.kind === "outbound",
-        "descriptor.kind must be 'inbound' or 'outbound'");
+    assert(descriptor.kind === "inbound" || descriptor.kind === "outbound" || descriptor.kind === "dns",
+        "descriptor.kind must be 'inbound', 'outbound', or 'dns'");
     assert(descriptor.type != null,            "descriptor.type required");
     // A descriptor builds its JSON either via a hand-written emit() (legacy /
-    // escape-hatch) or declaratively via fields[] consumed by protocols._filler.
+    // escape-hatch) or declaratively via fields[] consumed by builder._filler.
     // At least one must be present. post() is an optional filler escape-hatch.
     let _has_emit = type(descriptor.emit) === "function";
     // A declarative descriptor needs at least one field to build anything
@@ -171,7 +171,7 @@ function types_for_kind(kind) {
 // null — otherwise a broken shared module silently strips its fields from
 // the materialized UI with no diagnostic (S4-4).
 function _shared_module(name) {
-    try { return require(sprintf("protocols._shared.%s", name)); }
+    try { return require(sprintf("builder._shared.%s", name)); }
     catch (e) {
         warn(sprintf("registry: shared module '%s' failed to load: %s\n", name, e));
         return null;
