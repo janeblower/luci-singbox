@@ -206,4 +206,11 @@ return [
       section: { ".name": "ssh1", server: "ex.com", server_port: "22",
                  ssh_user: "root", server_password: "admin",
                  host_key: ["ssh-ed25519 AAAA..."], client_version: "SSH-2.0-OpenSSH_7.4p1" } },
+    { name: "naive_out", kind: "outbound", type: "naive",
+      section: { ".name": "nv1", server: "ex.com", server_port: "443",
+                 username: "u", password: "p", tls_server_name: "ex.com" } },
+    { name: "naive_in", kind: "inbound", type: "naive",
+      section: { ".name": "nv_in", protocol: "naive", listen_port: "443", network: "udp",
+                 naive_user: ["alice:secret"],
+                 tls_certificate_path: "/c.pem", tls_key_path: "/k.pem" } },
 ];

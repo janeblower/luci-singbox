@@ -1,0 +1,1 @@
+{ "listen": "::", "listen_port": 443, "network": "udp", "tag": "nv_in", "tls": { "certificate_path": "/c.pem", "enabled": true, "key_path": "/k.pem" }, "type": "naive", "users": [ { "password": "secret", "username": "alice" } ] }

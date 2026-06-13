@@ -1,0 +1,1 @@
+{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "nv1", "tls": { "enabled": true, "server_name": "ex.com" }, "type": "naive", "username": "u" }
