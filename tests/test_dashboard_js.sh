@@ -148,7 +148,7 @@ function ok(l,c){if(c)console.log('  PASS:',l);else{console.log('  FAIL:',l);fai
 
   // --- latency test calls callClashDelay per member ---
   const tested=[];
-  ctx.__test.setDelay((args)=>{ tested.push(args.name);
+  ctx.__test.setDelay((name)=>{ tested.push(name);
     return Promise.resolve({status:'ok',body:JSON.stringify({delay:42})}); });
   const t=Dash.buildDashboard();
   await t.poll(); await t.refreshProxies();

@@ -89,3 +89,4 @@ button.cbi-button.busy {
 .sb-dashboard-unavailable { display: block; margin: 1em 0; }
 .sb-dashboard-sub { font-size: .8em; opacity: .75; margin-top: .3em; display: flex;
 	gap: .6em; align-items: center; }
+.sb-dashboard-sub-update, .sb-sort-btn { margin-left: auto; }

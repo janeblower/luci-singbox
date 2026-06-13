@@ -83,7 +83,7 @@ function buildDashboard() {
 			return p && !isGroupType(p.type);   // don't probe nested groups
 		});
 		return Promise.all(members.map(function (m) {
-			return callClashDelay({ name: m, url: '', timeout: '5000' })
+			return callClashDelay(m, '', '5000')
 				.then(function (res) {
 					var ms = 0;
 					if (res && res.status === 'ok') {
