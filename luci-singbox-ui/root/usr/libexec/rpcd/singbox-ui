@@ -8,6 +8,7 @@
 //   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
 //   clash_get           proxy GET request to Clash API (read-side, read ACL)
 //   clash_mutate        proxy POST/PATCH/PUT/DELETE to Clash API (write ACL)
+//   clash_delay         proxy GET /proxies/<name>/delay?... (read ACL, query built server-side)
 //   export_section      return sing-box JSON for ONE inbound/outbound section
 //   preview_config      dry-run: generate full config to a tmpfile, return body
 //
@@ -51,6 +52,30 @@ function parse_args() {
 
 // sq(s) — single-quote escape for /bin/sh.
 function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
+
+// pct_encode(s) — RFC3986 percent-encoding of an arbitrary BYTE string. Clash
+// proxy/subscription tags routinely contain spaces and emoji (e.g. "🇺🇸 US-1"),
+// so both the delay path segment and the test-url query value must be encoded
+// byte-by-byte. Iterating bytes is correct for UTF-8: each multibyte char's
+// bytes are individually %XX-escaped and reassemble identically server-side.
+// Control bytes (<0x20, 0x7f) are dropped — they have no place in a URL and
+// would otherwise enable CR/LF / curl trickery.
+function pct_encode(s) {
+	s = `${s}`;
+	let out = "";
+	for (let i = 0; i < length(s); i++) {
+		let c = substr(s, i, 1);
+		let o = ord(c);
+		if (o < 0x20 || o === 0x7f) continue;
+		if ((o >= 48 && o <= 57) || (o >= 65 && o <= 90) ||
+		    (o >= 97 && o <= 122) ||
+		    c === "-" || c === "." || c === "_" || c === "~")
+			out += c;
+		else
+			out += sprintf("%%%02X", o);
+	}
+	return out;
+}
 
 // valid_section_name(name) — контракт имени UCI-секции, общий для
 // export_section: непустая строка ≤64 символов,
@@ -565,6 +590,34 @@ function call_clash_mutate() {
 	clash_proxy(method, path, args.body);
 }
 
+// clash_delay — read-side latency probe. Clash's delay endpoint requires a
+// query string (?url=...&timeout=...) which clash_path_ok deliberately rejects,
+// so we build AND validate the path here rather than routing it through
+// clash_get. The path prefix is hard-coded to /proxies/<name>/delay; `name` and
+// `url` are percent-encoded; `timeout` is clamped to a positive integer ≤60000.
+// Nothing caller-supplied reaches the URL unescaped.
+function call_clash_delay() {
+	let args = parse_args();
+	let name = args.name;
+	if (type(name) !== "string" || !length(name)) { emit_err("invalid name"); return; }
+	if (length(name) > 128) { emit_err("name too long"); return; }
+
+	let url = (type(args.url) === "string" && length(args.url)) ? args.url
+	          : "http://www.gstatic.com/generate_204";
+	if (!match(url, /^https?:\/\//) ||
+	    index(url, " ") >= 0 || index(url, "\t") >= 0 ||
+	    index(url, "\r") >= 0 || index(url, "\n") >= 0) {
+		emit_err("invalid url"); return;
+	}
+
+	let t = +args.timeout;
+	if (!(t > 0) || t > 60000) t = 5000;
+
+	let path = "/proxies/" + pct_encode(name) + "/delay?url=" + pct_encode(url)
+	         + "&timeout=" + sprintf("%d", int(t));
+	clash_proxy("GET", path, null);
+}
+
 
 // METHODS — единый источник правды: имя метода → { sig, handler }. `sig`
 // уходит в emit_list() (rpcd читает сигнатуры), `handler` — в диспетчер.
@@ -582,6 +635,7 @@ const METHODS = {
 	read_config:         { sig: {},                                                   handler: call_read_config },
 	clash_get:           { sig: { path: "string" },                                   handler: call_clash_get },
 	clash_mutate:        { sig: { method: "string", path: "string", body: "string" }, handler: call_clash_mutate },
+	clash_delay:         { sig: { name: "string", url: "string", timeout: "string" }, handler: call_clash_delay },
 	export_section:      { sig: { kind: "string", name: "string" },                   handler: call_export_section },
 	preview_config:      { sig: {},                                                   handler: call_preview_config },
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
