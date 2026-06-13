@@ -121,14 +121,14 @@ function buildDashboard() {
 	function mountChrome() {
 		var widgets = E('div', { 'class': 'sb-dashboard-widgets' });
 		var groups  = E('div', { 'class': 'sb-dashboard-groups' });
-		var sortBtn = E('button', { 'class': 'btn cbi-button',
+		var sortBtn = E('button', { 'class': 'btn cbi-button sb-sort-btn',
 			'click': function () { setSortByLatency(!state.sortByLatency); } },
 			_('Sort by latency'));
 		var toolbar = E('div', { 'class': 'sb-dashboard-toolbar' }, [ sortBtn ]);
 		root.innerHTML = '';
 		root.appendChild(widgets);
-		root.appendChild(groups);
 		root.appendChild(toolbar);
+		root.appendChild(groups);
 		state.ui = { widgets: widgets, groups: groups };
 	}
 
@@ -191,7 +191,7 @@ function buildDashboard() {
 				E('b', {}, gname),
 				E('span', { 'class': 'sb-dashboard-grp-type' },
 					isSel ? _('selector') : _('auto')),
-				E('button', { 'class': 'btn cbi-button',
+				E('button', { 'class': 'btn cbi-button sb-dashboard-test',
 					'click': ui.createHandlerFn(this, (function (g) {
 						return function () { return testGroup(g); };
 					})(gname)) }, _('Test'))

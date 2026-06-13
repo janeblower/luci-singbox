@@ -140,7 +140,7 @@ function ok(l,c){if(c)console.log('  PASS:',l);else{console.log('  FAIL:',l);fai
     return Promise.resolve({status:'ok',body:JSON.stringify({delay:42})}); });
   const t=Dash.buildDashboard();
   await t.poll(); await t.refreshProxies();
-  const testBtn=ctx.__test.find(t.node,(n)=>n.tag==='button'&&typeof n.attrs.click==='function');
+  const testBtn=ctx.__test.find(t.node,(n)=>n.tag==='button'&&/sb-dashboard-test/.test((n.attrs&&n.attrs['class'])||'')&&typeof n.attrs.click==='function');
   await testBtn.attrs.click();
   ok('Test probes each member', tested.indexOf('A')>=0 && tested.indexOf('B')>=0);
 
