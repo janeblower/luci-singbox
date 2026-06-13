@@ -194,4 +194,12 @@ return [
       section: { ".name": "at_in", protocol: "anytls", listen_port: "443",
                  anytls_user: ["alice:secret"], padding_scheme: ["stop=8"],
                  tls_certificate_path: "/c.pem", tls_key_path: "/k.pem" } },
+    { name: "shadowtls_out", kind: "outbound", type: "shadowtls",
+      section: { ".name": "st1", server: "ex.com", server_port: "443",
+                 shadowtls_version: "3", server_password: "pw", tls_server_name: "google.com" } },
+    { name: "shadowtls_in", kind: "inbound", type: "shadowtls",
+      section: { ".name": "st_in", protocol: "shadowtls", listen_port: "443",
+                 shadowtls_version: "3", shadowtls_user: ["alice:secret"],
+                 handshake_server: "google.com", handshake_server_port: "443",
+                 strict_mode: "1", wildcard_sni: "all" } },
 ];

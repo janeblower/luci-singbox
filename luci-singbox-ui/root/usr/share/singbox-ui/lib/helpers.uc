@@ -132,7 +132,7 @@ function reset_iface_cache() { _iface_dev_cache = {}; }
 // lib/protocols/<x>.uc + require() in outbound.uc) AND here, and the test
 // keeps the two from drifting.
 const OUTBOUND_PROXY_KINDS = [
-	"vless", "trojan", "hysteria2", "hysteria", "tuic", "anytls", "shadowsocks", "socks", "http", "vmess",
+	"vless", "trojan", "hysteria2", "hysteria", "tuic", "anytls", "shadowsocks", "shadowtls", "socks", "http", "vmess",
 ];
 
 // O(1) membership set built once from the list above. Was a linear scan
