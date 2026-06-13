@@ -176,16 +176,140 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `multiplex` | `multiplex_*` | n/a | есть (shared block) | E2 |
 | Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 
-> **Dropped in E2:** `tuic`, `anytls`, `ssh`, and `interface` outbound types are removed from the UI surface. Existing UCI sections are hard-deleted by migration `drop-removed-protocols-e2`.
+> **Dropped in E2 / Re-added in protocol matrix:** `tuic`, `anytls`, `ssh`, `vmess` outbound types were removed in E2 but re-added in the expanded protocol matrix (Task 6.1). The E2 hard-delete migration ran once on existing pre-matrix installs; new installs configure them from scratch.
 
-### selector outbound (standalone)
-| Field | Status |
-|---|---|
-| Built dynamically from subscriptions (`lib/outbound.uc:230`) | есть |
-| Standalone UCI `outbound` with `type=selector` | нет | future (manual grouping) |
+### socks outbound (`lib/builder/protocols/socks.uc` — protocol matrix)
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `version` | `socks_version` | есть | matrix |
+| `username` | `username` | есть | matrix |
+| `password` | `password` | есть | matrix |
+| `network` | `network` | есть | matrix |
+| `udp_over_tcp` | `udp_over_tcp` | есть | matrix |
 
-### urltest outbound (standalone)
-Same status as selector: implemented via subscriptions, no standalone UCI form. Not in Phase B scope unless a concrete request appears.
+### http outbound (`lib/builder/protocols/http.uc` — protocol matrix)
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `username` | `username` | есть | matrix |
+| `password` | `password` | есть | matrix |
+| `path` | `http_path` | есть | matrix |
+
+### vmess outbound (`lib/builder/protocols/vmess.uc` — protocol matrix)
+Re-added after E2 removal. sing-box 1.12 VMess outbound.
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `uuid` | `server_uuid` | есть | matrix |
+| `security` | `vmess_security` | есть | matrix |
+| `alter_id` | `alter_id` | есть | matrix |
+| `global_padding` | `global_padding` | есть | matrix |
+| `authenticated_length` | `authenticated_length` | есть | matrix |
+| `network` | `network` | есть | matrix |
+| `packet_encoding` | `packet_encoding` | есть | matrix |
+
+### hysteria outbound (`lib/builder/protocols/hysteria.uc` — protocol matrix)
+Legacy Hysteria v1 (distinct from hysteria2).
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `server_ports` | `server_ports` | есть | matrix |
+| `hop_interval` | `hop_interval` | есть | matrix |
+| `up_mbps` | `up_mbps` | есть | matrix |
+| `down_mbps` | `down_mbps` | есть | matrix |
+| `auth_str` | `hysteria_auth_str` | есть | matrix |
+| `obfs` | `obfs` | есть | matrix |
+| `network` | `network` | есть | matrix |
+| `recv_window_conn` | `recv_window_conn` | есть | matrix |
+| `recv_window` | `recv_window` | есть | matrix |
+| `disable_mtu_discovery` | `disable_mtu_discovery` | есть | matrix |
+
+### tuic outbound (`lib/builder/protocols/tuic.uc` — protocol matrix)
+Re-added after E2 removal. sing-box 1.12 TUIC v5.
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `uuid` | `server_uuid` | есть | matrix |
+| `password` | `server_password` | есть | matrix |
+| `congestion_control` | `congestion_control` | есть | matrix |
+| `udp_relay_mode` | `udp_relay_mode` | есть | matrix |
+| `udp_over_stream` | `udp_over_stream` | есть | matrix |
+| `zero_rtt_handshake` | `zero_rtt_handshake` | есть | matrix |
+| `heartbeat` | `heartbeat` | есть | matrix |
+| `network` | `network` | есть | matrix |
+
+### anytls outbound (`lib/builder/protocols/anytls.uc` — protocol matrix)
+Re-added after E2 removal.
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `password` | `server_password` | есть | matrix |
+| `idle_session_check_interval` | `idle_session_check_interval` | есть | matrix |
+| `idle_session_timeout` | `idle_session_timeout` | есть | matrix |
+| `min_idle_session` | `min_idle_session` | есть | matrix |
+
+### shadowtls outbound (`lib/builder/protocols/shadowtls.uc` — protocol matrix)
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `version` | `shadowtls_version` | есть | matrix |
+| `password` | `server_password` | есть | matrix |
+
+### ssh outbound (`lib/builder/protocols/ssh.uc` — protocol matrix)
+Re-added after E2 removal.
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `user` | `ssh_user` | есть | matrix |
+| `password` | `server_password` | есть | matrix |
+| `private_key` | `private_key` | есть | matrix |
+| `private_key_path` | `private_key_path` | есть | matrix |
+| `private_key_passphrase` | `private_key_passphrase` | есть | matrix |
+| `host_key[]` | `host_key` | есть | matrix |
+| `host_key_algorithms[]` | `host_key_algorithms` | есть | matrix |
+| `client_version` | `client_version` | есть | matrix |
+| `cipher[]` | `ssh_cipher` | есть | matrix |
+| `mac[]` | `ssh_mac` | есть | matrix |
+| `kex_algorithm[]` | `ssh_kex_algorithm` | есть | matrix |
+
+### naive outbound (`lib/builder/protocols/naive.uc` — protocol matrix)
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `server` | `server` | есть | matrix |
+| `server_port` | `server_port` | есть | matrix |
+| `username` | `username` | есть | matrix |
+| `password` | `password` | есть | matrix |
+| `network` | `network` | есть | matrix |
+| `insecure_concurrency` | `insecure_concurrency` | есть | matrix |
+| `quic_congestion_control` | `quic_congestion_control` | есть | matrix |
+
+### selector outbound (`lib/builder/protocols/groups.uc` — protocol matrix)
+Standalone UCI `outbound` with `type=selector`. Selects one outbound from a group, with optional default and interrupt behaviour.
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `outbounds[]` | `group_outbounds` | есть | matrix |
+| `default` | `group_default` | есть | matrix |
+| `interrupt_exist_connections` | `interrupt_exist_connections` | есть | matrix |
+
+### urltest outbound (`lib/builder/protocols/groups.uc` — protocol matrix)
+Automatically selects the best outbound by latency test.
+| sing-box JSON | UCI | Outbound | Phase |
+|---|---|---|---|
+| `outbounds[]` | `group_outbounds` | есть | matrix |
+| `url` | `group_url` | есть | matrix |
+| `interval` | `group_interval` | есть | matrix |
+| `tolerance` | `group_tolerance` | есть | matrix |
+| `idle_timeout` | `group_idle_timeout` | есть | matrix |
+| `interrupt_exist_connections` | `interrupt_exist_connections` | есть | matrix |
 
 ### direct outbound
 E2 DSL descriptor (`lib/protocols/direct.uc`). Replaces the legacy `type=interface` UCI outbound.
