@@ -69,6 +69,7 @@ mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 # bbolt-client arch map (single source of truth)
 # Each bbolt_arches_<abi> variable lists the exact OpenWrt arches that use
 # that generic ABI binary.
+# NOTE: install.sh's COVERED allowlist duplicates these 20 arches — update it too when arches change.
 # ---------------------------------------------------------------------------
 bbolt_arches_x86_64="x86_64"
 bbolt_arches_aarch64="aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic"
