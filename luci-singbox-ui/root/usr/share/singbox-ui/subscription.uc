@@ -396,7 +396,7 @@ function cmd_fetch_rulesets(cur) {
 				continue;
 			}
 			if (!bbolt_available()) {
-				log_err(`fetch_rulesets: ${name} skipped — bbolt-client not installed (use the UI button)`);
+				log_err(`fetch_rulesets: ${name} skipped — bbolt-client not installed (reinstall or upgrade the package)`);
 				continue;
 			}
 			if (!cache_extract_srs(db, name, raw_path)) {

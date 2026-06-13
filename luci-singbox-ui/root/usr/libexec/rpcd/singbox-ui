@@ -30,11 +30,6 @@ const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 const CLASH_CURL   = getenv("CLASH_CURL")   || "curl";
 const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
-// bbolt-client helper: not packaged in the .apk; fetched on demand from the
-// fixed `bbolt-latest` GitHub Release and installed here. Test-overridable.
-const BBOLT_PATH   = getenv("SINGBOX_BBOLT_BIN") || "/usr/libexec/singbox-ui/bbolt-client";
-const BBOLT_BASE   = getenv("BBOLT_RELEASE_BASE")
-	|| "https://github.com/janeblower/luci-singbox/releases/download/bbolt-latest";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }
@@ -562,108 +557,6 @@ function call_clash_mutate() {
 	clash_proxy(method, path, args.body);
 }
 
-// host_arch() → bbolt asset arch ("x86_64"|"aarch64"|"armv7"|"mipsel"|"mips") or
-// null. Prefers `apk --print-arch` (distinguishes mips endianness, which uname -m
-// cannot — both report "mips"); falls back to uname -m for x86_64/aarch64.
-function host_arch() {
-	let pa = trim(run_capture(["apk", "--print-arch"]) ?? "");
-	if (length(pa)) {
-		// apk --print-arch is authoritative on OpenWrt: map it or return null.
-		// Do NOT fall through to uname -m, or an unsupported apk arch (mips64,
-		// riscv64, …) would be masked by the host's uname (e.g. x86_64 in CI).
-		if (substr(pa, 0, 6) === "x86_64") return "x86_64";
-		if (substr(pa, 0, 7) === "aarch64") return "aarch64";
-		if (substr(pa, 0, 6) === "mips64") return null;       // 64-bit mips unsupported
-		if (substr(pa, 0, 6) === "mipsel") return "mipsel";   // before "mips"
-		if (substr(pa, 0, 4) === "mips") return "mips";
-		if (substr(pa, 0, 5) === "armeb") return null;        // big-endian ARM unsupported
-		if (substr(pa, 0, 3) === "arm") return "armv7";
-		return null;                                          // definitive but unsupported
-	}
-	// Fallback only when apk is unavailable: uname -m (64-bit arches only)
-	let m = trim(run_capture(["uname", "-m"]) ?? "");
-	if (m === "x86_64" || m === "amd64") return "x86_64";
-	if (m === "aarch64" || m === "arm64") return "aarch64";
-	if (substr(m, 0, 5) === "armv7" || m === "armv7l") return "armv7";
-	return null;
-}
-
-// bbolt_status — read-only: is the helper installed, for which arch, where.
-// `version` is the binary mtime (the static reader prints no version string),
-// enough for the UI to tell "freshly (re)installed" apart. No side effects.
-function call_bbolt_status() {
-	drain_stdin();
-	let st = fs.stat(BBOLT_PATH);
-	let installed = (st && st.type === "file") ? true : false;
-	emit({
-		status:    "ok",
-		installed: installed,
-		arch:      host_arch() ?? "",
-		path:      BBOLT_PATH,
-		version:   installed ? sprintf("%d", st.mtime) : "",
-	});
-}
-
-// bbolt_install — download the arch-matched bbolt-client-rs-<arch> from the
-// latest GitHub Release plus sha256sums.txt, verify the checksum, and install
-// 0755 to BBOLT_PATH via an atomic rename. Every failure (unknown arch, network,
-// missing/!matching sha) returns an error and installs nothing.
-function call_bbolt_install() {
-	drain_stdin();
-	let arch = host_arch();
-	if (arch == null) { emit_err("unsupported arch (need x86_64/aarch64/armv7/mipsel/mips)"); return; }
-	let asset = `bbolt-client-rs-${arch}`;
-
-	// Install dir = parent of BBOLT_PATH (derived, not hardcoded, so a test
-	// override lands in its sandbox). Download the binary INTO this dir so the
-	// final rename is same-filesystem (atomic). A /tmp → /usr/libexec rename is
-	// cross-device on OpenWrt (tmpfs vs overlay) and fails with EXDEV.
-	let i = length(BBOLT_PATH) - 1;
-	while (i >= 0 && substr(BBOLT_PATH, i, 1) !== "/") i--;
-	let parent = (i > 0) ? substr(BBOLT_PATH, 0, i) : "/";
-	system("mkdir -p " + sq(parent) + " >/dev/null 2>&1");
-
-	let bin_tmp  = `${parent}/.bbolt-client.dl`;
-	let sums_tmp = "/tmp/bbolt-client.sha256sums";
-
-	if (!run(["curl", "-sfL", "-o", bin_tmp,  `${BBOLT_BASE}/${asset}`])) {
-		try { fs.unlink(bin_tmp); } catch (_) {}
-		emit_err("download failed (binary)"); return;
-	}
-	if (!run(["curl", "-sfL", "-o", sums_tmp, `${BBOLT_BASE}/sha256sums.txt`])) {
-		try { fs.unlink(bin_tmp); } catch (_) {}
-		emit_err("download failed (sha256sums.txt)"); return;
-	}
-
-	// Expected sha for our asset: a "<hash>␠␠<name>" line in sha256sums.txt.
-	let want = "";
-	let sf = fs.open(sums_tmp, "r");
-	if (sf) {
-		for (let line in split(sf.read("all") ?? "", "\n")) {
-			let parts = split(trim(line), /[ \t]+/);
-			if (length(parts) >= 2 && parts[length(parts) - 1] === asset) {
-				want = parts[0]; break;
-			}
-		}
-		sf.close();
-	}
-	try { fs.unlink(sums_tmp); } catch (_) {}
-	if (!length(want)) { try { fs.unlink(bin_tmp); } catch (_) {} emit_err("no sha256 for asset"); return; }
-
-	let got = "";
-	let h = run_capture(["sha256sum", bin_tmp]);
-	if (h != null) got = split(trim(h), /[ \t]+/)[0];
-	if (lc(got) !== lc(want)) {
-		try { fs.unlink(bin_tmp); } catch (_) {}
-		emit_err("sha256 mismatch — refusing to install"); return;
-	}
-
-	system("chmod 0755 " + sq(bin_tmp) + " >/dev/null 2>&1");
-	let ok = false;
-	try { ok = fs.rename(bin_tmp, BBOLT_PATH); } catch (_) { ok = false; }
-	if (!ok) { try { fs.unlink(bin_tmp); } catch (_) {} emit_err("install (rename) failed"); return; }
-	emit({ status: "ok", installed: true, arch: arch, path: BBOLT_PATH });
-}
 
 // METHODS — единый источник правды: имя метода → { sig, handler }. `sig`
 // уходит в emit_list() (rpcd читает сигнатуры), `handler` — в диспетчер.
@@ -684,8 +577,6 @@ const METHODS = {
 	export_section:      { sig: { kind: "string", name: "string" },                   handler: call_export_section },
 	preview_config:      { sig: {},                                                   handler: call_preview_config },
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
-	bbolt_status:        { sig: {},                                                   handler: call_bbolt_status },
-	bbolt_install:       { sig: {},                                                   handler: call_bbolt_install },
 };
 
 function emit_list() {

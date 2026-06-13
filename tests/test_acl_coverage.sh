@@ -20,13 +20,9 @@ fi
 #   - never starts/stops/restarts singbox-ui service
 # If you add a new RPC method to read.ubus, also add it here and prove the
 # above invariants hold in the handler.
-# bbolt_status only reads fs.stat(BBOLT_PATH) + uname -m and emits JSON; no UCI
-# write, no nft, no service restart — safe for read.ubus.
-SAFE_READ_METHODS="status status_detail read_config clash_get export_section preview_config protocol_schema bbolt_status"
+SAFE_READ_METHODS="status status_detail read_config clash_get export_section preview_config protocol_schema"
 
-# Whitelist of methods expected in write.ubus. bbolt_install downloads + installs
-# the bbolt-client helper binary (fs mutation), so it is correctly write-side.
-EXPECTED_WRITE_METHODS="generate nftables restart refresh clash_mutate bbolt_install"
+EXPECTED_WRITE_METHODS="generate nftables restart refresh clash_mutate"
 
 # Use jsonfilter (available on OpenWrt). On a generic host CI box it usually
 # isn't present, so fall back to python3. If neither is available, SKIP

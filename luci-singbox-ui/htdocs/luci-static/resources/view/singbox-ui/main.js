@@ -18,7 +18,6 @@
 'require view.singbox-ui.tabs.monitoring as SbTabMon';
 'require view.singbox-ui.widgets.action-bar as SbActionBar';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
-'require view.singbox-ui.widgets.bbolt-panel as SbBboltPanel';
 'require view.singbox-ui.lib.view_state as SbViewState';
 
 return view.extend({
@@ -60,10 +59,6 @@ return view.extend({
 			var inboundsNode   = nodes[0];
 			var outboundsNode  = nodes[1];
 			var rulesetsNode   = nodes[2];
-			// bbolt-client helper panel at the top of the Rule-Sets tab (toggles
-			// with the tab since it lives inside rulesetsNode).
-			var bboltHolder = E('div', { 'class': 'sb-bbolt' });
-			rulesetsNode.insertBefore(bboltHolder, rulesetsNode.firstChild);
 			var routerulesNode = nodes[3];
 			var routedefNode   = nodes[4];
 			var dnsNode        = nodes[5];
@@ -136,7 +131,6 @@ return view.extend({
 					});
 				});
 				SbStatusPanel.renderStatusPanel(statusHolder);
-				SbBboltPanel.renderBboltPanel(bboltHolder);
 			});
 
 			return root;

@@ -141,13 +141,4 @@ out=$(ubus call singbox-ui export_section '{"kind":"outbound","name":"nonexisten
 assert_clean export_section "$out"
 echo "  PASS: ubus call singbox-ui export_section forks helper via shebang"
 
-# 4d) bbolt_status — read-only fs.stat + host_arch() (forks `apk --print-arch`).
-#     Always status:ok; installed:true/false depending on the box.
-out=$(ubus call singbox-ui bbolt_status 2>/dev/null) \
-	|| { echo "FAIL: 'ubus call singbox-ui bbolt_status' returned non-zero"; exit 1; }
-assert_clean bbolt_status "$out"
-printf '%s' "$out" | grep -q '"status": *"ok"' \
-	|| { echo "FAIL: bbolt_status did not return ok via prod path; out=$out"; exit 1; }
-echo "  PASS: ubus call singbox-ui bbolt_status ok via shebang path"
-
 echo "OK"
