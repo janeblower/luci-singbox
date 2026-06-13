@@ -644,4 +644,38 @@ echo "$err" | grep -qE 'error:.*no subscription outbounds' \
 	|| { echo "[$err]"; fail "S3-8: log_err output not tagged 'error:'"; }
 pass "S3-8: log_err lines carry an 'error:' tag"
 
+# ---- per-section refresh scoping: any_subs_stale honors `only` arg ---
+echo "-- scoping: any_subs_stale honors per-section only arg"
+TMPS=$(mktemp -d)
+mkdir -p "$TMPS/uci" "$TMPS/run"
+cat >"$TMPS/uci/singbox-ui" <<'EOF'
+config outbound 'one'
+	option type 'subscription'
+	option enabled '1'
+	option sub_url 'https://e/one'
+	option sub_interval '99999'
+config outbound 'two'
+	option type 'subscription'
+	option enabled '1'
+	option sub_url 'https://e/two'
+	option sub_interval '99999'
+EOF
+# 'one' has a freshly-written body (not stale); 'two' has none (stale/missing).
+printf 'vless://x\n' > "$TMPS/run/sub_one.txt"
+SINGBOX_DIR="$(dirname "$SUB_UC")"
+# shellcheck disable=SC2086
+scope() {
+	env UCI_CONFIG_DIR="$TMPS/uci" SINGBOX_TMPDIR="$TMPS/run" SCOPE_ONLY="$1" \
+		"$UCODE_BIN" $UCODE_LIB_FLAGS -L "$SINGBOX_DIR" -e '
+  let s=require("subscription");
+  let uci=require("uci"); let cur=uci.cursor(getenv("UCI_CONFIG_DIR"));
+  let only = getenv("SCOPE_ONLY") || null;
+  print(s._any_subs_stale_for_test(cur, false, only) ? "stale" : "fresh");'
+}
+[ "$(scope one)" = "fresh" ] || { echo "FAIL: scope one should be fresh (recent file, huge interval): $(scope one)"; rm -rf "$TMPS"; exit 1; }
+[ "$(scope two)" = "stale" ] || { echo "FAIL: scope two should be stale (no file): $(scope two)"; rm -rf "$TMPS"; exit 1; }
+[ "$(scope '')"  = "stale" ] || { echo "FAIL: unscoped should be stale (two missing): $(scope '')"; rm -rf "$TMPS"; exit 1; }
+rm -rf "$TMPS"
+echo "  PASS: any_subs_stale honors per-section scoping"
+
 echo "OK"

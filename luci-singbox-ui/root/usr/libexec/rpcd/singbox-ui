@@ -214,7 +214,12 @@ function call_refresh() {
 		emit_err(`invalid what: ${what}`);
 		return;
 	}
-	if (run(uc_argv(SUBSCRIPTION_UC, "refresh", what, "force"))) emit_ok();
+	let name = (type(args.name) === "string" && match(args.name, /^[A-Za-z0-9_-]+$/))
+	           ? args.name : "";
+	let argv = name !== ""
+		? uc_argv(SUBSCRIPTION_UC, "refresh", what, "force", name)
+		: uc_argv(SUBSCRIPTION_UC, "refresh", what, "force");
+	if (run(argv)) emit_ok();
 	else emit_err(`refresh ${what} failed`);
 }
 
@@ -639,7 +644,7 @@ const METHODS = {
 	generate:            { sig: {},                                                   handler: call_generate },
 	nftables:            { sig: { action: "string" },                                 handler: call_nftables },
 	restart:             { sig: {},                                                   handler: call_restart },
-	refresh:             { sig: { what: "string" },                                   handler: call_refresh },
+	refresh:             { sig: { what: "string", name: "string" },                   handler: call_refresh },
 	status:              { sig: {},                                                   handler: call_status },
 	status_detail:       { sig: {},                                                   handler: call_status_detail },
 	sub_status:          { sig: {},                                                   handler: call_sub_status },
