@@ -7,7 +7,7 @@
 # and thereby BYPASSING the shebang. That cannot catch the historical bug
 # where the handler shipped with a bare `#!/usr/bin/ucode` (no -L): rpcd
 # launches the handler through its shebang, so in-handler require()s
-# (log / protocols.schema_dump / outbound / inbound / uci) fail and methods return errors.
+# (log / builder.protocols.schema_dump / outbound / inbound / uci) fail and methods return errors.
 #
 # This test installs the handler + lib into the guest's REAL system paths,
 # restarts rpcd, and calls `ubus call singbox-ui ...`. rpcd execs the
@@ -69,7 +69,7 @@ echo "$out" | grep -q '"status": *"ok"' \
 echo "  PASS: ubus call singbox-ui status ok via shebang path"
 
 # 2) `protocol_schema` is the canonical require()-heavy method: it loads
-#    protocols.schema_dump + outbound + inbound. If -L is missing from the
+#    builder.protocols.schema_dump + outbound + inbound. If -L is missing from the
 #    shebang these requires fail and the method returns
 #    {"status":"error","message":"require(...) failed"}. This is the exact
 #    bug class the regression guards.

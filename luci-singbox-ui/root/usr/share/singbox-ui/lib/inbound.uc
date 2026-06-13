@@ -10,15 +10,15 @@
 // (C2.1.15 guard — colon-in-password no longer truncates; keep this note.)
 
 let helpers = require("helpers");
-let reg     = require("protocols.registry");
-let filler  = require("protocols._filler");
+let reg     = require("builder.protocols.registry");
+let filler  = require("builder._filler");
 
 // Eagerly load every active inbound descriptor so register() fires. S2.1: each
 // require() is wrapped so one malformed descriptor file logs+skips instead of
 // throwing through require() and aborting generation for ALL protocols.
-for (let _m in ["protocols.trojan", "protocols.shadowsocks", "protocols.vless",
-                "protocols.hysteria2", "protocols.direct", "protocols.tproxy",
-                "protocols.mixed", "protocols.json_raw"]) {
+for (let _m in ["builder.protocols.trojan", "builder.protocols.shadowsocks", "builder.protocols.vless",
+                "builder.protocols.hysteria2", "builder.protocols.direct", "builder.protocols.tproxy",
+                "builder.protocols.mixed", "builder.protocols.json_raw"]) {
 	try { require(_m); }
 	catch (e) { warn(sprintf("inbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }

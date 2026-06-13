@@ -15,7 +15,7 @@ command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_protocol_list_consi
 # NON_PROXY_OUTBOUNDS mirrors the deliberate exclusions in helpers.uc.
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
     require("outbound");                       // eager-load all descriptors
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let helpers = require("helpers");
     // registered outbounds with their own dispatch branch (not proxy kinds):
     // direct (iface/direct), and the Task 4 raw passthrough types json/sharelink.

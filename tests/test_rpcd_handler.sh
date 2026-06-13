@@ -10,7 +10,7 @@ fi
 
 # Shebang invariant: rpcd invokes the handler via its shebang on the target,
 # so `-L /usr/share/singbox-ui/lib` MUST be on the interpreter line. Without
-# it, in-handler `require("scrub")` / `require("protocols.schema_dump")` /
+# it, in-handler `require("scrub")` / `require("builder.protocols.schema_dump")` /
 # `require("reveal")` calls fail at runtime and methods like preview_config
 # and protocol_schema return `require(...) failed` (regression: shebang was
 # bare `#!/usr/bin/ucode` until this assertion was added). The Linux kernel
@@ -35,7 +35,7 @@ if command -v ucode >/dev/null 2>&1; then
 	# to spy on child invocations, and we mustn't let that stub catch the
 	# top-level interpreter that's running the rpcd handler itself.
 	UCODE_BIN=$(command -v ucode)
-	# Handler requires protocols.schema_dump (protocol_schema method) and
+	# Handler requires builder.protocols.schema_dump (protocol_schema method) and
 	# outbound/inbound dependencies, so it needs the app's lib dir on its module search path.
 	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then

@@ -16,7 +16,7 @@ die() { echo "FAIL: $1 [$2]"; exit 1; }
 
 # ---- flat field coercion: str/num/bool/array, omit empty vs never, rename ----
 out=$(je '
-    let filler = require("protocols._filler");
+    let filler = require("builder._filler");
     let d = {
         kind: "outbound", sing_box_type: "demo",
         fields: [
@@ -49,7 +49,7 @@ ok "flat field coercion + omit + rename + UI-only skip"
 
 # ---- omit_when empty drops empty string scalars ----
 out=$(je '
-    let filler = require("protocols._filler");
+    let filler = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"demo",
               fields:[ { name:"x", type:"string", json_key:"x" } ], shared:null };
     let got = filler.build(d, { ".name":"t", x:"" });
@@ -60,7 +60,7 @@ ok "omit_when empty drops empty scalar"
 
 # ---- post hook runs last and mutates the object ----
 out=$(je '
-    let filler = require("protocols._filler");
+    let filler = require("builder._filler");
     let d = {
         kind:"outbound", sing_box_type:"demo", shared:null,
         fields:[ { name:"a", type:"string", json_key:"a" } ],
@@ -74,7 +74,7 @@ ok "post hook runs last"
 
 # ---- shared dispatch: tls merges under out.tls when enabled ----
 out=$(je '
-    let filler = require("protocols._filler");
+    let filler = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"vless", fields:[], shared:{ tls:{} } };
     let got = filler.build(d, { ".name":"v1", tls_enabled:"1", tls_server_name:"sni.example" });
     print((got.tls != null && got.tls.enabled === true && got.tls.server_name === "sni.example") ? "OK" : sprintf("BAD %J", got));
@@ -84,7 +84,7 @@ ok "shared tls merges under out.tls"
 
 # ---- shared dispatch: tls disabled -> no tls key ----
 out=$(je '
-    let filler = require("protocols._filler");
+    let filler = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"vless", fields:[], shared:{ tls:{} } };
     let got = filler.build(d, { ".name":"v1" });
     print(got.tls == null ? "OK" : sprintf("BAD %J", got));
@@ -94,7 +94,7 @@ ok "shared tls omitted when disabled"
 
 # ---- shared dispatch: tls force_enabled opts passed through ----
 out=$(je '
-    let filler = require("protocols._filler");
+    let filler = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"hysteria2", fields:[], shared:{ tls:{ force_enabled:true } } };
     let got = filler.build(d, { ".name":"h1" });   // tls_enabled NOT set
     print((got.tls != null && got.tls.enabled === true) ? "OK" : sprintf("BAD %J", got));
@@ -104,7 +104,7 @@ ok "shared tls force_enabled passes opts"
 
 # ---- shared dispatch: dial merge adds nothing on empty section ----
 out=$(je '
-    let filler = require("protocols._filler");
+    let filler = require("builder._filler");
     let d = { kind:"outbound", sing_box_type:"direct", fields:[], shared:{ dial:true } };
     let got = filler.build(d, { ".name":"d1" });
     print(sprintf("%J", got));
@@ -147,7 +147,7 @@ ok "direct outbound empty section omits all overrides"
 
 # ---- registry: a descriptor with fields but no emit registers OK ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"declonly_t3", sing_box_type:"x",
@@ -160,7 +160,7 @@ ok "registry accepts emit-less declarative descriptor"
 
 # ---- registry: a descriptor with neither emit nor fields is rejected ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try { reg.register({ kind:"outbound", type:"empty_t3", sing_box_type:"x" }); }
     catch (e) { threw = true; }
@@ -171,7 +171,7 @@ ok "registry rejects emit-less + fields-less descriptor"
 
 # ---- registry: emit-less descriptor with an EMPTY fields[] is rejected ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try { reg.register({ kind:"outbound", type:"emptyfields_t3", sing_box_type:"x", fields:[] }); }
     catch (e) { threw = true; }
@@ -182,7 +182,7 @@ ok "registry rejects emit-less + empty-fields descriptor"
 
 # ---- registry: a non-function post is rejected ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"badpost_t3", sing_box_type:"x",
@@ -195,7 +195,7 @@ ok "registry rejects non-function post"
 
 # ---- validate_field: unknown coerce is rejected ----
 out=$(je '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     let threw = false;
     try {
         reg.register({ kind:"outbound", type:"badcoerce_t3", sing_box_type:"x",

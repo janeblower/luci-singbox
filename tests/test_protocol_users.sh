@@ -11,7 +11,7 @@ die() { echo "FAIL: $1 [$2]"; exit 1; }
 
 # mixed: username:password, colon-in-password preserved, empty list -> no users
 out=$(je '
-    let U = require("protocols._shared.users");
+    let U = require("builder._shared.users");
     let spec = { from:"mixed_user", columns:[ {key:"username",required:true}, {key:"password",tail:true,always:true} ] };
     let r = U.build({ ".name":"m", mixed_user:["alice:secret","bob:pa:ss"] }, spec);
     print(sprintf("%J", r));
@@ -22,7 +22,7 @@ ok "mixed username:password (tail keeps colon)"
 
 # vless multi + bad rows skipped (malformed uuid, missing uuid)
 out=$(je '
-    let U = require("protocols._shared.users");
+    let U = require("builder._shared.users");
     let spec = { from:"inbound_user", columns:[ {key:"name",required:true}, {key:"uuid",required:true,guard:"uuid"}, {key:"flow",tail:true} ] };
     let r = U.build({ ".name":"v", inbound_user:["alice:uuid-a:xtls-rprx-vision","bob:uuid-b","bad: ","carol:uuid c"] }, spec);
     print(sprintf("%J", r.users));
@@ -33,7 +33,7 @@ ok "vless name:uuid[:flow] with bad-row skip"
 
 # vless single fallback when list empty
 out=$(je '
-    let U = require("protocols._shared.users");
+    let U = require("builder._shared.users");
     let spec = { from:"inbound_user",
         columns:[ {key:"name",required:true}, {key:"uuid",required:true,guard:"uuid"}, {key:"flow",tail:true} ],
         single_fallback:{ fields:[ {key:"uuid",from:"server_uuid"}, {key:"flow",from:"vless_flow"} ] } };
@@ -46,7 +46,7 @@ ok "vless single fallback from server_uuid"
 
 # shadowsocks: name:method:password, method validated+discarded, empty/unknown skipped
 out=$(je '
-    let U = require("protocols._shared.users");
+    let U = require("builder._shared.users");
     let METHODS = ["aes-256-gcm","2022-blake3-aes-128-gcm"];
     let spec = { from:"ss_user", columns:[ {key:"name",required:true}, {key:"method",validate:METHODS,discard:true}, {key:"password",tail:true,warn_if_empty:true} ] };
     let r = U.build({ ".name":"s", ss_user:["alice:aes-256-gcm:pw","bad:nomethod:pw","eve:aes-256-gcm:"] }, spec);
@@ -58,7 +58,7 @@ ok "shadowsocks discards method, skips unknown-method + empty-password"
 
 # trojan single (no list)
 out=$(je '
-    let U = require("protocols._shared.users");
+    let U = require("builder._shared.users");
     let spec = { single_fallback:{ fields:[ {key:"password",from:"server_password"} ] } };
     let r = U.build({ ".name":"t", server_password:"pw" }, spec);
     print(sprintf("%J", r.users));
@@ -68,7 +68,7 @@ ok "trojan single password"
 
 # colon-less single token is dropped (legacy: index(u,":")<0 -> skip) — all families
 out=$(je '
-    let U = require("protocols._shared.users");
+    let U = require("builder._shared.users");
     let r = U.build({ ".name":"m", mixed_user:["alice","bob:secret"] },
         { from:"mixed_user", columns:[ {key:"username",required:true}, {key:"password",tail:true,always:true} ] });
     print(sprintf("%J", r.users));
@@ -78,7 +78,7 @@ ok "mixed: colon-less token dropped"
 
 # hysteria2 colon-less -> dropped -> single fallback fires with real server_password
 out=$(je '
-    let U = require("protocols._shared.users");
+    let U = require("builder._shared.users");
     let spec = { from:"inbound_user",
         columns:[ {key:"name",required:true}, {key:"password",tail:true,always:true} ],
         single_fallback:{ fields:[ {key:"password",from:"server_password"} ] } };

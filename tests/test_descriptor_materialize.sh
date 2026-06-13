@@ -16,7 +16,7 @@ fi
 # Test 1: register + materialize on a minimal descriptor with one shared block.
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     reg.register({
         kind: "outbound", type: "demo", sing_box_type: "demo",
         shared: { tls: { enabled_field: "tls_enabled" } },
@@ -36,7 +36,7 @@ esac
 # Test 2: descriptor with missing tab on a field is rejected.
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     try {
         reg.register({
             kind: "outbound", type: "badtab", sing_box_type: "x",
@@ -54,7 +54,7 @@ esac
 # Test 3: unknown shared key rejected.
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     try {
         reg.register({
             kind: "outbound", type: "badshared", sing_box_type: "x",
@@ -73,7 +73,7 @@ esac
 # Test 4: _show_advanced_<tab> auto-injected and prepended first.
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
-    let reg = require("protocols.registry");
+    let reg = require("builder.protocols.registry");
     reg.register({
         kind: "outbound", type: "advdemo", sing_box_type: "x",
         fields: [
