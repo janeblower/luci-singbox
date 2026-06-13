@@ -1,0 +1,1 @@
+{ "ha_connections": 4, "post_quantum": true, "protocol": "quic", "tag": "cf_in", "token": "eyToken", "type": "cloudflared" }

@@ -21,7 +21,7 @@ for (let _m in ["builder.protocols.trojan", "builder.protocols.shadowsocks", "bu
                 "builder.protocols.anytls", "builder.protocols.shadowtls", "builder.protocols.direct",
                 "builder.protocols.tproxy", "builder.protocols.redirect", "builder.protocols.mixed", "builder.protocols.json_raw",
                 "builder.protocols.socks", "builder.protocols.http", "builder.protocols.vmess",
-                "builder.protocols.naive"]) {
+                "builder.protocols.naive", "builder.protocols.cloudflared"]) {
 	try { require(_m); }
 	catch (e) { warn(sprintf("inbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }

@@ -215,4 +215,7 @@ return [
                  tls_certificate_path: "/c.pem", tls_key_path: "/k.pem" } },
     { name: "redirect_in", kind: "inbound", type: "redirect",
       section: { ".name": "rd_in", protocol: "redirect", listen_port: "7894" } },
+    { name: "cloudflared_in", kind: "inbound", type: "cloudflared",
+      section: { ".name": "cf_in", protocol: "cloudflared", token: "eyToken",
+                 cf_protocol: "quic", ha_connections: "4", post_quantum: "1" } },
 ];
