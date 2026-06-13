@@ -1,7 +1,7 @@
 // lib/protocols/_shared/tls.uc
 
 return {
-    applies_to: { kinds: [ "inbound", "outbound" ] },
+    applies_to: { kinds: [ "inbound", "outbound", "dns" ] },
 
     fields: [
         { name: "tls_enabled", type: "bool", tab: "tls",

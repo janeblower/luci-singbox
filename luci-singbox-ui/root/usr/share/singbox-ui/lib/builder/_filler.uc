@@ -5,8 +5,8 @@
 // (see protocols/registry.uc and outbound.uc build_constructor_for).
 
 let helpers    = require("helpers");
-let dial_blk   = require("protocols._shared.dial");
-let users_blk  = require("protocols._shared.users");
+let dial_blk   = require("builder._shared.dial");
+let users_blk  = require("builder._shared.users");
 
 const s_opt    = helpers.s_opt;
 const s_num    = helpers.s_num;
@@ -122,7 +122,13 @@ function _build_block(s, spec, kind, opts) {
     }
     if (!_gate(s, spec.gate, opts)) return (spec.merge ? {} : null);
     let obj = {};
-    _emit_seq(obj, s, spec[kind] != null ? spec[kind] : spec.seq);
+    // Direction-keyed specs (tls) expose `outbound`/`inbound`. dns servers are
+    // TLS *clients* -> use the outbound sequence. merge specs (dial) carry `seq`
+    // and are direction-agnostic.
+    let seq = spec[kind] != null ? spec[kind]
+              : (spec.seq != null ? spec.seq
+                 : (kind === "inbound" ? spec.inbound : spec.outbound));
+    _emit_seq(obj, s, seq);
     return obj;
 }
 
@@ -137,7 +143,7 @@ function _emit_shared(out, s, kind, d) {
             continue;
         }
         let mod;
-        try { mod = require(sprintf("protocols._shared.%s", blk)); }
+        try { mod = require(sprintf("builder._shared.%s", blk)); }
         catch (e) { warn(sprintf("_filler: shared '%s' failed to load: %s\n", blk, e)); continue; }
         if (mod == null) continue;
         let opts = (type(d.shared[blk]) === "object") ? d.shared[blk] : {};
