@@ -26,6 +26,7 @@ return view.extend({
 			object: 'singbox-ui',
 			method: 'protocol_schema',
 		});
+		var callStatusDetail = rpc.declare({ object: 'singbox-ui', method: 'status_detail' });
 		return Promise.all([
 			uci.load('singbox-ui'),
 			L.resolveDefault(uci.load('network'), null),  // bind_interface dropdown source
@@ -37,6 +38,9 @@ return view.extend({
 						E('p', _('Failed to load protocol schema. Some forms may be incomplete; restart rpcd or reinstall package.')),
 						'warning');
 				}
+			}),
+			L.resolveDefault(callStatusDetail(), null).then(function (r) {
+				if (r && r.core_version != null) SbViewState.setCoreVersion(r.core_version);
 			}),
 		]);
 	},
