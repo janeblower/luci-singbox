@@ -33,9 +33,43 @@ function buildDashboard() {
 		});
 	}
 	function refreshProxies() { return fetchProxies().then(repaint); }
-	// chooseNode/testGroup are implemented in Task 6; stubs keep render wiring valid.
-	function chooseNode(_g, _m) { return Promise.resolve(); }
-	function testGroup(_g) { return Promise.resolve(); }
+	function setSortByLatency(on) { state.sortByLatency = !!on; repaint(); }
+	function chooseNode(groupName, member) {
+		// optimistic: reflect selection immediately, then resync from /proxies
+		if (state.proxies[groupName]) state.proxies[groupName].now = member;
+		renderGroups();
+		return callClashMutate('PUT', '/proxies/' + groupName,
+		                       JSON.stringify({ name: member }))
+			.then(refreshProxies, function () {
+				ui.addNotification(null, E('p', {}, _('Failed to switch node')));
+				return refreshProxies();
+			});
+	}
+
+	function testGroup(groupName) {
+		var grp = state.proxies[groupName];
+		if (!grp) return Promise.resolve();
+		var members = (grp.all || []).filter(function (m) {
+			var p = state.proxies[m];
+			return p && !isGroupType(p.type);   // don't probe nested groups
+		});
+		return Promise.all(members.map(function (m) {
+			return callClashDelay({ name: m, url: '', timeout: '5000' })
+				.then(function (res) {
+					var ms = 0;
+					if (res && res.status === 'ok') {
+						var d; try { d = JSON.parse(res.body); } catch (e) { d = {}; }
+						ms = (d && d.delay) || 0;
+					}
+					var p = state.proxies[m];
+					if (p) p.history = [ { delay: ms } ];
+				}, function () {
+					var p = state.proxies[m];
+					if (p) p.history = [ { delay: 0 } ];
+				})
+				.then(renderGroups);
+		}));
+	}
 
 	function latClass(ms) {
 		if (!(ms > 0)) return 'sb-lat-none';
@@ -87,9 +121,14 @@ function buildDashboard() {
 	function mountChrome() {
 		var widgets = E('div', { 'class': 'sb-dashboard-widgets' });
 		var groups  = E('div', { 'class': 'sb-dashboard-groups' });
+		var sortBtn = E('button', { 'class': 'btn cbi-button',
+			'click': function () { setSortByLatency(!state.sortByLatency); } },
+			_('Sort by latency'));
+		var toolbar = E('div', { 'class': 'sb-dashboard-toolbar' }, [ sortBtn ]);
 		root.innerHTML = '';
 		root.appendChild(widgets);
 		root.appendChild(groups);
+		root.appendChild(toolbar);
 		state.ui = { widgets: widgets, groups: groups };
 	}
 
@@ -214,7 +253,7 @@ function buildDashboard() {
 	}
 
 	return { node: root, start: start, stop: stop, poll: poll,
-	         refreshProxies: refreshProxies };
+	         refreshProxies: refreshProxies, setSortByLatency: setSortByLatency };
 }
 
 return L.Class.extend({ buildDashboard: buildDashboard });

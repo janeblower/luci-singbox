@@ -122,6 +122,35 @@ function ok(l,c){if(c)console.log('  PASS:',l);else{console.log('  FAIL:',l);fai
   ok('urltest rows are read-only (no click handler)',
      urltestRows.length>=1 && urltestRows.every((r)=>typeof r.attrs.click!=='function'));
 
+  // --- selector switch sends PUT /proxies/<group> {name} ---
+  let putPath=null, putBody=null;
+  ctx.__test.setMutate((method,path,bodyStr)=>{ putPath=method+' '+path; putBody=bodyStr;
+    return Promise.resolve({status:'ok'}); });
+  const s=Dash.buildDashboard();
+  await s.poll(); await s.refreshProxies();
+  const aRow=ctx.__test.find(s.node,(n)=>n.attrs&&n.attrs['data-group']==='GW'&&n.attrs['data-name']==='B'&&typeof n.attrs.click==='function');
+  ok('selector member B is clickable', !!aRow);
+  await aRow.attrs.click();
+  ok('selector click PUTs /proxies/GW', putPath==='PUT /proxies/GW');
+  ok('selector click body is {name:B}', JSON.parse(putBody).name==='B');
+
+  // --- latency test calls callClashDelay per member ---
+  const tested=[];
+  ctx.__test.setDelay((args)=>{ tested.push(args.name);
+    return Promise.resolve({status:'ok',body:JSON.stringify({delay:42})}); });
+  const t=Dash.buildDashboard();
+  await t.poll(); await t.refreshProxies();
+  const testBtn=ctx.__test.find(t.node,(n)=>n.tag==='button'&&typeof n.attrs.click==='function');
+  await testBtn.attrs.click();
+  ok('Test probes each member', tested.indexOf('A')>=0 && tested.indexOf('B')>=0);
+
+  // --- sort-by-latency reorders members fastest-first ---
+  const so=Dash.buildDashboard();
+  so.setSortByLatency(true);
+  await so.poll(); await so.refreshProxies();
+  const names=ctx.__test.findAll(so.node,(n)=>n.attrs&&/sb-dashboard-node-name/.test(n.attrs['class']||'')).map((n)=>n.textContent);
+  ok('sorted fastest-first (A before B)', names.indexOf('A')>=0 && names.indexOf('A')<names.indexOf('B'));
+
   process.exit(failures?1:0);
 })();
 NODE
