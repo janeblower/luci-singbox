@@ -1,0 +1,98 @@
+name: Pages
+
+# Rebuild the feed after every successful Build on main (so it tracks the rolling
+# `latest` release), or on demand. Build.yml is the workflow named "Build".
+on:
+  workflow_run:
+    workflows: ["Build"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two Pages deploys at once; let an in-flight deploy finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & deploy apk feed
+    runs-on: ubuntu-24.04
+    # workflow_run fires on completion regardless of result — gate on success.
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      # Same SDK as scripts/build-apk.sh — we only need its host `apk` tool.
+      SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install zstd
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zstd
+
+      - name: Cache OpenWrt SDK tarball
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/luci-singbox-ui/openwrt-sdk
+          key: pages-sdk-25.12.3-x86-64
+
+      - name: Extract apk host tool from SDK
+        id: sdk
+        run: |
+          set -euo pipefail
+          cache="$HOME/.cache/luci-singbox-ui/openwrt-sdk"
+          mkdir -p "$cache"
+          tb="$cache/$(basename "$SDK_URL")"
+          if [ ! -f "$tb" ]; then
+            wget -qO "$tb.part" "$SDK_URL"
+            mv -f "$tb.part" "$tb"
+          fi
+          sdkdir="$RUNNER_TEMP/sdk"
+          mkdir -p "$sdkdir"
+          tar --zstd -xf "$tb" -C "$sdkdir"
+          root="$(find "$sdkdir" -mindepth 1 -maxdepth 1 -type d | head -n1)"
+          apk="$root/staging_dir/host/bin/apk"
+          [ -x "$apk" ] || { echo "apk host tool not found at $apk" >&2; exit 1; }
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+
+      - name: Download latest release packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          gh release download latest --repo "$GITHUB_REPOSITORY" \
+            --pattern '*.apk' --pattern 'sha256sums.txt' --dir dist
+          ( cd dist && sha256sum -c sha256sums.txt )
+
+      - name: Write signing key
+        env:
+          APK_SIGN_KEY: ${{ secrets.APK_SIGN_KEY }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$RUNNER_TEMP/keys"
+          printf '%s\n' "$APK_SIGN_KEY" > "$RUNNER_TEMP/keys/luci-singbox.pem"
+          chmod 600 "$RUNNER_TEMP/keys/luci-singbox.pem"
+
+      - name: Build feed tree
+        env:
+          APK_BIN: ${{ steps.sdk.outputs.apk }}
+          FEED_SIGN_KEY: ${{ runner.temp }}/keys/luci-singbox.pem
+          PAGES_URL: https://janeblower.github.io/luci-singbox
+        run: sh scripts/build-feed.sh 25.12 dist public
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
