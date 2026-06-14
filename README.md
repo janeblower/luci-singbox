@@ -48,7 +48,7 @@ apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
 ```sh
 ARCH=$(apk --print-arch)
 wget -O /etc/apk/keys/luci-singbox.pem https://janeblower.github.io/luci-singbox/luci-singbox.pem
-echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox" > /etc/apk/repositories.d/luci-singbox.list
+echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox/packages.adb" > /etc/apk/repositories.d/luci-singbox.list
 apk update && apk add luci-singbox-ui
 ```
 
@@ -131,7 +131,7 @@ apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
 ```sh
 ARCH=$(apk --print-arch)
 wget -O /etc/apk/keys/luci-singbox.pem https://janeblower.github.io/luci-singbox/luci-singbox.pem
-echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox" > /etc/apk/repositories.d/luci-singbox.list
+echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox/packages.adb" > /etc/apk/repositories.d/luci-singbox.list
 apk update && apk add luci-singbox-ui
 ```
 

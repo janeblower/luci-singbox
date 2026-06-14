@@ -23,7 +23,7 @@
   <p>On the router (OpenWrt {{VERSION}}.x+, apk-based):</p>
   <pre><code>ARCH=$(apk --print-arch)
 wget -O /etc/apk/keys/luci-singbox.pem {{PAGES_URL}}/luci-singbox.pem
-echo "{{PAGES_URL}}/{{VERSION}}/$ARCH/luci-singbox" > /etc/apk/repositories.d/luci-singbox.list
+echo "{{PAGES_URL}}/{{VERSION}}/$ARCH/luci-singbox/packages.adb" > /etc/apk/repositories.d/luci-singbox.list
 apk update && apk add luci-singbox-ui</code></pre>
   <p class="note">OpenWrt 24.10.x and older use <code>.ipk</code> and are not served here — use the GitHub Releases artifacts instead.</p>
   <hr>
