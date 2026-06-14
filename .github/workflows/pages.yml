@@ -140,4 +140,7 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: public
           publish_branch: gh-pages
+          # Keep Jekyll ON: the midnight theme renders our _config.yml + index.md.
+          # Without this peaceiris drops a .nojekyll file and Pages serves raw .md.
+          enable_jekyll: true
           commit_message: "deploy feed: ${{ github.event.workflow_run.head_sha || github.sha }}"
