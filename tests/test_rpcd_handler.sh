@@ -194,7 +194,8 @@ EOF
 chmod +x "$tmpdir/ucode"
 out=$(echo '{"what":"all"}' | PATH="$tmpdir:$PATH" run_h call refresh)
 printf "%s\n" "$out" | je 'd.status == "ok"' || { echo "FAIL: refresh did not return ok"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
-grep -q "refresh all force" "$tmpdir/refresh.log" || { echo "FAIL: subscription.uc not invoked with refresh all force"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
+grep -q "subscription.uc refresh force" "$tmpdir/refresh.log" || { echo "FAIL: subscription.uc not invoked with 'refresh force'"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
+grep -q "nft-rulesets.uc refresh force" "$tmpdir/refresh.log" || { echo "FAIL: nft-rulesets.uc not invoked with 'refresh force'"; cat "$tmpdir/refresh.log" 2>/dev/null; exit 1; }
 
 echo "-- call with unknown method returns error"
 out=$(echo '{}' | run_h call frobnicate)

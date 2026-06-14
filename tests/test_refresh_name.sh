@@ -1,6 +1,6 @@
 #!/bin/sh
 # tests/test_refresh_name.sh
-# call_refresh forwards a valid `name` as the 4th CLI arg to subscription.uc and
+# call_refresh forwards a valid `name` as the 3rd CLI arg (`refresh force <name>`) to subscription.uc and
 # rejects an invalid name (falls back to a global refresh, no name forwarded).
 set -e
 cd "$(dirname "$0")/.."
@@ -26,7 +26,7 @@ callr() { # $1 = JSON args
 # valid name -> forwarded as a CLI arg
 got=$(callr '{"what":"subscriptions","name":"mysub"}')
 echo "$got" | grep -qx 'mysub' || { echo "FAIL: valid name not forwarded; argv=[$got]"; exit 1; }
-echo "$got" | grep -qx 'subscriptions' || { echo "FAIL: what not forwarded; argv=[$got]"; exit 1; }
+echo "$got" | grep -qx 'force' || { echo "FAIL: force not forwarded; argv=[$got]"; exit 1; }
 
 # invalid name (shell metachar) -> NOT forwarded (no 'a;b' token)
 got=$(callr '{"what":"subscriptions","name":"a;b rm"}')
