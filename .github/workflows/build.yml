@@ -214,11 +214,31 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # Short-circuit the whole expensive path (Rust cross-compile + 5 qemu test
+      # suites) when bbolt-client source is unchanged. The 5 output binaries are
+      # cached keyed on the source hash; on a hit the build/test steps below are
+      # skipped and the cached binaries are uploaded as the artifact verbatim, so
+      # a push that doesn't touch bbolt-client/ never rebuilds them. Cold cache =
+      # full build (no failure mode). Key lists source-relevant inputs only, so a
+      # docs-only edit under bbolt-client/ still hits.
+      - name: Restore prebuilt bbolt binaries
+        id: bbolt-cache
+        uses: actions/cache@v5
+        with:
+          path: |
+            bbolt-client/bbolt-client-rs-x86_64
+            bbolt-client/bbolt-client-rs-aarch64
+            bbolt-client/bbolt-client-rs-armv7
+            bbolt-client/bbolt-client-rs-mipsel
+            bbolt-client/bbolt-client-rs-mips
+          key: bbolt-bin-${{ runner.os }}-${{ hashFiles('bbolt-client/src/**', 'bbolt-client/build.sh', 'bbolt-client/Cargo.lock', 'bbolt-client/Cargo.toml', 'bbolt-client/rust-toolchain.toml') }}
+
       # Nightly + rust-src are required for -Z build-std (the toolchain is also
       # pinned in bbolt-client/rust-toolchain.toml). aarch64 cross-links with the
       # bundled rust-lld, so no cross-gcc is needed. llvm-tools provides
       # rust-objcopy, which build.sh uses to strip the MIPS .pdr section.
       - name: Install nightly + rust-src + llvm-tools
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: |
           rustup toolchain install nightly --profile minimal --component rust-src --component llvm-tools
           rustc +nightly --version
@@ -226,6 +246,7 @@ jobs:
       # Cache Cargo registry, git sources, and the Rust target directory.
       # cache `path:` is repo-root-relative (not affected by working-directory).
       - name: Cache Cargo + build artifacts
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         uses: actions/cache@v5
         with:
           path: |
@@ -237,26 +258,33 @@ jobs:
 
       # qemu-user lets us run cross-compiled binaries in the test steps below.
       - name: Install qemu-user
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: |
           sudo apt-get update
           sudo apt-get install -y qemu-user
 
       - name: Build (all 5 arches)
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: ./build.sh
 
       - name: Test x86_64 (native)
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: ./test.sh
 
       - name: Test aarch64 (qemu)
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: RUN="qemu-aarch64 target/aarch64-unknown-linux-gnu/release/bbolt-client-rs" ./test.sh
 
       - name: Test armv7 (qemu)
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: RUN="qemu-arm target/armv7-unknown-linux-gnueabihf/release/bbolt-client-rs" ./test.sh
 
       - name: Test mipsel (qemu)
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: RUN="qemu-mipsel target/mipsel-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
 
       - name: Test mips (qemu)
+        if: steps.bbolt-cache.outputs.cache-hit != 'true'
         run: RUN="qemu-mips target/mips-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
 
       # Upload binaries as a workflow artifact for the `build` job to consume.
