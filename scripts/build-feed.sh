@@ -13,6 +13,7 @@
 #   FEED_PUBKEY    public key copied to the feed root (default: feed/luci-singbox.pem)
 #   LANDING_TMPL   landing template (default: feed/landing.html)
 #   PAGES_URL      base URL substituted into the landing page
+#   RELEASE_REPO   owner/repo for release + GitHub links (default: janeblower/luci-singbox)
 #
 # Why the package files are renamed: apk-tools 3 indexes carry NO per-package
 # filename. The client reconstructs the download URL as "<name>-<version>.apk"
@@ -31,6 +32,7 @@ I18N="luci-i18n-singbox-ui-ru.apk"
 PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
 FEED_PUBKEY="${FEED_PUBKEY:-feed/luci-singbox.pem}"
 LANDING_TMPL="${LANDING_TMPL:-feed/landing.html}"
+RELEASE_REPO="${RELEASE_REPO:-janeblower/luci-singbox}"
 : "${APK_BIN:?APK_BIN required (path to apk tool)}"
 
 # Echo the "<name>-<version>.apk" filename apk reconstructs for a package file,
@@ -50,12 +52,21 @@ copy_pkg() {
   cp "$cp_src" "$cp_dir/$cp_name"
 }
 
-# Write a browsable index.html listing the entries of a directory.
+# Write a browsable index.html (themed to match the landing) listing a dir.
 gen_dir_index() {
   gi_dir="$1"; gi_title="$2"
   {
-    printf '<!DOCTYPE html>\n<html><head><meta charset="utf-8">'
-    printf '<title>%s</title></head><body>\n<h1>%s</h1>\n<ul>\n' "$gi_title" "$gi_title"
+    printf '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
+    printf '<meta name="viewport" content="width=device-width, initial-scale=1">'
+    printf '<title>%s</title>\n' "$gi_title"
+    printf '<style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;'
+    printf 'background:#e9ecef;color:#222;line-height:1.55}'
+    printf 'header{background:#353535;color:#f5f5f5;padding:1rem 1.25rem}'
+    printf 'header h1{margin:0 auto;max-width:56rem;font-size:1.2rem}'
+    printf 'main{max-width:56rem;margin:1.3rem auto;padding:0 1.25rem}'
+    printf 'ul{list-style:none;padding:0;margin:0}li{padding:.25rem 0}'
+    printf 'a{color:#2a7ae2;text-decoration:none}a:hover{text-decoration:underline}</style>'
+    printf '</head><body>\n<header><h1>%s</h1></header>\n<main>\n<ul>\n' "$gi_title"
     for gi_entry in "$gi_dir"/*; do
       [ -e "$gi_entry" ] || continue
       gi_name="$(basename "$gi_entry")"
@@ -63,7 +74,7 @@ gen_dir_index() {
       [ -d "$gi_entry" ] && gi_name="$gi_name/"
       printf '<li><a href="%s">%s</a></li>\n' "$gi_name" "$gi_name"
     done
-    printf '</ul>\n</body></html>\n'
+    printf '</ul>\n</main>\n</body></html>\n'
   } > "$gi_dir/index.html"
 }
 
@@ -89,6 +100,7 @@ rm -rf "$OUT"
 mkdir -p "$OUT/$VERSION"
 
 # Discover arches from the per-arch package filenames (never hardcode the list).
+ARCHES=""
 found=0
 for apk in "$DIST"/luci-singbox-ui-*.apk; do
   [ -e "$apk" ] || continue
@@ -96,6 +108,7 @@ for apk in "$DIST"/luci-singbox-ui-*.apk; do
   arch="${base#luci-singbox-ui-}"
   arch="${arch%.apk}"
   build_arch_dir "$arch"
+  ARCHES="$ARCHES $arch"
   found=1
 done
 [ "$found" = "1" ] || { echo "no luci-singbox-ui-*.apk in $DIST" >&2; exit 1; }
@@ -106,7 +119,20 @@ gen_dir_index "$OUT/$VERSION" "OpenWrt $VERSION - architectures"
 # Publish the public signing key at the feed root.
 cp "$FEED_PUBKEY" "$OUT/$REPO_NAME.pem"
 
-# Render the landing page at the feed root.
-sed -e "s#{{PAGES_URL}}#$PAGES_URL#g" -e "s#{{VERSION}}#$VERSION#g" "$LANDING_TMPL" > "$OUT/index.html"
+# Generate the per-arch direct-download list (stable tag-based latest URLs).
+DOWNLOADS=""
+# shellcheck disable=SC2086
+for a in $ARCHES; do
+  DOWNLOADS="$DOWNLOADS<li><a href=\"https://github.com/$RELEASE_REPO/releases/download/latest/luci-singbox-ui-$a.apk\">luci-singbox-ui-$a.apk</a></li>"
+done
+
+# Render the landing page at the feed root. Scalars + the generated list. The
+# list is a single line (no newlines / no '#' / '&'), so sed's '#' delimiter is
+# safe.
+sed -e "s#{{PAGES_URL}}#$PAGES_URL#g" \
+    -e "s#{{VERSION}}#$VERSION#g" \
+    -e "s#{{RELEASE_REPO}}#$RELEASE_REPO#g" \
+    -e "s#{{DOWNLOADS}}#$DOWNLOADS#g" \
+    "$LANDING_TMPL" > "$OUT/index.html"
 
 echo "feed built at $OUT"
