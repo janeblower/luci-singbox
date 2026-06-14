@@ -1,16 +1,33 @@
 #!/bin/sh
-# Install a crond entry that periodically refreshes subscriptions. The */15 tick
-# is only the CHECK cadence; subscription.uc honors each sub's sub_interval and
-# the global subscriptions.auto_update flag, so it's cheap when nothing is due.
-# Idempotent: never duplicates its own line.
+# Install crond entries that periodically refresh subscriptions AND nft
+# rule-sets. The */15 tick is only the CHECK cadence; each script honours its
+# own per-section interval (subscription.uc: sub_interval + the global
+# subscriptions.auto_update flag; nft-rulesets.uc: its own ruleset intervals),
+# so the tick is cheap when nothing is due. Idempotent: never duplicates its
+# own lines. Migrates the legacy single-script lines from before the split.
 CRONTAB="${SINGBOX_CRONTAB:-/etc/crontabs/root}"
 RELOAD="${SINGBOX_CRON_RELOAD:-/etc/init.d/cron}"
-LINE='*/15 * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh subscriptions'
+# Two entry-points now: subscriptions (subscription.uc) and nft rule-sets
+# (nft-rulesets.uc) have different update mechanisms. Cron ticks both; each
+# script honours its own per-section interval internally, so the */15 tick is
+# just a cheap "is anything due?" check.
+LINE_SUBS='*/15 * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh'
+LINE_RS='*/15 * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/nft-rulesets.uc refresh'
 
 mkdir -p "$(dirname "$CRONTAB")"
 touch "$CRONTAB"
-if ! grep -qF 'subscription.uc refresh subscriptions' "$CRONTAB"; then
-	printf '%s\n' "$LINE" >> "$CRONTAB"
+
+# Migrate legacy single-script lines from before the split: both the old
+# subs-only token form ('... subscription.uc refresh subscriptions') and the
+# old combined form ('... subscription.uc refresh all', previously installed by
+# 99-luci-singbox-ui). subscription.uc no longer accepts a positional 'what'.
+sed -i '/subscription\.uc refresh subscriptions/d; /subscription\.uc refresh all/d' "$CRONTAB"
+
+if ! grep -qxF "$LINE_SUBS" "$CRONTAB"; then
+	printf '%s\n' "$LINE_SUBS" >> "$CRONTAB"
+fi
+if ! grep -qxF "$LINE_RS" "$CRONTAB"; then
+	printf '%s\n' "$LINE_RS" >> "$CRONTAB"
 fi
 
 if [ "$RELOAD" = "true" ]; then
