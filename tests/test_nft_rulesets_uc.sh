@@ -150,4 +150,36 @@ fi
 	|| fail "S3-3: in-whitelist symlink: expected rs_rsOk.json to be produced"
 pass "S3-3: in-whitelist symlink target is allowed"
 
+# ---- regression: inbound nft_rules='1' is NOT treated as a ruleset ----
+# Fixture: a tproxy inbound carrying nft_rules='1' and NO config ruleset section.
+# The ruleset fetcher keys on UCI section KIND (sections_of_kind "ruleset"), so the
+# inbound must never be iterated. Guard against the old bug where it walked every
+# nft_rules='1' section regardless of kind (picking up tproxy inbounds -> staleness
+# fired forever -> infinite reload). A behavioral/log assertion: with the bug, the
+# fetcher would process 'tproxy_in' and log "unknown type 'tproxy' for tproxy_in";
+# correctly scoped, it logs "no rule-sets configured (nft_rules=1)" and stops.
+#
+# Drive `fetch` (not `refresh`) — fetch calls cmd_fetch_rulesets directly, so the
+# log is deterministic and not masked by the cold-cache reload backoff in refresh.
+echo "-- inbound nft_rules='1' is not treated as a ruleset"
+cat >"$TMPDIR/singbox-ui" <<'EOF'
+config cache 'cache'
+	option enabled '1'
+
+config inbound 'tproxy_in'
+	option type 'tproxy'
+	option enabled '1'
+	option nft_rules '1'
+EOF
+rm -f "$SINGBOX_TMPDIR"/rs_*.json
+out=$(SINGBOX_NO_RELOAD=1 run_uc fetch 2>&1 || true)
+echo "$out" | grep -q 'no rule-sets configured' \
+	|| { echo "[$out]"; fail "inbound-only fixture should yield 'no rule-sets configured' (ruleset scoping broken)"; }
+echo "$out" | grep -q 'tproxy_in' \
+	&& { echo "[$out]"; fail "ruleset fetcher referenced the inbound 'tproxy_in' (treated inbound as ruleset)"; }
+if ls "$SINGBOX_TMPDIR"/rs_*.json >/dev/null 2>&1; then
+	fail "inbound nft_rules=1 wrongly produced an rs_*.json (treated as ruleset)"
+fi
+pass "inbound nft_rules='1' is not treated as a ruleset"
+
 echo "OK"
