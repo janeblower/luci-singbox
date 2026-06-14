@@ -18,7 +18,7 @@ else
 	exit 0
 fi
 
-SUB_UC=luci-singbox-ui/root/usr/share/singbox-ui/subscription.uc
+SUB_UC=luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -80,7 +80,7 @@ config ruleset 'geoip'
 	option nft_rules '1'
 EOF
 rm -f "$SINGBOX_TMPDIR/rs_geoip.json"
-BBOLT_KNOWN="$BBOLT_KNOWN" run_uc fetch-rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="$BBOLT_KNOWN" run_uc fetch >/dev/null 2>&1 || true
 [ -s "$SINGBOX_TMPDIR/rs_geoip.json" ] || fail "rs_geoip.json missing (cache extract)"
 grep -q '1.2.3.0/24' "$SINGBOX_TMPDIR/rs_geoip.json" || fail "decompiled json wrong"
 pass "remote ruleset built from cache.db"
@@ -101,7 +101,7 @@ config ruleset 'geoip'
 	option nft_rules '1'
 EOF
 rm -f "$SINGBOX_TMPDIR/rs_geoip.json"
-out=$(BBOLT_KNOWN="geoip" run_uc fetch-rulesets 2>&1 || true)
+out=$(BBOLT_KNOWN="geoip" run_uc fetch 2>&1 || true)
 [ ! -f "$SINGBOX_TMPDIR/rs_geoip.json" ] || fail "must not build with cache disabled"
 echo "$out" | grep -qiE 'cache_file disabled|cache' || fail "expected cache-disabled log: $out"
 pass "cache disabled → skip+log"
@@ -117,7 +117,7 @@ config ruleset 'geoip'
 	option nft_rules '1'
 EOF
 rm -f "$SINGBOX_TMPDIR/rs_geoip.json"
-out=$(SINGBOX_BBOLT_BIN="$TMPDIR/bin/does-not-exist" run_uc fetch-rulesets 2>&1 || true)
+out=$(SINGBOX_BBOLT_BIN="$TMPDIR/bin/does-not-exist" run_uc fetch 2>&1 || true)
 [ ! -f "$SINGBOX_TMPDIR/rs_geoip.json" ] || fail "must not build without bbolt-client"
 echo "$out" | grep -qiE 'bbolt-client not installed' || fail "expected no-binary log: $out"
 pass "no bbolt-client → skip+log"
@@ -133,7 +133,7 @@ config ruleset 'missing'
 	option nft_rules '1'
 EOF
 rm -f "$SINGBOX_TMPDIR/rs_missing.json"
-out=$(BBOLT_KNOWN="" SINGBOX_BOOT_FETCH=1 run_uc fetch-rulesets 2>&1 || true)
+out=$(BBOLT_KNOWN="" SINGBOX_BOOT_FETCH=1 run_uc fetch 2>&1 || true)
 [ ! -f "$SINGBOX_TMPDIR/rs_missing.json" ] || fail "absent tag must not build"
 echo "$out" | grep -qiE 'not in cache' || fail "expected absent-tag log: $out"
 pass "absent tag (boot) → skip+log"
@@ -162,14 +162,14 @@ EOF
 
 # Cold: bbolt lists no keys → refresh must reload then time out the poll.
 : >"$RELOAD_LOG"
-BBOLT_KNOWN="" SINGBOX_RS_CACHE_WAIT=1 run_uc refresh rulesets force >/dev/null 2>&1 || true
+BBOLT_KNOWN="" SINGBOX_RS_CACHE_WAIT=1 run_uc refresh force >/dev/null 2>&1 || true
 grep -q reload-called "$RELOAD_LOG" || fail "cold tag did NOT trigger reload"
 pass "cold tag triggers reload"
 
 # Warm: bbolt lists the tag → no reload, rs_geoip.json built.
 : >"$RELOAD_LOG"
 rm -f "$SINGBOX_TMPDIR/rs_geoip.json"
-BBOLT_KNOWN="geoip" SINGBOX_RS_CACHE_WAIT=1 run_uc refresh rulesets force >/dev/null 2>&1 || true
+BBOLT_KNOWN="geoip" SINGBOX_RS_CACHE_WAIT=1 run_uc refresh force >/dev/null 2>&1 || true
 [ -s "$RELOAD_LOG" ] && fail "warm tag must NOT trigger reload"
 [ -s "$SINGBOX_TMPDIR/rs_geoip.json" ] || fail "warm refresh did not build rs_geoip.json"
 pass "warm tag: no reload, set rebuilt"
