@@ -11,8 +11,7 @@
 'require tools.widgets as widgets';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
 'require view.singbox-ui.tabs.outbounds as SbTabOutbounds';
-'require view.singbox-ui.tabs.rulesets as SbTabRulesets';
-'require view.singbox-ui.tabs.routing as SbTabRouting';
+'require view.singbox-ui.tabs.route as SbTabRoute';
 'require view.singbox-ui.tabs.dns as SbTabDns';
 'require view.singbox-ui.tabs.general as SbTabGeneral';
 'require view.singbox-ui.tabs.monitoring as SbTabMon';
@@ -50,22 +49,22 @@ return view.extend({
 		var self = this;
 		var mInbounds     = SbTabInbounds.buildInboundsMap();
 		var mOutbounds    = SbTabOutbounds.buildOutboundsMap();
-		var mRulesets     = SbTabRulesets.buildRulesetsMap();
-		var mRouteRules   = SbTabRouting.buildRouteRulesMap();
-		var mRouteDefault = SbTabRouting.buildRouteDefaultMap();
+		var mRouteRules   = SbTabRoute.buildRouteRulesMap();
+		var mRulesets     = SbTabRoute.buildRuleSetsMap();
+		var mRouteDefault = SbTabRoute.buildRouteDefaultMap();
 		var mDns          = SbTabDns.buildDnsMap();
 		var mGeneral      = SbTabGeneral.buildGeneralMap();
 		var mon           = SbTabMon.buildMonitoring();
 		var dash          = SbTabDash.buildDashboard();
 
-		self._maps = [ mInbounds, mOutbounds, mRulesets, mRouteRules, mRouteDefault, mDns, mGeneral ];
+		self._maps = [ mInbounds, mOutbounds, mRouteRules, mRulesets, mRouteDefault, mDns, mGeneral ];
 
 		return Promise.all(self._maps.map(function (m) { return m.render(); }))
 		.then(function (nodes) {
 			var inboundsNode   = nodes[0];
 			var outboundsNode  = nodes[1];
-			var rulesetsNode   = nodes[2];
-			var routerulesNode = nodes[3];
+			var routerulesNode = nodes[2];
+			var rulesetsNode   = nodes[3];
 			var routedefNode   = nodes[4];
 			var dnsNode        = nodes[5];
 			var generalNode    = nodes[6];
@@ -82,16 +81,14 @@ return view.extend({
 				'href': L.resource('view/singbox-ui/style.css')
 			});
 
-			var outputWrap = E('div', {}, [
+			var routeWrap = E('div', {}, [
 				E('ul', { 'class': 'cbi-tabmenu sb-subtab-header' }, [
-					E('li', { 'data-tab': 'outbounds'  }, _('Outbounds')),
-					E('li', { 'data-tab': 'rulesets'   }, _('Rule-Sets')),
 					E('li', { 'data-tab': 'routerules' }, _('Route Rules')),
+					E('li', { 'data-tab': 'rulesets'   }, _('Rule-Sets')),
 					E('li', { 'data-tab': 'routedef'   }, _('Default'))
 				]),
-				outboundsNode,
-				rulesetsNode,
 				routerulesNode,
+				rulesetsNode,
 				routedefNode
 			]);
 
@@ -101,14 +98,16 @@ return view.extend({
 				statusHolder,
 				E('ul', { 'class': 'cbi-tabmenu sb-tab-header' }, [
 					E('li', { 'data-tab': 'inbounds'   }, _('Inbounds')),
-					E('li', { 'data-tab': 'output'     }, _('Output')),
+					E('li', { 'data-tab': 'outbounds'  }, _('Outbounds')),
+					E('li', { 'data-tab': 'route'      }, _('Route')),
 					E('li', { 'data-tab': 'dns'        }, _('DNS')),
 					E('li', { 'data-tab': 'dashboard'  }, _('Dashboard')),
 					E('li', { 'data-tab': 'monitoring' }, _('Monitoring')),
 					E('li', { 'data-tab': 'general'    }, _('General'))
 				]),
 				inboundsNode,
-				outputWrap,
+				outboundsNode,
+				routeWrap,
 				dnsNode,
 				dash.node,
 				mon.node,
@@ -120,14 +119,14 @@ return view.extend({
 			// the 0-delay flicker setTimeout introduced (spec C2.2.10).
 			Promise.resolve().then(function () {
 				SbCommon.wireTabs(root, '.sb-subtab-header', {
-					outbounds:  outboundsNode,
-					rulesets:   rulesetsNode,
 					routerules: routerulesNode,
+					rulesets:   rulesetsNode,
 					routedef:   routedefNode
-				}, 'outbounds');
+				}, 'routerules');
 				SbCommon.wireTabs(root, '.sb-tab-header', {
 					inbounds:   inboundsNode,
-					output:     outputWrap,
+					outbounds:  outboundsNode,
+					route:      routeWrap,
 					dns:        dnsNode,
 					dashboard:  dash.node,
 					monitoring: mon.node,
