@@ -423,6 +423,10 @@ if (length(ARGV)) {
 	}
 }
 
+// NOTE: this file is invoked only by CLI path (init.d/cron/rpcd) and is NOT
+// require()-able — ucode rejects the hyphen in the module name. These exports are
+// therefore inert today; tests drive this module behaviorally via the CLI. Kept
+// for parity with subscription.uc and in case the file is ever made importable.
 return {
 	path_under_whitelist,
 	is_stale,

@@ -102,21 +102,6 @@ run_uc fetch-subs
 grep -q '^trojan://' "$SINGBOX_TMPDIR/sub_subA.txt" || fail "plain body not written"
 pass "plain body passthrough"
 
-# ---- fetch-rulesets: local source copy ----
-echo "-- fetch-rulesets copies local .json source to rs_<name>.json"
-mkdir -p "$TMPDIR/src"
-printf '%s' '{"version":1,"rules":[]}' >"$TMPDIR/src/r.json"
-cat >"$TMPDIR/singbox-ui" <<EOF
-config ruleset 'rA'
-	option type 'local'
-	option path '$TMPDIR/src/r.json'
-	option nft_rules '1'
-EOF
-run_uc fetch-rulesets
-[ -s "$SINGBOX_TMPDIR/rs_rA.json" ] || fail "rs_rA.json missing"
-grep -q '"rules"' "$SINGBOX_TMPDIR/rs_rA.json" || fail "rs_rA.json content wrong"
-pass "local source ruleset"
-
 # ---- SINGBOX_BOOT_FETCH=1 still fetches ----
 echo "-- SINGBOX_BOOT_FETCH=1 still fetches subs (boot path active)"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
@@ -193,32 +178,15 @@ run_uc fetch-subs                                  # warm cache
 old_mt=$(F="$SINGBOX_TMPDIR/sub_subA.txt" "$UCODE_BIN" -e 'let s=require("fs").stat(getenv("F")); print(s ? s.mtime : 0)')
 sleep 1
 : >"$FAKE_SINGBOX_LOG"
-SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions   # fresh → no-op
+SINGBOX_NO_RELOAD=1 run_uc refresh   # fresh → no-op
 new_mt=$(F="$SINGBOX_TMPDIR/sub_subA.txt" "$UCODE_BIN" -e 'let s=require("fs").stat(getenv("F")); print(s ? s.mtime : 0)')
 [ "$old_mt" = "$new_mt" ] || fail "fresh refresh re-downloaded"
 [ ! -s "$FAKE_SINGBOX_LOG" ] || fail "fresh refresh called sing-box fetch"
 pass "fresh refresh is no-op"
 
-SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions force
+SINGBOX_NO_RELOAD=1 run_uc refresh force
 [ -s "$FAKE_SINGBOX_LOG" ] || fail "forced refresh did not call sing-box fetch"
 pass "forced refresh re-downloads"
-
-# ---- regression: tproxy inbound with nft_rules='1' must NOT trigger a
-# ruleset refresh. Pre-fix any_rulesets_stale() walked every section that had
-# `nft_rules='1'`, including tproxy inbounds, whose rs_<name>.json never
-# exists — so the cron loop reloaded sing-box every 30 minutes for nothing.
-echo "-- inbound nft_rules='1' is not treated as a ruleset"
-cat >"$TMPDIR/singbox-ui" <<'EOF'
-config inbound 'tproxy_in'
-	option enabled '1'
-	option protocol 'tproxy'
-	option listen_port '7893'
-	option nft_rules '1'
-EOF
-: >"$FAKE_SINGBOX_LOG"
-SINGBOX_NO_RELOAD=1 run_uc refresh rulesets force
-[ ! -s "$FAKE_SINGBOX_LOG" ] || { echo "singbox.log:"; cat "$FAKE_SINGBOX_LOG"; fail "ruleset refresh fired on inbound"; }
-pass "inbound nft_rules='1' ignored by ruleset refresh"
 
 # ---- sub_update_via: outbound tag is passed to 'tools fetch -o' ----
 echo "-- sub_update_via outbound tag is passed to 'tools fetch -o'"
@@ -356,47 +324,6 @@ out2=$(run_probe "$VMESS_BAD_TAG")
 [ "$out1" = "$out2" ] || fail "safe_tag fallback not deterministic across runs"
 pass "safe_tag fallback is deterministic"
 
-# ---- C2.1.8: local ruleset path must be under a known prefix ----
-# Hostile (or accidental) UCI value path=/etc/shadow must NOT be copied into
-# the work dir. Only an LuCI admin can write UCI today, but defense in depth.
-echo "-- C2.1.8: local ruleset path outside whitelist is rejected"
-cat >"$TMPDIR/singbox-ui" <<'EOF'
-config ruleset 'rs1'
-	option type 'local'
-	option path '/root/secret.json'
-	option nft_rules '1'
-EOF
-rm -f "$SINGBOX_TMPDIR/rs_rs1.json" "$SINGBOX_TMPDIR/rs_rs1.raw"
-out=$(run_uc fetch-rulesets 2>&1 || true)
-echo "$out" | grep -qiE 'outside whitelist|invalid path|reject' \
-	|| { echo "$out"; fail "expected rejection log, got: $out"; }
-[ ! -f "$SINGBOX_TMPDIR/rs_rs1.json" ] && [ ! -f "$SINGBOX_TMPDIR/rs_rs1.raw" ] \
-	|| fail "rs_rs1 file should not have been created from disallowed path"
-pass "local ruleset path outside whitelist is rejected"
-
-echo "-- C2.1.8: local ruleset under /tmp is still accepted"
-mkdir -p "$TMPDIR/src"
-printf '%s' '{"version":1,"rules":[]}' >"$TMPDIR/src/ok.json"
-cat >"$TMPDIR/singbox-ui" <<EOF
-config ruleset 'rs2'
-	option type 'local'
-	option path '$TMPDIR/src/ok.json'
-	option nft_rules '1'
-EOF
-rm -f "$SINGBOX_TMPDIR/rs_rs2.json"
-# $TMPDIR resolves under /tmp on standard hosts; skip if not.
-case "$TMPDIR" in
-	/tmp/*|/var/*|/etc/*|/usr/share/*)
-		run_uc fetch-rulesets >/dev/null 2>&1 || true
-		[ -s "$SINGBOX_TMPDIR/rs_rs2.json" ] \
-			|| fail "whitelisted local ruleset should have been copied"
-		pass "whitelisted local ruleset is accepted"
-		;;
-	*)
-		echo "  SKIP: TMPDIR $TMPDIR not under a whitelist prefix"
-		;;
-esac
-
 # ---- C2.1.10: try_b64_decode requires recognized scheme in decoded payload ----
 # A plaintext body that, when run through b64dec, contains '://' but no line
 # starting with a known share-link scheme must NOT be silently re-decoded.
@@ -452,14 +379,6 @@ run_uc fetch-subs >/dev/null 2>&1 || true
 grep -qi '^HTTPS://example.test/upstream' "$SINGBOX_TMPDIR/sub_subD.txt" \
 	|| { cat "$SINGBOX_TMPDIR/sub_subD.txt"; fail "HTTPS:// URL not preserved"; }
 pass "plaintext HTTPS:// URL is accepted"
-
-# ---- C2.1.16: local-ruleset cp failure cleans up raw_path ----
-# Structural check: the local-ruleset error branch must explicitly unlink
-# raw_path so a partial copy can't poison subsequent runs.
-echo "-- C2.1.16: local-ruleset cp-failure branch removes raw_path"
-grep -qE 'fs\.unlink\(raw_path\)' "$SUB_UC" \
-	|| fail "subscription.uc: missing fs.unlink(raw_path) cleanup in local branch"
-pass "subscription.uc: local cp-failure cleans up raw_path"
 
 # ---- C2.3.11: detect_rs_format strips URL query/fragment before suffix check ----
 # Anchor: lib/helpers.uc detect_rs_format. URLs with ?ver=N or #frag must still
@@ -572,47 +491,6 @@ run_uc fetch-subs
 	|| fail "S3-2: oversize body (with a valid URL line) was NOT rejected by the size guard"
 pass "S3-2: oversize valid body rejected by post-read size guard"
 
-# ---- S3-3: symlink whose target escapes the whitelist is rejected ----
-# The symlink path itself is under /tmp (whitelisted), but its target resolves
-# to /proc/version, under no whitelist prefix. cp would follow it; the handler
-# resolves the link with fs.readlink (lstat exposes no target field) and
-# re-checks the prefix guard, which must reject it.
-echo "-- S3-3: local ruleset symlink escaping whitelist is rejected"
-mkdir -p "$TMPDIR/src"
-ln -sf /proc/version "$TMPDIR/src/sneaky.json"
-cat >"$TMPDIR/singbox-ui" <<EOF
-config ruleset 'rsLink'
-	option type 'local'
-	option path '$TMPDIR/src/sneaky.json'
-	option nft_rules '1'
-EOF
-rm -f "$SINGBOX_TMPDIR/rs_rsLink.json" "$SINGBOX_TMPDIR/rs_rsLink.raw"
-out=$(run_uc fetch-rulesets 2>&1 || true)
-echo "$out" | grep -qiE 'outside whitelist|symlink|resolved|unresolvable' \
-	|| { echo "$out"; fail "S3-3: expected rejection log for escaping symlink"; }
-[ ! -f "$SINGBOX_TMPDIR/rs_rsLink.json" ] && [ ! -f "$SINGBOX_TMPDIR/rs_rsLink.raw" ] \
-	|| fail "S3-3: escaping symlink should not have produced a file"
-pass "S3-3: symlink escaping whitelist is rejected"
-
-# Allow-case: a symlink under the whitelist pointing to an in-whitelist regular
-# file must NOT be rejected (proves the readlink re-check ALLOWS legit targets —
-# i.e. the guard isn't a blanket reject-all-symlinks). We assert the symlink
-# rejection log is absent for this ruleset; the source is a valid local file so
-# it proceeds past the symlink guard to the normal cp/decompile path.
-echo "-- S3-3: in-whitelist symlink target is allowed (recheck, not reject-all)"
-printf '{"version":1,"rules":[]}\n' > "$TMPDIR/src/real_ok.json"
-ln -sf "$TMPDIR/src/real_ok.json" "$TMPDIR/src/link_ok.json"
-cat >"$TMPDIR/singbox-ui" <<EOF
-config ruleset 'rsOk'
-	option type 'local'
-	option path '$TMPDIR/src/link_ok.json'
-	option nft_rules '1'
-EOF
-out=$(run_uc fetch-rulesets 2>&1 || true)
-echo "$out" | grep -qiE "rsOk.*(outside whitelist|unresolvable|relative)" \
-	&& { echo "$out"; fail "S3-3: in-whitelist symlink was wrongly rejected (reject-all regression)"; }
-pass "S3-3: in-whitelist symlink target is allowed"
-
 # ---- S3-4: non-numeric interval falls back to default (refresh still fires) ----
 echo "-- S3-4: NaN sub_interval clamps to default so refresh still runs"
 cat >"$TMPDIR/singbox-ui" <<'EOF'
@@ -627,7 +505,7 @@ export FAKE_SINGBOX_BODY_FILE="$TMPDIR/body"
 printf 'vless://old@host:1\n' >"$SINGBOX_TMPDIR/sub_subN.txt"
 touch -t 197001020000 "$SINGBOX_TMPDIR/sub_subN.txt"
 : >"$FAKE_SINGBOX_LOG"
-SINGBOX_NO_RELOAD=1 run_uc refresh subscriptions
+SINGBOX_NO_RELOAD=1 run_uc refresh
 [ -s "$FAKE_SINGBOX_LOG" ] \
 	|| { echo "singbox.log empty — refresh treated NaN interval as never-stale"; fail "S3-4: NaN interval disabled refresh"; }
 pass "S3-4: NaN interval clamped to default, refresh fired"
@@ -678,7 +556,7 @@ scope() {
 rm -rf "$TMPS"
 echo "  PASS: any_subs_stale honors per-section scoping"
 
-# --- auto_update gate: cron (non-force) subscriptions skipped when flag=0 ---
+# --- auto_update gate: cron (non-force) subs suppressed when flag=0 ---
 echo "-- auto_update gate: cron non-force skipped when flag=0"
 SINGBOX_DIR="$(dirname "$SUB_UC")"
 TMPG=$(mktemp -d); mkdir -p "$TMPG/uci"
@@ -687,28 +565,26 @@ config subscriptions 'subscriptions'
 	option auto_update '0'
 EOF
 # shellcheck disable=SC2086
-gate() { env UCI_CONFIG_DIR="$TMPG/uci" GATE_WHAT="$1" GATE_FORCE="$2" \
+gate() { env UCI_CONFIG_DIR="$TMPG/uci" GATE_FORCE="$1" \
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -L "$SINGBOX_DIR" -e '
   let s=require("subscription"); let uci=require("uci");
   let cur=uci.cursor(getenv("UCI_CONFIG_DIR"));
-  print(s._refresh_gate_what_for_test(cur, getenv("GATE_WHAT"), getenv("GATE_FORCE")==="1"));'; }
-[ "$(gate all 0)" = "rulesets" ]       || { echo "FAIL: all+noforce+flag0 -> rulesets, got $(gate all 0)"; rm -rf "$TMPG"; exit 1; }
-[ "$(gate subscriptions 0)" = "" ]     || { echo "FAIL: subs+noforce+flag0 -> '', got [$(gate subscriptions 0)]"; rm -rf "$TMPG"; exit 1; }
-[ "$(gate all 1)" = "all" ]            || { echo "FAIL: force bypasses gate, got $(gate all 1)"; rm -rf "$TMPG"; exit 1; }
+  print(s._subs_refresh_allowed_for_test(cur, getenv("GATE_FORCE")==="1") ? "yes" : "no");'; }
+[ "$(gate 0)" = "no" ]  || { echo "FAIL: non-force + flag0 must skip subs, got $(gate 0)"; rm -rf "$TMPG"; exit 1; }
+[ "$(gate 1)" = "yes" ] || { echo "FAIL: force bypasses gate, got $(gate 1)"; rm -rf "$TMPG"; exit 1; }
 rm -rf "$TMPG"
-# flag=1 (enabled) leaves what unchanged
 TMPG2=$(mktemp -d); mkdir -p "$TMPG2/uci"
 cat >"$TMPG2/uci/singbox-ui" <<'EOF'
 config subscriptions 'subscriptions'
 	option auto_update '1'
 EOF
 # shellcheck disable=SC2086
-gate2() { env UCI_CONFIG_DIR="$TMPG2/uci" GATE_WHAT="$1" \
+gate2() { env UCI_CONFIG_DIR="$TMPG2/uci" \
 	"$UCODE_BIN" $UCODE_LIB_FLAGS -L "$SINGBOX_DIR" -e '
   let s=require("subscription"); let uci=require("uci"); let cur=uci.cursor(getenv("UCI_CONFIG_DIR"));
-  print(s._refresh_gate_what_for_test(cur, getenv("GATE_WHAT"), false));'; }
-[ "$(gate2 all)" = "all" ] || { echo "FAIL: flag1 all -> all, got $(gate2 all)"; rm -rf "$TMPG2"; exit 1; }
+  print(s._subs_refresh_allowed_for_test(cur, false) ? "yes" : "no");'; }
+[ "$(gate2)" = "yes" ] || { echo "FAIL: flag1 non-force must allow subs, got $(gate2)"; rm -rf "$TMPG2"; exit 1; }
 rm -rf "$TMPG2"
-echo "PASS: auto_update gate rewrites what for cron only"
+echo "PASS: auto_update gate suppresses cron subs only when disabled"
 
 echo "OK"
