@@ -23,8 +23,9 @@ const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
 // `dynamic` marks a selector whose choices are populated at render time from
 // live UCI / network state (see descriptor_form.js attachDynamic), not from a
 // static `values` array.
-const KNOWN_DYNAMIC = { outbounds: 1, dns_servers: 1, interfaces: 1, devices: 1 };
-const KNOWN_COERCE  = { str: 1, num: 1, bool: 1, array: 1 };
+const KNOWN_DYNAMIC = { outbounds: 1, dns_servers: 1, interfaces: 1, devices: 1,
+                        rulesets: 1, route_rules: 1 };
+const KNOWN_COERCE  = { str: 1, num: 1, bool: 1, array: 1, num_array: 1 };
 const KNOWN_OMIT    = { empty: 1, never: 1 };
 
 function validate_field(f, ctx) {
@@ -108,8 +109,10 @@ function validate_users(u, ctx) {
 
 function register(descriptor) {
     assert(descriptor.kind != null,            "descriptor.kind required");
-    assert(descriptor.kind === "inbound" || descriptor.kind === "outbound" || descriptor.kind === "dns",
-        "descriptor.kind must be 'inbound', 'outbound', or 'dns'");
+    assert(descriptor.kind === "inbound" || descriptor.kind === "outbound" ||
+           descriptor.kind === "dns" || descriptor.kind === "route_rule" ||
+           descriptor.kind === "rule_set",
+        "descriptor.kind must be 'inbound', 'outbound', 'dns', 'route_rule', or 'rule_set'");
     assert(descriptor.type != null,            "descriptor.type required");
     // A descriptor builds its JSON either via a hand-written emit() (legacy /
     // escape-hatch) or declaratively via fields[] consumed by builder._filler.

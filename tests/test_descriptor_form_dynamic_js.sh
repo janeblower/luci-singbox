@@ -65,7 +65,34 @@ const uci = {
 			return [{ '.name': 'cloudflare', type: 'https' }];
 		if (config === 'network' && type === 'interface')
 			return [{ '.name': 'loopback' }, { '.name': 'lan' }, { '.name': 'wan' }];
+		if (config === 'singbox-ui' && type === 'ruleset')
+			return [{ '.name': 'rs_geoip', type: 'remote' }, { '.name': 'rs_ads', type: 'local' }];
+		if (config === 'singbox-ui' && type === 'route_rule')
+			return [
+				{ '.name': 'rule_default', type: 'default' },
+				{ '.name': 'rule_logical', type: 'logical' },
+			];
 		return [];
+	},
+};
+
+// SbViewState + SbCommon shims (require lines are stripped by the harness regex;
+// these inject the real APIs into the sandbox so the version-gate code works).
+const SbViewState = {
+	_ver: '',
+	getCoreVersion: function () { return SbViewState._ver; },
+	setCoreVersion: function (v) { SbViewState._ver = v || ''; },
+};
+const SbCommon = {
+	compareVersions: function (a, b) {
+		const pa = String(a).split('.').map(Number);
+		const pb = String(b).split('.').map(Number);
+		const len = Math.max(pa.length, pb.length);
+		for (let i = 0; i < len; i++) {
+			const na = pa[i] || 0, nb = pb[i] || 0;
+			if (na !== nb) return na > nb ? 1 : -1;
+		}
+		return 0;
 	},
 };
 const network = {
@@ -79,15 +106,17 @@ const network = {
 
 const sandbox = {
 	__moduleExports: null,
-	_:          (s) => s,
-	L:          { Class: { extend: (o) => o } },
-	form:       form,
-	ui:         {},
-	validators: validators,
-	uci:        uci,
-	network:    network,
-	console:    console,
-	Promise:    Promise,
+	_:           (s) => s,
+	L:           { Class: { extend: (o) => o } },
+	form:        form,
+	ui:          {},
+	validators:  validators,
+	uci:         uci,
+	network:     network,
+	SbViewState: SbViewState,
+	SbCommon:    SbCommon,
+	console:     console,
+	Promise:     Promise,
 };
 const ctx = vm.createContext(sandbox);
 vm.runInContext('(function() {' + body + '})();', ctx, { filename: 'descriptor_form.js' });
@@ -269,6 +298,69 @@ function test3() {
 	if (k.indexOf('h2') >= 0 && k.indexOf('http/1.1') >= 0 && k.indexOf('h3') >= 0)
 		pass('tls_alpn: suggestions populated');
 	else fail('tls_alpn suggestions', JSON.stringify(o._values));
+}
+
+// ---------------------------------------------------------------------------
+// 6. dynamic:"rulesets" + type:"list" → DynamicList (generic list branch).
+//    load() populates ruleset suggestions with name+(type) labels.
+// ---------------------------------------------------------------------------
+{
+	const { s, opts } = makeSection();
+	applyMaterialized(s, 'route_rule', 'default', {
+		tabs: ['match'],
+		fields: [{ name: 'rule_set', type: 'list', tab: 'match', dynamic: 'rulesets' }],
+	});
+	const o = findOpt(opts, 'rule_set');
+	if (o && o._widget === form.DynamicList) pass('rulesets list: dynamic rulesets + type list → DynamicList widget');
+	else fail('rulesets list widget', 'got ' + (o && o._widget && o._widget._tag));
+
+	if (o && typeof o.load === 'function') {
+		o.load.call(o, 'sid');
+		const k = keysOf(o);
+		if (k.indexOf('rs_geoip') >= 0 && k.indexOf('rs_ads') >= 0)
+			pass('rulesets list: load() populates ruleset suggestions');
+		else fail('rulesets list load values', JSON.stringify(o._values));
+	} else fail('rulesets list load', 'no load function attached');
+}
+
+// ---------------------------------------------------------------------------
+// 7. per-field min_version gate: field with min_version > core is skipped;
+//    field with min_version <= core (or unknown core) is rendered.
+// ---------------------------------------------------------------------------
+{
+	// 7a. core unknown → fail-open, both fields rendered.
+	SbViewState._ver = '';
+	const { s: s7a, opts: opts7a } = makeSection();
+	applyMaterialized(s7a, 'outbound', 'vless', {
+		tabs: ['basic'],
+		fields: [
+			{ name: 'new_field', type: 'string', tab: 'basic', min_version: '99.0.0' },
+			{ name: 'old_field', type: 'string', tab: 'basic' },
+		],
+	});
+	const nf7a = findOpt(opts7a, 'new_field');
+	const of7a = findOpt(opts7a, 'old_field');
+	if (nf7a) pass('min_version gate: core unknown → fail-open (new_field rendered)');
+	else fail('min_version gate fail-open', 'new_field was skipped despite unknown core');
+	if (of7a) pass('min_version gate: old_field without min_version always rendered');
+	else fail('min_version gate old_field', 'old_field missing');
+
+	// 7b. core 1.12.0, field requires 1.14.0 → field skipped.
+	SbViewState._ver = '1.12.0';
+	const { s: s7b, opts: opts7b } = makeSection();
+	applyMaterialized(s7b, 'outbound', 'vless', {
+		tabs: ['basic'],
+		fields: [
+			{ name: 'future_field', type: 'string', tab: 'basic', min_version: '1.14.0' },
+			{ name: 'compat_field', type: 'string', tab: 'basic', min_version: '1.12.0' },
+		],
+	});
+	const ff7b = findOpt(opts7b, 'future_field');
+	const cf7b = findOpt(opts7b, 'compat_field');
+	if (!ff7b) pass('min_version gate: 1.12 core, min_version 1.14 → field skipped');
+	else fail('min_version gate skip', 'future_field should be skipped on 1.12 core');
+	if (cf7b) pass('min_version gate: 1.12 core, min_version 1.12 → field rendered');
+	else fail('min_version gate compat', 'compat_field with matching version should render');
 }
 
 test3().then(function () {

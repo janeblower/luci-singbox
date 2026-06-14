@@ -32,7 +32,15 @@ function _emit_scalar(out, s, f) {
         if (type(f.requires) === "string") {
             if (!length(s_opt(s, f.requires))) return;
         } else {
-            if (s_opt(s, f.requires.field) !== f.requires.value) return;
+            let want = f.requires.value;
+            let have = s_opt(s, f.requires.field);
+            if (type(want) === "array") {
+                let hit = false;
+                for (let v in want) if (v === have) hit = true;
+                if (!hit) return;
+            } else if (have !== want) {
+                return;
+            }
         }
     }
     let coerce = f.coerce || "str";
@@ -51,6 +59,13 @@ function _emit_scalar(out, s, f) {
         // break the parity invariant for any future list-field conversion.)
         let a = as_array(s[f.name]);
         if (omit === "never" || length(a)) out[f.json_key] = a;
+        return;
+    }
+    if (coerce === "num_array") {
+        let a = as_array(s[f.name]);
+        let nums = [];
+        for (let v in a) { let n = +v; if (n == n) push(nums, n); }   // drop NaN
+        if (omit === "never" || length(nums)) out[f.json_key] = nums;
         return;
     }
     if (coerce === "num") {
@@ -178,6 +193,8 @@ function build(d, s) {
     if (d.kind === "inbound") {
         out = dial_blk.build_listen_base(s, d.sing_box_type);
         if (out == null) return null;
+    } else if (d.kind === "route_rule") {
+        out = {};                                  // rules have no type/tag header
     } else {
         out = { type: d.sing_box_type, tag: s[".name"] };
     }
