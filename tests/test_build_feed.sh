@@ -50,7 +50,6 @@ echo "DUMMY PUBLIC KEY" > "$TMP/pub.pem"
 # No FEED_SIGN_KEY -> unsigned index (signing needs a key + is covered live);
 # this test targets the filename/layout contract apk depends on.
 FEED_PUBKEY="$TMP/pub.pem" \
-LANDING_TMPL="$ROOT/feed/landing.html" \
 PAGES_URL="https://example.test/luci-singbox" \
 RELEASE_REPO="acme/luci-singbox" \
 APK_BIN="$APK" \
@@ -74,25 +73,31 @@ while read -r want; do
   [ -f "$d/$want" ] || fail "index references missing file: $want"
 done < "$TMP/want"
 
-# Public key published + landing rendered with substitutions.
+# Public key published at feed root.
 [ -f "$TMP/out/luci-singbox.pem" ] || fail "public key not published at feed root"
-[ -f "$TMP/out/index.html" ] || fail "landing index.html missing"
-grep -q "example.test/luci-singbox" "$TMP/out/index.html" || fail "PAGES_URL not substituted"
-grep -q "apk add luci-singbox-ui" "$TMP/out/index.html" || fail "install snippet missing"
-grep -q "packages.adb" "$TMP/out/index.html" || fail "repo URL must point at packages.adb"
-# No unsubstituted placeholders left in the rendered landing.
-grep -q "{{" "$TMP/out/index.html" && fail "unsubstituted {{...}} placeholder in landing"
-# RELEASE_REPO substituted into the GitHub links.
-grep -q "github.com/acme/luci-singbox" "$TMP/out/index.html" || fail "RELEASE_REPO not substituted"
-# Dynamic per-arch download link points at the stable latest-release URL.
-grep -q "releases/download/latest/luci-singbox-ui-x86_64.apk" "$TMP/out/index.html" \
-  || fail "direct-download link for built arch missing"
-# Browse pages carry the dark theme header.
-grep -q "background:#353535" "$TMP/out/25.12/index.html" || fail "browse page not themed"
 
-# Browsable indexes at version + arch levels.
-[ -f "$TMP/out/25.12/index.html" ] || fail "version-level index missing"
-[ -f "$TMP/out/25.12/x86_64/index.html" ] || fail "arch-level index missing"
+# The feed is published to the gh-pages branch and Jekyll-built by GitHub Pages
+# with jekyll-theme-midnight, so build-feed emits Jekyll sources, NOT HTML.
+[ -f "$TMP/out/_config.yml" ] || fail "_config.yml (Jekyll site config) missing"
+grep -q "jekyll-theme-midnight" "$TMP/out/_config.yml" || fail "midnight theme not configured"
+[ -f "$TMP/out/index.html" ] && fail "build-feed must not emit index.html (Jekyll renders .md)"
+
+# Root landing (index.md) rendered with substitutions, install snippet, no junk.
+[ -f "$TMP/out/index.md" ] || fail "landing index.md missing"
+grep -q "example.test/luci-singbox" "$TMP/out/index.md" || fail "PAGES_URL not substituted"
+grep -q "apk add luci-singbox-ui" "$TMP/out/index.md" || fail "install snippet missing"
+grep -q "packages.adb" "$TMP/out/index.md" || fail "repo URL must point at packages.adb"
+grep -q "github.com/acme/luci-singbox" "$TMP/out/index.md" || fail "RELEASE_REPO not substituted"
+# No unsubstituted placeholders left.
+grep -q "{{" "$TMP/out/index.md" && fail "unsubstituted {{...}} placeholder in landing"
+# Removed for good: the legacy .ipk note and the latest-release download block.
+grep -qi "ipk" "$TMP/out/index.md" && fail ".ipk mention must be gone (we have no .ipk)"
+grep -q "releases/download/latest" "$TMP/out/index.md" && fail "latest-release block must be gone"
+
+# Browsable Jekyll indexes at version + arch levels (index.md with front matter).
+[ -f "$TMP/out/25.12/index.md" ] || fail "version-level index.md missing"
+[ -f "$TMP/out/25.12/x86_64/index.md" ] || fail "arch-level index.md missing"
+grep -q "layout: default" "$TMP/out/25.12/index.md" || fail "browse page lacks Jekyll front matter"
 
 # Arch list derived from filenames: no stray arch dir.
 [ -d "$TMP/out/25.12/mips_24kc" ] && fail "unexpected arch dir (not in fixture dist)"

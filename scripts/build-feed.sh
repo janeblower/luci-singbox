@@ -1,6 +1,13 @@
 #!/bin/sh
 # Build a signed, browsable apk feed tree from already-built .apk packages.
 #
+# The output tree is published to a dedicated `gh-pages` branch (see
+# .github/workflows/pages.yml) and served by GitHub Pages' Jekyll build using
+# the jekyll-theme-midnight theme — same model as the awg-openwrt reference.
+# This script therefore emits Jekyll sources (`_config.yml` + `index.md` per
+# directory), NOT pre-rendered HTML. GitHub renders the `.md` files through the
+# theme at deploy time; the `.apk`/`.adb` binaries are passed through untouched.
+#
 # Usage: build-feed.sh <version> <dist_dir> <out_dir>
 #   version   OpenWrt minor used as the top path segment (e.g. 25.12)
 #   dist_dir  dir containing luci-singbox-ui-<arch>.apk + luci-i18n-...-ru.apk
@@ -11,9 +18,8 @@
 #   FEED_SIGN_KEY  private signing key; if set, the index is signed (production).
 #                  If empty, an unsigned index is produced (tests).
 #   FEED_PUBKEY    public key copied to the feed root (default: feed/luci-singbox.pem)
-#   LANDING_TMPL   landing template (default: feed/landing.html)
 #   PAGES_URL      base URL substituted into the landing page
-#   RELEASE_REPO   owner/repo for release + GitHub links (default: janeblower/luci-singbox)
+#   RELEASE_REPO   owner/repo for the GitHub source link (default: janeblower/luci-singbox)
 #
 # Why the package files are renamed: apk-tools 3 indexes carry NO per-package
 # filename. The client reconstructs the download URL as "<name>-<version>.apk"
@@ -31,7 +37,6 @@ REPO_NAME="luci-singbox"
 I18N="luci-i18n-singbox-ui-ru.apk"
 PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
 FEED_PUBKEY="${FEED_PUBKEY:-feed/luci-singbox.pem}"
-LANDING_TMPL="${LANDING_TMPL:-feed/landing.html}"
 RELEASE_REPO="${RELEASE_REPO:-janeblower/luci-singbox}"
 : "${APK_BIN:?APK_BIN required (path to apk tool)}"
 
@@ -52,30 +57,20 @@ copy_pkg() {
   cp "$cp_src" "$cp_dir/$cp_name"
 }
 
-# Write a browsable index.html (themed to match the landing) listing a dir.
+# Write a browsable Jekyll index.md (front matter + link list) for a directory.
+# Jekyll + the midnight theme render this; sub-entries are listed as md links.
 gen_dir_index() {
   gi_dir="$1"; gi_title="$2"
   {
-    printf '<!DOCTYPE html>\n<html lang="en"><head><meta charset="utf-8">'
-    printf '<meta name="viewport" content="width=device-width, initial-scale=1">'
-    printf '<title>%s</title>\n' "$gi_title"
-    printf '<style>body{margin:0;font-family:system-ui,-apple-system,sans-serif;'
-    printf 'background:#e9ecef;color:#222;line-height:1.55}'
-    printf 'header{background:#353535;color:#f5f5f5;padding:1rem 1.25rem}'
-    printf 'header h1{margin:0 auto;max-width:56rem;font-size:1.2rem}'
-    printf 'main{max-width:56rem;margin:1.3rem auto;padding:0 1.25rem}'
-    printf 'ul{list-style:none;padding:0;margin:0}li{padding:.25rem 0}'
-    printf 'a{color:#2a7ae2;text-decoration:none}a:hover{text-decoration:underline}</style>'
-    printf '</head><body>\n<header><h1>%s</h1></header>\n<main>\n<ul>\n' "$gi_title"
+    printf -- '---\nlayout: default\ntitle: %s\n---\n\n# %s\n\n' "$gi_title" "$gi_title"
     for gi_entry in "$gi_dir"/*; do
       [ -e "$gi_entry" ] || continue
       gi_name="$(basename "$gi_entry")"
-      [ "$gi_name" = "index.html" ] && continue
+      [ "$gi_name" = "index.md" ] && continue
       [ -d "$gi_entry" ] && gi_name="$gi_name/"
-      printf '<li><a href="%s">%s</a></li>\n' "$gi_name" "$gi_name"
+      printf -- '- [%s](%s)\n' "$gi_name" "$gi_name"
     done
-    printf '</ul>\n</main>\n</body></html>\n'
-  } > "$gi_dir/index.html"
+  } > "$gi_dir/index.md"
 }
 
 # Assemble one arch directory: copy apks (renamed), build/sign the index, indexes.
@@ -100,7 +95,6 @@ rm -rf "$OUT"
 mkdir -p "$OUT/$VERSION"
 
 # Discover arches from the per-arch package filenames (never hardcode the list).
-ARCHES=""
 found=0
 for apk in "$DIST"/luci-singbox-ui-*.apk; do
   [ -e "$apk" ] || continue
@@ -108,7 +102,6 @@ for apk in "$DIST"/luci-singbox-ui-*.apk; do
   arch="${base#luci-singbox-ui-}"
   arch="${arch%.apk}"
   build_arch_dir "$arch"
-  ARCHES="$ARCHES $arch"
   found=1
 done
 [ "$found" = "1" ] || { echo "no luci-singbox-ui-*.apk in $DIST" >&2; exit 1; }
@@ -119,20 +112,45 @@ gen_dir_index "$OUT/$VERSION" "OpenWrt $VERSION - architectures"
 # Publish the public signing key at the feed root.
 cp "$FEED_PUBKEY" "$OUT/$REPO_NAME.pem"
 
-# Generate the per-arch direct-download list (stable tag-based latest URLs).
-DOWNLOADS=""
-# shellcheck disable=SC2086
-for a in $ARCHES; do
-  DOWNLOADS="$DOWNLOADS<li><a href=\"https://github.com/$RELEASE_REPO/releases/download/latest/luci-singbox-ui-$a.apk\">luci-singbox-ui-$a.apk</a></li>"
-done
+# Jekyll site config — GitHub Pages renders the .md files with this theme.
+cat > "$OUT/_config.yml" <<EOF
+title: luci-singbox APK feed
+description: APK package feed for sing-box LuCI on OpenWrt ${VERSION}.x and newer
+theme: jekyll-theme-midnight
+EOF
 
-# Render the landing page at the feed root. Scalars + the generated list. The
-# list is a single line (no newlines / no '#' / '&'), so sed's '#' delimiter is
-# safe.
-sed -e "s#{{PAGES_URL}}#$PAGES_URL#g" \
-    -e "s#{{VERSION}}#$VERSION#g" \
-    -e "s#{{RELEASE_REPO}}#$RELEASE_REPO#g" \
-    -e "s#{{DOWNLOADS}}#$DOWNLOADS#g" \
-    "$LANDING_TMPL" > "$OUT/index.html"
+# Root landing page (Jekyll markdown). No legacy .ipk note, no latest-release
+# block — the feed itself is the install path; \$ARCH / \$(apk ...) stay literal.
+cat > "$OUT/index.md" <<EOF
+---
+layout: default
+title: luci-singbox APK feed
+---
+
+# luci-singbox APK feed
+
+Signed APK package feed for OpenWrt ${VERSION}.x and newer.
+
+## Install via feed
+
+On the router (OpenWrt ${VERSION}.x+, apk-based):
+
+\`\`\`sh
+ARCH=\$(apk --print-arch)
+wget -O /etc/apk/keys/luci-singbox.pem ${PAGES_URL}/luci-singbox.pem
+echo "${PAGES_URL}/${VERSION}/\$ARCH/luci-singbox/packages.adb" > /etc/apk/repositories.d/luci-singbox.list
+apk update && apk add luci-singbox-ui
+\`\`\`
+
+## Browse
+
+- [OpenWrt ${VERSION}](${VERSION}/) — packages by architecture
+
+Public signing key: [luci-singbox.pem](luci-singbox.pem)
+
+---
+
+Source: [${RELEASE_REPO}](https://github.com/${RELEASE_REPO})
+EOF
 
 echo "feed built at $OUT"
