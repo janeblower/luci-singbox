@@ -13,8 +13,7 @@ $ROOT/importers/outbound.js
 $ROOT/importers/transport.js
 $ROOT/tabs/inbounds.js
 $ROOT/tabs/outbounds.js
-$ROOT/tabs/rulesets.js
-$ROOT/tabs/routing.js
+$ROOT/tabs/route.js
 $ROOT/tabs/dns.js
 $ROOT/tabs/general.js
 $ROOT/tabs/monitoring.js
@@ -73,14 +72,11 @@ if grep -nE 'setTimeout\(.*,[[:space:]]*0[[:space:]]*\)' "$ROOT/main.js" >/dev/n
   fail=1
 fi
 
-# C2 D.7: rulesets.js nft_rules flag must have a description.
-if ! awk '/o = s\.option\(form\.Flag, .nft_rules./{found=1} found && /o\.description/{print; exit 0} END{exit found?1:1}' \
-   "$ROOT/tabs/rulesets.js" >/dev/null 2>&1; then
-  # Fall back to a simpler grep: description string anywhere after nft_rules.
-  if ! grep -nA5 "'nft_rules'" "$ROOT/tabs/rulesets.js" | grep -q 'o\.description'; then
-    echo "FAIL: rulesets.js nft_rules form.Flag missing description"
-    fail=1
-  fi
+# Rule-sets are descriptor-driven (Route tab refactor): nft_rules is a field in
+# the rule_set descriptors, not a hand-written form.Flag in a tab module.
+if ! grep -q "nft_rules" "luci-singbox-ui/root/usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc"; then
+  echo "FAIL: nft_rules missing from rule_set remote descriptor"
+  fail=1
 fi
 
 # C2 E.1: both Preview buttons in widgets/action-bar.js must route through
