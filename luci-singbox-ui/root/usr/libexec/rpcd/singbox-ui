@@ -3,7 +3,7 @@
 //   generate            run /usr/share/singbox-ui/generate.uc
 //   nftables {action}   run /usr/share/singbox-ui/nftables.uc apply|remove
 //   restart             restart /etc/init.d/singbox-ui (full service restart)
-//   refresh {what}      run subscription.uc refresh subscriptions|rulesets|all force
+//   refresh {what}      subscriptions->subscription.uc, rulesets->nft-rulesets.uc, all->both (force)
 //   status              return JSON: { running, subscriptions[], rulesets[] }
 //   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
 //   clash_get           proxy GET request to Clash API (read-side, read ACL)
@@ -13,7 +13,7 @@
 //   preview_config      dry-run: generate full config to a tmpfile, return body
 //
 // Env overrides (used by tests):
-//   NFTABLES_CMD GENERATE_UC SINGBOX_INIT SUBSCRIPTION_UC SINGBOX_TMP SINGBOX_CONFIG
+//   NFTABLES_CMD GENERATE_UC SINGBOX_INIT SUBSCRIPTION_UC RULESETS_UC SINGBOX_TMP SINGBOX_CONFIG
 //   EXPORT_SECTION_UC CLASH_CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
 //   SINGBOX_VARLIB
 
@@ -25,6 +25,7 @@ const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode -L /usr/share/singbox-ui/l
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
 const SINGBOX_INIT = getenv("SINGBOX_INIT") || "/etc/init.d/singbox-ui";
 const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subscription.uc";
+const RULESETS_UC      = getenv("RULESETS_UC") || "/usr/share/singbox-ui/nft-rulesets.uc";
 const EXPORT_SECTION_UC = getenv("EXPORT_SECTION_UC") || "/usr/share/singbox-ui/export_section.uc";
 const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
 const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
@@ -216,10 +217,17 @@ function call_refresh() {
 	}
 	let name = (type(args.name) === "string" && match(args.name, /^[A-Za-z0-9_-]+$/))
 	           ? args.name : "";
-	let argv = name !== ""
-		? uc_argv(SUBSCRIPTION_UC, "refresh", what, "force", name)
-		: uc_argv(SUBSCRIPTION_UC, "refresh", what, "force");
-	if (run(argv)) emit_ok();
+	let ok = true;
+	if (what === "subscriptions" || what === "all") {
+		let argv = name !== ""
+			? uc_argv(SUBSCRIPTION_UC, "refresh", "force", name)
+			: uc_argv(SUBSCRIPTION_UC, "refresh", "force");
+		if (!run(argv)) ok = false;
+	}
+	if (what === "rulesets" || what === "all") {
+		if (!run(uc_argv(RULESETS_UC, "refresh", "force"))) ok = false;
+	}
+	if (ok) emit_ok();
 	else emit_err(`refresh ${what} failed`);
 }
 
