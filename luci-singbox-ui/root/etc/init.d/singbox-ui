@@ -6,6 +6,7 @@ STOP=01
 
 GENERATE_UC=/usr/share/singbox-ui/generate.uc
 SUBSCRIPTION_UC=/usr/share/singbox-ui/subscription.uc
+RULESETS_UC=/usr/share/singbox-ui/nft-rulesets.uc
 NFTABLES_UC=/usr/share/singbox-ui/nftables.uc
 UCODE_LIB=/usr/share/singbox-ui/lib
 # Overridable so tests can stub the binary (default is the packaged path used by
@@ -19,7 +20,7 @@ start_service() {
 	# stays snappy. subscription.uc keeps prior sub_*.txt / rs_*.json files
 	# untouched on failure, so generate.uc falls back to the cache.
 	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$SUBSCRIPTION_UC" fetch-subs &
-	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$SUBSCRIPTION_UC" fetch-rulesets &
+	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$RULESETS_UC" fetch &
 	wait
 
 	ucode -L "$UCODE_LIB" "$GENERATE_UC"

@@ -94,8 +94,8 @@ PATH="$TMPDIR/bin:$PATH" sh -c "
 "
 
 # 1) Both fetch invocations happened.
-grep -q 'fetch-subs' "$UCODE_LOG"     || fail "fetch-subs not invoked"
-grep -q 'fetch-rulesets' "$UCODE_LOG" || fail "fetch-rulesets not invoked"
+grep -q 'fetch-subs' "$UCODE_LOG"       || fail "fetch-subs not invoked"
+grep -q 'nft-rulesets' "$UCODE_LOG"    || fail "nft-rulesets fetch not invoked"
 pass "subs + rulesets fetched"
 
 # 2) SINGBOX_BOOT_FETCH=1 was exported.
