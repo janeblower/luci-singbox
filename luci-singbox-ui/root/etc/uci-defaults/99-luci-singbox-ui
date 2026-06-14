@@ -26,26 +26,6 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
 # Reload rpcd so the new ACL JSON is picked up.
 /etc/init.d/rpcd reload >/dev/null 2>&1
 
-# Install cron entry: refresh subscriptions+rulesets on a fixed interval.
-# Per-section update_interval / sub_interval is honoured by subscription.uc itself.
-# Single source of truth for the cadence — bump CRON_INTERVAL_MIN to change it.
-CRON_INTERVAL_MIN=30  # how often subscription/ruleset refresh runs (minutes)
-CRON_LINE="*/${CRON_INTERVAL_MIN} * * * * /usr/bin/ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/subscription.uc refresh all >/dev/null 2>&1"
-CRON_FILE=/etc/crontabs/root
-mkdir -p "$(dirname "$CRON_FILE")"
-touch "$CRON_FILE"
-# Drop legacy refresh.sh line from prior package versions, then ensure the
-# current ucode line is present exactly once.
-if grep -qF '/usr/share/singbox-ui/refresh.sh' "$CRON_FILE" \
-	|| ! grep -qF "$CRON_LINE" "$CRON_FILE"; then
-	tmp=$(mktemp)
-	grep -vF '/usr/share/singbox-ui/refresh.sh' "$CRON_FILE" \
-		| grep -vF '/usr/share/singbox-ui/subscription.uc' > "$tmp"
-	echo "$CRON_LINE" >> "$tmp"
-	mv "$tmp" "$CRON_FILE"
-	/etc/init.d/cron restart >/dev/null 2>&1 || /etc/init.d/cron start >/dev/null 2>&1
-fi
-
 # ---------------------------------------------------------------------------
 # Migrate legacy FakeIP list form (multiple `list inet*_range`) to scalar
 # `option inet*_range`. sing-box 1.12+ rejects array form; we now expose only
