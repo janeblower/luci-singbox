@@ -20,6 +20,17 @@ if [ -z "$APK" ] || ! "$APK" --version 2>/dev/null | grep -q "apk-tools 3"; then
   exit 0
 fi
 
+# Fixtures below are built with `apk mkpkg --info KEY:VALUE` (apk-tools 3.0.5+).
+# Some OpenWrt apk-tools 3 builds — including the CI qemu image — predate the
+# --info long option and abort fixture creation with "unrecognized option
+# 'info'", which would fail the whole suite. Probe once and SKIP gracefully when
+# the running apk can't build fixtures; real coverage still runs wherever a
+# capable apk exists (host SDK copy, dev boxes).
+if ! "$APK" mkpkg --help 2>&1 | grep -q -- '--info'; then
+  echo "SKIP test_build_feed: apk mkpkg lacks --info (apk-tools build too old)"
+  exit 0
+fi
+
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 # Build two real apks named like the GitHub release assets (arch in the filename,
