@@ -32,3 +32,26 @@ out=$("$UCODE_BIN" -L "$LIB" -e '
 echo "$out"
 echo "$out" | grep -q '^OK$' || { echo "FAIL"; exit 1; }
 echo "test_route_filler: PASS"
+
+out2=$("$UCODE_BIN" -L "$LIB" -e '
+  let filler = require("builder._filler");
+  let action = require("builder._shared.route_action");
+  let d = { kind:"route_rule", sing_box_type:"",
+            fields:[ ...action.fields() ] };
+  // sniff
+  let o = filler.build(d, { [".name"]:"a1", action:"sniff", sniffer:["tls","http"], timeout:"500ms" });
+  let ok = (o.action === "sniff" && o.sniffer[0] === "tls" && o.timeout === "500ms" && o.outbound == null);
+  // reject
+  let o2 = filler.build(d, { [".name"]:"a2", action:"reject", method:"drop" });
+  ok = ok && (o2.action === "reject" && o2.method === "drop");
+  // resolve
+  let o3 = filler.build(d, { [".name"]:"a3", action:"resolve", server:"dns1", strategy:"prefer_ipv4" });
+  ok = ok && (o3.action === "resolve" && o3.server === "dns1" && o3.strategy === "prefer_ipv4");
+  // route-options override shared with route
+  let o4 = filler.build(d, { [".name"]:"a4", action:"route-options", override_port:"443" });
+  ok = ok && (o4.action === "route-options" && o4.override_port === 443);
+  print(ok ? "OK\n" : sprintf("BAD %J %J %J %J\n", o, o2, o3, o4));
+')
+echo "$out2"
+echo "$out2" | grep -q '^OK$' || { echo "FAIL action"; exit 1; }
+echo "test_route_filler(action): PASS"
