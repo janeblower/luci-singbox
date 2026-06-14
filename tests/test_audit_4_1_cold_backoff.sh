@@ -35,7 +35,7 @@ else
 	exit 0
 fi
 
-SUB_UC=luci-singbox-ui/root/usr/share/singbox-ui/subscription.uc
+SUB_UC=luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -117,15 +117,15 @@ echo "-- 4.1: dead cold tag reloads ONCE, then backs off (no teardown loop)"
 # First refresh (cron path, no force): no sentinel yet → eligible → exactly one
 # reload, still cold. Throttle assertions use the cron path on purpose — a UI
 # force-refresh deliberately overrides the backoff (covered in the BUG2 block).
-BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "first cold refresh should reload exactly once (got $(count_reloads))"
 [ -f "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt" ] || fail "backoff sentinel not stamped for dead tag"
 pass "first cold refresh reloads once and stamps sentinel"
 
 # Second + third refresh within the backoff window: tag still cold but its
 # update_interval (1 day) has NOT elapsed → must NOT reload again.
-BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
-BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "dead tag re-reloaded inside backoff window (got $(count_reloads), expected 1)"
 pass "subsequent refreshes inside backoff window do NOT reload (teardown loop fixed)"
 
@@ -137,7 +137,7 @@ echo "-- 4.1: elapsed backoff makes the dead tag retry-eligible again"
 touch -d '2000-01-01 00:00:00' "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt" 2>/dev/null \
 	|| touch -t 200001010000 "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
 : >"$RELOAD_LOG"
-BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "elapsed-backoff cold tag should reload once (got $(count_reloads))"
 pass "after update_interval elapses, cold tag is retry-eligible again"
 
@@ -147,7 +147,7 @@ echo "-- 4.1: warm tag NEVER reloads and clears any stale sentinel"
 rm -f "$SINGBOX_TMPDIR/rs_deadrs.json"
 # Pre-plant a sentinel; a tag that is now warm must clear it and never reload.
 echo 123 >"$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
-BBOLT_KNOWN="deadrs" run_uc refresh rulesets force >/dev/null 2>&1 || true
+BBOLT_KNOWN="deadrs" run_uc refresh force >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 0 ] || fail "warm tag MUST NOT trigger reload (got $(count_reloads))"
 [ -s "$SINGBOX_TMPDIR/rs_deadrs.json" ] || fail "warm refresh did not build rs_deadrs.json"
 [ ! -f "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt" ] || fail "warm extract did not clear cold sentinel"
@@ -162,7 +162,7 @@ echo "-- 4.1: a cold tag that recovers becomes immediately eligible again"
 # logic — otherwise the fresh json would short-circuit the whole branch.
 : >"$RELOAD_LOG"
 rm -f "$SINGBOX_TMPDIR/rs_deadrs.json"
-BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "recovered-then-cold tag should reload once (got $(count_reloads))"
 pass "cleared sentinel → cold tag eligible without waiting a full interval"
 
@@ -171,7 +171,7 @@ echo "-- 4.6: failed cache extract leaves no stray rs_*.raw at the real path"
 # bbolt -r exits 1 (unknown tag) → cache_extract_srs must clean up its temp file
 # and leave neither rs_deadrs.raw nor a 0-byte file behind.
 rm -f "$SINGBOX_TMPDIR/rs_deadrs.raw" "$SINGBOX_TMPDIR"/rs_deadrs.raw.tmp.*
-BBOLT_KNOWN="" SINGBOX_BOOT_FETCH=1 run_uc fetch-rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" SINGBOX_BOOT_FETCH=1 run_uc fetch >/dev/null 2>&1 || true
 [ ! -f "$SINGBOX_TMPDIR/rs_deadrs.raw" ] || fail "failed extract left a stray rs_deadrs.raw"
 # No leftover temp siblings either.
 if ls "$SINGBOX_TMPDIR"/rs_deadrs.raw.tmp.* >/dev/null 2>&1; then
@@ -194,7 +194,7 @@ chmod +x "$TMPDIR/bin/sleep"
 # sleep the poll must return quickly (we cap at 8s as a hang sentinel).
 rm -f "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
 start=$(date +%s)
-BBOLT_KNOWN="" SINGBOX_RS_CACHE_WAIT=5 run_uc refresh rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" SINGBOX_RS_CACHE_WAIT=5 run_uc refresh >/dev/null 2>&1 || true
 elapsed=$(( $(date +%s) - start ))
 [ "$elapsed" -le 8 ] || fail "wait_for_tags busy-spun/hung with broken sleep (${elapsed}s)"
 pass "wait_for_tags bails on broken sleep (${elapsed}s)"
@@ -216,7 +216,7 @@ rm -f "$SINGBOX_TMPDIR/rs_deadrs.json"
 # busybox date has no -d, so use a fixed far-future -t stamp (CCYYMMDDhhmm,
 # kept < 2038 to stay 32-bit-safe) to force mtime > now on every platform.
 touch -t 203501010000 "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
-BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "future-dated sentinel wedged the tag (got $(count_reloads), expected 1)"
 pass "future-dated sentinel is treated as eligible, not wedged"
 
@@ -230,13 +230,13 @@ echo "-- 4.1 BUG2: force-refresh overrides the backoff; cron (no force) does not
 date +%s >"$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
 touch "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
 # (a) cron path: refresh WITHOUT the "force" arg → still backing off → no reload.
-BBOLT_KNOWN="" run_uc refresh rulesets >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 0 ] || fail "non-force refresh inside backoff reloaded (got $(count_reloads), expected 0)"
 pass "cron refresh (no force) stays throttled inside the backoff window"
 
 # (b) force path: same fresh sentinel, but force=true → backoff overridden → one
 #     reload, and the sentinel is re-stamped (tag still cold after the poll).
-BBOLT_KNOWN="" run_uc refresh rulesets force >/dev/null 2>&1 || true
+BBOLT_KNOWN="" run_uc refresh force >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "force-refresh did not override backoff (got $(count_reloads), expected 1)"
 pass "force-refresh overrides the backoff window and reloads"
 
