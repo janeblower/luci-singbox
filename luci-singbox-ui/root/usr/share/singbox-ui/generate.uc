@@ -101,6 +101,16 @@ let ref_seen = {};
 for (let n in referenced) ref_seen[n] = true;
 for (let n in dns_mod.referenced_rulesets(uci))
 	if (!ref_seen[n]) { push(referenced, n); ref_seen[n] = true; }
+// An enabled inline rule-set that nothing references is dead config: it is not
+// emitted (build_rule_sets only builds referenced sets), yet route.uc still
+// suppresses its member default rules from top-level emission. Warn so the
+// "vanished rules" surprise is diagnosable (the UI also badges them inline:X).
+uci.foreach("singbox-ui", "ruleset", function(s) {
+	if (s.enabled === "0") return;
+	if ((s.type ?? "remote") !== "inline") return;
+	if (!ref_seen[s[".name"]])
+		warn(sprintf("generate.uc: inline rule-set '%s' is enabled but unreferenced; its member rules are not applied\n", s[".name"]));
+});
 let rsets = ruleset_mod.build_rule_sets(uci, referenced);
 if (length(rsets) || length(r.rules) || r.final) {
 	config.route = {};
