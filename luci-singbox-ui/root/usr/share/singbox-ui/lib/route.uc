@@ -1,109 +1,145 @@
-// lib/route.uc — sing-box `route.rules` and final outbound; reports referenced rulesets.
+// lib/route.uc — sing-box route.rules + final outbound; reports referenced
+// rulesets. Per-rule JSON is built declaratively via builder.route descriptors
+// + builder._filler; this module owns the cross-cutting logic: auto hijack-dns,
+// ruleset-ref resolution + referenced[] tracking, dangling-outbound drop,
+// logical inlining, and top-level exclusion of consumed sub-rules.
 
-// build_route_rules(cur) -> { rules, final, referenced }
-//   rules:      array of route.rule objects (rule_set / inbound / ... matched to outbound)
-//   final:      string tag of the final outbound, or null
-//   referenced: array of (deduped) ruleset names actually referenced by enabled route_rules,
-//               filtered to those whose ruleset section is enabled.
-// valid_ob (optional): a { tag: true } set of outbound tags that actually
-// exist in the generated outbounds[] (disabled/deleted ones already excluded
-// by outbound.uc). When provided, route_rule.outbound / route_default.outbound
-// references that don't resolve are dropped with a warn instead of being
-// emitted as a dangling tag that makes sing-box refuse to start (S3.2). When
-// omitted (direct unit-test callers), no outbound filtering is applied.
+let reg      = require("builder.route.registry");   // eager-loads route_rule/rule_set descriptors
+let filler   = require("builder._filler");
+let headless = require("builder.route.headless");
+
+// build_route_rules(cur, valid_ob) -> { rules, final, referenced }
 function build_route_rules(cur, valid_ob) {
-	let rules = [];
-	let referenced = [];
-	let seen = {};
-	function ob_ok(tag) { return !valid_ob || valid_ob[tag]; }
+    let rules = [];
+    let referenced = [];
+    let seen = {};
+    function ob_ok(tag) { return !valid_ob || valid_ob[tag]; }
 
-	// hijack-dns is requested by any enabled tproxy inbound with hijack_dns=1.
-	let hijack = false;
-	cur.foreach("singbox-ui", "inbound", function(s) {
-		if (s.enabled === "0") return;
-		if (s.protocol === "tproxy" && s.hijack_dns === "1") hijack = true;
-	});
-	if (hijack)
-		push(rules, { protocol: "dns", action: "hijack-dns" });
+    // hijack-dns from tproxy inbounds (must precede user rules).
+    let hijack = false;
+    cur.foreach("singbox-ui", "inbound", function(s) {
+        if (s.enabled === "0") return;
+        if (s.protocol === "tproxy" && s.hijack_dns === "1") hijack = true;
+    });
+    if (hijack) push(rules, { protocol: "dns", action: "hijack-dns" });
 
-	// Auto-emit hijack-dns rules for direct inbounds flagged as DNS listeners.
-	// Must precede user-defined rules so DNS gets dispatched before any
-	// other matching logic sees the connection.
-	cur.foreach("singbox-ui", "inbound", function(s) {
-		if (s.enabled === "0") return;
-		if (s.protocol !== "direct") return;
-		if (s.dns_listener !== "1") return;
-		push(rules, { inbound: s[".name"], action: "hijack-dns" });
-	});
+    cur.foreach("singbox-ui", "inbound", function(s) {
+        if (s.enabled === "0") return;
+        if (s.protocol !== "direct") return;
+        if (s.dns_listener !== "1") return;
+        push(rules, { inbound: s[".name"], action: "hijack-dns" });
+    });
 
-	// Build a quick name→enabled lookup for rulesets. Disabled rulesets are
-	// dropped from each route_rule's `rule_set` list; if that empties the
-	// list, the route_rule itself is skipped (matches original behavior).
-	let rs_enabled = {};
-	cur.foreach("singbox-ui", "ruleset", function(s) {
-		rs_enabled[s[".name"]] = (s.enabled !== "0");
-	});
+    // ruleset enabled lookup.
+    let rs_enabled = {};
+    cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = (s.enabled !== "0"); });
 
-	cur.foreach("singbox-ui", "route_rule", function(section) {
-		if (section.enabled === "0") return;
+    // index route_rule sections; collect the consumed set (refs from logical
+    // route_rules and inline rulesets) so consumed default rules are NOT emitted
+    // top-level.
+    let rr_by_name = {};
+    cur.foreach("singbox-ui", "route_rule", function(s) { rr_by_name[s[".name"]] = s; });
 
-		let refs = section.ruleset ?? [];
-		if (type(refs) === "string") refs = [ refs ];
+    function ref_list(s) {
+        let refs = s.rules ?? [];
+        if (type(refs) === "string") refs = [ refs ];
+        return refs;
+    }
+    let consumed = {};
+    cur.foreach("singbox-ui", "route_rule", function(s) {
+        if (s.enabled === "0") return;
+        if ((s.type ?? "default") !== "logical") return;
+        for (let n in ref_list(s)) consumed[n] = true;
+    });
+    cur.foreach("singbox-ui", "ruleset", function(s) {
+        if (s.enabled === "0") return;
+        if ((s.type ?? "remote") !== "inline") return;
+        for (let n in ref_list(s)) consumed[n] = true;
+    });
 
-		let resolved = [];
-		for (let rs_name in refs) {
-			if (!rs_enabled[rs_name]) continue;   // missing or disabled
-			if (!seen[rs_name]) { push(referenced, rs_name); seen[rs_name] = true; }
-			push(resolved, rs_name);
-		}
-		if (!length(resolved)) return;
+    // resolve+track rule_set matcher refs on a built rule (drop disabled/missing).
+    function resolve_rulesets(rule) {
+        if (rule.rule_set == null) return;
+        let resolved = [];
+        for (let n in rule.rule_set) {
+            if (!rs_enabled[n]) continue;
+            if (!seen[n]) { push(referenced, n); seen[n] = true; }
+            push(resolved, n);
+        }
+        if (length(resolved)) rule.rule_set = resolved;
+        else delete rule.rule_set;
+    }
 
-		let action = section.action ?? "direct";
-		// sing-box 1.11+ removed the `block` outbound; the replacement is a
-		// rule with `action: "reject"` (no outbound). Direct/outbound rules
-		// get the explicit `action: "route"` that sing-box 1.14 will require
-		// (1.12 already warns when it's missing on dial fields).
-		if (action === "block") {
-			push(rules, { action: "reject", rule_set: resolved });
-			return;
-		}
-		let target;
-		if (action === "direct")        target = "direct";
-		else if (action === "outbound") target = section.outbound;
-		if (!target) return;
-		// S3.2: skip the rule if its outbound target no longer exists/enabled.
-		if (!ob_ok(target)) {
-			warn(sprintf("route.uc: route_rule '%s' outbound '%s' is not a defined outbound; dropping rule\n", section[".name"], target));
-			return;
-		}
+    // validate action target; return false to drop the rule.
+    function action_ok(rule, name) {
+        // Only `route` requires an outbound. reject/hijack-dns/sniff/resolve/
+        // route-options carry no outbound (route-options' outbound field is
+        // filler-gated to action=route), so they pass through unvalidated.
+        if (rule.action === "route") {
+            if (!length(rule.outbound ?? "")) {
+                warn(sprintf("route.uc: route_rule '%s' action=route with no outbound; dropping\n", name));
+                return false;
+            }
+            if (!ob_ok(rule.outbound)) {
+                warn(sprintf("route.uc: route_rule '%s' outbound '%s' is not a defined outbound; dropping\n", name, rule.outbound));
+                return false;
+            }
+        }
+        return true;
+    }
 
-		push(rules, { action: "route", rule_set: resolved, outbound: target });
-	});
+    cur.foreach("singbox-ui", "route_rule", function(s) {
+        if (s.enabled === "0") return;
+        let t = s.type ?? "default";
+        let name = s[".name"];
+        if (t === "default" && consumed[name]) return;   // consumed -> nested only
 
-	let final = null;
-	let rd = cur.get_all("singbox-ui", "route_default");
-	if (rd) {
-		let action = rd.action ?? "direct";
-		if (action === "direct")        final = "direct";
-		else if (action === "outbound") {
-			final = rd.outbound ?? null;
-			// S3.2: drop a dangling final outbound (sing-box hard-fails on it).
-			if (final && !ob_ok(final)) {
-				warn(sprintf("route.uc: route_default outbound '%s' is not a defined outbound; omitting final\n", final));
-				final = null;
-			}
-		}
-		else if (action === "block") {
-			// No "block" outbound exists in sing-box 1.11+. Express
-			// "block by default" as a trailing catch-all reject rule and
-			// leave `final` unset (sing-box defaults the final to direct
-			// when omitted; this catch-all fires first for any flow that
-			// reached the end of the chain unmatched).
-			push(rules, { action: "reject" });
-		}
-	}
+        let d = reg.get("route_rule", t);
+        if (d == null) {
+            warn(sprintf("route.uc: unknown route_rule type '%s' for '%s'; skipping\n", t, name));
+            return;
+        }
+        let rule = filler.build(d, s);
 
-	return { rules, final, referenced };
+        if (t === "logical") {
+            rule.type = "logical";
+            let sub = [];
+            for (let n in ref_list(s)) {
+                let rs = rr_by_name[n];
+                if (rs == null) continue;
+                if ((rs.type ?? "default") === "logical") continue;   // only default refs
+                if (rs.enabled === "0") continue;
+                if (rs.rule_set != null && length(rs.rule_set))
+                    warn(sprintf("route.uc: logical '%s' sub-rule '%s' has a rule_set matcher; not valid in a logical sub-rule, dropped\n", name, n));
+                let h = headless.build(rs);
+                if (length(keys(h))) push(sub, h);
+            }
+            if (!length(sub)) return;   // empty logical -> skip
+            rule.rules = sub;
+        }
+
+        resolve_rulesets(rule);
+        if (!action_ok(rule, name)) return;
+        push(rules, rule);
+    });
+
+    // route_default -> final outbound / trailing reject.
+    let final = null;
+    let rd = cur.get_all("singbox-ui", "route_default");
+    if (rd) {
+        let a = rd.action ?? "route";
+        if (a === "route") {
+            final = rd.outbound ?? null;
+            if (final && !ob_ok(final)) {
+                warn(sprintf("route.uc: route_default outbound '%s' is not a defined outbound; omitting final\n", final));
+                final = null;
+            }
+        } else if (a === "reject") {
+            push(rules, { action: "reject" });
+        }
+    }
+
+    return { rules, final, referenced };
 }
 
 return { build_route_rules };
