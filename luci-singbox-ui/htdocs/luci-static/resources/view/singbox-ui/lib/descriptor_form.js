@@ -4,6 +4,8 @@
 'require uci';
 'require network';
 'require view.singbox-ui.lib.validators as validators';
+'require view.singbox-ui.lib.view_state as SbViewState';
+'require view.singbox-ui.lib.common as SbCommon';
 
 // Phase E2: applyMaterialized(s, kind, protoName, materialized)
 //   materialized comes from the protocol_schema RPC after registry.materialize().
@@ -18,6 +20,8 @@
 
 var TAB_TITLES = {
     basic:     _('Basic'),
+    match:     _('Match'),
+    action:    _('Action'),
     tls:       _('TLS'),
     transport: _('Transport'),
     multiplex: _('Multiplex'),
@@ -31,10 +35,10 @@ function widgetFor(field) {
     // attachDynamic). `devices` is a free-entry multi list; every other
     // source is a single-select reference to an existing section.
     if (field.dynamic) {
-        // devices and multi-select outbound lists are free-entry DynamicLists;
-        // every other dynamic source is a single-select reference.
         if (field.dynamic === 'devices') return form.DynamicList;
-        if (field.dynamic === 'outbounds' && field.type === 'list') return form.DynamicList;
+        // Any list-typed dynamic source is a free-entry DynamicList with
+        // suggestions; single-typed dynamic sources are single-select.
+        if (field.type === 'list') return form.DynamicList;
         return form.ListValue;
     }
     if (t === 'enum') return form.ListValue;
@@ -60,6 +64,13 @@ function dynamicChoices(source) {
         return uci.sections('network', 'interface')
             .filter(function (s) { return s['.name'] !== 'loopback'; })
             .map(function (s) { return [s['.name'], s['.name']]; });
+    if (source === 'rulesets')
+        return uci.sections('singbox-ui', 'ruleset')
+            .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
+    if (source === 'route_rules')
+        return uci.sections('singbox-ui', 'route_rule')
+            .filter(function (s) { return (s.type || 'default') === 'default'; })
+            .map(function (s) { return [s['.name'], s['.name']]; });
     return [];
 }
 
@@ -80,16 +91,16 @@ function attachDynamic(opt, field) {
         };
         return;
     }
-    // Multi-select free-entry DynamicList for outbound tag lists (e.g.
-    // selector/urltest `outbounds`). Suggestions come from existing singbox-ui
-    // outbound sections, but free text is always allowed.
-    if (field.dynamic === 'outbounds' && field.type === 'list') {
+    // Generic free-entry multi-select for any list-typed dynamic source
+    // (outbounds, rulesets, route_rules). Suggestions come from existing
+    // sections; free text always allowed. Excludes the current section.
+    if (field.type === 'list') {
         opt.load = function (section_id) {
             this.keylist = [];
             this.vallist = [];
             var self = this;
-            uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
-                if (sec['.name'] !== section_id) self.value(sec['.name'], sec['.name']);
+            dynamicChoices(field.dynamic).forEach(function (kv) {
+                if (kv[0] !== section_id) self.value(kv[0], kv[1]);
             });
             return form.DynamicList.prototype.load.apply(this, arguments);
         };
@@ -219,6 +230,12 @@ function applyMaterialized(s, kind, protoName, materialized) {
 
     materialized.fields.forEach(function (f) {
         var key = f.tab + '\t' + f.name;
+        // Per-field version gate: a field requiring a newer sing-box than the
+        // running core is skipped entirely. Fail-open when core is unknown.
+        if (f.min_version) {
+            var _core = SbViewState.getCoreVersion && SbViewState.getCoreVersion();
+            if (_core && SbCommon.compareVersions(_core, f.min_version) < 0) return;
+        }
         var registered = s._sbMatRegistry[key];
         if (registered) {
             // Same shared field appearing for another protocol: extend the

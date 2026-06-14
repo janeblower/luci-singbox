@@ -280,14 +280,15 @@ config ruleset 'geoip_ru'
 
 config route_rule 'rule_cn_vless'
 	option enabled '1'
-	list ruleset 'geosite_cn'
-	option action 'outbound'
+	list rule_set 'geosite_cn'
+	option action 'route'
 	option outbound 'my_vless'
 
 config route_rule 'rule_ru_direct'
 	option enabled '1'
-	list ruleset 'geoip_ru'
-	option action 'direct'
+	list rule_set 'geoip_ru'
+	option action 'route'
+	option outbound 'direct'
 "
 run_gen
 check "route rules key"       '\"rules\":'                              "$TMPDIR/out.json"
@@ -324,9 +325,10 @@ config ruleset 'no_iv_rs'
 
 config route_rule 'rule_auto'
 	option enabled '1'
-	list ruleset 'auto_rs'
-	list ruleset 'no_iv_rs'
-	option action 'direct'
+	list rule_set 'auto_rs'
+	list rule_set 'no_iv_rs'
+	option action 'route'
+	option outbound 'direct'
 "
 run_gen
 check "update_interval emitted as duration" '"update_interval": "86400s"' "$TMPDIR/out.json"
@@ -353,9 +355,10 @@ config ruleset 'geo_on'
 
 config route_rule 'rule_mix'
 	option enabled '1'
-	list ruleset 'geo_off'
-	list ruleset 'geo_on'
-	option action 'direct'
+	list rule_set 'geo_off'
+	list rule_set 'geo_on'
+	option action 'route'
+	option outbound 'direct'
 "
 run_gen
 check "enabled ruleset present" '"tag": "geo_on"' "$TMPDIR/out.json"
@@ -374,13 +377,14 @@ config ruleset 'dup_rs'
 
 config route_rule 'rule_a'
 	option enabled '1'
-	list ruleset 'dup_rs'
-	option action 'direct'
+	list rule_set 'dup_rs'
+	option action 'route'
+	option outbound 'direct'
 
 config route_rule 'rule_b'
 	option enabled '1'
-	list ruleset 'dup_rs'
-	option action 'block'
+	list rule_set 'dup_rs'
+	option action 'reject'
 "
 run_gen
 count=$(grep -c '"tag": "dup_rs"' "$TMPDIR/out.json" || true)
@@ -400,7 +404,7 @@ grep -q '"type": "block"' "$TMPDIR/out.json" \
     && { echo "FAIL: 'block' outbound type must not be auto-injected"; exit 1; }
 echo "  PASS: no auto-injected 'block' outbound"
 
-echo "-- route_default action=block emits trailing {action:reject} catch-all"
+echo "-- route_default action=reject emits trailing {action:reject} catch-all"
 write_cfg "
 config inbound 'tproxy_in'
 	option enabled '1'
@@ -409,11 +413,11 @@ config inbound 'tproxy_in'
 	option hijack_dns '0'
 
 config route_default 'route_default'
-	option action 'block'
+	option action 'reject'
 "
 run_gen
 grep -q '\"final\":' "$TMPDIR/out.json" \
-    && { echo "FAIL: route_default action=block must not emit a 'final' key"; exit 1; }
+    && { echo "FAIL: route_default action=reject must not emit a 'final' key"; exit 1; }
 check "catch-all reject" '\"action\": \"reject\"' "$TMPDIR/out.json"
 # Catch-all must be the LAST rule (jq-free check: last occurrence of action
 # in the rules array). A trailing reject without rule_set/protocol qualifies.
@@ -460,12 +464,12 @@ config ruleset 'rs32'
 
 config route_rule 'r32'
 	option enabled '1'
-	list   ruleset 'rs32'
-	option action 'outbound'
+	list   rule_set 'rs32'
+	option action 'route'
 	option outbound 'ghostob'
 
 config route_default 'route_default'
-	option action 'outbound'
+	option action 'route'
 	option outbound 'ghostfinal'
 "
 run_gen
@@ -622,7 +626,8 @@ config dns_server 'upstream'
 	option server '1.1.1.1'
 
 config route_default 'route_default'
-	option action 'direct'
+	option action 'route'
+	option outbound 'direct'
 "
 run_gen
 check "route block"          '\"route\":'                              "$TMPDIR/out.json"
@@ -650,7 +655,8 @@ config dns 'dns'
 	option default_resolver 'override_me'
 
 config route_default 'route_default'
-	option action 'direct'
+	option action 'route'
+	option outbound 'direct'
 "
 run_gen
 check "override resolver"    '\"server\": \"override_me\"'             "$TMPDIR/out.json"
@@ -764,8 +770,9 @@ config ruleset 'cn'
 
 config route_rule 'r1'
 	option enabled '1'
-	list ruleset 'cn'
-	option action 'direct'
+	list rule_set 'cn'
+	option action 'route'
+	option outbound 'direct'
 "
 run_gen
 # Structural (audit 10.7): assert the hijack rule lives at the EXACT first
@@ -898,12 +905,13 @@ config ruleset 'geosite_cn'
 
 config route_rule 'rule_cn'
 	option enabled '1'
-	list ruleset 'geosite_cn'
-	option action 'outbound'
+	list rule_set 'geosite_cn'
+	option action 'route'
 	option outbound 'my_vless'
 
 config route_default 'route_default'
-	option final 'my_vless'
+	option action 'route'
+	option outbound 'my_vless'
 "
 run_gen
 sb_check "complete config (dns+fakeip+tproxy+vless+route)" "$TMPDIR/out.json"

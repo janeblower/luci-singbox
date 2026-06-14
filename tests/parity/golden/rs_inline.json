@@ -1,0 +1,1 @@
+{ "rules": [ { "domain_suffix": [ "ads.example" ] } ], "tag": "blocklist", "type": "inline" }

@@ -79,7 +79,7 @@ print("ok\n");
 ' | grep -q '^ok$' || { echo "FAIL: clash.uc assertions"; exit 1; }
 ok "clash.uc build_clash_api"
 
-echo "-- route.uc: hijack-dns + block->reject + disabled-ruleset drop + final"
+echo "-- route.uc: hijack-dns + declarative actions + rule_set tracking + final"
 uc '
 let m = require("route");
 function assert(c, msg) { if (!c) { warn("ASSERT: " + msg + "\n"); exit(1); } }
@@ -104,26 +104,31 @@ let saw_hijack = false;
 for (let rule in r1.rules)
 	if (rule.protocol === "dns" && rule.action === "hijack-dns") saw_hijack = true;
 assert(saw_hijack, "tproxy hijack-dns rule emitted");
-// route_rule action:block -> reject; referenced tracks enabled rulesets
+// Declarative default rule: action:reject is emitted as-is; the rule_set
+// matcher (new field name) is filtered to enabled rulesets and tracked in
+// referenced[]. (New schema: no block/direct actions; rule_set replaces the
+// old ruleset matcher field.)
 let r2 = m.build_route_rules(cur_for({
 	ruleset:    [ { ".name": "ads", enabled: "1" }, { ".name": "off", enabled: "0" } ],
 	route_rule: [
-		{ ".name": "r_block", enabled: "1", action: "block", ruleset: [ "ads" ] },
-		{ ".name": "r_dead",  enabled: "1", action: "direct", ruleset: [ "off" ] },
+		{ ".name": "r_reject", enabled: "1", type: "default", action: "reject", rule_set: [ "ads", "off" ] },
 	],
 }, null));
-let saw_reject = false;
+let reject_rule = null;
 for (let rule in r2.rules)
-	if (rule.action === "reject") saw_reject = true;
-assert(saw_reject, "block -> reject rule");
+	if (rule.action === "reject") reject_rule = rule;
+assert(reject_rule != null, "action:reject emitted");
 assert(length(r2.referenced) === 1 && r2.referenced[0] === "ads", "only enabled ruleset referenced");
-// rule referencing only a disabled ruleset is dropped entirely
-let only_direct = 0;
-for (let rule in r2.rules) if (rule.action === "route") only_direct++;
-assert(only_direct === 0, "rule over disabled-only ruleset dropped");
-// route_default action:outbound -> final
-let r3 = m.build_route_rules(cur_for({}, { action: "outbound", outbound: "wg0" }));
-assert(r3.final === "wg0", "final from route_default outbound");
+assert(type(reject_rule.rule_set) === "array" && length(reject_rule.rule_set) === 1
+	&& reject_rule.rule_set[0] === "ads", "rule_set matcher filtered to enabled only");
+// route_default action:route -> final outbound
+let r3 = m.build_route_rules(cur_for({}, { action: "route", outbound: "wg0" }));
+assert(r3.final === "wg0", "final from route_default route outbound");
+// route_default action:reject -> trailing reject rule, no final
+let r4 = m.build_route_rules(cur_for({}, { action: "reject" }));
+let tail_reject = false;
+for (let rule in r4.rules) if (rule.action === "reject") tail_reject = true;
+assert(tail_reject && r4.final === null, "route_default reject -> trailing reject, no final");
 print("ok\n");
 ' | grep -q '^ok$' || { echo "FAIL: route.uc assertions"; exit 1; }
 ok "route.uc build_route_rules"

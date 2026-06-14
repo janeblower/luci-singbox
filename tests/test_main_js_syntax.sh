@@ -50,15 +50,15 @@ echo "-- references all three output GridSections"
 # GridSection usage lives in extracted tab modules after modularization
 DNS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
 ( grep -q "GridSection" "$JS" || grep -q "GridSection" "$DNS_TAB" ) || { echo "FAIL: no GridSection"; exit 1; }
-# 'outbound', 'ruleset', 'route_rule' live in tabs/routing.js after modularization (Task 10)
-ROUTING_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js
-grep -q "'outbound'"            "$ROUTING_TAB" || { echo "FAIL: no outbound section type (checked tabs/routing.js)"; exit 1; }
-grep -q "'ruleset'"             "$ROUTING_TAB" || { echo "FAIL: no ruleset section type (checked tabs/routing.js)"; exit 1; }
-grep -q "'route_rule'"          "$ROUTING_TAB" || { echo "FAIL: no route_rule section type (checked tabs/routing.js)"; exit 1; }
+# 'outbound', 'ruleset', 'route_rule' live in tabs/route.js after route-tab refactor
+ROUTE_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/route.js
+grep -q "'outbound'"            "$ROUTE_TAB" || { echo "FAIL: no outbound section type (checked tabs/route.js)"; exit 1; }
+grep -q "'ruleset'"             "$ROUTE_TAB" || { echo "FAIL: no ruleset section type (checked tabs/route.js)"; exit 1; }
+grep -q "'route_rule'"          "$ROUTE_TAB" || { echo "FAIL: no route_rule section type (checked tabs/route.js)"; exit 1; }
 # modaltitle lives in extracted tab modules after modularization
-ROUTING_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/routing.js
+ROUTE_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/route.js
 DNS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
-( grep -q "modaltitle" "$JS" || grep -q "modaltitle" "$ROUTING_TAB" || grep -q "modaltitle" "$DNS_TAB" ) || { echo "FAIL: no modaltitle"; exit 1; }
+( grep -q "modaltitle" "$JS" || grep -q "modaltitle" "$ROUTE_TAB" || grep -q "modaltitle" "$DNS_TAB" ) || { echo "FAIL: no modaltitle"; exit 1; }
 
 echo "-- references new outbound types (merged type field)"
 # These fields live in tabs/outbounds.js after modularization (Task 8)
@@ -73,11 +73,13 @@ grep -q "sub_interval"           "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_interv
 ! grep -q "proxy_type"           "$JS" || { echo "FAIL: legacy proxy_type still present"; exit 1; }
 ! grep -q "'json'"               "$JS" || { echo "FAIL: legacy json outbound type still present"; exit 1; }
 
-echo "-- references ruleset fields"
-# nft_rules and update_interval live in tabs/rulesets.js after modularization (Task 9)
-RULESETS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/rulesets.js
-grep -q "nft_rules"       "$RULESETS_TAB" || { echo "FAIL: no nft_rules field (checked tabs/rulesets.js)"; exit 1; }
-grep -q "update_interval" "$RULESETS_TAB" || { echo "FAIL: no update_interval field (checked tabs/rulesets.js)"; exit 1; }
+echo "-- references ruleset fields (descriptor-driven)"
+RS_REMOTE=luci-singbox-ui/root/usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc
+grep -q "nft_rules"       "$RS_REMOTE" || { echo "FAIL: no nft_rules field (checked builder/route/ruleset_remote.uc)"; exit 1; }
+grep -q "update_interval" "$RS_REMOTE" || { echo "FAIL: no update_interval field (checked builder/route/ruleset_remote.uc)"; exit 1; }
+# rule-sets are descriptor-driven in tabs/route.js
+ROUTE_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/route.js
+grep -q "applyMaterialized" "$ROUTE_TAB" || { echo "FAIL: route.js must use descriptor_form.applyMaterialized"; exit 1; }
 
 echo "-- references DNS tab sections"
 # dns_server, dns_rule, descriptor-driven fields, default_resolver live in tabs/dns.js after modularization (Task 11)

@@ -1,0 +1,1 @@
+{ "format": "binary", "tag": "geosite", "type": "remote", "update_interval": "86400s", "url": "https://example.com/geosite.srs" }

@@ -4,7 +4,7 @@ const FIELD_WHITELIST = [
     "name", "type", "tab", "required", "default", "validate",
     "ui_label", "secret", "values", "item", "dynamic",
     "advanced", "depends", "parent_enabled", "placeholder", "virtual",
-    "multiline",
+    "multiline", "min_version",
 ];
 
 function project_field(f) {
@@ -29,9 +29,10 @@ function project_materialized(m) {
 
 function dump_all() {
     let reg = require("builder.protocols.registry");
-    require("builder.dns.registry");   // ensure dns descriptors are registered
-    let out = { outbound: {}, inbound: {}, dns: {} };
-    for (let k in [ "outbound", "inbound", "dns" ])
+    require("builder.dns.registry");     // ensure dns descriptors register
+    require("builder.route.registry");   // ensure route_rule/rule_set descriptors register
+    let out = { outbound: {}, inbound: {}, dns: {}, route_rule: {}, rule_set: {} };
+    for (let k in [ "outbound", "inbound", "dns", "route_rule", "rule_set" ])
         for (let proto in reg.types_for_kind(k)) {
             let m = reg.materialize(k, proto);
             if (m != null) out[k][proto] = project_materialized(m);

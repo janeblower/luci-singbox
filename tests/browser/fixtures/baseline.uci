@@ -28,13 +28,14 @@ config outbound 'direct_wan'
 
 config route_rule 'defaults_direct'
 	option enabled '1'
-	list   ruleset 'russia_inside'
-	list   ruleset 'discord'
-	option action 'outbound'
+	list   rule_set 'russia_inside'
+	list   rule_set 'discord'
+	option action 'route'
 	option outbound 'direct_wan'
 
 config route_default 'route_default'
-	option action 'direct'
+	option action 'route'
+	option outbound 'direct'
 
 config inbound 'dns_in'
 	option enabled '1'
