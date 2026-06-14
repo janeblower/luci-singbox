@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>luci-singbox OpenWrt apk feed</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1b1f23; }
+    h1 { margin-bottom: 0.2rem; }
+    .sub { color: #586069; margin-top: 0; }
+    pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
+    code { font-family: ui-monospace, monospace; }
+    a { color: #0366d6; }
+    hr { border: 0; border-top: 1px solid #e1e4e8; margin: 2rem 0; }
+    .note { background: #fff8c5; padding: 0.6rem 1rem; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <h1>luci-singbox OpenWrt apk feed</h1>
+  <p class="sub">Signed APK package feed for OpenWrt {{VERSION}}.x and newer.</p>
+  <hr>
+  <h2>Install</h2>
+  <p>On the router (OpenWrt {{VERSION}}.x+, apk-based):</p>
+  <pre><code>ARCH=$(apk --print-arch)
+wget -O /etc/apk/keys/luci-singbox.pem {{PAGES_URL}}/luci-singbox.pem
+echo "{{PAGES_URL}}/{{VERSION}}/$ARCH/luci-singbox" > /etc/apk/repositories.d/luci-singbox.list
+apk update && apk add luci-singbox-ui</code></pre>
+  <p class="note">OpenWrt 24.10.x and older use <code>.ipk</code> and are not served here — use the GitHub Releases artifacts instead.</p>
+  <hr>
+  <h2>Browse</h2>
+  <p><a href="{{VERSION}}/">Browse packages by architecture →</a></p>
+  <p>Public signing key: <a href="luci-singbox.pem">luci-singbox.pem</a></p>
+  <hr>
+  <p class="sub">Source: <a href="https://github.com/janeblower/luci-singbox">janeblower/luci-singbox</a></p>
+</body>
+</html>
