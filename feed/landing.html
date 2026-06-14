@@ -3,34 +3,67 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>luci-singbox OpenWrt apk feed</title>
+  <title>luci-singbox · OpenWrt apk feed</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 52rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; color: #1b1f23; }
-    h1 { margin-bottom: 0.2rem; }
-    .sub { color: #586069; margin-top: 0; }
-    pre { background: #f6f8fa; padding: 1rem; border-radius: 6px; overflow-x: auto; }
-    code { font-family: ui-monospace, monospace; }
-    a { color: #0366d6; }
-    hr { border: 0; border-top: 1px solid #e1e4e8; margin: 2rem 0; }
-    .note { background: #fff8c5; padding: 0.6rem 1rem; border-radius: 6px; }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+           color: #222; background: #e9ecef; line-height: 1.55; }
+    header.hero { background: #353535; color: #f5f5f5; }
+    .hero .bar { max-width: 56rem; margin: 0 auto; padding: 0.6rem 1.25rem; display: flex; justify-content: flex-end; }
+    .hero .bar a { color: #cfd3d6; text-decoration: none; font-size: .9rem;
+                   border: 1px solid #555; border-radius: 6px; padding: .3rem .7rem; }
+    .hero .bar a:hover { color: #fff; border-color: #888; }
+    .hero .title { max-width: 56rem; margin: 0 auto; padding: 1.4rem 1.25rem 2.4rem; }
+    .hero h1 { margin: 0; font-size: 2rem; font-weight: 700; }
+    .hero p.tagline { margin: .4rem 0 0; color: #b9bdc1; }
+    main { max-width: 56rem; margin: -1.6rem auto 3rem; padding: 0 1.25rem; }
+    .card { background: #fff; border: 1px solid #d8dde2; border-radius: 10px;
+            padding: 1.4rem 1.6rem; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+    h2 { margin-top: 1.7rem; font-size: 1.2rem; border-bottom: 1px solid #eceff2; padding-bottom: .3rem; }
+    h2:first-child { margin-top: 0; }
+    a { color: #2a7ae2; }
+    pre { background: #f6f8fa; padding: 1rem; border-radius: 8px; overflow-x: auto; }
+    code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .9em; }
+    ul.dl { list-style: none; padding-left: 0; }
+    ul.dl li { padding: .15rem 0; }
+    .note { background: #fff8c5; border: 1px solid #f0e6a6; padding: .6rem 1rem; border-radius: 8px; }
+    footer { max-width: 56rem; margin: 0 auto 3rem; padding: 0 1.25rem; color: #6b7280; font-size: .85rem; }
   </style>
 </head>
 <body>
-  <h1>luci-singbox OpenWrt apk feed</h1>
-  <p class="sub">Signed APK package feed for OpenWrt {{VERSION}}.x and newer.</p>
-  <hr>
-  <h2>Install</h2>
-  <p>On the router (OpenWrt {{VERSION}}.x+, apk-based):</p>
-  <pre><code>ARCH=$(apk --print-arch)
+  <header class="hero">
+    <div class="bar"><a href="https://github.com/{{RELEASE_REPO}}">View on GitHub</a></div>
+    <div class="title">
+      <h1>luci-singbox apk feed</h1>
+      <p class="tagline">Signed APK package feed for OpenWrt {{VERSION}}.x and newer.</p>
+    </div>
+  </header>
+  <main>
+    <div class="card">
+      <h2>Install via feed</h2>
+      <p>On the router (OpenWrt {{VERSION}}.x+, apk-based):</p>
+      <pre><code>ARCH=$(apk --print-arch)
 wget -O /etc/apk/keys/luci-singbox.pem {{PAGES_URL}}/luci-singbox.pem
 echo "{{PAGES_URL}}/{{VERSION}}/$ARCH/luci-singbox/packages.adb" > /etc/apk/repositories.d/luci-singbox.list
 apk update && apk add luci-singbox-ui</code></pre>
-  <p class="note">OpenWrt 24.10.x and older use <code>.ipk</code> and are not served here — use the GitHub Releases artifacts instead.</p>
-  <hr>
-  <h2>Browse</h2>
-  <p><a href="{{VERSION}}/">Browse packages by architecture →</a></p>
-  <p>Public signing key: <a href="luci-singbox.pem">luci-singbox.pem</a></p>
-  <hr>
-  <p class="sub">Source: <a href="https://github.com/janeblower/luci-singbox">janeblower/luci-singbox</a></p>
+      <p class="note">OpenWrt 24.10.x and older use <code>.ipk</code> and are not served here — use the GitHub Releases artifacts instead.</p>
+
+      <h2>Direct downloads (latest build)</h2>
+      <p>Always the freshest rolling build — pick your arch (<code>apk --print-arch</code> on the router):</p>
+      <ul class="dl">
+        {{DOWNLOADS}}
+      </ul>
+      <p>Or one-line install (auto-detects arch):</p>
+      <pre><code>wget -O- https://raw.githubusercontent.com/{{RELEASE_REPO}}/main/install.sh | sh</code></pre>
+      <p>All assets: <a href="https://github.com/{{RELEASE_REPO}}/releases/tag/latest">latest release &#x2192;</a></p>
+
+      <h2>Browse</h2>
+      <p><a href="{{VERSION}}/">Browse packages by architecture &#x2192;</a></p>
+      <p>Public signing key: <a href="luci-singbox.pem">luci-singbox.pem</a></p>
+    </div>
+  </main>
+  <footer>
+    Source: <a href="https://github.com/{{RELEASE_REPO}}">{{RELEASE_REPO}}</a>
+  </footer>
 </body>
 </html>

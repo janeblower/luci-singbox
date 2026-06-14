@@ -41,6 +41,7 @@ echo "DUMMY PUBLIC KEY" > "$TMP/pub.pem"
 FEED_PUBKEY="$TMP/pub.pem" \
 LANDING_TMPL="$ROOT/feed/landing.html" \
 PAGES_URL="https://example.test/luci-singbox" \
+RELEASE_REPO="acme/luci-singbox" \
 APK_BIN="$APK" \
   sh "$ROOT/scripts/build-feed.sh" 25.12 "$TMP/dist" "$TMP/out"
 
@@ -68,6 +69,15 @@ done < "$TMP/want"
 grep -q "example.test/luci-singbox" "$TMP/out/index.html" || fail "PAGES_URL not substituted"
 grep -q "apk add luci-singbox-ui" "$TMP/out/index.html" || fail "install snippet missing"
 grep -q "packages.adb" "$TMP/out/index.html" || fail "repo URL must point at packages.adb"
+# No unsubstituted placeholders left in the rendered landing.
+grep -q "{{" "$TMP/out/index.html" && fail "unsubstituted {{...}} placeholder in landing"
+# RELEASE_REPO substituted into the GitHub links.
+grep -q "github.com/acme/luci-singbox" "$TMP/out/index.html" || fail "RELEASE_REPO not substituted"
+# Dynamic per-arch download link points at the stable latest-release URL.
+grep -q "releases/download/latest/luci-singbox-ui-x86_64.apk" "$TMP/out/index.html" \
+  || fail "direct-download link for built arch missing"
+# Browse pages carry the dark theme header.
+grep -q "background:#353535" "$TMP/out/25.12/index.html" || fail "browse page not themed"
 
 # Browsable indexes at version + arch levels.
 [ -f "$TMP/out/25.12/index.html" ] || fail "version-level index missing"
