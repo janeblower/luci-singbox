@@ -43,6 +43,15 @@ apk add --allow-untrusted ./luci-singbox-ui_*.apk
 apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
 ```
 
+**Or add the signed apk feed** (OpenWrt 25.12+; auto-updates with `apk upgrade`):
+
+```sh
+ARCH=$(apk --print-arch)
+wget -O /etc/apk/keys/luci-singbox.pem https://janeblower.github.io/luci-singbox/luci-singbox.pem
+echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox" > /etc/apk/repositories.d/luci-singbox.list
+apk update && apk add luci-singbox-ui
+```
+
 > ⚠️ **Conflicts with `firewall` (fw3).** This package drives nftables
 > directly, so installing it removes the `firewall` package and your
 > `/etc/config/firewall` rules stop being applied — make sure nothing depends
@@ -115,6 +124,15 @@ apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
 apk add --allow-untrusted ./luci-singbox-ui_*.apk
 # опционально — русский перевод:
 apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
+```
+
+**Или подключить подписанный apk-feed** (OpenWrt 25.12+; обновляется через `apk upgrade`):
+
+```sh
+ARCH=$(apk --print-arch)
+wget -O /etc/apk/keys/luci-singbox.pem https://janeblower.github.io/luci-singbox/luci-singbox.pem
+echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox" > /etc/apk/repositories.d/luci-singbox.list
+apk update && apk add luci-singbox-ui
 ```
 
 Пакет **конфликтует с `firewall` (fw3)**, потому что управляет nftables
