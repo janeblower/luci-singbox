@@ -132,6 +132,50 @@ function write_atomic(path, body) {
 	return true;
 }
 
+// parse_headers(hdr) -> { userinfo?:{upload,download,total,expire}, title? }.
+// Reads the curl -D header dump. Tolerant: missing fields are simply omitted,
+// a garbage dump yields {}. subscription-userinfo is a ';'-separated k=v list;
+// title comes from content-disposition filename or a profile-title header
+// (base64:-prefixed values are decoded).
+function parse_headers(hdr) {
+	let out = {};
+	if (hdr == null) return out;
+	let info = null, title = null;
+	for (let line in split(hdr, "\n")) {
+		let l = trim(line);
+		let ui = match(l, /^[Ss]ubscription-[Uu]serinfo:[ \t]*(.*)$/);
+		if (ui) {
+			info = {};
+			for (let kv in split(ui[1], ";")) {
+				let p = match(trim(kv), /^([A-Za-z_]+)=([0-9]+)$/);
+				if (p) info[lc(p[1])] = +p[2];
+			}
+		}
+		if (index(lc(l), "content-disposition") === 0) {
+			// ucode's regex engine (POSIX/TRE) has no non-capturing (?:...)
+			// groups, so capture the raw value then strip an optional
+			// RFC 5987 charset prefix (UTF-8'') and surrounding quotes by hand.
+			let fn = match(l, /[Ff]ilename\*?=[ \t]*"?([^";\r\n]+)"?/);
+			if (fn) {
+				let v = trim(fn[1]);
+				let cs = match(v, /^[A-Za-z0-9-]+''(.*)$/);
+				if (cs) v = trim(cs[1]);
+				title = v;
+			}
+		}
+		let pt = match(l, /^[Pp]rofile-[Tt]itle:[ \t]*(.*)$/);
+		if (pt) {
+			let v = trim(pt[1]);
+			let b = match(v, /^base64:(.*)$/);
+			if (b) { try { v = b64dec(trim(b[1])) || v; } catch (_) {} }
+			title = v;
+		}
+	}
+	if (info != null) out.userinfo = info;
+	if (title != null && title !== "") out.title = title;
+	return out;
+}
+
 function cmd_fetch_subs(cur, only) {
 	// Ensure TMPDIR exists whether invoked via CLI (module-level mkdir above)
 	// or via the test wrapper (_cmd_fetch_subs_for_test) which require()s the
@@ -221,6 +265,12 @@ function cmd_fetch_subs(cur, only) {
 			continue;
 		}
 		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
+		let hdr_raw = _reader(m.hdr_path) ?? "";
+		let meta = parse_headers(hdr_raw);
+		if (length(meta)) {
+			let meta_path = `${TMPDIR}/sub_${m.name}.meta`;
+			write_atomic(meta_path, sprintf("%J", meta));
+		}
 		try { fs.unlink(m.hdr_path); } catch (_) {}
 	}
 	return 0;
@@ -267,8 +317,21 @@ function cmd_sub_status(cur) {
 			try { let f = fs.open(path, "r"); if (f) { body = f.read("all") || ""; f.close(); } } catch (_) {}
 			for (let line in split(body, "\n")) if (trim(line) !== "") node_count++;
 		}
+		let title = null, userinfo = null;
+		let mp = `${TMPDIR}/sub_${name}.meta`;
+		let mst = fs.stat(mp);
+		if (mst && mst.type === "file") {
+			let mraw = _reader(mp) ?? "";
+			let parsed = null;
+			try { parsed = json(mraw); } catch (_) {}
+			if (type(parsed) === "object") {
+				title = parsed.title ?? null;
+				userinfo = parsed.userinfo ?? null;
+			}
+		}
 		push(out, { name: name, enabled: enabled,
-		            last_update: last_update, node_count: node_count });
+		            last_update: last_update, node_count: node_count,
+		            title: title, userinfo: userinfo });
 	}
 	return out;
 }
@@ -315,6 +378,7 @@ if (length(ARGV)) {
 return {
 	try_b64_decode,
 	is_stale,
+	_parse_headers_for_test: parse_headers,
 	_set_io_for_test,
 	_set_fetcher_for_test,
 	_fetcher_real_for_test: function(jobs) { return _fetcher(jobs); },
