@@ -244,6 +244,54 @@ function b64_decode(s) {
 	return dec;
 }
 
+// parse_socks(url) — SOCKS5 share-link: socks5://[user:pass@]host:port#name
+// userinfo is OPTIONAL: plain "user:pass" or base64("user:pass"). -> sing-box socks (v5).
+// Placed after b64_decode: ucode resolves top-level function refs by definition
+// order, so parse_socks (which calls b64_decode) must follow it.
+function parse_socks(url) {
+	let host, port, params, frag, raw = null;
+	// Pattern A: with userinfo  (m[1]=userinfo m[2]=host m[3]=port m[4]=query m[5]=frag)
+	let m = match(url, /^socks5?:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (m) {
+		raw  = m[1];
+		host = safe_host(m[2]); port = safe_port(m[3]);
+		params = m[4] ? parse_query(substr(m[4], 1)) : {};
+		frag   = m[5] ? url_decode(substr(m[5], 1)) : null;
+	} else {
+		// Pattern B: no userinfo  (m[1]=host m[2]=port m[3]=query m[4]=frag).
+		// Host class adds @ to its negation so this only matches a true no-@ URL.
+		m = match(url, /^socks5?:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+		if (!m) return null;
+		host = safe_host(m[1]); port = safe_port(m[2]);
+		params = m[3] ? parse_query(substr(m[3], 1)) : {};
+		frag   = m[4] ? url_decode(substr(m[4], 1)) : null;
+	}
+	if (!host || !port) return null;
+	let username = null, password = null;
+	if (length(raw)) {
+		let ui = url_decode(raw);
+		let colon = index(ui, ":");
+		if (colon < 0) {                              // try base64(user:pass)
+			let dec = b64_decode(raw);                // decode the ORIGINAL raw, not url_decoded
+			if (dec != null) { ui = drop_ctrl(dec); colon = index(ui, ":"); }
+		}
+		if (colon >= 0) {
+			username = substr(ui, 0, colon);
+			password = substr(ui, colon + 1);
+		} else if (length(ui)) {
+			username = ui;
+		}
+	}
+	let out = {
+		type: "socks", server: host, server_port: port, version: "5",
+		tag: safe_tag(length(frag) ? frag : host, url),
+	};
+	if (length(username)) out.username = username;
+	if (length(password)) out.password = password;
+	smap.apply_params(params, smap.SPEC.socks, out);
+	return out;
+}
+
 // parse_ss(url) — Shadowsocks share-link.
 //   Plain:  ss://<method>:<password>@<host>:<port>[?plugin=...][#name]
 //   Legacy: ss://<base64(method:password)>@<host>:<port>[#name]
@@ -465,6 +513,7 @@ function parse_proxy_url(url) {
 	if (match(url, /^hysteria:\/\//) ||
 	    match(url, /^hy:\/\//))        return parse_hysteria1(url);
 	if (match(url, /^anytls:\/\//))    return parse_anytls(url);
+	if (match(url, /^socks5?:\/\//))   return parse_socks(url);
 	warn("sharelink.uc: unsupported proxy URL scheme: " + url + "\n");
 	return null;
 }
