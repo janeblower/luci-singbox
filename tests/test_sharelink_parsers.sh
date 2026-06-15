@@ -81,4 +81,20 @@ out=$(je "
 [ "$out" = "NONE|NONE" ] || die "reality flow/short_id clean omission" "$out"
 ok "vless reality without flow/sid omits keys"
 
+# MAP: vless closes prior gaps — alpn (csv) and allowInsecure (bool) now land.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('vless://11111111-1111-1111-1111-111111111111@h.ex:443?security=tls&sni=s.com&alpn=h2,http%2F1.1&allowInsecure=1&fp=chrome#n');
+    print(sprintf('%s|%d|%s|%s', r.tls.server_name, length(r.tls.alpn), r.tls.insecure===true?'T':'?', r.tls.utls.fingerprint));
+")
+[ "$out" = "s.com|2|T|chrome" ] || die "vless alpn/allowInsecure/fp" "$out"
+ok "vless alpn+allowInsecure+fp mapped via SPEC"
+
+# MAP: vless encryption/spx/mode/headerType are declared unsupported -> absent.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('vless://11111111-1111-1111-1111-111111111111@h.ex:443?security=tls&encryption=none&mode=gun&headerType=http&spx=%2F#n');
+    print(sprintf('%s|%s|%s', r.encryption==null?'OMIT':'LEAK', r.mode==null?'OMIT':'LEAK', r.headerType==null?'OMIT':'LEAK'));
+")
+[ "$out" = "OMIT|OMIT|OMIT" ] || die "vless unsupported absent" "$out"
+ok "vless encryption/mode/headerType/spx left unmapped (declared)"
+
 echo "OK"

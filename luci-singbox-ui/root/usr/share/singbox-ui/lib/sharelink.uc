@@ -9,6 +9,7 @@
 // (see drop_ctrl / safe_tag / safe_host).
 
 let helpers = require("helpers");
+let smap = require("sharelink_map");
 const fnv1a32 = helpers.fnv1a32;
 
 // drop_ctrl(s) — drop bytes < 0x20 from a string. Used to scrub already-
@@ -91,6 +92,39 @@ function parse_query(query_string) {
 	return params;
 }
 
+// h_tls_security(params, host, out) — enable the TLS block for security=tls|reality
+// and seed server_name (sni param wins, else the host). Reality adds its sub-block.
+// Consumes the `security` and `sni` params (SPEC Delegated).
+function h_tls_security(params, host, out) {
+	let sec = params["security"];
+	if (sec !== "tls" && sec !== "reality") return;
+	out.tls = { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host };
+	if (sec === "reality") out.tls.reality = { enabled: true };
+}
+
+// h_transport(params, out) — v2ray transport block from type/path/host/serviceName.
+// Consumes the `type`/`path`/`host`/`serviceName` params (SPEC Delegated).
+function h_transport(params, out) {
+	let tt = params["type"];
+	if (!length(tt) || tt === "tcp") return;
+	let tr = { type: tt };
+	if (tt === "ws") {
+		if (length(params["path"])) tr.path = params["path"];
+		if (length(params["host"])) tr.headers = { Host: params["host"] };
+	} else if (tt === "grpc") {
+		if (length(params["serviceName"])) tr.service_name = params["serviceName"];
+		else if (length(params["path"]))   tr.service_name = params["path"];
+	} else if (tt === "http" || tt === "h2") {
+		tr.type = "http";
+		if (length(params["path"])) tr.path = params["path"];
+		if (length(params["host"])) tr.host = [ params["host"] ];
+	} else if (tt === "httpupgrade") {
+		if (length(params["path"])) tr.path = params["path"];
+		if (length(params["host"])) tr.host = params["host"];
+	}
+	out.transport = tr;
+}
+
 function parse_vless(url) {
 	// vless://uuid@host:port?params#name
 	let m = match(url, /^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
@@ -107,29 +141,9 @@ function parse_vless(url) {
 		type: "vless", server: host, server_port: port, uuid: uuid,
 		tag: safe_tag(length(frag) ? frag : host, url),
 	};
-	let security = params["security"];
-	if (security === "tls" || security === "reality") {
-		let sni = params["sni"] ?? host;
-		out.tls = { enabled: true, server_name: sni };
-		if (params["fp"]) out.tls.utls = { enabled: true, fingerprint: params["fp"] };
-		if (security === "reality" && params["pbk"]) {
-			out.tls.reality = { enabled: true, public_key: params["pbk"] };
-			// short_id (sid) is mandatory for the reality handshake when the
-			// server is configured with one — dropping it produces a dead
-			// outbound that cannot connect (and, via download_detour, makes
-			// remote rule-sets un-fetchable → sing-box FATALs at startup).
-			if (length(params["sid"])) out.tls.reality.short_id = params["sid"];
-		}
-		// Note: `spx` (reality spider_x) is an Xray-only client field; sing-box
-		// has no equivalent, so it is intentionally not mapped.
-	}
-	// flow (e.g. xtls-rprx-vision) is a top-level vless field. Without it the
-	// client won't negotiate XTLS-Vision and a server expecting it resets the
-	// connection — same dead-proxy failure mode as a missing short_id.
-	if (length(params["flow"])) out.flow = params["flow"];
-	let transport_type = params["type"];
-	if (transport_type && transport_type !== "tcp")
-		out.transport = { type: transport_type };
+	h_tls_security(params, host, out);   // Delegated: security + sni
+	h_transport(params, out);            // Delegated: type/path/host/serviceName
+	smap.apply_params(params, smap.SPEC.vless, out);  // Direct: flow/fp/pbk/sid/alpn/insecure
 	return out;
 }
 
