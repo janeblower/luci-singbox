@@ -21,7 +21,7 @@ out=$(je '
     m.apply_params(
         { sni: "x.com", alpn: "h2,http/1.1", ins: "1", off: "0", n: "100 mbps" },
         [
-            { param: "sni",  path: "tls.server_name" },
+            { param: "sni",  path: "tls.server_name", enables: "tls.utls.enabled" },
             { param: "alpn", path: "tls.alpn", transform: "csv" },
             { param: "ins",  path: "tls.insecure", transform: "bool" },
             { param: "off",  path: "tls.never",    transform: "bool" },
@@ -30,16 +30,17 @@ out=$(je '
             { param: "hand", handler: "x" },
             { param: "uns",  unsupported: "because" },
         ], o);
-    print(sprintf("%s|%d|%s|%s|%s|%s|%s",
+    print(sprintf("%s|%d|%s|%s|%s|%s|%s|%s",
         o.tls.server_name,
         length(o.tls.alpn),
         o.tls.insecure === true ? "T" : "?",
         o.tls.never == null ? "OMIT" : "LEAK",
         o.up_mbps,
         o.should == null ? "GATED" : "LEAK",
-        o.hand == null ? "OK" : "LEAK"));
+        o.hand == null ? "OK" : "LEAK",
+        o.tls.utls.enabled === true ? "E" : "?"));
 ')
-[ "$out" = "x.com|2|T|OMIT|100|GATED|OK" ] || die "engine apply_params" "$out"
+[ "$out" = "x.com|2|T|OMIT|100|GATED|OK|E" ] || die "engine apply_params" "$out"
 ok "apply_params: set_path/csv/bool/int/gate/skip-handler"
 
 echo "OK"
