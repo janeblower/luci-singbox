@@ -64,11 +64,45 @@ d="$TMP/out/25.12/x86_64/luci-singbox"
 [ -f "$d/packages.adb" ] || fail "packages.adb missing"
 
 # REGRESSION GUARD: every package the index references must exist on disk as the
-# exact <name>-<version>.apk file apk will try to download.
+# exact <name>-<version>.apk file apk will try to download. The index lists
+# packages as repeated top-level "name:"/"version:" pairs; print one file name
+# per package on the version line (the index's per-entry indent differs from a
+# single package's adbdump, so this stays index-shaped rather than anchored).
 "$APK" adbdump "$d/packages.adb" 2>/dev/null | awk '
   /name:/    {n=$NF}
   /version:/ {v=$NF; print n"-"v".apk"}' | sort -u > "$TMP/want"
 [ -s "$TMP/want" ] || fail "index has no packages"
+
+# REGRESSION GUARD (FEED-1): build-feed.sh feed_pkg_filename must anchor on the
+# TOP-LEVEL `  name: `/`  version: ` fields (2-space indent) and take the FIRST
+# match, so a nested name:/version: in a recursive adbdump can't hijack the
+# reconstructed download filename (a wrong name -> 404 on the device). adbdump of
+# a normal package emits no nested name:/version:, so feed against a crafted dump
+# fixture (a decoy nested pair, deeper-indented, AFTER the real fields) and assert
+# the SAME awk program build-feed uses still yields the top-level name-version.
+# shellcheck disable=SC2016  # awk program — $2 is awk's field, not a shell var
+PARSER='
+    /^  name: /    && n=="" { n=$2 }
+    /^  version: / && v=="" { v=$2 }
+    n!="" && v!=""          { printf "%s-%s.apk\n", n, v; exit }
+    END { if (n=="" || v=="") exit 1 }'
+# Verify the literal program text in build-feed.sh matches what we test (so this
+# guard can't pass against a regressed/diverged parser).
+# shellcheck disable=SC2016  # matching the literal awk text, not expanding $2
+grep -q '/^  name: /    && n=="" { n=\$2 }' "$ROOT/scripts/build-feed.sh" \
+  || fail "FEED-1: build-feed.sh feed_pkg_filename no longer anchors on top-level '  name: '"
+cat > "$TMP/dump" <<'DUMP'
+  name: luci-singbox-ui
+  version: 9.9.9-r1
+  arch: x86_64
+  scripts:
+    triggers:
+      name: should-be-ignored
+      version: 0.0.0-r0
+DUMP
+got="$(awk "$PARSER" "$TMP/dump")" || fail "FEED-1: parser exited nonzero on a valid dump"
+[ "$got" = "luci-singbox-ui-9.9.9-r1.apk" ] \
+  || fail "FEED-1: nested name:/version: hijacked the filename; got '$got'"
 while read -r want; do
   [ -f "$d/$want" ] || fail "index references missing file: $want"
 done < "$TMP/want"

@@ -42,11 +42,19 @@ RELEASE_REPO="${RELEASE_REPO:-janeblower/luci-singbox}"
 
 # Echo the "<name>-<version>.apk" filename apk reconstructs for a package file,
 # read from its own metadata. Exits non-zero if either field is missing.
+#
+# adbdump is a recursive structural dump: `name:`/`version:` tokens can also
+# appear nested (scripts, triggers, provides, future metadata). Anchor on the
+# TOP-LEVEL 2-space indentation (`^  name: ` / `^  version: `) and take the FIRST
+# match, then stop — so a nested field can never hijack the reconstructed
+# filename (which apk uses to build the download URL; a wrong name -> 404). This
+# mirrors the precise anchoring build-apk.sh's verify step uses on the same dump.
 feed_pkg_filename() {
   "$APK_BIN" adbdump "$1" 2>/dev/null | awk '
-    $1=="name:"    {n=$2}
-    $1=="version:" {v=$2}
-    END { if (n=="" || v=="") exit 1; printf "%s-%s.apk\n", n, v }'
+    /^  name: /    && n=="" { n=$2 }
+    /^  version: / && v=="" { v=$2 }
+    n!="" && v!=""          { printf "%s-%s.apk\n", n, v; exit }
+    END { if (n=="" || v=="") exit 1 }'
 }
 
 # Copy a .apk into the feed dir under apk'"'"'s <name>-<version>.apk convention.

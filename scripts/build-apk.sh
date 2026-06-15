@@ -26,7 +26,17 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 APP_NAME="luci-singbox-ui"
 APP_DESC="LuCI support for singbox-ui"
-APP_DEPENDS="libc luci-base sing-box jq curl"
+# Runtime dependencies baked into the shipped .apk. This is the PRIMARY delivery
+# path (releases + feed + install.sh), so it MUST carry the same runtime needs as
+# the buildroot path (LUCI_DEPENDS in luci-singbox-ui/Makefile) — keep the two in
+# sync (guarded by tests/test_makefile_deps.sh):
+#   - curl           subscription bodies are fetched via curl (subscription.uc)
+#   - ucode + ucode-mod-fs  shipped .uc handlers require('fs') (helpers/generate/...)
+#   - kmod-nft-socket / kmod-nft-tproxy  nftables.uc emits `socket transparent` and
+#                    `tproxy ... to` expressions; without the kmods tproxy apply fails.
+# NOTE: `nftables` is intentionally NOT listed — it ships in OpenWrt base / fw4.
+# (libc is apk's base dep; jq was dropped — not used by any shipped on-device code.)
+APP_DEPENDS="libc luci-base sing-box curl ucode ucode-mod-fs kmod-nft-socket kmod-nft-tproxy"
 APP_CONFFILE="/etc/config/singbox-ui"
 
 I18N_NAME="luci-i18n-singbox-ui-ru"
@@ -474,12 +484,28 @@ fi
 # ---------------------------------------------------------------------------
 if [ "$APK_MKPKG_STUB" != "1" ]; then
     verify_root_owner() {
-        local out="$1" bad=""
+        local out="$1" bad="" owners="" count=0
         local dump
-        if dump=$("$APK_BIN" adbdump "$out" 2>/dev/null); then
-            bad=$(printf '%s\n' "$dump" | grep -E '^[[:space:]]*(user|group):' \
-                                        | grep -vE '^[[:space:]]*(user|group): root$' || true)
+        dump=$("$APK_BIN" adbdump "$out" 2>/dev/null) \
+            || { echo "ERROR: adbdump failed for $out — cannot verify ownership" >&2; exit 1; }
+        # All user:/group: lines this package declares.
+        owners=$(printf '%s\n' "$dump" | grep -E '^[[:space:]]*(user|group):' || true)
+        count=$(printf '%s\n' "$owners" | grep -c . || true)
+        # Fail-closed: if adbdump's owner-field representation ever changes (keyword
+        # rename, owner lines omitted for root, etc.) `bad` would be empty and the
+        # gate would pass vacuously — silently disabling the safety net it exists
+        # for. A package with real files MUST declare at least one owner line, so a
+        # zero count means the format moved out from under us → trip the build.
+        if [ "$count" -eq 0 ]; then
+            echo "ERROR: $out has no user:/group: lines in adbdump — owner-field" >&2
+            echo "       format may have changed; refusing to vacuously pass the" >&2
+            echo "       root-ownership check (verify_root_owner)." >&2
+            exit 1
         fi
+        # Accept either the literal `root` or numeric uid/gid 0 (robust to apk
+        # emitting `user: 0` instead of `user: root`).
+        bad=$(printf '%s\n' "$owners" \
+            | grep -vE '^[[:space:]]*(user|group): (root|0)$' || true)
         if [ -n "$bad" ]; then
             echo "ERROR: $out contains non-root owner/group entries:" >&2
             printf '%s\n' "$bad" | sort -u >&2
