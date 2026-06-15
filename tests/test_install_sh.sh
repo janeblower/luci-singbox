@@ -40,11 +40,22 @@ command -v sha256sum >/dev/null || fail "host needs sha256sum for the test"
 printf '#!/bin/sh\necho 0\n' > "$BIN/id"; chmod +x "$BIN/id"
 
 # --- fixtures served for aarch64_cortex-a53 ---
-echo "FAKE_APK_AARCH64_A53" > "$TMP/serve/luci-singbox-ui-aarch64_cortex-a53.apk"
-# build a matching sha256sums.txt the script must verify
-( cd "$TMP/serve" && sha256sum "luci-singbox-ui-aarch64_cortex-a53.apk" ) > "$TMP/serve/sha256sums.txt"
+# serve_fixtures: (re)create the served apks + a matching sha256sums.txt. With
+# an argument of "noi18n" the Russian translation package is NOT served (so the
+# 404 path can be exercised).
+serve_fixtures() {
+  rm -f "$TMP/serve/"*.apk "$TMP/serve/sha256sums.txt"
+  echo "FAKE_APK_AARCH64_A53" > "$TMP/serve/luci-singbox-ui-aarch64_cortex-a53.apk"
+  if [ "${1:-}" != "noi18n" ]; then
+    echo "FAKE_I18N_RU" > "$TMP/serve/luci-i18n-singbox-ui-ru.apk"
+  fi
+  # bare basenames in the second column (matches build.yml's `sha256sum *.apk`,
+  # which install.sh's awk expects: $2==name or $2=="*"name).
+  ( cd "$TMP/serve" && for f in *.apk; do sha256sum "$f"; done ) > "$TMP/serve/sha256sums.txt"
+}
+serve_fixtures
 
-# --- TEST 1: happy path — correct arch asset is downloaded and apk-added ---
+# --- TEST 1: happy path — per-arch asset AND the ru i18n package are installed ---
 : > "$TMP/apk.log"
 echo "aarch64_cortex-a53" > "$ARCHFILE"
 SINGBOX_INSTALL_TEST=1 \
@@ -53,6 +64,8 @@ sh "$ROOT/install.sh" || fail "install.sh exited nonzero (happy path)"
 
 grep -q "luci-singbox-ui-aarch64_cortex-a53.apk" "$TMP/apk.log" \
   || fail "apk add not called with the per-arch asset luci-singbox-ui-aarch64_cortex-a53.apk"
+grep -q "luci-i18n-singbox-ui-ru.apk" "$TMP/apk.log" \
+  || fail "apk add not called with the ru i18n package luci-i18n-singbox-ui-ru.apk"
 
 # --- TEST 2: apk sha256 mismatch aborts BEFORE apk add ---
 echo "TAMPERED_APK" > "$TMP/serve/luci-singbox-ui-aarch64_cortex-a53.apk"
@@ -64,9 +77,8 @@ fi
 grep -q "luci-singbox-ui-aarch64_cortex-a53.apk" "$TMP/apk.log" 2>/dev/null && \
   fail "apk add ran despite a tampered apk (verified after install, not before)"
 
-# Restore good fixture for subsequent tests
-echo "FAKE_APK_AARCH64_A53" > "$TMP/serve/luci-singbox-ui-aarch64_cortex-a53.apk"
-( cd "$TMP/serve" && sha256sum "luci-singbox-ui-aarch64_cortex-a53.apk" ) > "$TMP/serve/sha256sums.txt"
+# Restore good fixtures for subsequent tests
+serve_fixtures
 
 # --- TEST 3: unsupported arch aborts with clear message, apk add not called ---
 echo "riscv64_generic" > "$ARCHFILE"
@@ -77,5 +89,28 @@ echo "$out" | grep -qi "unsupported" \
   || fail "no 'unsupported' message for uncovered arch riscv64_generic; got: $out"
 grep -q "." "$TMP/apk.log" 2>/dev/null && \
   fail "apk add was called for unsupported arch riscv64_generic"
+
+# --- TEST 4: ru i18n absent from release — main apk still installs, no i18n add ---
+serve_fixtures noi18n
+echo "aarch64_cortex-a53" > "$ARCHFILE"
+: > "$TMP/apk.log"
+SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" \
+  sh "$ROOT/install.sh" || fail "install.sh exited nonzero when ru i18n is absent"
+grep -q "luci-singbox-ui-aarch64_cortex-a53.apk" "$TMP/apk.log" \
+  || fail "main apk not installed when i18n absent"
+grep -q "luci-i18n-singbox-ui-ru.apk" "$TMP/apk.log" && \
+  fail "i18n apk add attempted despite the package being absent from the release"
+
+# --- TEST 5: tampered i18n apk (sha256 mismatch) aborts before ANY apk add ---
+serve_fixtures
+echo "TAMPERED_I18N" > "$TMP/serve/luci-i18n-singbox-ui-ru.apk"   # hash no longer matches
+echo "aarch64_cortex-a53" > "$ARCHFILE"
+: > "$TMP/apk.log"
+if SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" \
+   sh "$ROOT/install.sh" 2>/dev/null; then
+  fail "install.sh accepted a tampered i18n apk (sha256 not enforced)"
+fi
+grep -q "." "$TMP/apk.log" 2>/dev/null && \
+  fail "apk add ran despite a tampered i18n apk (verify-before-install violated)"
 
 echo "ALL CHECKS PASSED (install.sh)"

@@ -52,25 +52,52 @@ esac
 info "detected arch: $ARCH"
 
 APK_NAME="luci-singbox-ui-${ARCH}.apk"
+# Russian translation package (noarch). Best-effort: installed only if present in
+# the release. Same trust model as the main apk (sha256 + --allow-untrusted).
+I18N_NAME="luci-i18n-singbox-ui-ru.apk"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT INT TERM
 
+# verify_sha256 <file_basename>: look <file> up in sha256sums.txt and die on a
+# mismatch. die when the file has no entry (we only verify what we ship).
+verify_sha256() {
+  vs_name="$1"
+  vs_want=$(awk -v a="$vs_name" '$2==a || $2=="*"a {print $1; exit}' "$TMP/sha256sums.txt")
+  [ -n "$vs_want" ] || die "no sha256 entry for $vs_name"
+  vs_have=$(sha256sum "$TMP/$vs_name" | cut -d' ' -f1)
+  [ "$vs_want" = "$vs_have" ] || die "sha256 mismatch for $vs_name — refusing to install"
+  info "verified $vs_name sha256"
+}
+
 # Download the per-arch apk + sha256sums.txt, verify integrity before installing.
 # Installed with --allow-untrusted (not signed by a device-trusted key); sha256
-# check is the integrity gate — die on mismatch or missing entry.
+# check is the integrity gate — die on mismatch or missing entry. NOTE: the
+# sha256sums.txt is co-located with the artifact on the same release host, so it
+# only defends against transport corruption, NOT a compromised/MITM'd host that
+# can serve both a malicious apk and a matching hash. For a stronger trust
+# boundary use the signed apk-feed (its index is signed; see feed/luci-singbox.pem).
 info "downloading $APK_NAME + sha256sums.txt"
 fetch "${APK_BASE}${APK_NAME}" "$TMP/$APK_NAME" || die "apk download failed"
 fetch "${APK_BASE}sha256sums.txt" "$TMP/sha256sums.txt" || die "sha256sums.txt download failed"
 
-want=$(awk -v a="$APK_NAME" '$2==a || $2=="*"a {print $1; exit}' "$TMP/sha256sums.txt")
-[ -n "$want" ] || die "no sha256 entry for $APK_NAME"
-have=$(sha256sum "$TMP/$APK_NAME" | cut -d' ' -f1)
-[ "$want" = "$have" ] || die "sha256 mismatch for $APK_NAME — refusing to install"
-info "verified $APK_NAME sha256"
+verify_sha256 "$APK_NAME"
+
+# Russian i18n is optional — only fetch+verify it if the release carries it.
+HAVE_I18N=0
+if fetch "${APK_BASE}${I18N_NAME}" "$TMP/$I18N_NAME" 2>/dev/null; then
+  verify_sha256 "$I18N_NAME"
+  HAVE_I18N=1
+else
+  info "no $I18N_NAME in release — skipping Russian translation"
+fi
 
 if [ "${SINGBOX_INSTALL_TEST:-}" != "1" ]; then apk update || die "apk update failed"; fi
 info "installing $APK_NAME (deps from feeds)"
 apk add --allow-untrusted "$TMP/$APK_NAME" || die "apk add failed"
+if [ "$HAVE_I18N" = "1" ]; then
+  info "installing $I18N_NAME"
+  apk add --allow-untrusted "$TMP/$I18N_NAME" || die "apk add (i18n) failed"
+fi
 
 cat <<EOF
 
