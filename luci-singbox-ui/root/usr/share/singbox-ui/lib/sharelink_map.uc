@@ -99,6 +99,7 @@ const INVENTORY = {
     vmess: [ "v", "ps", "add", "port", "id", "aid", "scy",
              "net", "type", "host", "path", "tls", "sni", "alpn", "fp" ],
     anytls: [ "sni", "insecure", "alpn", "hpkp" ],
+    socks: [ "udp" ],
 };
 
 const SPEC = {
@@ -179,6 +180,9 @@ const SPEC = {
         { param: "insecure", path: "tls.insecure", transform: "bool" },
         { param: "alpn",     path: "tls.alpn", transform: "csv" },
         { param: "hpkp",     unsupported: "HPKP cert pinning — no sing-box equivalent" },
+    ],
+    socks: [
+        { param: "udp", unsupported: "sing-box socks outbound is always UDP-capable" },
     ],
     vmess: [
         // Structural (parsed positionally in parse_vmess):

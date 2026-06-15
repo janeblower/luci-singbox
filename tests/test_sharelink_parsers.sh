@@ -171,4 +171,21 @@ out=$(je "
 [ "$out" = "anytls|mypass|s.com|1|T" ] || die "anytls parse" "$out"
 ok "anytls:// parsed (password + tls/sni/alpn/insecure)"
 
+# NEW: socks5://base64(user:pass)@host:port -> sing-box socks outbound (version 5).
+SOCKSUSER=$(printf '%s' 'alice:s3cret' | base64 -w0)
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('socks5://${SOCKSUSER}@h.ex:1080#SK');
+    print(sprintf('%s|%s|%s|%s|%d', r.type, r.version, r.username, r.password, r.server_port));
+")
+[ "$out" = "socks|5|alice|s3cret|1080" ] || die "socks5 parse" "$out"
+ok "socks5:// parsed (base64 user:pass + version 5)"
+
+# NEW: socks:// with plain userinfo (no base64) also works; udp param declared unsupported.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('socks://bob:pw@h.ex:1080?udp=1#SK2');
+    print(sprintf('%s|%s|%s|%s', r.username, r.password, r.version, r.udp==null?'OMIT':'LEAK'));
+")
+[ "$out" = "bob|pw|5|OMIT" ] || die "socks plain parse" "$out"
+ok "socks:// plain userinfo; udp declared unsupported"
+
 echo "OK"
