@@ -93,13 +93,18 @@ function parse_query(query_string) {
 }
 
 // h_tls_security(params, host, out) — enable the TLS block for security=tls|reality
-// and seed server_name (sni param wins, else the host). Reality adds its sub-block.
-// Consumes the `security` and `sni` params (SPEC Delegated).
+// and seed server_name (sni param wins, else the host). For reality, assemble the
+// reality sub-block (public_key + short_id) ONLY when pbk is present — emitting a
+// reality block without public_key makes sing-box FATAL at config load.
+// Consumes the `security`/`sni`/`pbk`/`sid` params (SPEC Delegated).
 function h_tls_security(params, host, out) {
 	let sec = params["security"];
 	if (sec !== "tls" && sec !== "reality") return;
 	out.tls = { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host };
-	if (sec === "reality") out.tls.reality = { enabled: true };
+	if (sec === "reality" && length(params["pbk"])) {
+		out.tls.reality = { enabled: true, public_key: params["pbk"] };
+		if (length(params["sid"])) out.tls.reality.short_id = params["sid"];
+	}
 }
 
 // h_transport(params, out) — v2ray transport block from type/path/host/serviceName.
@@ -107,7 +112,7 @@ function h_tls_security(params, host, out) {
 function h_transport(params, out) {
 	let tt = params["type"];
 	if (!length(tt) || tt === "tcp") return;
-	let tr = { type: tt };
+	let tr = { type: (tt === "h2") ? "http" : tt };
 	if (tt === "ws") {
 		if (length(params["path"])) tr.path = params["path"];
 		if (length(params["host"])) tr.headers = { Host: params["host"] };
@@ -115,7 +120,6 @@ function h_transport(params, out) {
 		if (length(params["serviceName"])) tr.service_name = params["serviceName"];
 		else if (length(params["path"]))   tr.service_name = params["path"];
 	} else if (tt === "http" || tt === "h2") {
-		tr.type = "http";
 		if (length(params["path"])) tr.path = params["path"];
 		if (length(params["host"])) tr.host = [ params["host"] ];
 	} else if (tt === "httpupgrade") {

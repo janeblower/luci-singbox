@@ -92,9 +92,26 @@ ok "vless alpn+allowInsecure+fp mapped via SPEC"
 # MAP: vless encryption/spx/mode/headerType are declared unsupported -> absent.
 out=$(je "
     let r = require('sharelink').parse_proxy_url('vless://11111111-1111-1111-1111-111111111111@h.ex:443?security=tls&encryption=none&mode=gun&headerType=http&spx=%2F#n');
-    print(sprintf('%s|%s|%s', r.encryption==null?'OMIT':'LEAK', r.mode==null?'OMIT':'LEAK', r.headerType==null?'OMIT':'LEAK'));
+    print(sprintf('%s|%s|%s|%s', r.encryption==null?'OMIT':'LEAK', r.mode==null?'OMIT':'LEAK', r.headerType==null?'OMIT':'LEAK', r.spx==null?'OMIT':'LEAK'));
 ")
-[ "$out" = "OMIT|OMIT|OMIT" ] || die "vless unsupported absent" "$out"
+[ "$out" = "OMIT|OMIT|OMIT|OMIT" ] || die "vless unsupported absent" "$out"
 ok "vless encryption/mode/headerType/spx left unmapped (declared)"
+
+# MAP: a plain vless (no security=) produces NO tls block.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('vless://11111111-1111-1111-1111-111111111111@h.ex:443?type=ws&path=%2Fw#n');
+    print(r.tls==null ? 'NOTLS' : 'LEAK');
+")
+[ "$out" = "NOTLS" ] || die "vless plain no tls" "$out"
+ok "vless without security emits no tls block"
+
+# MAP: security=reality but MISSING pbk must NOT emit a reality block
+# (a reality block without public_key FATALs sing-box at config load).
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('vless://11111111-1111-1111-1111-111111111111@h.ex:443?security=reality&sid=ab#n');
+    print(sprintf('%s|%s', r.tls.enabled===true?'TLS':'?', r.tls.reality==null?'NOREALITY':'LEAK'));
+")
+[ "$out" = "TLS|NOREALITY" ] || die "vless reality without pbk omits reality" "$out"
+ok "vless reality missing pbk omits reality block (no FATAL config)"
 
 echo "OK"

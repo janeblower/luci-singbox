@@ -94,6 +94,8 @@ const SPEC = {
         // are multi-param / context-dependent — handled by sharelink.uc helpers.
         { param: "security",    handler: "tls_security" },
         { param: "sni",         handler: "tls_security" },
+        { param: "pbk",         handler: "tls_security" },
+        { param: "sid",         handler: "tls_security" },
         { param: "type",        handler: "transport" },
         { param: "path",        handler: "transport" },
         { param: "host",        handler: "transport" },
@@ -102,8 +104,6 @@ const SPEC = {
         { param: "flow",         path: "flow" },
         { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled",
                                  when: { security: ["tls", "reality"] } },
-        { param: "pbk",          path: "tls.reality.public_key",  when: { security: "reality" } },
-        { param: "sid",          path: "tls.reality.short_id",    when: { security: "reality" } },
         { param: "alpn",         path: "tls.alpn", transform: "csv",
                                  when: { security: ["tls", "reality"] } },
         { param: "allowInsecure", path: "tls.insecure", transform: "bool",
