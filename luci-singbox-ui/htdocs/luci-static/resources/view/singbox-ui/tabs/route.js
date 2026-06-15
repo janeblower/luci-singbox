@@ -37,14 +37,17 @@ function buildRouteRulesMap() {
 	s.modaltitle = function (id) { return _('Route Rule') + ': ' + id; };
 	addRenameField(s);
 
-	var o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+	s.tab('match', _('Match'));
+	s.tab('action', _('Action'));
 
-	o = s.option(form.ListValue, 'type', _('Type'));
+	var o = s.taboption('match', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+
+	o = s.taboption('match', form.ListValue, 'type', _('Type'));
 	ROUTE_RULE_TYPES.forEach(function (kv) { o.value(kv[0], kv[1]); });
 	o.default = 'default'; o.rmempty = false;
 
-	// Read-only "Used by" badge column.
-	o = s.option(form.DummyValue, '_used_by', _('Used by'));
+	// Read-only "Used by" badge column (grid only).
+	o = s.taboption('match', form.DummyValue, '_used_by', _('Used by'));
 	o.modalonly = false;
 	o.cfgvalue = function (id) {
 		var c = consumedMap()[id];
@@ -88,9 +91,11 @@ function buildRuleSetsMap() {
 	s.modaltitle = function (id) { return _('Rule-Set') + ': ' + id; };
 	addRenameField(s);
 
-	var o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+	s.tab('basic', _('Basic'));
 
-	o = s.option(form.ListValue, 'type', _('Type'));
+	var o = s.taboption('basic', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+
+	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
 	RULE_SET_TYPES.forEach(function (kv) { o.value(kv[0], kv[1]); });
 	o.default = 'remote'; o.rmempty = false;
 
