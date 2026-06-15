@@ -3,7 +3,7 @@ let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "outbound", type: "naive", sing_box_type: "naive",
-    min_version: "1.13.0",
+    min_version: "1.13",
     shared: { tls: { force_enabled: true }, dial: true },
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
@@ -20,7 +20,7 @@ reg.register({
           json_key: "insecure_concurrency", coerce: "num" },
         { name: "quic_congestion_control", type: "string", tab: "basic",
           ui_label: "QUIC congestion control (1.13+)", advanced: true,
-          json_key: "quic_congestion_control" },
+          json_key: "quic_congestion_control", min_version: "1.13" },
     ],
 });
 
@@ -37,7 +37,7 @@ reg.register({
           ui_label: "Users (username:password)", placeholder: "alice:secret" },
         { name: "quic_congestion_control", type: "string", tab: "basic",
           ui_label: "QUIC congestion control (1.13+)", advanced: true,
-          json_key: "quic_congestion_control" },
+          json_key: "quic_congestion_control", min_version: "1.13" },
     ],
     users: {
         from: "naive_user",

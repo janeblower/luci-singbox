@@ -162,6 +162,25 @@ itf=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
 [ "$itf" = "OK" ] || { echo "FAIL tproxy.interface selector ($itf)"; exit 1; }
 echo "PASS tproxy.interface is a de-virtualized device selector"
 
+# 9b. BLD-3: per-field min_version reaches the frontend (FIELD_WHITELIST carries
+# it) so descriptor_form.js can gate version-labeled fields. ssh.cipher is
+# annotated min_version "1.14" (2-part per BLD-4 convention). Assert it survives
+# projection AND is the 2-part form.
+mvchk=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
+	let fs = require("fs");
+	let raw = fs.stdin.read("all") || "";
+	let j; try { j = json(raw); } catch (_) { print("FAIL_PARSE\n"); exit(0); }
+	let ssh = (j && j.schema && j.schema.outbound) ? j.schema.outbound.ssh : null;
+	if (ssh == null) { print("FAIL_NO_SSH\n"); exit(0); }
+	let c = null;
+	for (let f in ssh.fields) if (f.name == "ssh_cipher") c = f;
+	if (c == null)                 { print("FAIL_NO_CIPHER\n"); exit(0); }
+	if (c.min_version != "1.14")   { print("FAIL_MV:" + (c.min_version ?? "<absent>") + "\n"); exit(0); }
+	print("OK\n");
+')
+[ "$mvchk" = "OK" ] || { echo "FAIL ssh.cipher min_version projection ($mvchk)"; exit 1; }
+echo "PASS per-field min_version (ssh.cipher=1.14) reaches schema"
+
 # 10. No backend-only props leak through schema_dump's FIELD_WHITELIST projection.
 # Walks every field object in both outbound and inbound sections and fails if any
 # of the filler/registry backend-only keys (json_key, coerce, omit_when,

@@ -153,7 +153,14 @@ return {
                   gate: { any_present: ["reality_handshake_server", "reality_handshake_server_port"] },
                   fields: [
                     { name: "reality_handshake_server",      json_key: "server" },
-                    { name: "reality_handshake_server_port", json_key: "server_port", coerce: "num" },
+                    // sing-box reality requires BOTH handshake.server and
+                    // handshake.server_port. The field's UI default (443) is not
+                    // written to UCI unless touched, so when only the server is
+                    // filled the gate fires but server_port would be missing.
+                    // Backfill 443 + always-emit so a server-only config still
+                    // produces a valid handshake block (BLD-6).
+                    { name: "reality_handshake_server_port", json_key: "server_port",
+                      coerce: "num", default_when_empty: 443, omit_when: "never" },
                 ] },
             ] },
         ],

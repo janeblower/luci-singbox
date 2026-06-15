@@ -11,6 +11,12 @@ function fields() {
     return [
         { name: "action", type: "enum", tab: "action", required: true,
           json_key: "action", omit_when: "never", default: "route",
+          // `default` is a UI-only default; the filler only consults
+          // default_when_empty. Without it, a non-UI write (hand-edited UCI,
+          // partial import) with no `action` value emits "action":"" which
+          // sing-box rejects. Backfill the sing-box default "route" so
+          // action_ok()'s outbound validation stays meaningful (BLD-1).
+          default_when_empty: "route",
           values: [ "route", "route-options", "reject", "hijack-dns", "sniff", "resolve" ],
           ui_label: "Action" },
 

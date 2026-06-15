@@ -478,6 +478,79 @@ grep -q 'ghostfinal' "$TMPDIR/out.json" \
     && { echo "FAIL(S3.2): dangling route_default outbound must not become final"; cat "$TMPDIR/out.json"; exit 1; }
 echo "  PASS: dangling outbound refs dropped"
 
+# ---- GEN-1: selector/urltest dangling member + default are pruned ----
+echo "-- selector group dangling member dropped, dangling default cleared (GEN-1)"
+write_cfg "
+config outbound 'realob'
+	option enabled '1'
+	option type 'vless'
+	option server '1.2.3.4'
+	option server_port '443'
+	option uuid '11111111-1111-1111-1111-111111111111'
+
+config outbound 'mygroup'
+	option enabled '1'
+	option type 'selector'
+	list   group_outbounds 'realob'
+	list   group_outbounds 'ghostmember'
+	option group_default 'ghostdefault'
+"
+run_gen
+grep -q 'ghostmember' "$TMPDIR/out.json" \
+	&& { echo "FAIL(GEN-1): dangling selector member must be dropped"; cat "$TMPDIR/out.json"; exit 1; }
+grep -q 'ghostdefault' "$TMPDIR/out.json" \
+	&& { echo "FAIL(GEN-1): dangling selector default must be cleared"; cat "$TMPDIR/out.json"; exit 1; }
+check "selector keeps valid member" '"realob"' "$TMPDIR/out.json"
+echo "  PASS: GEN-1 selector dangling member/default pruned"
+
+# ---- BLD-7: a selector/urltest with no valid members is dropped entirely ----
+echo "-- selector group with only dangling members is dropped (BLD-7)"
+write_cfg "
+config outbound 'deadgroup'
+	option enabled '1'
+	option type 'selector'
+	list   group_outbounds 'nope1'
+	list   group_outbounds 'nope2'
+"
+run_gen
+grep -q '"tag": "deadgroup"' "$TMPDIR/out.json" \
+	&& { echo "FAIL(BLD-7): empty selector group must be dropped, not emit outbounds:[]"; cat "$TMPDIR/out.json"; exit 1; }
+grep -q '"outbounds": \[\]' "$TMPDIR/out.json" \
+	&& { echo "FAIL(BLD-7): empty outbounds:[] must never be emitted"; cat "$TMPDIR/out.json"; exit 1; }
+echo "  PASS: BLD-7 member-less group dropped"
+
+# ---- GEN-3: a stale sub_selector_type clamps to the safe default 'selector' ----
+echo "-- stale sub_selector_type clamps to selector (GEN-3)"
+write_cfg "
+config outbound 'subClamp'
+	option type 'subscription'
+	option sub_url 'http://example.test/x'
+	option sub_multi '1'
+	option sub_selector_type 'bogusvalue'
+"
+printf '%s\n' 'vless://u@host:443?security=tls#A' > "$SANDBOX_DIR/subs/sub_subClamp.txt"
+run_gen
+jpath_eq "GEN-3 bogus sub_selector_type -> selector" \
+	'(function(){for (let o in d.outbounds) if (o.tag=="subClamp") return o.type; return "<none>";})()' \
+	"selector" "$TMPDIR/out.json"
+
+# ---- GEN-2: post_process scrub runs AFTER route is assembled (route branch live) ----
+# An implicit outbound tag referenced by route.final must be scrubbed end-to-end.
+# We can't inject a custom implicit tag from UCI, so assert structurally that the
+# run_pipeline call is positioned after config.route assembly in generate.uc
+# (the previous call site, right after config.outbounds, left config.route null).
+echo "-- post_process pipeline runs after config.route assembly (GEN-2)"
+awk '
+	/config\.route[ ]*=[ ]*\{\}/ { route_line=NR }
+	/post_process\.run_pipeline/  { pipe_line=NR }
+	END {
+		if (route_line == 0 || pipe_line == 0) { print "MISSING"; exit 1 }
+		if (pipe_line > route_line) { print "OK" } else { print "BAD" }
+	}
+' "$GENERATE_UC" | grep -q '^OK$' \
+	|| { echo "FAIL(GEN-2): run_pipeline must run after config.route is assembled"; exit 1; }
+echo "  PASS: GEN-2 run_pipeline ordered after route assembly"
+
 # ---- S3.3: default_domain_resolver emitted even with no route block ----
 echo "-- default_domain_resolver for DNS-only config (no route content) (S3.3)"
 write_cfg "

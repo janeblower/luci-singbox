@@ -233,4 +233,38 @@ config dns 'dns'
 run_gen
 nocheck "dangling dns.final dropped" '"final": "ghost"'
 
+# GEN-4: build_rules computes the enabled-server/ruleset maps once and threads
+# them; passing the maps explicitly must yield byte-identical output to letting
+# build_rules compute them internally (pure refactor, no behavior change).
+echo "-- GEN-4: threaded maps == standalone build_rules"
+write_cfg "
+config ruleset 'rs'
+	option enabled '1'
+	option type 'remote'
+	option url 'https://x/y.srs'
+
+config dns_server 'fakeip'
+	option enabled '1'
+	option type 'fakeip'
+
+config dns_rule 'r1'
+	option enabled '1'
+	list   ruleset 'rs'
+	option server 'fakeip'
+"
+# shellcheck disable=SC2086
+g4=$(UCI_CONFIG_DIR="$TMPDIR" "$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+	let uci = require("uci").cursor(getenv("UCI_CONFIG_DIR"));
+	let dns = require("dns");
+	// standalone (each callee re-walks sections)
+	let a = sprintf("%J", dns.build_rules(uci));
+	// threaded (caller supplies precomputed maps)
+	let srv = {}; uci.foreach("singbox-ui","dns_server",function(s){ if(s.enabled!=="0") srv[s[".name"]]=true; });
+	let rse = {}; uci.foreach("singbox-ui","ruleset",function(s){ rse[s[".name"]]=(s.enabled!=="0"); });
+	let b = sprintf("%J", dns.build_rules(uci, srv, rse));
+	print(a === b ? "SAME\n" : sprintf("DIFF\n a=%s\n b=%s\n", a, b));
+')
+echo "$g4" | grep -q '^SAME$' || { echo "FAIL: GEN-4 threaded build_rules diverges"; echo "$g4"; exit 1; }
+echo "  PASS: GEN-4 threaded maps == standalone"
+
 echo "OK"

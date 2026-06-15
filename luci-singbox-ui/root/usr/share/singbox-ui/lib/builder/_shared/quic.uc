@@ -6,9 +6,10 @@ return {
 
     fields: [
         { name: "quic_initial_packet_size", type: "number", tab: "basic",
-          ui_label: "Initial packet size (1.14+)", advanced: true },
+          ui_label: "Initial packet size (1.14+)", advanced: true, min_version: "1.14" },
         { name: "quic_disable_path_mtu_discovery", type: "bool", tab: "basic",
-          ui_label: "Disable path MTU discovery (1.14+)", default: 0, advanced: true },
+          ui_label: "Disable path MTU discovery (1.14+)", default: 0, advanced: true,
+          min_version: "1.14" },
     ],
 
     emit_spec: {

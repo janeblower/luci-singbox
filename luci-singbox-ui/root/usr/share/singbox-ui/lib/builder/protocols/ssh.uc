@@ -27,11 +27,11 @@ reg.register({
         { name: "client_version", type: "string", tab: "basic", ui_label: "Client version",
           placeholder: "SSH-2.0-OpenSSH_7.4p1", advanced: true, json_key: "client_version" },
         { name: "ssh_cipher", type: "list", tab: "basic", ui_label: "Ciphers (1.14+)",
-          advanced: true, json_key: "cipher", coerce: "array" },
+          advanced: true, json_key: "cipher", coerce: "array", min_version: "1.14" },
         { name: "ssh_mac", type: "list", tab: "basic", ui_label: "MACs (1.14+)",
-          advanced: true, json_key: "mac", coerce: "array" },
+          advanced: true, json_key: "mac", coerce: "array", min_version: "1.14" },
         { name: "ssh_kex_algorithm", type: "list", tab: "basic", ui_label: "KEX algorithms (1.14+)",
-          advanced: true, json_key: "kex_algorithm", coerce: "array" },
+          advanced: true, json_key: "kex_algorithm", coerce: "array", min_version: "1.14" },
     ],
 });
 

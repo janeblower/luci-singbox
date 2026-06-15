@@ -200,4 +200,67 @@ out=$(je '
 [ "$out" = "ACCEPTED" ] || die "known dynamic source must be accepted" "$out"
 ok "known dynamic source accepted"
 
+# ---- BLD-8: requires.field referencing an unknown sibling is rejected ----
+out=$(je '
+    let reg = require("builder.protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"bld8a", sing_box_type:"x",
+            fields:[ { name:"network", type:"string", tab:"basic", json_key:"network" },
+                     { name:"pe", type:"string", tab:"basic", json_key:"packet_encoding",
+                       requires:{ field:"netwrk", value:"udp" } } ],   // typo
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "REJECTED" ] || die "BLD-8 typod requires.field must be rejected" "$out"
+ok "BLD-8 requires.field typo rejected"
+
+# ---- BLD-8: a valid sibling requires.field is accepted ----
+out=$(je '
+    let reg = require("builder.protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"bld8b", sing_box_type:"x",
+            fields:[ { name:"network", type:"string", tab:"basic", json_key:"network" },
+                     { name:"pe", type:"string", tab:"basic", json_key:"packet_encoding",
+                       requires:{ field:"network", value:"udp" } } ],
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "ACCEPTED" ] || die "BLD-8 valid requires.field must be accepted" "$out"
+ok "BLD-8 valid requires.field accepted"
+
+# ---- BLD-8: parent_enabled referencing a SHARED-block field is accepted ----
+out=$(je '
+    let reg = require("builder.protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"bld8c", sing_box_type:"x",
+            shared:{ tls:{} },
+            fields:[ { name:"foo", type:"string", tab:"tls", json_key:"foo",
+                       parent_enabled:"tls_enabled" } ],   // tls_enabled comes from shared tls
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "ACCEPTED" ] || die "BLD-8 parent_enabled to shared field must be accepted" "$out"
+ok "BLD-8 parent_enabled to shared field accepted"
+
+# ---- BLD-8: a non-scalar default_when_empty is rejected ----
+out=$(je '
+    let reg = require("builder.protocols.registry");
+    let threw = false;
+    try {
+        reg.register({ kind:"outbound", type:"bld8d", sing_box_type:"x",
+            fields:[ { name:"f", type:"string", tab:"basic", json_key:"f",
+                       default_when_empty:["bad"] } ],   // array, not scalar
+            emit:function(s){return {};} });
+    } catch (e) { threw = true; }
+    print(threw ? "REJECTED" : "ACCEPTED");
+')
+[ "$out" = "REJECTED" ] || die "BLD-8 non-scalar default_when_empty must be rejected" "$out"
+ok "BLD-8 non-scalar default_when_empty rejected"
+
 echo "ALL PASS: test_registry_robustness ($pass checks)"

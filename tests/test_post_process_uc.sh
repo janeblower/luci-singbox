@@ -9,7 +9,13 @@ cd "$(dirname "$0")/.."
 UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
 run_uc() { "$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" -e "$1"; }
 
-echo "-- scrub_implicit_refs drops implicit-direct refs in dns/route"
+# GEN-2: dns detour to the implicit `direct` is ALWAYS scrubbed (sing-box
+# rejects detour to the implicit/empty direct). But a route rule / final naming
+# `direct` when it IS a real injected outbound must be KEPT — routing TO direct
+# is valid sing-box, and stripping it would leave a route action with no
+# outbound. The route scrub only fires for an implicit tag that does NOT resolve
+# to a real outbound (truly dangling).
+echo "-- scrub_implicit_refs: dns detour scrubbed; route ref to real implicit direct kept"
 out=$(run_uc '
 	let pp = require("post_process");
 	let cfg = {
@@ -23,8 +29,22 @@ out=$(run_uc '
 	print(((r.route.rules[0].outbound ?? "(absent)") == "(absent)" || r.route.rules[0].outbound === null ? "scrubbed" : r.route.rules[0].outbound) + "\n");
 ')
 [ "$out" = "scrubbed
-scrubbed
-scrubbed" ] && echo "  PASS: implicit refs scrubbed" || { echo "FAIL: [$out]"; exit 1; }
+direct
+direct" ] && echo "  PASS: dns detour scrubbed, route ref to real direct kept" || { echo "FAIL: [$out]"; exit 1; }
+
+echo "-- scrub_implicit_refs: route ref to a DANGLING implicit tag IS scrubbed"
+out=$(run_uc '
+	let pp = require("post_process");
+	let cfg = {
+		outbounds: [{ type: "vless", tag: "p" }],
+		route: { final: "ghost", rules: [{ outbound: "ghost" }] }
+	};
+	let r = pp.scrub_implicit_refs(cfg, { implicit_tags: ["ghost"] });
+	print(((r.route.final ?? "(absent)") == "(absent)" || r.route.final === null ? "scrubbed" : r.route.final) + "\n");
+	print(((r.route.rules[0].outbound ?? "(absent)") == "(absent)" || r.route.rules[0].outbound === null ? "scrubbed" : r.route.rules[0].outbound) + "\n");
+')
+[ "$out" = "scrubbed
+scrubbed" ] && echo "  PASS: dangling implicit route refs scrubbed" || { echo "FAIL: [$out]"; exit 1; }
 
 echo "-- scrub_implicit_refs no-op when implicit_tags empty"
 out=$(run_uc '
