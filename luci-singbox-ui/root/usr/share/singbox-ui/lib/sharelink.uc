@@ -276,6 +276,7 @@ function parse_ss(url) {
 	// The plugin value's first ';'-segment is the plugin name; the remainder is
 	// the opts string. parse_query splits on the first '=' only, so an
 	// unencoded (or %-encoded) ';'/'=' inside the value survives intact.
+	// SPEC ss: { param:"plugin", handler:"ss_plugin" } — bespoke name;opts split below
 	if (length(query)) {
 		let pl = parse_query(query)["plugin"];
 		if (length(pl)) {
@@ -356,6 +357,15 @@ function parse_vmess(url) {
 		if (!length(sni)) sni = length(whost) ? whost : host;
 		out.tls = { enabled: true, server_name: sni };
 	}
+	// Direct SPEC pass (alpn/fp onto the tls block). vmess params == the decoded
+	// v2rayN JSON object; apply_params reads it the same as a query map. The
+	// gate {tls:"tls"} ensures alpn/fp only attach when TLS is enabled.
+	let vparams = {
+		tls:  drop_ctrl(`${cfg.tls ?? ""}`),
+		alpn: drop_ctrl(`${cfg.alpn ?? ""}`),
+		fp:   drop_ctrl(`${cfg.fp ?? ""}`),
+	};
+	smap.apply_params(vparams, smap.SPEC.vmess, out);
 	return out;
 }
 
