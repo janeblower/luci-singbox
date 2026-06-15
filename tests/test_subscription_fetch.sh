@@ -50,4 +50,38 @@ UC
 out2="$("$UCODE" -L "$LIB/lib" -L "$LIB" "$WORK/probe2.uc")"
 [ "$out2" = "absent" ] || { echo "FAIL: _build_fetch_config_for_test still exported"; exit 1; }
 
+# Test C: the REAL _fetcher invokes curl with the expected argv — proves
+# helpers.sq() quoting holds and DEFAULT_UA fallback fires for an empty UA.
+REC="$WORK/curl-rec.sh"
+cat > "$REC" <<'EOF'
+#!/bin/sh
+printf '%s\n' "$@" >> "$ARGV_LOG"
+# emulate curl: write body to -o target so downstream parse succeeds
+out=""; prev=""
+for a in "$@"; do [ "$prev" = "-o" ] && out="$a"; prev="$a"; done
+[ -n "$out" ] && printf 'trojan://x@h:1#n\n' > "$out"
+exit 0
+EOF
+chmod +x "$REC"
+export ARGV_LOG="$WORK/argv.log"; : > "$ARGV_LOG"
+
+cat > "$WORK/probeC.uc" <<UC
+let sub = require("subscription");
+sub._fetcher_real_for_test([
+  { name:"s1", url:"https://h/x?a=1&b=2", ua:"Custom UA/1.0",
+    hdr_path:"$WORK/s1.hdr", body_path:"$WORK/s1.body", opts:{timeout:9} },
+  { name:"s2", url:"https://h/y", ua:"",
+    hdr_path:"$WORK/s2.hdr", body_path:"$WORK/s2.body", opts:{timeout:9} },
+]);
+UC
+CURL="$REC" "$UCODE" -L "$LIB/lib" -L "$LIB" "$WORK/probeC.uc"
+# url + custom UA appear as single argv tokens (quoting preserved the '&' and space)
+grep -qxF 'https://h/x?a=1&b=2' "$ARGV_LOG" || { echo "FAIL: url not a single argv token"; cat "$ARGV_LOG"; exit 1; }
+grep -qxF 'Custom UA/1.0' "$ARGV_LOG"        || { echo "FAIL: ua not a single argv token"; cat "$ARGV_LOG"; exit 1; }
+# empty UA falls back to the browser default
+grep -qxF 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36' "$ARGV_LOG" \
+  || { echo "FAIL: DEFAULT_UA fallback not applied for empty UA"; cat "$ARGV_LOG"; exit 1; }
+# curl flags present
+grep -qxF -- '--max-time' "$ARGV_LOG" || { echo "FAIL: --max-time missing"; exit 1; }
+
 echo "PASS"
