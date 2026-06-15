@@ -188,4 +188,12 @@ out=$(je "
 [ "$out" = "bob|pw|5|OMIT" ] || die "socks plain parse" "$out"
 ok "socks:// plain userinfo; udp declared unsupported"
 
+# NEW: socks user-only userinfo that is coincidentally valid base64 must stay literal.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('socks://justuser@h.ex:1080#n');
+    print(sprintf('%s|%s', r.username, r.password==null?'NOPASS':'LEAK'));
+")
+[ "$out" = "justuser|NOPASS" ] || die "socks user-only literal" "$out"
+ok "socks:// user-only userinfo kept literal (not mis-decoded as base64)"
+
 echo "OK"

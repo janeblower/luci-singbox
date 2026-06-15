@@ -271,9 +271,16 @@ function parse_socks(url) {
 	if (length(raw)) {
 		let ui = url_decode(raw);
 		let colon = index(ui, ":");
-		if (colon < 0) {                              // try base64(user:pass)
+		if (colon < 0) {                              // maybe base64("user:pass")?
 			let dec = b64_decode(raw);                // decode the ORIGINAL raw, not url_decoded
-			if (dec != null) { ui = drop_ctrl(dec); colon = index(ui, ":"); }
+			if (dec != null) {
+				let decd = drop_ctrl(dec);
+				let dc = index(decd, ":");
+				// Only adopt the decoded form if it actually yields user:pass —
+				// a colon-less userinfo (e.g. "justuser") can be valid base64 yet
+				// decode to junk; in that case keep the literal raw as username.
+				if (dc >= 0) { ui = decd; colon = dc; }
+			}
 		}
 		if (colon >= 0) {
 			username = substr(ui, 0, colon);
