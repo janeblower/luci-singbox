@@ -13,7 +13,66 @@ UCODE_LIB=/usr/share/singbox-ui/lib
 # the procd command below). Used for both `check` (S6.1) and `run`.
 SINGBOX_BIN="${SINGBOX_BIN:-/usr/bin/sing-box}"
 
+# --- Service-lifecycle lock (missed-1) -------------------------------------
+# Every daemon-mutating path funnels through this script: boot `start`, the
+# rpcd `restart` method (→ `reload`), and BOTH */15 cron jobs (subscription.uc
+# and nft-rulesets.uc each shell out to `<init> reload`). Without
+# serialization two stop+start cycles can interleave and leave sing-box down
+# or double-started, or an nft apply can race a half-written restart. We
+# serialize with an atomic mkdir lock-DIRECTORY — busybox ash has no flock and
+# `>` is not exclusive, so mkdir is the atomic primitive (same approach as
+# nftables.uc's apply-lock). Re-entrant within ONE process via a depth counter
+# so reload_config can hold the lock across its nested stop+start. A stale
+# lock (holder crashed mid-cycle) is reclaimed after LC_LOCK_TTL so it can
+# never wedge boot/cron forever.
+LC_LOCK_DIR=/tmp/singbox-ui/.lifecycle.lock
+LC_LOCK_TTL="${SINGBOX_LIFECYCLE_TTL:-120}"
+
+_lc_acquire() {
+	_LC_DEPTH=$(( ${_LC_DEPTH:-0} + 1 ))
+	[ "$_LC_DEPTH" -gt 1 ] && return 0   # already held by this process
+	mkdir -p /tmp/singbox-ui
+	_lc_i=0
+	while :; do
+		if mkdir "$LC_LOCK_DIR" 2>/dev/null; then
+			echo $$ > "$LC_LOCK_DIR/pid" 2>/dev/null
+			return 0
+		fi
+		# Stale-lock reclaim: steal a lock dir older than the TTL.
+		_lc_now=$(date +%s)
+		_lc_mt=$(date -r "$LC_LOCK_DIR" +%s 2>/dev/null || echo "$_lc_now")
+		if [ $(( _lc_now - _lc_mt )) -ge "$LC_LOCK_TTL" ]; then
+			logger -t singbox-ui "lifecycle lock stale — reclaiming"
+			rm -rf "$LC_LOCK_DIR" 2>/dev/null
+			continue
+		fi
+		_lc_i=$(( _lc_i + 1 ))
+		if [ "$_lc_i" -ge "$LC_LOCK_TTL" ]; then
+			# Waited a full TTL without success — proceed rather than wedge
+			# boot/cron forever; the holder is reclaimed on the next pass.
+			logger -t singbox-ui "lifecycle lock wait timed out — proceeding"
+			return 0
+		fi
+		sleep 1
+	done
+}
+
+_lc_release() {
+	_LC_DEPTH=$(( ${_LC_DEPTH:-0} - 1 ))
+	[ "${_LC_DEPTH:-0}" -gt 0 ] && return 0   # still held by an outer caller
+	_LC_DEPTH=0
+	rm -rf "$LC_LOCK_DIR" 2>/dev/null
+}
+
 start_service() {
+	_lc_acquire
+	__do_start
+	_ss_rc=$?
+	_lc_release
+	return "$_ss_rc"
+}
+
+__do_start() {
 	mkdir -p /tmp/singbox-ui
 
 	# Always try to refresh on (re)start, with short curl timeouts so boot
@@ -73,7 +132,12 @@ start_service() {
 	# Capabilities-only is a real security win without that risk.
 	procd_set_param capabilities /etc/capabilities/singbox-ui.json
 	procd_set_param command "$SINGBOX_BIN" run -c /tmp/singbox-ui.json
-	procd_set_param respawn
+	# missed-2: explicit respawn policy. sing-box is a must-stay-up proxy and
+	# the `sing-box check` gate above already prevents config-rejection respawn
+	# loops, so we keep retrying indefinitely (retry=0) instead of letting
+	# procd's default give up after ~5 crashes/hour and leave the tunnel down.
+	# Args: <threshold-s> <cooldown-s> <retry: 0 = unlimited>.
+	procd_set_param respawn 3600 5 0
 	procd_close_instance
 
 	# C3.3: record service-start timestamp for status_detail RPC. S1.1: the
@@ -104,14 +168,21 @@ start_service() {
 }
 
 stop_service() {
+	_lc_acquire
 	# G7: nftables.uc remove prints "No such file or directory" on a
 	# fresh stop (no table to delete). Symmetric with start_service
 	# (line above already suppresses); keep operator logs quiet.
 	ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove 2>/dev/null
+	_lc_release
 }
 
 reload_config() {
-	# sing-box does not support signal-based config reload.
+	# sing-box does not support signal-based config reload. Hold the
+	# lifecycle lock across the WHOLE stop+start (missed-1) so a concurrent
+	# reload/restart/boot cannot interleave its own stop+start in the gap.
+	# The lock is re-entrant, so the nested stop/start below do not deadlock.
+	_lc_acquire
 	stop
 	start
+	_lc_release
 }

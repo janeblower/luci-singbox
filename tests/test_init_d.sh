@@ -289,4 +289,60 @@ grep -q 'rejected config' "$LOGGER_LOG" || fail "S6.1 expected a 'rejected confi
 grep -q 'procd_open_instance' "$PROCD_LOG" && fail "S6.1 procd must not start a rejected config"
 pass "S6.1 invalid config refused before procd"
 
+# ---- missed-1: service-lifecycle lock (mkdir lock-dir, re-entrant, stale TTL) ----
+echo "-- missed-1: lifecycle lock acquired/released, re-entrant, stale-reclaimed"
+LOCK=/tmp/singbox-ui/.lifecycle.lock
+# Restore happy-path stubs (the S6.1 block left sing-box failing `check`).
+cat >"$TMPDIR/bin/sing-box" <<'EOF'
+#!/bin/sh
+echo "sing-box $*" >>"$SINGBOX_LOG"
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/sing-box"
+cat >"$TMPDIR/bin/ucode" <<'EOF'
+#!/bin/sh
+echo "ucode $*" >>"$UCODE_LOG"
+for _arg in "$@"; do
+    case "$_arg" in
+        */generate.uc) echo '{"ok":true}' > /tmp/singbox-ui.json; break ;;
+    esac
+done
+exit 0
+EOF
+chmod +x "$TMPDIR/bin/ucode"
+
+# (a) depth-counter re-entrancy: a nested acquire keeps the lock held until the
+#     OUTERMOST release (so reload_config can hold it across stop+start).
+rm -rf "$LOCK"
+rc=0
+PATH="$TMPDIR/bin:$PATH" sh -c "
+    . '$PWD/$INIT'
+    _lc_acquire; _lc_acquire
+    [ -d '$LOCK' ] || exit 3
+    _lc_release
+    [ -d '$LOCK' ] || exit 4
+    _lc_release
+    [ -d '$LOCK' ] && exit 5
+    exit 0
+" || rc=$?
+[ "$rc" = 0 ] || fail "lifecycle lock re-entrancy/release broken (rc=$rc)"
+pass "lock re-entrant; released only at depth 0"
+
+# (b) a successful start_service leaves NO lock behind.
+rm -f /tmp/singbox-ui.json; rm -rf "$LOCK"
+PATH="$TMPDIR/bin:$PATH" sh -c ". '$PWD/$INIT'; start_service"
+[ -d "$LOCK" ] && fail "start_service did not release the lifecycle lock"
+pass "start_service releases the lock"
+
+# (c) a STALE lock (older than TTL) is reclaimed, not deadlocked.
+rm -f /tmp/singbox-ui.json
+mkdir -p "$LOCK"; echo 999999 > "$LOCK/pid"
+sleep 2   # age it past the 1s TTL set below
+rc=0
+PATH="$TMPDIR/bin:$PATH" SINGBOX_LIFECYCLE_TTL=1 \
+    sh -c ". '$PWD/$INIT'; start_service" >/dev/null 2>&1 || rc=$?
+[ "$rc" = 0 ] || fail "stale lock not reclaimed; start_service rc=$rc (deadlock?)"
+[ -d "$LOCK" ] && fail "stale-lock path left a lock behind"
+pass "stale lock reclaimed (no deadlock)"
+
 echo "OK"

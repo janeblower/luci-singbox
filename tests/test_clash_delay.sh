@@ -63,4 +63,33 @@ out=$(call '{"name":"a\r\nX"}')
 [ "$(status "$out")" = "ok" ] || { echo "FAIL: CRLF name errored unexpectedly: $out"; exit 1; }
 case "$(body "$out")" in *"%0D%0A"*) echo "FAIL: CR/LF leaked into url: $(body "$out")"; exit 1;; esac
 
+# --- RPC-1: curl's `-m` deadline must COVER the probe timeout, never cut it ---
+# Previously clash_proxy hardcoded `-m 5`, so a probe asking for >5 s was killed
+# by curl at 5 s and always reported a failure. The handler now derives curl's
+# -m (whole seconds) from the probe `timeout` (ms) + ~2 s slack, clamped to 65 s.
+# A second curl stub records its full argv so we can read back the -m value.
+cat >"$TMP/curl_argv" <<'EOF'
+#!/bin/sh
+# Print the -m value: scan argv for the token right after "-m".
+prev=""; for a in "$@"; do [ "$prev" = "-m" ] && { printf '%s' "$a"; exit 0; }; prev="$a"; done
+EOF
+chmod +x "$TMP/curl_argv"
+call_m() { # $1 = JSON args -> prints the curl -m value the handler chose
+  printf '%s' "$1" | env CLASH_CURL="$TMP/curl_argv" CLASH_LISTEN="127.0.0.1" \
+    CLASH_PORT="9090" CLASH_SECRET="" \
+    "$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" "$HANDLER" call clash_delay 2>/dev/null \
+  | "$UCODE_BIN" -e 'let fs=require("fs");let d=json(fs.stdin.read("all")||"{}");print(d.body ?? "");'
+}
+# default 5000 ms probe -> -m >= 5 (was exactly 5 before; now 5/1000 ceil + 2 = 7)
+m=$(call_m '{"name":"a"}')
+[ -n "$m" ] && [ "$m" -ge 5 ] || { echo "FAIL(RPC-1): default probe gave -m=$m, want >=5"; exit 1; }
+# 10000 ms probe MUST get a curl -m > 5 (the old bug capped at 5)
+m=$(call_m '{"name":"a","timeout":"10000"}')
+[ -n "$m" ] && [ "$m" -gt 5 ] || { echo "FAIL(RPC-1): 10s probe still capped at -m=$m (<=5)"; exit 1; }
+[ "$m" -ge 12 ] || { echo "FAIL(RPC-1): 10s probe -m=$m does not cover the 10s deadline"; exit 1; }
+# Max 60000 ms probe -> curl -m clamped to <= 65 (no runaway hang)
+m=$(call_m '{"name":"a","timeout":"60000"}')
+[ -n "$m" ] && [ "$m" -le 65 ] || { echo "FAIL(RPC-1): 60s probe -m=$m exceeds 65s clamp"; exit 1; }
+echo "PASS(RPC-1): curl -m deadline scales with probe timeout, clamped to 65s"
+
 echo "PASS: clash_delay builds/validates the delay URL"

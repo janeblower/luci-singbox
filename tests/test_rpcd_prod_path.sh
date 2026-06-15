@@ -141,4 +141,56 @@ out=$(ubus call singbox-ui export_section '{"kind":"outbound","name":"nonexisten
 assert_clean export_section "$out"
 echo "  PASS: ubus call singbox-ui export_section forks helper via shebang"
 
+# 4d) CRITIC/missed-6: export_section must return a RESOLVED section for a real
+#     UCI section — not merely a clean envelope. A clean-but-error envelope (4c)
+#     proves the child launched; it does NOT prove export_section.uc's own
+#     `require('inbound')` / builder.* chain resolved. If the explicit
+#     `ucode -L /usr/share/singbox-ui/lib export_section.uc` wiring (env UCODE_LIB
+#     → uc_argv) regressed, the helper would still launch but emit
+#     status:"error" with no section. Seed one inbound section into the live UCI,
+#     then assert the call returns status:"ok" AND a section object whose type
+#     was built by the lib chain — proving -L resolved require('inbound') etc.
+SEED_NAME="prodpath_probe_in"
+# This test installs only the handler+lib, not /etc/config/singbox-ui, so the
+# UCI config package may not exist yet — `uci set` on a missing package errors
+# ("Entry not found"). Seed the package's default config (falling back to an
+# empty file) so the section can be created and committed for the rpcd child
+# to read.
+_seeded_cfg=0
+if [ ! -f /etc/config/singbox-ui ]; then
+	cp -f "$SRC/etc/config/singbox-ui" /etc/config/singbox-ui 2>/dev/null || : > /etc/config/singbox-ui
+	# Remember we created it so we can remove it afterwards — otherwise a
+	# later test (test_uci_defaults_migration) refuses to run on a "real
+	# install" and silently SKIPs, losing coverage.
+	_seeded_cfg=1
+fi
+# Idempotent: drop any leftover from a prior run, then create + commit.
+uci -q delete "singbox-ui.${SEED_NAME}" 2>/dev/null || true
+uci set "singbox-ui.${SEED_NAME}=inbound"
+uci set "singbox-ui.${SEED_NAME}.enabled=1"
+uci set "singbox-ui.${SEED_NAME}.protocol=shadowsocks"
+uci set "singbox-ui.${SEED_NAME}.listen=::"
+uci set "singbox-ui.${SEED_NAME}.listen_port=18388"
+uci set "singbox-ui.${SEED_NAME}.shadowsocks_method=aes-256-gcm"
+uci set "singbox-ui.${SEED_NAME}.server_password=prodpathsecret"
+uci commit singbox-ui
+
+out=$(ubus call singbox-ui export_section "{\"kind\":\"inbound\",\"name\":\"${SEED_NAME}\"}" 2>/dev/null) \
+	|| { echo "FAIL: export_section on a real section returned non-zero"; uci -q delete "singbox-ui.${SEED_NAME}"; uci commit singbox-ui; exit 1; }
+# Clean up the seeded section before asserting, so a failure can't leave UCI dirty.
+uci -q delete "singbox-ui.${SEED_NAME}" 2>/dev/null || true
+uci commit singbox-ui
+# Must be a RESOLVED section: status:ok + a section object the lib chain built
+# (type echoes the protocol, tag echoes the section name). A missing/empty
+# section here means export_section.uc's require()s did not resolve via -L.
+echo "$out" | grep -q '"status": *"ok"' \
+	|| { echo "FAIL: export_section did not resolve a real section (require -L wiring regressed?); out=$out"; exit 1; }
+echo "$out" | grep -q '"type": *"shadowsocks"' \
+	|| { echo "FAIL: export_section returned no resolved section.type=shadowsocks; out=$out"; exit 1; }
+echo "  PASS: ubus call singbox-ui export_section returns a RESOLVED section (proves -L require chain)"
+
+# Restore the pristine env: if WE created /etc/config/singbox-ui, remove it so
+# downstream tests (e.g. test_uci_defaults_migration) still run.
+if [ "$_seeded_cfg" = 1 ]; then rm -f /etc/config/singbox-ui; fi
+
 echo "OK"

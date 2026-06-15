@@ -684,6 +684,29 @@ printf "%s\n" "$out" | je 'd.status == "ok"' \
 	|| { echo "FAIL: S1-3 allowlisted clash_mutate path regressed; out=$out"; exit 1; }
 echo "  PASS: S1-3 clash endpoint allowlist"
 
+echo "-- RPC-4: read vs write Clash endpoints use SEPARATE allowlists"
+# read-only resources (/version, /traffic, /group) are GET-allowed but must NOT
+# accept a write verb through clash_mutate — read and write now have split
+# allowlists, so a write-ACL caller can't mutate a read-only endpoint.
+for ro in /version /traffic /group; do
+	# GET still works (read allowlist).
+	out=$(echo "{\"path\":\"$ro\"}" | CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok run_h call clash_get)
+	printf "%s\n" "$out" | je 'd.status == "ok"' \
+		|| { echo "FAIL(RPC-4): clash_get $ro should be allowed; out=$out"; exit 1; }
+	# But a write verb to the same path is refused (not on the write allowlist).
+	out=$(echo "{\"method\":\"DELETE\",\"path\":\"$ro\"}" | CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok run_h call clash_mutate)
+	printf "%s\n" "$out" | je 'd.status == "error"' \
+		|| { echo "FAIL(RPC-4): clash_mutate to read-only $ro should be refused; out=$out"; exit 1; }
+done
+# The genuine write endpoints still accept mutations.
+out=$(echo '{"method":"PUT","path":"/proxies/MyGroup"}' | CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL(RPC-4): clash_mutate PUT /proxies/<group> should be allowed; out=$out"; exit 1; }
+out=$(echo '{"method":"DELETE","path":"/connections"}' | CLASH_CURL="$tmpdir/curl" CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok run_h call clash_mutate)
+printf "%s\n" "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL(RPC-4): clash_mutate DELETE /connections should be allowed; out=$out"; exit 1; }
+echo "  PASS: RPC-4 read/write Clash allowlists are separate"
+
 echo "-- call protocol_schema dispatches and returns schema"
 out=$(echo '{}' | run_h call protocol_schema)
 printf "%s\n" "$out" | je 'd.status == "ok"' \
