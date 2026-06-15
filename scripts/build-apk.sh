@@ -26,7 +26,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 APP_NAME="luci-singbox-ui"
 APP_DESC="LuCI support for singbox-ui"
-APP_DEPENDS="libc luci-base nftables sing-box jq curl"
+APP_DEPENDS="libc luci-base sing-box jq curl"
 APP_CONFFILE="/etc/config/singbox-ui"
 
 I18N_NAME="luci-i18n-singbox-ui-ru"
