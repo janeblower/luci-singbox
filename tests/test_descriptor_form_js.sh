@@ -346,11 +346,13 @@ if (!threw) pass('null/missing payload handled without throw');
 // ---------------------------------------------------------------------------
 // Test 13: advanced + parent_enabled + depends → a single depends arm that
 // ANDs the protocol gate with the per-value depends, the parent_enabled flag,
-// and the per-tab _show_advanced toggle.
+// and the per-tab _show_advanced toggle. Uses kind 'dns' because the advanced
+// toggle is now scoped to dns/route only (Bug 4); inbound/outbound skip it
+// (covered by Test 13b below).
 // ---------------------------------------------------------------------------
 {
 	const { s: sAdv, opts: optsAdv } = makeSection();
-	applyMaterialized(sAdv, 'outbound', 'vless', {
+	applyMaterialized(sAdv, 'dns', 'vless', {
 		tabs: ['tls'],
 		fields: [{
 			name: 'reality_short_id', type: 'string', tab: 'tls',
@@ -366,9 +368,37 @@ if (!threw) pass('null/missing payload handled without throw');
 	    d.tls_enable === '1' &&
 	    d._show_advanced_tls === '1' &&
 	    o._depends.length === 1) {
-		pass('advanced/parent_enabled/depends folded into one AND-arm');
+		pass('advanced/parent_enabled/depends folded into one AND-arm (dns)');
 	} else {
 		fail('advanced/parent_enabled/depends arm', JSON.stringify(o && o._depends));
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Test 13b: for inbound/outbound the advanced toggle is NOT added to the arm
+// (Bug 4 — all fields shown). parent_enabled + depends still apply.
+// ---------------------------------------------------------------------------
+{
+	const { s: sNoAdv, opts: optsNoAdv } = makeSection();
+	applyMaterialized(sNoAdv, 'outbound', 'vless', {
+		tabs: ['tls'],
+		fields: [{
+			name: 'reality_short_id', type: 'string', tab: 'tls',
+			advanced: true, parent_enabled: 'tls_enable',
+			depends: { field: 'tls_reality', value: '1' },
+		}],
+	});
+	const o = optsNoAdv.find(x => x._name === 'reality_short_id');
+	const d = o && o._depends[0];
+	if (d &&
+	    d.type === 'vless' &&
+	    d.tls_reality === '1' &&
+	    d.tls_enable === '1' &&
+	    !('_show_advanced_tls' in d) &&
+	    o._depends.length === 1) {
+		pass('outbound advanced field has no _show_advanced gate (Bug 4)');
+	} else {
+		fail('outbound advanced arm should omit _show_advanced_tls', JSON.stringify(o && o._depends));
 	}
 }
 
