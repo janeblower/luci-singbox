@@ -29,10 +29,12 @@ echo "-- helpers.uc: detect_rs_format / csv_list / is_outbound_proxy_kind / fnv1
 uc '
 let h = require("helpers");
 function assert(c, m) { if (!c) { warn("ASSERT: " + m + "\n"); exit(1); } }
-assert(h.detect_rs_format("https://x/a.srs", null)  === "binary", "srs->binary");
-assert(h.detect_rs_format("https://x/a.json", null) === "source", "json->source");
-assert(h.detect_rs_format("https://x/a.srs?v=1", null) === "binary", "query stripped");
-assert(h.detect_rs_format("https://x/a.txt", "source") === "source", "override wins");
+assert(h.detect_rs_format("https://x/a.srs")  === "binary", "srs->binary");
+assert(h.detect_rs_format("https://x/a.json") === "source", "json->source");
+assert(h.detect_rs_format("https://x/a.srs?v=1") === "binary", "query stripped");
+// No override arg anymore (the `format` UI field was removed): unknown
+// extension falls back to the binary default.
+assert(h.detect_rs_format("https://x/a.txt") === "binary", "unknown ext -> binary default");
 assert(length(h.csv_list("a, b ,c")) === 3, "csv 3 items");
 assert(h.csv_list("a, b ,c")[1] === "b", "csv trims");
 assert(length(h.csv_list("")) === 0, "empty csv -> []");

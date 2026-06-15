@@ -6,7 +6,10 @@ function build_log(cur) {
 	let s = cur.get_all("singbox-ui", "log");
 	if (s == null) return null;
 	if (s.enabled === "0") return { disabled: true };
-	let out = { level: s.level || "info", timestamp: true };
+	// Emit `disabled: false` explicitly when logging is on. sing-box defaults to
+	// enabled when the key is absent, but being explicit makes it unambiguous in
+	// the generated config that logging is active (operator diagnosing failures).
+	let out = { disabled: false, level: s.level || "info", timestamp: true };
 	if (s.output != null && length(s.output)) out.output = s.output;
 	return out;
 }

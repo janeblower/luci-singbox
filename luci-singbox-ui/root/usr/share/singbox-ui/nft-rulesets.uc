@@ -323,9 +323,9 @@ function cmd_fetch_rulesets(cur) {
 			continue;
 		}
 		// Cache-extracted remote rule-sets are always compiled .srs (force
-		// binary); local sources keep extension-based detection.
+		// binary); local sources use extension-based detection (no UI override).
 		let fmt = m.force_binary ? "binary"
-		          : helpers.detect_rs_format(m.target, helpers.uci_get_or_empty(cur, m.name, "format"));
+		          : helpers.detect_rs_format(m.target);
 		if (fmt === "binary") {
 			if (system([SINGBOX, "rule-set", "decompile", m.raw_path, "-o", m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: decompile failed for ${m.name}`);
