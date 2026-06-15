@@ -338,8 +338,12 @@ fn page_size(m: &[u8]) -> usize {
 fn page(m: &[u8], ps: usize, id: u64) -> &[u8] {
     // reject ids that overflow or fall outside the mapping (corrupt db).
     // Compute in u64 (pgid is u64; usize is 32-bit on arm/mips) then narrow.
-    let off = match id.checked_mul(ps as u64) {
-        Some(v) if v + 16 <= m.len() as u64 => v as usize,
+    // CRITIC/missed-5: `v + 16` is checked too — a forged pgid whose product
+    // `id*ps` lands in the top 16 of the u64 range passes `checked_mul` but would
+    // wrap `v + 16` back into [0, m.len()], smuggling a truncated `v as usize`
+    // offset past the bounds test. `checked_add` makes the wrap a clean error.
+    let off = match id.checked_mul(ps as u64).and_then(|v| v.checked_add(16)) {
+        Some(end) if end <= m.len() as u64 => (end - 16) as usize,
         _ => { err(b"invalid database\n"); unsafe { sys_exit(1) } }
     };
     // bbolt FastCheck: a page must self-identify as the requested id, else a

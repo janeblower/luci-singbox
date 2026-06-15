@@ -32,6 +32,10 @@ const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 const CLASH_CURL   = getenv("CLASH_CURL")   || "curl";
 const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
+// RPC-3: probe core_version via the same overridable binary path init.d uses
+// (etc/init.d/singbox-ui: SINGBOX_BIN), so a non-PATH install still reports a
+// real version instead of an empty string.
+const SINGBOX_BIN  = getenv("SINGBOX_BIN") || "/usr/bin/sing-box";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }
@@ -321,7 +325,7 @@ function call_status_detail() {
 
 	let core_ver = "";
 	try {
-		let v = run_capture(["sing-box", "version"]) ?? "";
+		let v = run_capture([SINGBOX_BIN, "version"]) ?? "";
 		let mm = match(v, /version ([0-9]+\.[0-9]+\.[0-9]+)/);
 		if (mm) core_ver = mm[1];
 	} catch (_) {}
@@ -351,7 +355,9 @@ function call_sub_status() {
 	let arr;
 	try { arr = json(raw || "[]"); } catch (e) { arr = []; }
 	if (type(arr) !== "array") arr = [];
-	emit({ status: "ok", subscriptions: arr });
+	// `now` lets the dashboard render "updated X ago" off the server clock
+	// (DASH-2) instead of the browser clock, which can be skewed.
+	emit({ status: "ok", now: time(), subscriptions: arr });
 }
 
 function call_protocol_schema() {
@@ -380,16 +386,25 @@ function call_read_config() {
 }
 
 // clash_safe_listen(v) — sanitise a Clash listen host before it is interpolated
-// into the curl URL (audit 6.3). Accepts a dotted-quad / bracket-less IPv6 /
-// hostname charset only — no '@', '/', '?', '#', ':' or whitespace, so a crafted
-// value like "evil.com/x?" or "host@attacker" cannot reshape the URL into an
-// SSRF/exfil target. Returns the value unchanged when safe, else null. (IPv6
-// literals carry ':' and are intentionally rejected here — the loopback default
-// covers the only address the UI ever talks to.)
+// into the curl URL (audit 6.3). Accepts a dotted-quad / hostname charset OR a
+// bracket-less IPv6 literal — but never '@', '/', '?', '#' or whitespace, so a
+// crafted value like "evil.com/x?" or "host@attacker" cannot reshape the URL
+// into an SSRF/exfil target. Returns the value unchanged when safe, else null.
+//
+// RPC-2: the IPv6 loopback ::1 (a perfectly valid clash_api listen) used to be
+// rejected here because ':' was disallowed wholesale, so a ::1-bound Clash API
+// silently fell back to 127.0.0.1 and every request hit the wrong address. We
+// now allow an IPv6 literal (hex digits + ':' + '.' for v4-mapped) as a SECOND
+// pattern; clash_proxy brackets it in the URL authority. The hex-only second
+// pattern still excludes '@/?#' and whitespace, so the SSRF guard holds.
 function clash_safe_listen(v) {
 	if (type(v) !== "string" || !length(v) || length(v) > 255) return null;
-	if (!match(v, /^[A-Za-z0-9._-]+$/)) return null;
-	return v;
+	// dotted-quad / hostname (no ':') — the common case.
+	if (match(v, /^[A-Za-z0-9._-]+$/)) return v;
+	// bracket-less IPv6 literal: hex groups separated by ':' (and '.' for an
+	// embedded v4 tail). Requires at least one ':' so it can't alias a hostname.
+	if (match(v, /^[0-9A-Fa-f:.]+$/) && index(v, ":") >= 0) return v;
+	return null;
 }
 
 // clash_safe_port(p) — port must be numeric 1..65535 (audit 6.3). Mirrors
@@ -505,12 +520,24 @@ function call_preview_config() {
 	emit({ status: "ok", content: sprintf("%.4J", obj) });
 }
 
-// clash_path_ok(path) — defense-in-depth allowlist for Clash API endpoints
-// the UI is allowed to reach. The read ACL already separates clash_get from
-// clash_mutate; this stops a caller from probing arbitrary Clash paths
-// (e.g. future debug endpoints) by stuffing them through the proxy. Match by
-// prefix so /proxies/<group>, /connections/<id>, /group/<name> still pass.
-function clash_path_ok(path) {
+// clash_path_ok(path, write) — defense-in-depth allowlist for Clash API
+// endpoints the UI is allowed to reach. The ACL already separates clash_get
+// (read) from clash_mutate (write); this stops a caller from probing arbitrary
+// Clash paths (e.g. future debug endpoints) by stuffing them through the proxy.
+// Match by prefix so /proxies/<group>, /connections/<id>, /group/<name> pass.
+//
+// RPC-4: read and write used to share ONE allowlist, so a write-ACL caller
+// could PATCH/PUT/DELETE a read-only endpoint (e.g. DELETE /version, PATCH
+// /traffic) — semantically meaningless but a needless write surface. The
+// allowlist is now split: `write=true` permits only the endpoints Clash
+// actually mutates (configs mode-switch, proxies selector, connections close,
+// providers health/update); the broader read set covers GET-only resources
+// (/version, /traffic, /group). The ACL method set is unchanged — this is a
+// finer-grained guard INSIDE the existing read/write split.
+const CLASH_READ_ALLOW  = [ "/version", "/configs", "/connections", "/traffic",
+                            "/proxies", "/group", "/providers" ];
+const CLASH_WRITE_ALLOW = [ "/configs", "/connections", "/proxies", "/providers" ];
+function clash_path_ok(path, write) {
 	if (type(path) !== "string") return false;
 	if (substr(path, 0, 1) !== "/") return false;
 	// Reject traversal / NUL / whitespace outright. NB: the '-' MUST be last in
@@ -519,8 +546,7 @@ function clash_path_ok(path) {
 	// range". Same char set as before: word chars, '_', '.', '/', '-'.
 	if (!match(path, /^\/[A-Za-z0-9_.\/-]*$/)) return false;
 	if (index(path, "..") >= 0) return false;
-	let allow = [ "/version", "/configs", "/connections", "/traffic",
-	              "/proxies", "/group", "/providers" ];
+	let allow = write ? CLASH_WRITE_ALLOW : CLASH_READ_ALLOW;
 	for (let pfx in allow) {
 		if (path === pfx) return true;
 		if (substr(path, 0, length(pfx) + 1) === pfx + "/") return true;
@@ -552,18 +578,33 @@ function clash_header_tmp(secret) {
 	return trimmed;
 }
 
-// clash_proxy(method, path, body) — shared low-level curl proxy. Inputs MUST
-// be pre-validated by the caller: `method` is one of the HTTP verbs accepted
-// by Clash, `path` starts with '/', and `body` is either null or a string.
-// Reads Clash listen/port/secret from env (test override) or UCI.
-function clash_proxy(method, path, body) {
+// clash_proxy(method, path, body, curl_to) — shared low-level curl proxy.
+// Inputs MUST be pre-validated by the caller: `method` is one of the HTTP verbs
+// accepted by Clash, `path` starts with '/', and `body` is either null or a
+// string. `curl_to` is the optional curl `-m` deadline in WHOLE SECONDS; when
+// null it defaults to 5. Reads Clash listen/port/secret from env (test override)
+// or UCI.
+//
+// RPC-1: clash_delay's caller-supplied probe timeout (up to 60 s) used to be
+// silently cut short by a hardcoded `-m 5`, so any latency probe asking for >5 s
+// always reported a 5 s failure. The caller now passes a curl deadline that
+// covers the probe, and clash_proxy clamps it to a sane 1..65 s window so a
+// crafted value can't make curl hang far beyond Clash's own ceiling.
+function clash_proxy(method, path, body, curl_to) {
 	let p = clash_params();
-	let url = `http://${p.listen}:${p.port}${path}`;
+	// audit 6.3 / RPC-2: an IPv6 literal listen (carries ':') MUST be bracketed
+	// in the URL authority, else `http://::1:9090/...` is unparseable. A
+	// dotted-quad / hostname (clash_safe_listen charset, no ':') is used as-is.
+	let host = (index(p.listen, ":") >= 0) ? `[${p.listen}]` : p.listen;
+	let url = `http://${host}:${p.port}${path}`;
+	// curl deadline: whole seconds, clamped 1..65. Default 5 when unset/invalid.
+	let to = (type(curl_to) === "int" && curl_to >= 1) ? curl_to : 5;
+	if (to > 65) to = 65;
 	// audit 6.2: the bearer secret goes through a 0600 tmpfile (`-H @file`), not
 	// argv, so a co-located unprivileged user can't read it from /proc/<pid>/cmdline.
 	let hdr = clash_header_tmp(p.secret);
 	if (hdr == null) { emit_err("clash request failed (header tmpfile)"); return; }
-	let argv = [ CLASH_CURL, "-s", "-m", "5", "-X", method,
+	let argv = [ CLASH_CURL, "-s", "-m", sprintf("%d", to), "-X", method,
 	             "-H", `@${hdr}`, url ];
 	if (body != null && length(body)) { push(argv, "--data"); push(argv, body); }
 	let resp = run_capture(argv);
@@ -584,7 +625,7 @@ function call_clash_get() {
 		return;
 	}
 	let path = args.path || "";
-	if (!clash_path_ok(path)) { emit_err("invalid path"); return; }
+	if (!clash_path_ok(path, false)) { emit_err("invalid path"); return; }
 	clash_proxy("GET", path, null);
 }
 
@@ -601,7 +642,7 @@ function call_clash_mutate() {
 		return;
 	}
 	let path = args.path || "";
-	if (!clash_path_ok(path)) { emit_err("invalid path"); return; }
+	if (!clash_path_ok(path, true)) { emit_err("invalid path"); return; }
 	// audit 6.4: rpcd sigs are advisory, so guard `body` here. clash_proxy uses
 	// length(body) to decide whether to attach --data; a non-string (object/number)
 	// would be truthy under length() and get pushed into argv as a non-string token,
@@ -638,7 +679,12 @@ function call_clash_delay() {
 
 	let path = "/proxies/" + pct_encode(name) + "/delay?url=" + pct_encode(url)
 	         + "&timeout=" + sprintf("%d", int(t));
-	clash_proxy("GET", path, null);
+	// RPC-1: Clash holds the connection open for the full probe `timeout` (ms).
+	// Give curl a deadline (whole seconds) that covers it plus ~2 s of
+	// connect/response slack, so a probe asking for >5 s is no longer cut short
+	// by the old hardcoded `-m 5`. clash_proxy clamps the result to ≤65 s.
+	let curl_to = int((t + 999) / 1000) + 2;
+	clash_proxy("GET", path, null, curl_to);
 }
 
 

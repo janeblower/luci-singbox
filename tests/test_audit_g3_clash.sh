@@ -138,6 +138,25 @@ grep -q 'http://192.168.1.1:8080/connections' "$tmpdir/curl.log" \
 	|| { echo "FAIL(6.3): valid listen/port wrongly rewritten; log:"; cat "$tmpdir/curl.log"; exit 1; }
 echo "PASS(6.3): valid listen/port preserved"
 
+# ---- RPC-2: an IPv6 loopback ::1 listen must be ACCEPTED and bracketed --------
+# Previously clash_safe_listen rejected every ':' so ::1 silently fell back to
+# 127.0.0.1 — a ::1-bound Clash API was unreachable. Now ::1 is honoured and the
+# URL authority brackets it: http://[::1]:9090/... (not the broken http://::1:...).
+: > "$tmpdir/curl.log"
+out=$(echo '{"path":"/connections"}' | \
+	env CLASH_CURL="$tmpdir/curl" CLASH_LISTEN='::1' CLASH_PORT=9090 CLASH_SECRET=tok \
+	    "$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" "$H" call clash_get)
+printf '%s\n' "$out" | je 'd.status == "ok"' \
+	|| { echo "FAIL(RPC-2): clash_get with ::1 not ok; out=$out"; exit 1; }
+# Must NOT fall back to 127.0.0.1.
+if grep -q 'http://127.0.0.1' "$tmpdir/curl.log"; then
+	echo "FAIL(RPC-2): ::1 wrongly fell back to 127.0.0.1"; cat "$tmpdir/curl.log"; exit 1
+fi
+# Must be bracketed: http://[::1]:9090/connections
+grep -q 'http://\[::1\]:9090/connections' "$tmpdir/curl.log" \
+	|| { echo "FAIL(RPC-2): ::1 listen not bracketed in URL; log:"; cat "$tmpdir/curl.log"; exit 1; }
+echo "PASS(RPC-2): IPv6 ::1 listen accepted and bracketed"
+
 # ---- 6.4: clash_mutate rejects a non-string body ----------------------------
 # Object body.
 out=$(echo '{"method":"PATCH","path":"/configs","body":{"mode":"global"}}' | \

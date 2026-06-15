@@ -100,6 +100,40 @@ adv "forged element ksize" "$TMP/fk.db" "" 1
 cp "$DATA/cache.db" "$TMP/fp.db"; printf '\377\377\377\377' | dd of="$TMP/fp.db" bs=1 seek=$(( reo + 4 )) conv=notrunc 2>/dev/null
 adv "forged element pos" "$TMP/fp.db" "" 1
 
+# 2c. CRITIC/missed-5: a forged meta with a VALID checksum but a tiny pageSize +
+# a huge root pgid drives page()'s offset math `id * ps (+16)` into the top of
+# the u64 range. The page-offset computation must reject this via checked
+# arithmetic (and the bounds-checked readers downstream) with a clean
+# "invalid database" exit, never an OOB-panic/abort. Unlike the forged-element
+# cases above (which keep the real pageSize), this forges the meta itself, so we
+# must recompute meta0's FNV-1a64 checksum — done with ucode (true int64). When
+# ucode is absent we skip, like the flock block below.
+if command -v ucode >/dev/null 2>&1; then
+  # write a little-endian integer (decimal, possibly > 2^63) of N bytes at OFF.
+  _wle() { # $1=file $2=off $3=decimal-value $4=nbytes  (uses ucode for >2^63)
+    ucode -e '
+      let h = +ARGV[2];
+      let fs = require("fs");
+      let f = fs.open(ARGV[0], "r+"); if (!f) exit(1);
+      f.seek(int(ARGV[1])); let n = int(ARGV[3]); let o = "";
+      for (let i = 0; i < n; i++) { o += chr(h & 0xff); h = h >> 8; }
+      f.write(o); f.close();
+    ' "$1" "$2" "$3" "$4"
+  }
+  cp "$DATA/cache.db" "$TMP/fm.db"
+  # pageSize=3 @ meta0+8 (file off 24); root pgid chosen so root*3 == 2^64-1, the
+  # exact value whose `+16` wraps past the u64 range on the pre-checked code.
+  _wle "$TMP/fm.db" 24 3 4
+  _wle "$TMP/fm.db" 32 6148914691236517205 8
+  # recompute FNV-1a64 over meta0's 56 covered bytes (file off 16..72) and store @72.
+  _mb=$(od -An -tu1 -j16 -N56 "$TMP/fm.db" | tr -s ' \n' ' ' | sed 's/^ //;s/ $//')
+  _ck=$(ucode -e 'let p=split(ARGV[0]," ");let h=0xcbf29ce484222325;for(let i=0;i<length(p);i++){if(p[i]=="")continue;h^=(int(p[i])&0xff);h*=0x100000001b3;}printf("%u\n",h);' "$_mb")
+  _wle "$TMP/fm.db" 72 "$_ck" 8
+  adv "forged meta tiny-pageSize + huge root pgid" "$TMP/fm.db" "" 1
+else
+  echo "skip: ucode unavailable -> forged-meta pgid-overflow case not run"
+fi
+
 # 3. error texts + exit codes (known-good; no oracle)
 B1=$($RUN "$DATA/cache.db" | head -1)
 [ "$($RUN "$DATA/cache.db" __nb__ 2>&1)" = 'no bucket "__nb__"' ] || fail "no-bucket text"
