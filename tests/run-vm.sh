@@ -7,6 +7,17 @@
 #
 # Image override: set SINGBOX_TEST_IMAGE to use a local tag (e.g. for
 # Phase 1 development before the image is published).
+#
+# FOLLOW-UP (CI-tests/PERF-2, deferred): the in-guest suite (tests/run.sh) runs
+# strictly serially and is the CI long-pole. Most ucode tests are independent
+# and sandbox to their own mktemp dir, so a bounded `xargs -P $(nproc)` pool
+# could roughly halve wall-time — BUT a few are stateful and MUST stay serial
+# (test_nftables_apply_lock uses a fixed lock dir; test_rpcd_prod_path does
+# rpcd restart; init.d tests). Parallelizing safely needs an explicit serial
+# allowlist, a guest -smp bump in tests/docker/entrypoint.sh, and per-test
+# mktemp/SINGBOX_TMPDIR isolation validation. Deferred as not-low-risk; the
+# failure-COLLECTION change in run.sh already removes the multi-failure re-run
+# pain that made serial slowness most painful.
 set -eu
 cd "$(dirname "$0")/.."
 

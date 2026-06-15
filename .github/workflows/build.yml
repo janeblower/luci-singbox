@@ -9,6 +9,18 @@ on:
     # run on that same push races: it pulls the OLD :latest while the
     # new one is still baking. Skip — the next functional commit will
     # exercise the freshly published image.
+    #
+    # LIMITATION (mixed-push gap): paths-ignore skips a workflow only when
+    # EVERY changed file matches. A single commit touching BOTH tests/docker/**
+    # AND a functional file still runs Build, which pulls :latest while
+    # test-image is mid-rebuild (its concurrency group can't yield —
+    # cancel-in-progress: false). The pulled image is never corrupt (GHCR
+    # repoints a tag only after all layers push — you get the OLD or NEW
+    # complete image, not a torn one), so the worst case is the VM suite running
+    # against the PRIOR-Dockerfile harness; the code under test is tar-pushed
+    # into the guest at runtime, so the functional change is still exercised.
+    # To test against the new harness in the same change, commit Dockerfile edits
+    # separately, or re-run Build once test-image has published.
     paths-ignore:
       - 'tests/docker/**'
       - '.github/workflows/test-image.yml'
@@ -31,6 +43,7 @@ jobs:
   lint:
     name: Lint (host)
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6
@@ -58,17 +71,20 @@ jobs:
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 \
             tests/*.sh scripts/*.sh \
             luci-singbox-ui/root/etc/init.d/singbox-ui
-          # uci-defaults runs under busybox ash on OpenWrt, not bash. Lint
-          # it with --shell=ash so bashisms (arrays, [[ ]], $'...') fail at
-          # CI rather than silently at first-boot on the router.
+          # uci-defaults runs under busybox ash on OpenWrt, not bash. Lint the
+          # WHOLE directory with --shell=ash so bashisms (arrays, [[ ]], $'...')
+          # fail at CI rather than silently at first-boot on the router. Globbing
+          # the dir (not a hardcoded file list) means a NEW uci-defaults script
+          # is linted automatically and this lint-coverage can't drift again
+          # (90-singbox-ui-fwmark was previously unlinted by anything).
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 --shell=ash \
-            luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui \
-            luci-singbox-ui/root/etc/uci-defaults/91-singbox-ui-cron
+            luci-singbox-ui/root/etc/uci-defaults/*
 
   js-unit:
     name: JS unit tests (host node)
     runs-on: ubuntu-24.04
     needs: lint
+    timeout-minutes: 12
     # The node-gated *_js.sh / json_import tests carry real assertions for the
     # XSS-relevant descriptor_form.js logic, the validators, and the share-link/
     # JSON importer parsers. They SKIP inside the OpenWrt qemu VM (no node in the
@@ -83,28 +99,59 @@ jobs:
         with:
           node-version: '20'
 
+      # Derive the node-gated set PROGRAMMATICALLY instead of hardcoding it —
+      # a hardcoded list silently drifts (it once omitted 5 real test files:
+      # test_dashboard_js, test_version_gate_js, test_audit_2_4/_8_3/_9_3, which
+      # then SKIPped in the VM and never ran anywhere). Any test that gates on
+      # `command -v node` or `NODE_BIN` is selected here. test_main_js_syntax.sh
+      # also matches but already runs in the lint job; running it twice is
+      # harmless. ucode is absent on this host, so the ucode-half of
+      # json_import gracefully SKIPs while node-side assertions still execute.
       - name: Run node-gated JS unit tests
         run: |
           set -eu
-          for t in \
-            tests/test_validators_js.sh \
-            tests/test_descriptor_form_js.sh \
-            tests/test_descriptor_form_dynamic_js.sh \
-            tests/test_json_import.sh \
-            tests/test_monitoring_js.sh \
-            tests/test_view_state_js.sh \
-            tests/test_common_notify_js.sh \
-            tests/test_status_panel_js.sh \
-            tests/test_transport_helper_js.sh \
-            tests/test_share_link_js.sh; do
+          found=0
+          for t in $(grep -lE 'command -v node|NODE_BIN' tests/test_*.sh | sort); do
             echo "==> $t"
             sh "$t"
+            found=$((found + 1))
           done
+          [ "$found" -gt 0 ] || { echo "FAIL: no node-gated tests matched the glob"; exit 1; }
+          echo "Ran $found node-gated test file(s)."
+
+      # i18n guard (pure shell+grep+awk) — runs here on the host, not only in the
+      # node-less VM, so the msgid-coverage / untranslated-threshold assertions
+      # actually execute pre-merge in CI.
+      - name: PO coverage (i18n threshold)
+        run: sh tests/test_po_coverage.sh
+
+      # Catch a forgotten `scripts/regen-po.sh` run: if a developer added a new
+      # _('...') UI string without regenerating the template, the .pot here will
+      # differ from the committed one. xgettext is needed for regen.
+      - name: gettext (for regen-po)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends gettext
+
+      - name: POT is up to date (regen-po produces no diff)
+        run: |
+          set -eu
+          sh scripts/regen-po.sh
+          # The template (.pot) must be byte-identical to what's committed.
+          # regen-po pins POT-Creation-Date + sort order, so a clean tree diffs
+          # empty. A non-empty diff means a forgotten regen — fail with the diff.
+          if ! git diff --quiet -- luci-singbox-ui/po/templates/luci-singbox-ui.pot; then
+            echo "FAIL: luci-singbox-ui.pot is stale — run scripts/regen-po.sh and commit."
+            git --no-pager diff -- luci-singbox-ui/po/templates/luci-singbox-ui.pot
+            exit 1
+          fi
+          echo "POT is up to date."
 
   test:
     name: Test suite (OpenWrt VM)
     runs-on: ubuntu-24.04
     needs: lint
+    # The QEMU-OpenWrt VM job is the one most likely to wedge (bad boot/loadvm).
+    # Bound it so a hung guest fails fast instead of idling the runner ~6h.
+    timeout-minutes: 25
     # The whole job runs inside the pre-built openwrt-test image. The
     # image carries qemu + the OpenWrt rootfs + a baked memory snapshot.
     # --device /dev/kvm passes the host's KVM into the container so qemu
@@ -131,8 +178,13 @@ jobs:
 
   browser-test:
     name: Browser integration tests
-    runs-on: ubuntu-latest
-    needs: [lint, test]
+    runs-on: ubuntu-24.04
+    # Only `needs: lint` — browser-test consumes no artifact or output from the
+    # `test` (VM) job; they run on separate runners with no shared state. Gating
+    # it behind `test` serialized it after the pipeline's long pole for nothing.
+    # `build` below still gates on BOTH test and browser-test, so correctness is
+    # unchanged while browser-test now runs in parallel with the VM suite.
+    needs: lint
     timeout-minutes: 15
 
     steps:
@@ -167,12 +219,16 @@ jobs:
           restore-keys: browser-img-
 
       # Cache puppeteer's Chrome download (~200MB). Pinned to the
-      # puppeteer major in tests/browser/package.json.
+      # puppeteer major in tests/browser/package.json. restore-keys lets a
+      # package.json bump warm-start from the prior Chrome download instead of
+      # a full ~200MB cold fetch (puppeteer skips re-download when the pinned
+      # Chrome revision is already present).
       - name: Cache puppeteer Chrome
         uses: actions/cache@v5
         with:
           path: ~/.cache/puppeteer
           key: puppeteer-${{ hashFiles('tests/browser/package.json') }}
+          restore-keys: puppeteer-
 
       - name: Install browser test deps
         working-directory: tests/browser
@@ -206,7 +262,12 @@ jobs:
   # bbolt-client.yml workflow and the bbolt-latest rolling-release dependency.
   bbolt:
     name: Build bbolt-client (5 arches)
-    runs-on: ubuntu-latest
+    # Pinned (not floating ubuntu-latest) for reproducibility, matching the
+    # rest of the workflow's pinning philosophy (SHA-pinned actions, pinned
+    # shellcheck/bun). A cold build cross-compiles 5 arches + runs 5 qemu-user
+    # suites, so allow generous headroom; a warm bbolt-bin cache hit is seconds.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
     defaults:
       run:
         working-directory: bbolt-client
@@ -254,6 +315,13 @@ jobs:
             ~/.cargo/git
             bbolt-client/target
           key: bbolt-${{ runner.os }}-${{ hashFiles('bbolt-client/Cargo.lock', 'bbolt-client/build.sh', 'bbolt-client/rust-toolchain.toml') }}
+          # Broad restore-keys warm-starts the cargo/target cache across a
+          # toolchain bump. cargo invalidates `target/` by rustc fingerprint, so
+          # this is normally fine; on a rare ABI/std change it could leave a
+          # confusing incremental state — drop/narrow this if flakiness appears.
+          # The shipped BINARIES are gated by the separate exact-match
+          # bbolt-bin-* cache (no restore-keys), so a toolchain bump still
+          # produces fresh, qemu-verified binaries regardless of this cache.
           restore-keys: bbolt-${{ runner.os }}-
 
       # qemu-user lets us run cross-compiled binaries in the test steps below.
@@ -303,7 +371,12 @@ jobs:
 
   build:
     name: Build OpenWrt packages (apk)
-    runs-on: ubuntu-latest
+    # Pinned (not floating ubuntu-latest): this job installs apt build-deps and
+    # runs the release-publishing path, so an unannounced runner-image bump must
+    # not change build behaviour without a commit — same pinning philosophy as
+    # the rest of the workflow.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
     # Gate the build (and its publish steps) on the full test suite. The publish
     # steps are event-gated to push/main and tags, so PR builds still validate
     # the package without publishing — but a red lint/js-unit/test/browser-test
@@ -317,8 +390,12 @@ jobs:
       contents: write
 
     env:
-      # Pin to a tagged OpenWrt 25.x release. Packages are LUCI_PKGARCH:=all
-      # (noarch), so any apk-capable SDK produces the same artifact.
+      # Pin to a tagged OpenWrt 25.x release. SDK_VERSION is the SINGLE source of
+      # the version string within this job: it is interpolated into both SDK_URL
+      # and the SDK cache key below, so bumping it can't leave the cache key
+      # matching a stale extract. (build-apk.sh and the test-image Dockerfile
+      # carry their own copies — see CLAUDE.md's multi-place bump note.)
+      SDK_VERSION: 25.12.3
       SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
 
     steps:
@@ -349,10 +426,13 @@ jobs:
           # prepares that SDK, a static key would silently reuse a stale extract.
           # restore-keys lets a script change still warm-start from the prior
           # extract (then the build refreshes it) instead of a cold download.
-          key: openwrt-sdk-25.12.3-x86-64-v2-${{ hashFiles('scripts/build-apk.sh') }}
+          # The version segment is interpolated from env.SDK_VERSION (single
+          # source) so bumping SDK_URL/SDK_VERSION can't leave the key pinned to
+          # a stale version's cache.
+          key: openwrt-sdk-${{ env.SDK_VERSION }}-x86-64-v2-${{ hashFiles('scripts/build-apk.sh') }}
           restore-keys: |
-            openwrt-sdk-25.12.3-x86-64-v2-
-            openwrt-sdk-25.12.3-x86-64-
+            openwrt-sdk-${{ env.SDK_VERSION }}-x86-64-v2-
+            openwrt-sdk-${{ env.SDK_VERSION }}-x86-64-
 
       # apk-mkpkg enforces Alpine-style versions: <X.Y.Z>[-rN]. For tag pushes
       # we use the tag (allowing an explicit -rN suffix); for rolling builds
@@ -407,6 +487,17 @@ jobs:
         # (see scripts/build-apk.sh comments). Real root is the reliable
         # path.
         run: sudo -E env BBOLT_BIN_DIR="$PWD/${{ steps.bbolt.outputs.dir }}" bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
+
+      # build-apk.sh ran under sudo, so the SDK tarball + extracted SDK are
+      # root-owned. The actions/cache POST-step saves them as the unprivileged
+      # runner user; it works today only because tar leaves world-readable perms.
+      # Chown the cache tree back so the save is unambiguous insurance against a
+      # silent cache-save failure (which would force a cold SDK download forever).
+      - name: Reclaim ownership of SDK cache for save
+        if: always()
+        run: |
+          set -eu
+          sudo chown -R "$(id -u):$(id -g)" .build/sdk "$HOME/.cache/luci-singbox-ui" 2>/dev/null || true
 
       - name: List produced packages
         id: pkg

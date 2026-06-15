@@ -32,7 +32,11 @@ for uci_file in "$FIXTURES"/*.uci; do
 	name=$(basename "$uci_file" .uci)
 	expect_file="$FIXTURES/$name.expect"
 	if [ ! -f "$expect_file" ]; then
-		echo "SKIP $name (no .expect)"; continue
+		# Per-fixture skip — NOT an environment-degradation signal, so use a
+		# marker run.sh's SKIP ceiling does NOT count (it greps ^SKIP / SKIP:).
+		# Otherwise N un-paired fixtures from this one test could trip the
+		# global MAX_SKIPS for an unrelated reason and mask the real signal.
+		echo "NOEXPECT: $name (no .expect)"; continue
 	fi
 	# Stage UCI into per-test config dir.
 	test_dir="$WORK/$name"

@@ -60,7 +60,7 @@ jobs:
             exit 0
           fi
           if git diff --name-only "${SHA}^" "${SHA}" \
-              | grep -qE '^(luci-singbox-ui/|bbolt-client/|feed/|scripts/build-apk\.sh|scripts/build-feed\.sh)'; then
+              | grep -qE '^(luci-singbox-ui/|bbolt-client/|feed/|scripts/build-apk\.sh|scripts/build-feed\.sh|scripts/install-manifest\.txt|scripts/install-manifest-overrides\.txt)'; then
             echo "feed-relevant change -> deploy"
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           else

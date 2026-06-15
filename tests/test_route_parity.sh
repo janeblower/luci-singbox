@@ -33,7 +33,10 @@ out=$("$UCODE_BIN" -L tests/parity -L "$LIB" -e '
   for (let fx in corpus) {
     let golden_path = sprintf("tests/parity/golden/%s.json", fx.name);
     let want_f = fs.open(golden_path, "r");
-    if (want_f == null) { print(sprintf("SKIP (no golden yet): %s\n", fx.name)); continue; }
+    // A corpus fixture without a golden is a hard FAILURE (matches
+    // test_protocol_parity.sh), not a silent SKIP: a silently-passing fixture
+    // gives no coverage AND its SKIP line would erode run.sh MAX_SKIPS budget.
+    if (want_f == null) { print(sprintf("MISSING golden %s\n", fx.name)); fails++; continue; }
     let want = trim(want_f.read("all")); want_f.close();
 
     let dir = sprintf("/tmp/route_par_%s", fx.name);

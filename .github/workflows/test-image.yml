@@ -77,7 +77,11 @@ jobs:
           echo "==> running entrypoint against the repo (5 min cap)"
           timeout 300 docker run --rm --device /dev/kvm \
             -v "$PWD:/work" "$PRIMARY" || {
-              echo "smoke run failed (exit $?). Image is still pushed."
+              # Snapshot $? FIRST — inside the || block it is reassigned by each
+              # subsequent command, so echoing "$?" directly would report the
+              # wrong code (e.g. lose timeout's 124).
+              rc=$?
+              echo "smoke run failed (exit $rc). Image is still pushed."
               echo "Check entrypoint output above; fix and re-dispatch."
               exit 1
             }
