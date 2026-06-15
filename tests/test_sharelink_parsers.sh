@@ -155,4 +155,12 @@ out=$(je "
 [ "$out" = "tuic|11111111-1111-1111-1111-111111111111|secret|bbr|native|1|s.com|T" ] || die "tuic parse" "$out"
 ok "tuic:// parsed (uuid:password + congestion/udp_relay/tls)"
 
+# NEW: hysteria:// (v1) -> sing-box hysteria outbound (auth_str/up_mbps/down_mbps/tls).
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('hysteria://h.ex:443?auth=tok&peer=s.com&insecure=1&alpn=h3&upmbps=50&downmbps=100&obfs=xplus#H1');
+    print(sprintf('%s|%s|%s|%d|%d|%s|%s', r.type, r.auth_str, r.tls.server_name, r.up_mbps, r.down_mbps, r.obfs, r.tls.insecure===true?'T':'?'));
+")
+[ "$out" = "hysteria|tok|s.com|50|100|xplus|T" ] || die "hysteria v1 parse" "$out"
+ok "hysteria:// (v1) parsed (auth/up/down/peer/obfs)"
+
 echo "OK"

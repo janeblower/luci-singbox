@@ -93,6 +93,8 @@ const INVENTORY = {
     ss: [ "plugin" ],
     tuic: [ "congestion_control", "udp_relay_mode", "alpn", "sni",
             "allow_insecure", "disable_sni" ],
+    hysteria: [ "auth", "peer", "insecure", "alpn", "up", "upmbps",
+                "down", "downmbps", "obfs", "protocol" ],
     // vmess INVENTORY is the v2rayN base64-JSON key set, not URL query params.
     vmess: [ "v", "ps", "add", "port", "id", "aid", "scy",
              "net", "type", "host", "path", "tls", "sni", "alpn", "fp" ],
@@ -158,6 +160,18 @@ const SPEC = {
         { param: "alpn",           path: "tls.alpn", transform: "csv" },
         { param: "allow_insecure", path: "tls.insecure", transform: "bool" },
         { param: "disable_sni",    path: "tls.disable_sni", transform: "bool" },
+    ],
+    hysteria: [
+        { param: "auth",     path: "auth_str" },
+        { param: "peer",     path: "tls.server_name" },
+        { param: "insecure", path: "tls.insecure", transform: "bool" },
+        { param: "alpn",     path: "tls.alpn", transform: "csv" },
+        { param: "upmbps",   path: "up_mbps",   transform: "int" },
+        { param: "up",       path: "up_mbps",   transform: "int" },
+        { param: "downmbps", path: "down_mbps", transform: "int" },
+        { param: "down",     path: "down_mbps", transform: "int" },
+        { param: "obfs",     path: "obfs" },
+        { param: "protocol", unsupported: "hysteria v1 transport protocol — sing-box is always QUIC" },
     ],
     vmess: [
         // Structural (parsed positionally in parse_vmess):
