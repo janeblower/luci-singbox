@@ -66,6 +66,17 @@ out=$(je '
 [ "$out" = '[ { "name": "t", "password": "pw" } ]' ] || die "trojan single" "$out"
 ok "trojan single password"
 
+# BLD-5: single_fallback with ALL source fields empty must NOT emit a
+# credential-less user (was: [{name}] with no password -> sing-box rejects).
+out=$(je '
+    let U = require("builder._shared.users");
+    let spec = { single_fallback:{ fields:[ {key:"password",from:"server_password"} ] } };
+    let r = U.build({ ".name":"t" }, spec);   // server_password absent/empty
+    print(sprintf("%J", r.users));
+')
+[ "$out" = '[ ]' ] || die "BLD-5 empty single fallback" "$out"
+ok "BLD-5: empty single fallback emits no users (no credential-less user)"
+
 # colon-less single token is dropped (legacy: index(u,":")<0 -> skip) — all families
 out=$(je '
     let U = require("builder._shared.users");

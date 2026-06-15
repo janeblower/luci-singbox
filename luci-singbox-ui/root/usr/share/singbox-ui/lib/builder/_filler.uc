@@ -64,7 +64,11 @@ function _emit_scalar(out, s, f) {
     if (coerce === "num_array") {
         let a = as_array(s[f.name]);
         let nums = [];
-        for (let v in a) { let n = +v; if (n == n) push(nums, n); }   // drop NaN
+        // Skip blank entries BEFORE coercion: in ucode `+"" === 0` (not NaN),
+        // so a blank UCI list row would otherwise survive as a literal 0 (e.g.
+        // port:[80,0,443]), which sing-box rejects. Mirrors the scalar `num`
+        // emptiness guard below (BLD-2). NaN (non-numeric) is still dropped.
+        for (let v in a) { if (!length(v)) continue; let n = +v; if (n == n) push(nums, n); }
         if (omit === "never" || length(nums)) out[f.json_key] = nums;
         return;
     }
@@ -74,10 +78,17 @@ function _emit_scalar(out, s, f) {
         // omit:never the field must always be present, so NaN falls back to 0
         // (matching the legacy s_num `n || 0` behaviour — never-omit is a hard
         // contract that a bad value must not silently break).
+        // default_when_empty: a blank value falls back to the constant (e.g.
+        // reality handshake server_port -> 443) instead of coercing "" -> 0.
+        let raw = s_opt(s, f.name);
+        if (!length(raw) && f.default_when_empty != null) {
+            out[f.json_key] = f.default_when_empty;
+            return;
+        }
         if (omit === "never") {
             let n = +s[f.name];
             out[f.json_key] = (n == n) ? n : 0;
-        } else if (length(s_opt(s, f.name))) {
+        } else if (length(raw)) {
             let n = +s[f.name];
             if (n == n) out[f.json_key] = n;   // n==n is false for NaN -> drop
         }

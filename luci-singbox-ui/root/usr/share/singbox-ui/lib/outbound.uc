@@ -47,8 +47,10 @@ function build_constructor_for(s, proto) {
 	}
 	// Legacy / escape-hatch descriptors carry emit(); declarative descriptors
 	// (trojan/direct outbound, Phase F) build via builder._filler from their
-	// fields[] metadata + declared shared blocks.
-	return d.emit ? d.emit(s) : filler.build(d, s);
+	// fields[] metadata + declared shared blocks. Predicate matches inbound.uc
+	// / dns.uc (`type(...) === "function"`) so all dispatch sites agree even if
+	// a future descriptor sets emit to a non-function value (BLD-9).
+	return (type(d.emit) === "function") ? d.emit(s) : filler.build(d, s);
 }
 
 function read_subscription_urls(name) {
@@ -136,7 +138,11 @@ function build_outbounds(cur) {
 					i++;
 				}
 				if (length(children)) {
-					let selector_type = section.sub_selector_type ?? "selector";
+					// GEN-3: only "selector"/"urltest" are valid sing-box group
+					// types. A stale/hand-edited sub_selector_type would emit an
+					// invalid `type` and make sing-box reject the whole config —
+					// clamp anything unexpected to the safe default "selector".
+					let selector_type = (section.sub_selector_type === "urltest") ? "urltest" : "selector";
 					let group = { tag: name, type: selector_type, outbounds: children };
 					if (selector_type === "urltest" && section.sub_urltest_url)
 						group.url = section.sub_urltest_url;
@@ -159,7 +165,42 @@ function build_outbounds(cur) {
 		add_ob(outbound);
 	});
 
-	return outbounds;
+	// GEN-1 / BLD-7: selector & urltest groups carry an `outbounds[]` member
+	// list (and selector a `default` target) of OTHER outbound tags. sing-box
+	// hard-fails at config load on a group that references a non-existent
+	// outbound ("outbound not found") or that has an empty `outbounds`. Nothing
+	// validated these — a user who deletes/disables a member, or saves a group
+	// before adding members, silently produces a config the daemon refuses to
+	// start. Mirror route.uc's ob_ok dangling-drop: prune members to the set of
+	// tags that actually exist in the final array (plus the implicit `direct`
+	// that generate.uc injects post-build), drop the whole group if it ends up
+	// empty, and clear a `default` that doesn't resolve. NOTE: urltest's `url`
+	// is an HTTP probe URL, NOT an outbound tag — it must NOT be validated here.
+	let valid_tags = { direct: true };
+	for (let ob in outbounds) if (length(ob.tag)) valid_tags[ob.tag] = true;
+	let pruned = [];
+	for (let ob in outbounds) {
+		if (ob.type !== "selector" && ob.type !== "urltest") { push(pruned, ob); continue; }
+		if (type(ob.outbounds) === "array") {
+			let members = [];
+			for (let m in ob.outbounds) {
+				if (valid_tags[m]) { push(members, m); continue; }
+				warn(sprintf("outbound.uc: group '%s' member '%s' is not a defined outbound; dropping member\n", ob.tag, m));
+			}
+			ob.outbounds = members;
+		}
+		if (type(ob.outbounds) !== "array" || !length(ob.outbounds)) {
+			warn(sprintf("outbound.uc: group '%s' has no valid member outbounds; dropping group (would break sing-box load)\n", ob.tag));
+			continue;
+		}
+		if (length(ob.default ?? "") && !valid_tags[ob.default]) {
+			warn(sprintf("outbound.uc: group '%s' default '%s' is not a defined outbound; clearing\n", ob.tag, ob.default));
+			delete ob.default;
+		}
+		push(pruned, ob);
+	}
+
+	return pruned;
 }
 
 return { build_outbounds, build_constructor_for, parse_proxy_url };

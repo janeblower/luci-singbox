@@ -17,6 +17,10 @@ out=$("$UCODE_BIN" -L "$LIB" -e '
         d.inbound.cloudflared.min_version));
 ')
 echo "$out"
-echo "$out" | grep -q 'anytls=1.12.0 naive_out=1.13.0 naive_in= cloudflared=1.14.0' \
+# min_version is the 2-part major.minor form (BLD-4): consistent with the
+# per-field gates (e.g. ssh.cipher=1.14) and with the frontend, whose
+# compareVersions() zero-pads missing parts and whose gate label slices to
+# major.minor anyway. naive inbound is intentionally ungated (empty).
+echo "$out" | grep -q 'anytls=1.12 naive_out=1.13 naive_in= cloudflared=1.14' \
   || { echo "FAIL: min_version projection wrong"; exit 1; }
 echo "test_version_gating: PASS"

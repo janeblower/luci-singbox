@@ -80,9 +80,6 @@ if (!have_direct) {
 
 config.outbounds = out_block;
 
-// Centralised post-processing pipeline. See lib/post_process.uc.
-config = post_process.run_pipeline(config, { implicit_tags: implicit_tags });
-
 // S3.2: the set of outbound tags that actually exist in the final outbounds[]
 // (disabled/deleted ones are already excluded by outbound.uc). route.uc uses it
 // to drop route_rule/route_default outbound references that don't resolve,
@@ -141,6 +138,15 @@ if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
 		config.route.default_domain_resolver = { server: resolver_tag };
 	}
 }
+
+// Centralised post-processing pipeline. See lib/post_process.uc.
+// GEN-2: must run AFTER config.route is fully assembled (route rules/final +
+// default_domain_resolver above) — at the previous call site (right after
+// config.outbounds) config.route did not exist yet, so the route-rule/final
+// implicit-ref scrub branches were dead code. The scrub only mutates dns/route
+// references, never config.outbounds, so the valid_ob set built above is
+// unaffected; plugins' on_generate_post now also see the complete config.
+config = post_process.run_pipeline(config, { implicit_tags: implicit_tags });
 
 let experimental = {};
 let cache_block = cache_mod.build_cache(uci);
@@ -210,6 +216,27 @@ function publish_atomic(path, body) {
 // push(). A future serializer swap or keys()-rebuild refactor could reorder
 // keys and break tests confusingly — keep this property in mind.
 if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
+	// missed-7: a failed write must not look like a clean generate. If
+	// CONFIG_OUT still exists (the early open/write failure path leaves the
+	// previous file untouched), the daemon keeps running STALE config — make
+	// that operator-visible instead of silent. status_detail reads
+	// last_generate_result, so record a distinct marker (best-effort: the same
+	// disk pressure that failed the main write may fail this too, but the
+	// warn() always reaches syslog).
+	let stale = false;
+	try { stale = (fs.stat(CONFIG_OUT) != null); } catch (_) { stale = false; }
+	if (stale) {
+		warn("generate.uc: config write FAILED — CONTINUING ON PREVIOUS config (running stale)\n");
+		try { log_mod.log_event("error", "config.write_failed_stale", {}); } catch (_) {}
+		try {
+			fs.mkdir("/var/lib/singbox-ui", 0755);
+			publish_atomic("/var/lib/singbox-ui/last_state.json",
+				sprintf("{\"last_generate_ts\":%d,\"last_generate_result\":\"write_failed_stale\",\"config_hash\":\"unknown\"}", time()));
+		} catch (_) {}
+	} else {
+		warn("generate.uc: config write FAILED and no usable config is present\n");
+		try { log_mod.log_event("error", "config.write_failed", {}); } catch (_) {}
+	}
 	exit(1);
 }
 

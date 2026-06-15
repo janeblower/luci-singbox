@@ -8,9 +8,18 @@
 //     shared:        { tls?: {...}, transport?: {...}, multiplex?: {...}, dial?: true },
 //     fields:        [{ name, type, tab, required?, default?, validate?, secret?,
 //                       advanced?, depends?: {field,value}, parent_enabled?,
-//                       placeholder?, values?, item?, virtual? }, ...],
+//                       placeholder?, values?, item?, virtual?, min_version? }, ...],
 //     emit:          function(section) -> sing-box JSON object,
+//     min_version:   "<major>.<minor>"  (per-type version gate; frontend hides
+//                    the type/field on an older core),
 //   }
+//
+// min_version CONVENTION: use 2-part "<major>.<minor>" everywhere (both
+// type-level `descriptor.min_version` and per-field `field.min_version`).
+// sing-box gates on minor releases, so the patch component is never meaningful.
+// compareVersions() (common.js) pads missing components with 0, so a 3-part
+// value would still compare correctly, but mixing formats is a foot-gun —
+// keep new gates 2-part (BLD-4).
 //
 // materialize(kind, type) returns the descriptor with shared-block fields
 // merged in and per-tab _show_advanced_<tab> flags auto-injected.
@@ -27,6 +36,15 @@ const KNOWN_DYNAMIC = { outbounds: 1, dns_servers: 1, interfaces: 1, devices: 1,
                         rulesets: 1, route_rules: 1 };
 const KNOWN_COERCE  = { str: 1, num: 1, bool: 1, array: 1, num_array: 1 };
 const KNOWN_OMIT    = { empty: 1, never: 1 };
+
+// ucode does NOT hoist `function` declarations: a function can only call
+// functions defined textually before it (verified: a forward call throws
+// "left-hand side is not a function"). validate_field_refs (used by register,
+// near the top) needs _shared_fields (defined far below), so forward-declare
+// both shared-block helpers with `let` here and assign them as function
+// expressions at their original location. Same pattern as _filler.uc's
+// _emit_seq/_emit_group mutual recursion.
+let _shared_module, _shared_fields;
 
 function validate_field(f, ctx) {
     assert(f.name != null,                        sprintf("%s: field.name required", ctx));
@@ -107,6 +125,37 @@ function validate_users(u, ctx) {
            sprintf("%s: users needs columns[] or single_fallback", ctx));
 }
 
+// validate_field_refs(descriptor, ctx) — cross-check sibling-field references
+// (requires.field / depends.field / parent_enabled) against the descriptor's
+// MERGED field-name set (own fields + shared-block fields, since a gate may
+// reference a shared field like `tls_enabled`). The filler is fully
+// declarative — a typo'd reference (e.g. requires:{field:"netwrk"}) silently
+// makes the field never emit, with no diagnostic. Assert it instead so the
+// mistake fails loudly at registration, like the other S4 validations (BLD-8).
+// default_when_empty is value-shaped (not a field reference) — assert it is a
+// scalar (string/number/bool), not an object/array, since the filler assigns
+// it verbatim.
+function validate_field_refs(descriptor, ctx) {
+    let names = {};
+    for (let f in (descriptor.fields || [])) if (f.name != null) names[f.name] = true;
+    for (let f in _shared_fields(descriptor)) if (f.name != null) names[f.name] = true;
+    function check_ref(fname, ref, what) {
+        if (ref == null) return;
+        assert(names[ref] != null,
+               sprintf("%s.%s: %s references unknown field '%s'", ctx, fname, what, ref));
+    }
+    for (let f in (descriptor.fields || [])) {
+        if (type(f.requires) === "object") check_ref(f.name, f.requires.field, "requires.field");
+        if (type(f.depends) === "object")  check_ref(f.name, f.depends.field, "depends.field");
+        check_ref(f.name, f.parent_enabled, "parent_enabled");
+        if (f.default_when_empty != null) {
+            let t = type(f.default_when_empty);
+            assert(t === "string" || t === "int" || t === "double" || t === "bool",
+                   sprintf("%s.%s: default_when_empty must be a scalar (string/number/bool)", ctx, f.name));
+        }
+    }
+}
+
 function register(descriptor) {
     assert(descriptor.kind != null,            "descriptor.kind required");
     assert(descriptor.kind === "inbound" || descriptor.kind === "outbound" ||
@@ -136,6 +185,7 @@ function register(descriptor) {
     validate_users(descriptor.users, ctx);
     for (let f in (descriptor.fields || []))
         validate_field(f, ctx);
+    validate_field_refs(descriptor, ctx);
     _registry[ctx] = descriptor;
     delete _materialize_cache[ctx];
 }
@@ -173,15 +223,15 @@ function types_for_kind(kind) {
 // error (syntax error, bad export) is logged via warn() before returning
 // null — otherwise a broken shared module silently strips its fields from
 // the materialized UI with no diagnostic (S4-4).
-function _shared_module(name) {
+_shared_module = function(name) {
     try { return require(sprintf("builder._shared.%s", name)); }
     catch (e) {
         warn(sprintf("registry: shared module '%s' failed to load: %s\n", name, e));
         return null;
     }
-}
+};
 
-function _shared_fields(d) {
+_shared_fields = function(d) {
     let out = [];
     if (d.shared == null) return out;
     for (let blk in d.shared) {
@@ -194,7 +244,7 @@ function _shared_fields(d) {
         for (let f in (mod.fields || [])) push(out, f);
     }
     return out;
-}
+};
 
 function _inject_advanced_flags(fields) {
     let tabs_with_advanced = {};

@@ -37,7 +37,7 @@ reg.register({
         { name: "strict_mode", type: "bool", tab: "basic", ui_label: "Strict mode",
           advanced: true, json_key: "strict_mode", coerce: "bool" },
         { name: "wildcard_sni", type: "string", tab: "basic", ui_label: "Wildcard SNI (1.12+)",
-          advanced: true, json_key: "wildcard_sni" },
+          advanced: true, json_key: "wildcard_sni", min_version: "1.12" },
     ],
     groups: [
         { json_key: "handshake", gate: { any_present: ["handshake_server", "handshake_server_port"] },

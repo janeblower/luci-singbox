@@ -26,7 +26,7 @@ function emit_cloudflared(s) {
 
 reg.register({
     kind: "inbound", type: "cloudflared", sing_box_type: "cloudflared",
-    min_version: "1.14.0",
+    min_version: "1.14",
     fields: [
         { name: "token", type: "string", tab: "basic", required: true, secret: true,
           ui_label: "Tunnel token" },

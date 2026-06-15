@@ -38,10 +38,20 @@ function build_servers(cur) {
 	return servers;
 }
 
-function build_rules(cur) {
+// ruleset_enabled_map(cur) -> { name: bool } for every ruleset section.
+function ruleset_enabled_map(cur) {
 	let rs_enabled = {};
 	cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = (s.enabled !== "0"); });
-	let srv_tags = enabled_server_tags(cur);
+	return rs_enabled;
+}
+
+// build_rules(cur, srv_tags?, rs_enabled?) — the two maps are optional so the
+// function stays standalone-callable (tests/parity); when build_dns drives it
+// it threads the maps it already computed instead of re-walking the sections
+// (GEN-4).
+function build_rules(cur, srv_tags, rs_enabled) {
+	if (rs_enabled == null) rs_enabled = ruleset_enabled_map(cur);
+	if (srv_tags == null)   srv_tags   = enabled_server_tags(cur);
 
 	let rules = [];
 	cur.foreach("singbox-ui", "dns_rule", function(s) {
@@ -86,17 +96,18 @@ function build_rules(cur) {
 	return rules;
 }
 
-// referenced_rulesets(cur) -> [name, ...]
+// referenced_rulesets(cur, rs_enabled?) -> [name, ...]
 // The deduped set of enabled rulesets referenced by enabled dns_rule sections.
+// rs_enabled is optional (computed if absent) so the function stays callable
+// standalone from generate.uc (GEN-4).
 // Mirrors the ref-resolution in build_rules (same enabled/existence filter), so
 // generate.uc can UNION these with route.uc's referenced set before building
 // route.rule_set definitions. Without this, a ruleset referenced only by a
 // dns_rule is emitted as a dns.rules[].rule_set tag with no matching
 // route.rule_set definition, and sing-box refuses to start ("rule-set not
 // found"). Pure: no I/O. See S3.1.
-function referenced_rulesets(cur) {
-	let rs_enabled = {};
-	cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = (s.enabled !== "0"); });
+function referenced_rulesets(cur, rs_enabled) {
+	if (rs_enabled == null) rs_enabled = ruleset_enabled_map(cur);
 
 	let out = [];
 	let seen = {};
@@ -113,9 +124,15 @@ function referenced_rulesets(cur) {
 // build_dns(cur) -> object | null
 function build_dns(cur) {
 	let out = {};
+	// GEN-4: compute the enabled-server and enabled-ruleset maps ONCE and thread
+	// them into build_rules + the dns.final check, instead of each callee
+	// re-walking the dns_server / ruleset sections.
+	let srv_tags   = enabled_server_tags(cur);
+	let rs_enabled = ruleset_enabled_map(cur);
+
 	let servers = build_servers(cur);
 	if (length(servers)) out.servers = servers;
-	let rules = build_rules(cur);
+	let rules = build_rules(cur, srv_tags, rs_enabled);
 	if (length(rules)) out.rules = rules;
 
 	let d = cur.get_all("singbox-ui", "dns");
@@ -123,7 +140,6 @@ function build_dns(cur) {
 		// S3.2: only emit dns.final when it names an enabled dns_server; a
 		// dangling final tag makes sing-box refuse to start.
 		if (length(s_opt(d, "final"))) {
-			let srv_tags = enabled_server_tags(cur);
 			if (srv_tags[d.final]) out.final = d.final;
 			else warn(sprintf("dns.uc: dns.final '%s' is not an enabled dns_server; omitting\n", d.final));
 		}

@@ -55,3 +55,27 @@ out2=$("$UCODE_BIN" -L "$LIB" -e '
 echo "$out2"
 echo "$out2" | grep -q '^OK$' || { echo "FAIL action"; exit 1; }
 echo "test_route_filler(action): PASS"
+
+# BLD-1: an unset `action` (non-UI write path) must emit the sing-box default
+# "route" via default_when_empty, NOT "action":"" (which sing-box rejects).
+# BLD-2: a blank num_array list row must be DROPPED, not coerced to 0.
+out3=$("$UCODE_BIN" -L "$LIB" -e '
+  let filler = require("builder._filler");
+  let action = require("builder._shared.route_action");
+  let d = { kind:"route_rule", sing_box_type:"",
+            fields:[ ...action.fields(),
+                     { name:"port", type:"list", json_key:"port", coerce:"num_array", tab:"match" } ] };
+  // action omitted entirely
+  let o = filler.build(d, { [".name"]:"b1", domain_suffix:["x.example"] });
+  let ok = (o.action === "route");          // BLD-1: NOT ""
+  // blank middle entry in a num_array
+  let o2 = filler.build(d, { [".name"]:"b2", action:"route", outbound:"p", port:["80","","443"] });
+  ok = ok && (length(o2.port) === 2 && o2.port[0] === 80 && o2.port[1] === 443);  // BLD-2: blank dropped
+  // all-blank num_array omits the key (not [0])
+  let o3 = filler.build(d, { [".name"]:"b3", action:"route", outbound:"p", port:[""] });
+  ok = ok && (o3.port == null);
+  print(ok ? "OK\n" : sprintf("BAD %J / %J / %J\n", o, o2, o3));
+')
+echo "$out3"
+echo "$out3" | grep -q "^OK$" || { echo "FAIL bld1_bld2"; exit 1; }
+echo "test_route_filler(BLD-1/BLD-2): PASS"

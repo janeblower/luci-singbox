@@ -2,7 +2,7 @@
 
 const FIELD_WHITELIST = [
     "name", "type", "tab", "required", "default", "validate",
-    "ui_label", "secret", "values", "item", "dynamic",
+    "ui_label", "ui_help", "secret", "values", "item", "dynamic",
     "advanced", "depends", "parent_enabled", "placeholder", "virtual",
     "multiline", "min_version",
 ];

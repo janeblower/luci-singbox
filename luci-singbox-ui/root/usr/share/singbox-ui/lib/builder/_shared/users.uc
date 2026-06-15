@@ -69,8 +69,15 @@ function _parse_row(entry, spec) {
 
 function _build_single(s, fb) {
     let u = { name: s[".name"] };
+    let have_cred = false;
     for (let f in (fb.fields || []))
-        if (length(s_opt(s, f.from))) u[f.key] = s[f.from];
+        if (length(s_opt(s, f.from))) { u[f.key] = s[f.from]; have_cred = true; }
+    // Drop a credential-less fallback: a single-user section whose source
+    // field(s) are all empty would otherwise emit users:[{name}] with no
+    // password/uuid, which sing-box rejects. Returning null lets build() emit
+    // no users[], so the missing credential surfaces as a clear error rather
+    // than a malformed user object (BLD-5).
+    if (!have_cred) return null;
     return u;
 }
 

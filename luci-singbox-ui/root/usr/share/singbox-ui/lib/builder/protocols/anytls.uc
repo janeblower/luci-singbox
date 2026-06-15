@@ -3,7 +3,7 @@ let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "outbound", type: "anytls", sing_box_type: "anytls",
-    min_version: "1.12.0",
+    min_version: "1.12",
     shared: { tls: { force_enabled: true }, dial: true },
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
@@ -27,7 +27,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "anytls", sing_box_type: "anytls",
-    min_version: "1.12.0",
+    min_version: "1.12",
     shared: { tls: { force_enabled: true } },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
