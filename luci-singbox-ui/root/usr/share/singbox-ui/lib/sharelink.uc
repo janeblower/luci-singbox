@@ -203,6 +203,29 @@ function parse_tuic(url) {
 	return out;
 }
 
+// parse_anytls(url) — AnyTLS share-link: anytls://<password>@host:port?params#name
+// (userinfo "user:pass" form: the password is the part after ':', else the whole).
+function parse_anytls(url) {
+	let m = match(url, /^anytls:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (!m) return null;
+	let userinfo = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!host || !port) return null;
+	let colon = index(userinfo, ":");
+	let password = (colon >= 0) ? substr(userinfo, colon + 1) : userinfo;
+	if (!length(password)) return null;
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+	let out = {
+		type: "anytls", server: host, server_port: port, password: password,
+		tag: safe_tag(length(frag) ? frag : host, url),
+		tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
+	};
+	smap.apply_params(params, smap.SPEC.anytls, out);
+	return out;
+}
+
 // b64_decode(s) — tolerant base64 decoder for share-link payloads.
 // Accepts both standard and url-safe alphabets and missing padding.
 // Returns the decoded string, or null on invalid input.
@@ -441,6 +464,7 @@ function parse_proxy_url(url) {
 	if (match(url, /^tuic:\/\//))      return parse_tuic(url);
 	if (match(url, /^hysteria:\/\//) ||
 	    match(url, /^hy:\/\//))        return parse_hysteria1(url);
+	if (match(url, /^anytls:\/\//))    return parse_anytls(url);
 	warn("sharelink.uc: unsupported proxy URL scheme: " + url + "\n");
 	return null;
 }
