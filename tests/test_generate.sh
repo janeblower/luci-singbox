@@ -249,7 +249,6 @@ config outbound 'my_sub_out'
 	option enabled '1'
 	option type 'subscription'
 	option sub_url 'https://sub.example.com/config'
-	option sub_update_via 'direct'
 	option sub_interval '3600'
 "
 run_gen

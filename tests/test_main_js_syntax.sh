@@ -68,7 +68,8 @@ grep -q "'subscription'"         "$OUTBOUNDS_TAB" || { echo "FAIL: no type=subsc
 # E2: proxy_url (share-link URL type) replaced by openShareLinkModal import button.
 grep -q "openShareLinkModal"     "$OUTBOUNDS_TAB" || { echo "FAIL: no openShareLinkModal (checked tabs/outbounds.js)"; exit 1; }
 grep -q "sub_url"                "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_url field (checked tabs/outbounds.js)"; exit 1; }
-grep -q "sub_update_via"         "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_update_via field (checked tabs/outbounds.js)"; exit 1; }
+grep -q "sub_user_agent"         "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_user_agent field (checked tabs/outbounds.js)"; exit 1; }
+grep -q "sub_update_via"         "$OUTBOUNDS_TAB" && { echo "FAIL: sub_update_via should be removed"; exit 1; } || true
 grep -q "sub_interval"           "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_interval field (checked tabs/outbounds.js)"; exit 1; }
 ! grep -q "proxy_type"           "$JS" || { echo "FAIL: legacy proxy_type still present"; exit 1; }
 ! grep -q "'json'"               "$JS" || { echo "FAIL: legacy json outbound type still present"; exit 1; }
