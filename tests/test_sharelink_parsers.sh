@@ -61,4 +61,24 @@ out=$(je "let r = require('sharelink').parse_proxy_url('vless://11111111-1111-11
 [ "$out" = "real.sni" ] || die "1.4 percent-encoded query key decoded" "$out"
 ok "1.4 percent-encoded query key (%73ni) decoded to sni"
 
+# REALITY: a vless reality link MUST carry flow (xtls-rprx-vision, top-level) and
+# short_id (sid -> tls.reality.short_id). Dropping either yields a non-functional
+# outbound (the reality handshake is rejected) — this was the root cause of the
+# rule-set-update crash: subscription nodes parsed without flow/short_id produced
+# a dead proxy, so sing-box could not download remote .srs at startup and FATAL'd.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?type=tcp&security=reality&pbk=PUBKEY&fp=chrome&sid=d38062b9&spx=%2F&flow=xtls-rprx-vision#n');
+    print(sprintf('%s|%s|%s|%s', r.flow ?? 'MISSING', r.tls.reality.short_id ?? 'MISSING', r.tls.reality.public_key, r.tls.utls.fingerprint));
+")
+[ "$out" = "xtls-rprx-vision|d38062b9|PUBKEY|chrome" ] || die "reality flow+short_id" "$out"
+ok "vless reality flow + short_id parsed"
+
+# A vless link WITHOUT flow/sid must not emit empty/MISSING keys (clean omission).
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('vless://11111111-1111-1111-1111-111111111111@1.2.3.4:443?security=reality&pbk=PUBKEY#n');
+    print(sprintf('%s|%s', r.flow == null ? 'NONE' : 'LEAK', r.tls.reality.short_id == null ? 'NONE' : 'LEAK'));
+")
+[ "$out" = "NONE|NONE" ] || die "reality flow/short_id clean omission" "$out"
+ok "vless reality without flow/sid omits keys"
+
 echo "OK"

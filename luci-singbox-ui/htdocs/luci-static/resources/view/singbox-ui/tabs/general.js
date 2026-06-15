@@ -14,6 +14,12 @@ function buildGeneralMap() {
 
 	o = s.option(form.Flag, 'enabled', _('Enable cache file'));
 	o.default = '1';
+	// rmempty=false: LuCI drops a Flag from UCI when its value equals the
+	// default ('1'), so a checked-but-default cache toggle silently lost
+	// `enabled` on save. cache.uc gates on `enabled === "1"`, so the cache_file
+	// block then vanished from the generated config (and with it the nft/bbolt
+	// rule-set path). Persist the option unconditionally.
+	o.rmempty = false;
 
 	o = s.option(form.ListValue, 'storage', _('Storage'));
 	o.value('ram',    _('RAM (/tmp/, lost on reboot)'));
@@ -33,6 +39,7 @@ function buildGeneralMap() {
 
 	o = s.option(form.Flag, 'store_fakeip', _('Persist fakeip mappings'));
 	o.default = '1';
+	o.rmempty = false;   // same default-stripping footgun as `enabled` above
 	o.depends('enabled', '1');
 	o.description = _('Effective only when a DNS server of type fakeip is enabled.');
 

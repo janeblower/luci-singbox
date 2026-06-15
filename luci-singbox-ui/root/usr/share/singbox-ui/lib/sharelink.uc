@@ -112,9 +112,21 @@ function parse_vless(url) {
 		let sni = params["sni"] ?? host;
 		out.tls = { enabled: true, server_name: sni };
 		if (params["fp"]) out.tls.utls = { enabled: true, fingerprint: params["fp"] };
-		if (security === "reality" && params["pbk"])
+		if (security === "reality" && params["pbk"]) {
 			out.tls.reality = { enabled: true, public_key: params["pbk"] };
+			// short_id (sid) is mandatory for the reality handshake when the
+			// server is configured with one — dropping it produces a dead
+			// outbound that cannot connect (and, via download_detour, makes
+			// remote rule-sets un-fetchable → sing-box FATALs at startup).
+			if (length(params["sid"])) out.tls.reality.short_id = params["sid"];
+		}
+		// Note: `spx` (reality spider_x) is an Xray-only client field; sing-box
+		// has no equivalent, so it is intentionally not mapped.
 	}
+	// flow (e.g. xtls-rprx-vision) is a top-level vless field. Without it the
+	// client won't negotiate XTLS-Vision and a server expecting it resets the
+	// connection — same dead-proxy failure mode as a missing short_id.
+	if (length(params["flow"])) out.flow = params["flow"];
 	let transport_type = params["type"];
 	if (transport_type && transport_type !== "tcp")
 		out.transport = { type: transport_type };
