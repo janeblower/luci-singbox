@@ -177,22 +177,20 @@ function buildOutboundsMap() {
 	o.placeholder = 'https://sub.example.com/config';
 	o.depends('type', 'subscription');
 
-	o = s.taboption('basic', form.ListValue, 'sub_update_via', _('Update via'));
+	o = s.taboption('basic', form.Value, 'sub_user_agent', _('User-Agent'));
 	o.modalonly = true;
 	o.depends('type', 'subscription');
-	o.description = _('Fetch the subscription through this outbound (proxy or direct).');
-	o.load = function (section_id) {
-		this.keylist = [];
-		this.vallist = [];
-		this.value('direct', _('Direct (WAN)'));
-		uci.sections('singbox-ui', 'outbound').forEach(function (sec) {
-			if (sec['.name'] === section_id) return;       // not itself
-			if (sec.type === 'subscription') return;        // can't fetch through a subscription
-			var label = sec['.name'] + ' (' + (sec.type || '?') + ')';
-			this.value(sec['.name'], label);
-		}.bind(this));
-		return form.ListValue.prototype.load.apply(this, arguments);
-	};
+	o.description = _('User-Agent header sent when fetching the subscription. ' +
+		'Pick a preset or type a custom value.');
+	o.default = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
+		'(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+	o.value(o.default, _('Browser (Chrome)'));
+	o.value('v2rayNG/1.8.5', 'v2rayNG');
+	o.value('v2raytun/1.0', 'v2raytun');
+	o.value('Happ/1.0', 'Happ');
+	o.value('sing-box/1.11.0', 'sing-box');
+	o.value('clash-verge/1.6.0', 'clash-verge');
+	o.value('curl/8.7.1', 'curl');
 
 	o = s.taboption('basic', form.Value, 'sub_interval', _('Update interval (s)'));
 	o.modalonly   = true;

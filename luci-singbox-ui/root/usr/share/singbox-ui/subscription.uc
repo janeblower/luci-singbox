@@ -7,13 +7,11 @@
 //
 // Env overrides (used by tests):
 //   SINGBOX_TMPDIR (default /tmp/singbox-ui)
-//   SINGBOX        (default /usr/bin/sing-box)
 //   UCI_CONFIG_DIR (honoured by require("uci").cursor)
 //   SINGBOX_NO_RELOAD=1 — refresh skips the init.d reload (tests)
 //   SINGBOX_INITD  (default /etc/init.d/singbox-ui) — init.d path for reload (tests)
 
 const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
-const SINGBOX    = getenv("SINGBOX")        || "/usr/bin/sing-box";
 // Cap subscription bodies so a hostile or runaway source cannot OOM a 128–256 MB
 // router. cmd_fetch_subs enforces MAX_BODY via a post-download fs.stat() guard.
 const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
@@ -22,10 +20,17 @@ const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
 // used to apply new subscription config after fetching.
 const SINGBOX_INITD = getenv("SINGBOX_INITD") || "/etc/init.d/singbox-ui";
 
+// curl binary seam (tests override via env). Subscriptions are always fetched
+// directly via curl — no proxy/outbound routing. curl has its own --max-time so
+// the external `timeout` wrapper is not needed here.
+const CURL = getenv("CURL") || "/usr/bin/curl";
+// Default browser UA when a subscription leaves sub_user_agent empty.
+const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
+                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+
 let fs  = require("fs");
 let uci_mod = require("uci");
 let helpers = require("helpers");
-let ob_mod = require("outbound");
 
 // Two channels: log() is ops-info, log_err() is errors. They both write to
 // stderr (init.d/cron route it to syslog) but log_err tags severity so an
@@ -36,7 +41,7 @@ function log_err(msg) { warn("error: " + msg + "\n"); }
 
 // I/O seams — overridable for tests, mirroring log._set_logger_for_test.
 // _reader(path) returns the raw body string (or null); _fetcher(jobs) runs
-// one `sing-box tools fetch` per job sequentially. BOTH `let` bindings are
+// one `curl` per job sequentially, fetching directly. BOTH `let` bindings are
 // declared here, BEFORE the setter helpers below close over and assign to
 // them — a forward reference would hit the temporal dead zone and throw at
 // call time.
@@ -49,28 +54,21 @@ let _reader = function(path) {
 	return body;
 };
 
-// _fetcher(jobs) — for each job runs `sing-box tools fetch -c <cfg> -o <via>
-// <url>` capturing stdout to job.outpath. The ephemeral cfg (job.cfg_json) is
-// written to a sibling temp file. `timeout` is optional on stock OpenWrt (not a
-// busybox applet) — guarded with `command -v`, mirroring nftables.uc's apply.
+// _fetcher(jobs) — for each job runs `curl -fsSL --max-time <to> -A <ua>
+// -D <hdr_path> -o <body_path> <url>`, downloading directly (no proxy). curl
+// writes the body to body_path and the response headers to hdr_path. All argv
+// is shell-quoted via helpers.sq() so a hostile url/ua cannot break the command.
 let _fetcher = function(jobs) {
 	if (!length(jobs)) return;
-	let has_timeout = (system(["/bin/sh", "-c", "command -v timeout >/dev/null 2>&1"]) === 0);
 	for (let j in jobs) {
-		let cfgpath = sprintf("%s.cfg", j.outpath);
-		let cf = fs.open(cfgpath, "w");
-		if (!cf) { log_err(`fetch: cannot write cfg for ${j.name}`); continue; }
-		try { cf.write(j.cfg_json); } catch (_) {}
-		cf.close();
-		let argv = [ SINGBOX, "tools", "fetch", "-c", cfgpath,
-		             "-o", (j.via !== "" ? j.via : "direct"), j.url ];
+		let ua = (j.ua != null && j.ua !== "") ? j.ua : DEFAULT_UA;
+		let to = (j.opts && j.opts.timeout) ? j.opts.timeout : 15;
+		let argv = [ CURL, "-fsSL", "--max-time", sprintf("%d", to),
+		             "-A", ua, "-D", j.hdr_path, "-o", j.body_path, j.url ];
 		let quoted = [];
 		for (let a in argv) push(quoted, helpers.sq(a));
-		let line = join(" ", quoted) + " > " + helpers.sq(j.outpath) + " 2>/dev/null";
-		let to = (j.opts && j.opts.timeout) ? j.opts.timeout : 15;
-		if (has_timeout) line = sprintf("timeout %d ", to) + line;
+		let line = join(" ", quoted) + " >/dev/null 2>&1";
 		try { system(["/bin/sh", "-c", line]); } catch (_) {}
-		fs.unlink(cfgpath);
 	}
 };
 
@@ -134,27 +132,48 @@ function write_atomic(path, body) {
 	return true;
 }
 
-// build_fetch_config(cur, via) -> JSON string for `sing-box tools fetch -c`.
-// Minimal config: the selected via-outbound (tag forced to `via`) + a direct
-// outbound. via="" / "direct" -> just direct. Returns null if via is set but
-// its section can't be built (caller logs + skips). No I/O.
-function build_fetch_config(cur, via) {
-	let direct = { tag: "direct", type: "direct" };
-	let outbounds = [];
-	if (via !== "" && via !== "direct") {
-		let kind = helpers.uci_get_or_empty(cur, via, "type");
-		if (kind === "") return null;
-		let sec = cur.get_all("singbox-ui", via);
-		if (sec == null) return null;
-		let obj;
-		try { obj = ob_mod.build_constructor_for(sec, kind); }
-		catch (e) { return null; }
-		if (obj == null) return null;
-		obj.tag = via;
-		push(outbounds, obj);
+// parse_headers(hdr) -> { userinfo?:{upload,download,total,expire}, title? }.
+// Reads the curl -D header dump. Tolerant: missing fields are simply omitted,
+// a garbage dump yields {}. subscription-userinfo is a ';'-separated k=v list;
+// title comes from content-disposition filename or a profile-title header
+// (base64:-prefixed values are decoded).
+function parse_headers(hdr) {
+	let out = {};
+	if (hdr == null) return out;
+	let info = null, title = null;
+	for (let line in split(hdr, "\n")) {
+		let l = trim(line);
+		let ui = match(l, /^[Ss]ubscription-[Uu]serinfo:[ \t]*(.*)$/);
+		if (ui) {
+			info = {};
+			for (let kv in split(ui[1], ";")) {
+				let p = match(trim(kv), /^([A-Za-z_]+)=([0-9]+)$/);
+				if (p) info[lc(p[1])] = +p[2];
+			}
+		}
+		if (index(lc(l), "content-disposition") === 0) {
+			// ucode's regex engine (POSIX/TRE) has no non-capturing (?:...)
+			// groups, so capture the raw value then strip an optional
+			// RFC 5987 charset prefix (UTF-8'') and surrounding quotes by hand.
+			let fn = match(l, /[Ff]ilename\*?=[ \t]*"?([^";\r\n]+)"?/);
+			if (fn) {
+				let v = trim(fn[1]);
+				let cs = match(v, /^[A-Za-z0-9-]+''(.*)$/);
+				if (cs) v = trim(cs[1]);
+				title = v;
+			}
+		}
+		let pt = match(l, /^[Pp]rofile-[Tt]itle:[ \t]*(.*)$/);
+		if (pt) {
+			let v = trim(pt[1]);
+			let b = match(v, /^base64:(.*)$/);
+			if (b) { try { v = b64dec(trim(b[1])) || v; } catch (_) {} }
+			title = v;
+		}
 	}
-	push(outbounds, direct);
-	return sprintf("%J", { outbounds: outbounds });
+	if (info != null) out.userinfo = info;
+	if (title != null && title !== "") out.title = title;
+	return out;
 }
 
 function cmd_fetch_subs(cur, only) {
@@ -172,9 +191,9 @@ function cmd_fetch_subs(cur, only) {
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
 	let timeout = boot ? 5 : 15;
 
-	// Step 1: build one job per subscription. Each job carries the ephemeral
-	// fetch-config JSON (outbounds: [via-outbound, direct]) so sing-box can
-	// route the download through the selected outbound.
+	// Step 1: build one job per subscription. Each job carries the url, the
+	// per-subscription User-Agent, and the body/header output paths; curl
+	// fetches the url directly (no proxy routing).
 	let jobs = [];
 	for (let name in names) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
@@ -187,42 +206,41 @@ function cmd_fetch_subs(cur, only) {
 			log_err(`fetch_subs: ${name} has no sub_url, skipping`);
 			continue;
 		}
-		let via = helpers.uci_get_or_empty(cur, name, "sub_update_via");
-		let cfg_json = build_fetch_config(cur, via);
-		if (cfg_json == null) {
-			log_err(`fetch_subs: ${name} via outbound '${via}' could not be built, skipping`);
-			continue;
-		}
-		let raw_path = `${TMPDIR}/sub_${name}.raw`;
-		let out_path = `${TMPDIR}/sub_${name}.txt`;
+		let ua = helpers.uci_get_or_empty(cur, name, "sub_user_agent");
+		let body_path = `${TMPDIR}/sub_${name}.raw`;
+		let hdr_path  = `${TMPDIR}/sub_${name}.hdr`;
+		let out_path  = `${TMPDIR}/sub_${name}.txt`;
 		push(jobs, {
-			name: name, raw_path: raw_path, out_path: out_path,
-			url: url, via: via, cfg_json: cfg_json, outpath: raw_path,
+			name: name, body_path: body_path, hdr_path: hdr_path,
+			out_path: out_path, url: url, ua: ua,
 			opts: { timeout: timeout },
 		});
 	}
 
-	// Step 2: fetch each subscription via sing-box tools fetch.
+	// Step 2: fetch each subscription directly via curl.
 	_fetcher(jobs);
 
 	// Step 3: parse each result; on failure, leave existing out_path alone.
 	for (let m in jobs) {
-		let st = fs.stat(m.raw_path);
+		let st = fs.stat(m.body_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_subs: download failed for ${m.name}`);
-			fs.unlink(m.raw_path);
+			fs.unlink(m.body_path);
+			try { fs.unlink(m.hdr_path); } catch (_) {}
 			continue;
 		}
 		if (st.size > MAX_BODY) {
 			log_err(`fetch_subs: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
-			fs.unlink(m.raw_path);
+			fs.unlink(m.body_path);
+			try { fs.unlink(m.hdr_path); } catch (_) {}
 			continue;
 		}
 
-		let raw = _reader(m.raw_path) ?? "";
-		fs.unlink(m.raw_path);
+		let raw = _reader(m.body_path) ?? "";
+		fs.unlink(m.body_path);
 		if (length(raw) === 0) {
 			log_err(`fetch_subs: empty body for ${m.name}`);
+			try { fs.unlink(m.hdr_path); } catch (_) {}
 			continue;
 		}
 
@@ -237,14 +255,23 @@ function cmd_fetch_subs(cur, only) {
 		}
 		if (!length(urls)) {
 			log_err(`fetch_subs: no valid proxy URL in response for ${m.name}`);
+			try { fs.unlink(m.hdr_path); } catch (_) {}
 			continue;
 		}
 
 		if (!write_atomic(m.out_path, join("\n", urls) + "\n")) {
 			log_err(`fetch_subs: cannot write ${m.out_path}`);
+			try { fs.unlink(m.hdr_path); } catch (_) {}
 			continue;
 		}
 		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
+		let hdr_raw = _reader(m.hdr_path) ?? "";
+		let meta = parse_headers(hdr_raw);
+		if (length(meta)) {
+			let meta_path = `${TMPDIR}/sub_${m.name}.meta`;
+			write_atomic(meta_path, sprintf("%J", meta));
+		}
+		try { fs.unlink(m.hdr_path); } catch (_) {}
 	}
 	return 0;
 }
@@ -290,8 +317,21 @@ function cmd_sub_status(cur) {
 			try { let f = fs.open(path, "r"); if (f) { body = f.read("all") || ""; f.close(); } } catch (_) {}
 			for (let line in split(body, "\n")) if (trim(line) !== "") node_count++;
 		}
+		let title = null, userinfo = null;
+		let mp = `${TMPDIR}/sub_${name}.meta`;
+		let mst = fs.stat(mp);
+		if (mst && mst.type === "file") {
+			let mraw = _reader(mp) ?? "";
+			let parsed = null;
+			try { parsed = json(mraw); } catch (_) {}
+			if (type(parsed) === "object") {
+				title = parsed.title ?? null;
+				userinfo = parsed.userinfo ?? null;
+			}
+		}
 		push(out, { name: name, enabled: enabled,
-		            last_update: last_update, node_count: node_count });
+		            last_update: last_update, node_count: node_count,
+		            title: title, userinfo: userinfo });
 	}
 	return out;
 }
@@ -338,10 +378,11 @@ if (length(ARGV)) {
 return {
 	try_b64_decode,
 	is_stale,
+	_parse_headers_for_test: parse_headers,
 	_set_io_for_test,
 	_set_fetcher_for_test,
+	_fetcher_real_for_test: function(jobs) { return _fetcher(jobs); },
 	_read_raw_for_test,
-	_build_fetch_config_for_test: build_fetch_config,
 	_cmd_fetch_subs_for_test: function(cur) { return cmd_fetch_subs(cur); },
 	_cmd_sub_status_for_test: function(cur) { return cmd_sub_status(cur); },
 	_any_subs_stale_for_test: function(cur, force, only) { return any_subs_stale(cur, force, only); },
