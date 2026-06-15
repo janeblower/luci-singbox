@@ -244,6 +244,40 @@ expect('outbound rejects direct (use type=interface)',
 	fnOut({ type: 'direct', server: 'x.y', server_port: 1 }),
 	{ ok: false, errors: ['Unknown outbound type: direct'], fields: {} });
 
+// --- IMP-1: malformed numeric fields must produce a parse error, NOT a UCI
+// section carrying the literal string "NaN". ----------------------------------
+expect('inbound non-numeric listen_port rejected',
+	fn({ type: 'shadowsocks', listen: '::', listen_port: 'eight',
+	     method: 'aes-256-gcm', password: 'p' }),
+	{ ok: false, errors: ['Invalid port: eight'], fields: {} });
+expect('inbound out-of-range listen_port rejected',
+	fn({ type: 'shadowsocks', listen: '::', listen_port: 70000,
+	     method: 'aes-256-gcm', password: 'p' }),
+	{ ok: false, errors: ['Invalid port: 70000'], fields: {} });
+expect('inbound listen_port with trailing garbage rejected',
+	fn({ type: 'shadowsocks', listen: '::', listen_port: '80abc',
+	     method: 'aes-256-gcm', password: 'p' }),
+	{ ok: false, errors: ['Invalid port: 80abc'], fields: {} });
+expect('outbound non-numeric server_port rejected',
+	fnOut({ type: 'vless', server: 'a.b', server_port: 'nope', uuid: 'u' }),
+	{ ok: false, errors: ['Invalid port: nope'], fields: {} });
+expect('outbound bad up_mbps rejected',
+	fnOut({ type: 'hysteria2', server: 'h.b', server_port: 8443, password: 'pw',
+	        up_mbps: 'fast' }),
+	{ ok: false, errors: ['Invalid up_mbps: fast'], fields: {} });
+expect('outbound bad alter_id rejected',
+	fnOut({ type: 'vmess', server: 'a.b', server_port: 443, uuid: 'u',
+	        alter_id: 'x' }),
+	{ ok: false, errors: ['Invalid alter_id: x'], fields: {} });
+// A valid numeric port still imports as a number (not "NaN").
+expect('inbound numeric listen_port still imports',
+	fn({ type: 'shadowsocks', listen: '::', listen_port: 8388,
+	     method: 'aes-256-gcm', password: 'p' }),
+	{ ok: true, errors: [], fields: {
+		protocol: 'shadowsocks', listen: '::', listen_port: 8388,
+		shadowsocks_method: 'aes-256-gcm', server_password: 'p',
+	}});
+
 console.log('OK');
 NODE
 

@@ -41,7 +41,7 @@ function openJsonImportModal(kind, m) {
 			? '{"type":"shadowsocks","listen":"::","listen_port":8388,"method":"aes-256-gcm","password":"p"}'
 			: '{"type":"vless","server":"a.b","server_port":443,"uuid":"…"}'
 	});
-	var err = E('div', { 'style': 'color:#c33;margin-top:8px;' });
+	var err = E('div', { 'class': 'sb-error', 'style': 'margin-top:8px;' });
 
 	function onImport() {
 		err.textContent = '';
@@ -77,9 +77,12 @@ function openJsonImportModal(kind, m) {
 		// uci.save() and do NOT reload the page — that previously raced with
 		// main.js's handleSave/handleSaveApply and discarded user edits in
 		// other sections. The user must press Save & Apply (or Save) to commit.
+		// UX-4: name the generated section in the toast so the user can locate
+		// the new draft row on a long list (we deliberately don't reload/scroll
+		// to avoid racing handleSave).
 		ui.addNotification(
 			null,
-			E('p', {}, _('Import staged as draft. Press "Save & Apply" to commit the changes.')),
+			E('p', {}, _('Imported as "%s". Press "Save & Apply" to commit the changes.').format(sid)),
 			'info'
 		);
 	}
@@ -98,7 +101,7 @@ function openJsonImportModal(kind, m) {
 function buildInboundsMap() {
 	var m = new form.Map('singbox-ui', _('Inbounds'),
 		_('Define inbounds: protocol-first constructor. ' +
-		  'nftables rules are applied for tproxy/tun inbounds that request them.'));
+		  'nftables rules are applied for tproxy inbounds that request them.'));
 
 	var s = m.section(form.GridSection, 'inbound', null);
 	s.anonymous  = false;
@@ -160,8 +163,6 @@ function buildInboundsMap() {
 	o.modalonly = false;
 	o.editable  = false;
 	o.cfgvalue  = function (section_id) {
-		var p = uci.get('singbox-ui', section_id, 'protocol') || '';
-		if (p === 'tun') return uci.get('singbox-ui', section_id, 'interface_name') || 'singbox-tun';
 		var listen = uci.get('singbox-ui', section_id, 'listen')      || '::';
 		var port   = uci.get('singbox-ui', section_id, 'listen_port') || '—';
 		return listen + ':' + port;

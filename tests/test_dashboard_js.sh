@@ -185,6 +185,81 @@ function ok(l,c){if(c)console.log('  PASS:',l);else{console.log('  FAIL:',l);fai
   await upd.attrs.click();
   ok('Update button calls refresh(subscriptions, mysub)', refreshed==='subscriptions:mysub');
 
+  // --- DASH-3: a NON-expanded subscription (no proxy group) still shows on a
+  // dedicated Subscriptions section. The sub returns userinfo but produces no
+  // clash-api group, so it would otherwise never surface. ---------------------
+  ctx.__test.setGet((path)=>{
+    if(path==='/proxies')return Promise.resolve({status:'ok',body:'{"proxies":{}}'}); // NO group
+    if(path==='/connections')return Promise.resolve({status:'ok',body:'{"connections":[]}'});
+    if(path==='/version')return Promise.resolve({status:'ok',body:'{"version":"1.12.0"}'});
+    return Promise.resolve({status:'ok',body:'{}'});
+  });
+  ctx.__test.setSub(()=>Promise.resolve({status:'ok', now: Math.floor(Date.now()/1000), subscriptions:[
+    { name:'plainsub', enabled:'1', last_update: Math.floor(Date.now()/1000)-60,
+      node_count:13, title:'My Plan',
+      userinfo:{ upload:100, download:200, total:1000, expire: Math.floor(Date.now()/1000)+86400 } }
+  ]}));
+  const d3s=Dash.buildDashboard();
+  await d3s.poll(); await d3s.refreshProxies(); await d3s.refreshSubs();
+  const subsBox=ctx.__test.find(d3s.node,(n)=>n.attrs&&/sb-dashboard-subs/.test(n.attrs['class']||''));
+  ok('dedicated Subscriptions section is mounted (DASH-3)', !!subsBox);
+  const subRow=ctx.__test.find(d3s.node,(n)=>n.attrs&&n.attrs['data-sub']==='plainsub');
+  ok('non-expanded subscription gets its own row (DASH-3)', !!subRow);
+  ok('non-expanded subscription shows node count + traffic (DASH-3)',
+     subRow && subRow.textContent.indexOf('13')>=0 && subRow.textContent.indexOf('My Plan')>=0);
+
+  // --- DASH-2: "updated X ago" uses the SERVER clock (state.subsNow), not the
+  // browser clock. With a server `now` far ahead of the browser, the age must
+  // be computed from the server clock. -----------------------------------------
+  const serverNow = Math.floor(Date.now()/1000) + 100000; // server clock ahead
+  ctx.__test.setSub(()=>Promise.resolve({status:'ok', now: serverNow, subscriptions:[
+    { name:'clocksub', enabled:'1', last_update: serverNow-3600, node_count:1 }
+  ]}));
+  const d2c=Dash.buildDashboard();
+  await d2c.poll(); await d2c.refreshProxies(); await d2c.refreshSubs();
+  const clockRow=ctx.__test.find(d2c.node,(n)=>n.attrs&&n.attrs['data-sub']==='clocksub');
+  // server now - last_update = 3600s -> "1h". Browser clock would yield a huge
+  // negative-clamped/large value, NOT exactly 1h.
+  ok('ago uses server clock: 1h from server now (DASH-2)',
+     clockRow && clockRow.textContent.indexOf('1h')>=0);
+
+  // --- DASH-1: latency Test bounds parallelism and shows a busy state. With
+  // many members and a delay we can observe in-flight, the Test button flips to
+  // "Testing…" + disabled, and never more than TEST_POOL(=8) probes are
+  // in-flight at once. -----------------------------------------------------------
+  var MANY = { proxies: { 'BIG': { type:'Selector', now:'n0', all:[] } } };
+  for (var k=0;k<20;k++){ var nm='n'+k; MANY.proxies.BIG.all.push(nm);
+    MANY.proxies[nm] = { type:'Shadowsocks', history:[{delay:0}] }; }
+  ctx.__test.setGet((path)=>{
+    if(path==='/proxies')return Promise.resolve({status:'ok',body:JSON.stringify(MANY)});
+    if(path==='/connections')return Promise.resolve({status:'ok',body:'{"connections":[]}'});
+    if(path==='/version')return Promise.resolve({status:'ok',body:'{"version":"1.12.0"}'});
+    return Promise.resolve({status:'ok',body:'{}'});
+  });
+  var inFlight=0, maxInFlight=0;
+  var release=[];
+  ctx.__test.setDelay((name)=>{
+    inFlight++; if(inFlight>maxInFlight)maxInFlight=inFlight;
+    return new Promise(function(res){ release.push(function(){ inFlight--;
+      res({status:'ok',body:'{"delay":10}'}); }); });
+  });
+  const dl=Dash.buildDashboard();
+  await dl.poll(); await dl.refreshProxies();
+  const findTestBtn=()=>ctx.__test.find(dl.node,(n)=>n.tag==='button'&&/sb-dashboard-test/.test((n.attrs&&n.attrs['class'])||''));
+  const tp=findTestBtn().attrs.click();       // fire Test (do not await yet)
+  await Promise.resolve(); await Promise.resolve();  // let the first batch dispatch
+  const busyBtn=findTestBtn();
+  ok('Test button shows a busy/disabled state while probing (DASH-1)',
+     busyBtn && busyBtn.attrs.disabled !== undefined && (busyBtn.textContent||'').indexOf('Testing')>=0);
+  // Drain in waves until all probes resolve.
+  while (release.length) { var batch=release.splice(0); batch.forEach((f)=>f());
+    await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); }
+  await tp;
+  ok('latency probes are bounded to <=8 concurrent (DASH-1)', maxInFlight>0 && maxInFlight<=8);
+  const doneBtn=findTestBtn();
+  ok('Test button returns to idle after probing (DASH-1)',
+     doneBtn && doneBtn.attrs.disabled === undefined && (doneBtn.textContent||'')==='Test');
+
   process.exit(failures?1:0);
 })();
 NODE

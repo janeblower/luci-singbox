@@ -13,6 +13,23 @@ var SB_INBOUND_KNOWN = {
 	'hysteria2': true,
 };
 
+// parseIntField — coerce a pasted numeric field with validation (IMP-1).
+// Unary + on a non-numeric paste (e.g. "listen_port":"eight") yields NaN, which
+// the import write path String()'d into the literal "NaN" — silently producing
+// a UCI section sing-box later rejects. Returns { ok, value } so the caller can
+// push an actionable parse error into the modal instead. `min`/`max` bound the
+// accepted range (e.g. 1..65535 for ports); pass null to skip a bound.
+function parseIntField(raw, min, max) {
+	var n = parseInt(raw, 10);
+	if (!isFinite(n)) return { ok: false };
+	// Reject "12abc" / objects: parseInt would accept the numeric prefix, so
+	// re-stringify and compare to catch trailing garbage.
+	if (String(n) !== String(raw).trim()) return { ok: false };
+	if (min != null && n < min) return { ok: false };
+	if (max != null && n > max) return { ok: false };
+	return { ok: true, value: n };
+}
+
 function jsonImportInbound(o) {
 	var out = { ok: false, errors: [], fields: {} };
 	if (!o || typeof o !== 'object' || Array.isArray(o)) {
@@ -29,9 +46,17 @@ function jsonImportInbound(o) {
 		return out;
 	}
 	var f = out.fields;
+	// bad(msg) — abort the import with a parse error and NO partial fields
+	// (consistent with the type/shape rejections above), so a rejected import
+	// never leaves half-populated state for the caller to misread (IMP-1).
+	function bad(msg) { out.fields = {}; out.errors.push(msg); return out; }
 	f.protocol = o.type;
 	if (o.listen      != null) f.listen      = String(o.listen);
-	if (o.listen_port != null) f.listen_port = +o.listen_port;
+	if (o.listen_port != null) {
+		var lp = parseIntField(o.listen_port, 1, 65535);
+		if (!lp.ok) return bad(_('Invalid port: ') + o.listen_port);
+		f.listen_port = lp.value;
+	}
 	if (o.network     != null) f.network     = String(o.network);
 
 	if (o.type === 'shadowsocks') {
@@ -86,13 +111,21 @@ function jsonImportInbound(o) {
 			if (u.flow)     f.vless_flow      = u.flow;
 			// sing-box 1.12 docs spec the camelCase `alterId`; accept the
 			// legacy snake_case for paste-compat.
-			var aid = (u.alterId != null) ? u.alterId : u.alter_id;
-			if (aid != null) f.vmess_alter_id = String(aid);
+			var aidRaw = (u.alterId != null) ? u.alterId : u.alter_id;
+			if (aidRaw != null) {
+				var aid = parseIntField(aidRaw, 0, null);
+				if (!aid.ok) return bad(_('Invalid alter_id: ') + aidRaw);
+				f.vmess_alter_id = String(aid.value);
+			}
 		}
 	}
 	if (o.type === 'tun') {
 		if (o.interface_name) f.interface_name = o.interface_name;
-		if (o.mtu) f.mtu = String(o.mtu);
+		if (o.mtu != null) {
+			var mt = parseIntField(o.mtu, 1, null);
+			if (!mt.ok) return bad(_('Invalid MTU: ') + o.mtu);
+			f.mtu = String(mt.value);
+		}
 		if (o.stack) f.stack = o.stack;
 		if (Array.isArray(o.address)) {
 			for (var i = 0; i < o.address.length; i++) {
@@ -128,8 +161,16 @@ function jsonImportInbound(o) {
 			f.obfs_type     = o.obfs.type;
 			f.obfs_password = o.obfs.password || '';
 		}
-		if (o.up_mbps   != null) f.up_mbps   = String(o.up_mbps);
-		if (o.down_mbps != null) f.down_mbps = String(o.down_mbps);
+		if (o.up_mbps != null) {
+			var up = parseIntField(o.up_mbps, 0, null);
+			if (!up.ok) return bad(_('Invalid up_mbps: ') + o.up_mbps);
+			f.up_mbps = String(up.value);
+		}
+		if (o.down_mbps != null) {
+			var dn = parseIntField(o.down_mbps, 0, null);
+			if (!dn.ok) return bad(_('Invalid down_mbps: ') + o.down_mbps);
+			f.down_mbps = String(dn.value);
+		}
 	}
 	out.ok = true;
 	return out;

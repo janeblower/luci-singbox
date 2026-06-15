@@ -33,28 +33,74 @@ function isUuid(v) {
 	return true;
 }
 
+// isIPv6Shape — tightened IPv6 recognizer (INFO-2). The old check accepted any
+// hex+colon string (e.g. '::::', '1:2:3'), so malformed values slipped past our
+// validator only to be rejected inconsistently by LuCI's stricter ipaddr
+// datatype. This counts colon groups and enforces the structural rules: at most
+// one '::' compressor, 1-4 hex digits per group, ≤8 groups (≤7 when a '::' is
+// present, since the compressor stands in for ≥1 zero group). Still lenient on
+// purpose — embedded-IPv4 suffixes and scope ids are out of scope; LuCI's
+// datatype is the authoritative gate. Returns true/false (not a message).
+function isIPv6Shape(v) {
+	if (typeof v !== 'string' || v.indexOf(':') < 0) return false;
+	// Strip an optional %zone-id suffix (link-local scope) before structural checks.
+	var s = v.replace(/%[0-9a-zA-Z]+$/, '');
+	// A double-colon compressor may appear at most once.
+	var dc = s.split('::');
+	if (dc.length > 2) return false;
+	var hasCompressor = (dc.length === 2);
+	// Each side of '::' (or the whole string when uncompressed) is a list of
+	// 1-4-hex-digit groups. Empty side around '::' is allowed (e.g. '::1', '1::').
+	function groups(part) {
+		if (part === '') return [];          // empty side of '::'
+		return part.split(':');
+	}
+	var head = groups(dc[0]);
+	var tail = hasCompressor ? groups(dc[1]) : [];
+	var all = head.concat(tail);
+	for (var i = 0; i < all.length; i++) {
+		if (!/^[0-9a-fA-F]{1,4}$/.test(all[i])) return false;
+	}
+	if (hasCompressor) {
+		// '::' substitutes ≥1 omitted zero group, so the explicit groups must
+		// leave room for it: total explicit groups ≤ 7.
+		return all.length <= 7;
+	}
+	// No compressor: a full address is exactly 8 groups.
+	return all.length === 8;
+}
+
 function isHost(v) {
 	if (typeof v !== 'string' || !v.length)
 		return _('Host must not be empty');
 
 	// IPv4 dotted-quad, 0-255 per octet.
 	var ipv4 = /^(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)\.){3}(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)$/;
-	// IPv6: lenient — any non-empty string composed of hex digits / colons
-	// that contains at least one colon. LuCI's own ipaddr datatype validates
-	// rigorously at form-render time; here we just need to recognise the
-	// shape to permit the field to pass our custom validator alongside.
-	var ipv6 = /^[0-9a-fA-F:]+$/;
 	// RFC 1035 lenient hostname: 1-253 chars total; each label 1-63 chars,
 	// alphanumeric + hyphen, must not start/end with hyphen.
 	var domain = /^(?=.{1,253}$)([a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 
 	if (ipv4.test(v))
 		return true;
-	if (v.indexOf(':') >= 0 && ipv6.test(v))
+	if (v.indexOf(':') >= 0 && isIPv6Shape(v))
 		return true;
 	if (domain.test(v))
 		return true;
 	return _('Must be a valid IPv4 address, IPv6 address, or hostname');
+}
+
+// isUrl — lenient http(s):// URL shape check for fields like the subscription
+// URL (BUG-1). Accepts http:// or https:// followed by at least one non-space
+// character. Deliberately permissive: curl is the authoritative parser at fetch
+// time, here we only catch the common "forgot the scheme / pasted garbage"
+// mistakes so the form blocks Save & Apply with inline feedback. An empty value
+// is the caller's concern (rmempty=false handles the required case).
+function isUrl(v) {
+	if (typeof v !== 'string' || !v.length)
+		return _('URL must not be empty');
+	if (!/^https?:\/\/\S+$/i.test(v.trim()))
+		return _('Must be an http:// or https:// URL');
+	return true;
 }
 
 // validateAlpn — per spec C2.2.3, an empty ALPN list is valid in sing-box
@@ -109,6 +155,8 @@ return L.Class.extend({
 	isPort:              isPort,
 	isUuid:              isUuid,
 	isHost:              isHost,
+	isIPv6Shape:         isIPv6Shape,
+	isUrl:               isUrl,
 	validateAlpn:        validateAlpn,
 	requiresWsPath:      requiresWsPath,
 	softWarnCongestion:  softWarnCongestion,

@@ -40,7 +40,7 @@ function openShareLinkModal(m) {
 		'style': 'width:100%;font-family:monospace;',
 		'placeholder': 'vless://… or ss://… or trojan://… or hysteria2://…'
 	});
-	var err = E('div', { 'style': 'color:#c33;margin-top:8px;' });
+	var err = E('div', { 'class': 'sb-error', 'style': 'margin-top:8px;' });
 
 	function onImport() {
 		err.textContent = '';
@@ -59,8 +59,10 @@ function openShareLinkModal(m) {
 			else                  uci.set('singbox-ui', sid, k, String(v));
 		});
 		ui.hideModal();
+		// UX-4: name the generated section so the user can find the new draft
+		// row without a reload/scroll (which would race handleSave).
 		ui.addNotification(null,
-			E('p', {}, _('Imported. Press "Save & Apply" to commit.')),
+			E('p', {}, _('Imported as "%s". Press "Save & Apply" to commit.').format(sid)),
 			'info');
 	}
 
@@ -176,6 +178,18 @@ function buildOutboundsMap() {
 	o.password    = true;
 	o.placeholder = 'https://sub.example.com/config';
 	o.depends('type', 'subscription');
+	// sub_url is the one mandatory field of a subscription outbound — without it
+	// the outbound silently fetches nothing and the failure only surfaces later
+	// in logread (BUG-1). rmempty=false blocks Save & Apply on an empty value;
+	// the validate additionally requires an http(s):// shape so a typo'd value
+	// is caught inline rather than producing a dead outbound.
+	o.rmempty  = false;
+	o.validate = function (_section_id, value) {
+		// depends() means this only renders for type=subscription; an empty
+		// value here is the required-field violation rmempty=false reports.
+		if (value == null || value === '') return true;
+		return SbValidators.isUrl(value);
+	};
 
 	o = s.taboption('basic', form.Value, 'sub_user_agent', _('User-Agent'));
 	o.modalonly = true;

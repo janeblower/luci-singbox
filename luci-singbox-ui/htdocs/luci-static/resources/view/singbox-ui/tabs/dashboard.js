@@ -14,7 +14,11 @@ function buildDashboard() {
 		lastDown: null, lastUp: null, dRate: 0, uRate: 0,
 		totDown: 0, totUp: 0, conns: 0, version: '', running: false,
 		proxies: {}, proxiesEvery: 0, sortByLatency: false,
-		subs: {}, testing: {}
+		subs: {}, subsNow: 0,
+		// DASH-1/DASH-4: per-group "latency test in progress" flag. Set while a
+		// group's probes run so renderGroups() can disable its Test button and
+		// repeated clicks don't stack concurrent probe storms.
+		testing: {}
 	};
 	var root = E('div', { 'class': 'sb-dashboard' });
 
@@ -40,13 +44,21 @@ function buildDashboard() {
 			var arr = (res && res.subscriptions) || [];
 			(Array.isArray(arr) ? arr : []).forEach(function (s) { map[s.name] = s; });
 			state.subs = map;
+			// DASH-2: prefer the server-supplied `now` (like the status panel)
+			// so "updated X ago" stays accurate on routers whose clock drifts
+			// from the browser (common without NTP). Falls back to the client
+			// clock in agoText() when the backend doesn't emit `now`.
+			state.subsNow = (res && +res.now) || 0;
 		}, function () { /* keep last known */ });
 	}
 	function refreshSubs() { return fetchSubs().then(repaint); }
 
 	function agoText(ts) {
 		if (!ts) return _('never updated');
-		var secs = Math.floor(Date.now() / 1000) - ts;
+		// Use the server clock when the backend supplied one (state.subsNow),
+		// else fall back to the browser clock (DASH-2).
+		var now = state.subsNow || Math.floor(Date.now() / 1000);
+		var secs = now - ts;
 		if (secs < 0) secs = 0;
 		if (secs < 60)   return _('updated %ds ago').format(secs);
 		if (secs < 3600) return _('updated %dm ago').format(Math.floor(secs / 60));
@@ -82,29 +94,59 @@ function buildDashboard() {
 			});
 	}
 
+	// DASH-1: probe at most TEST_POOL members concurrently and coalesce
+	// rendering — a subscription selector can carry 100+ nodes; the old code
+	// fired one ubus->clash-api delay RPC per member with no cap AND called
+	// renderGroups() (full panel innerHTML='' + rebuild) per result, hammering
+	// rpcd and thrashing the DOM O(N^2). Now: a small promise pool bounds
+	// in-flight probes, results are written to p.history as they land, and
+	// renderGroups() is called once per drained batch (not once per member).
+	var TEST_POOL = 8;
 	function testGroup(groupName) {
 		var grp = state.proxies[groupName];
 		if (!grp) return Promise.resolve();
+		// Ignore re-clicks while a probe run for this group is already active.
+		if (state.testing[groupName]) return Promise.resolve();
 		var members = (grp.all || []).filter(function (m) {
 			var p = state.proxies[m];
 			return p && !isGroupType(p.type);   // don't probe nested groups
 		});
-		return Promise.all(members.map(function (m) {
-			return callClashDelay(m, '', '5000')
-				.then(function (res) {
-					var ms = 0;
-					if (res && res.status === 'ok') {
-						var d; try { d = JSON.parse(res.body); } catch (e) { d = {}; }
-						ms = (d && d.delay) || 0;
-					}
-					var p = state.proxies[m];
-					if (p) p.history = [ { delay: ms } ];
-				}, function () {
-					var p = state.proxies[m];
-					if (p) p.history = [ { delay: 0 } ];
-				})
-				.then(renderGroups);
-		}));
+		state.testing[groupName] = true;
+		renderGroups();   // reflect the disabled/busy Test button immediately
+
+		var idx = 0;
+		function probeOne(m) {
+			return callClashDelay(m, '', '5000').then(function (res) {
+				var ms = 0;
+				if (res && res.status === 'ok') {
+					var d; try { d = JSON.parse(res.body); } catch (e) { d = {}; }
+					ms = (d && d.delay) || 0;
+				}
+				var p = state.proxies[m];
+				if (p) p.history = [ { delay: ms } ];
+			}, function () {
+				var p = state.proxies[m];
+				if (p) p.history = [ { delay: 0 } ];
+			});
+		}
+		// One worker drains the shared index, processing a batch then repainting
+		// once, so results show up progressively without a per-member rebuild.
+		function worker() {
+			if (idx >= members.length) return Promise.resolve();
+			var batch = members.slice(idx, idx + TEST_POOL);
+			idx += batch.length;
+			return Promise.all(batch.map(probeOne)).then(function () {
+				renderGroups();          // one rebuild per drained batch
+				return worker();
+			});
+		}
+		return worker().then(function () {
+			state.testing[groupName] = false;
+			renderGroups();
+		}, function () {
+			state.testing[groupName] = false;
+			renderGroups();
+		});
 	}
 
 	function latClass(ms) {
@@ -156,6 +198,7 @@ function buildDashboard() {
 
 	function mountChrome() {
 		var widgets = E('div', { 'class': 'sb-dashboard-widgets' });
+		var subs    = E('div', { 'class': 'sb-dashboard-subs' });
 		var groups  = E('div', { 'class': 'sb-dashboard-groups' });
 		var sortBtn = E('button', { 'class': 'btn cbi-button sb-sort-btn',
 			'click': function () { setSortByLatency(!state.sortByLatency); } },
@@ -163,9 +206,60 @@ function buildDashboard() {
 		var toolbar = E('div', { 'class': 'sb-dashboard-toolbar' }, [ sortBtn ]);
 		root.innerHTML = '';
 		root.appendChild(widgets);
+		root.appendChild(subs);
 		root.appendChild(toolbar);
 		root.appendChild(groups);
-		state.ui = { widgets: widgets, groups: groups };
+		state.ui = { widgets: widgets, subs: subs, groups: groups };
+	}
+
+	// DASH-3: build the meta spans (title / nodes / ago / traffic / expire) for
+	// a subscription record. Shared by the dedicated Subscriptions section and
+	// the per-group inline echo so both stay consistent. `withTitle` prepends
+	// the subscription title (the dedicated section uses its own heading row).
+	function subMetaSpans(subInfo, withTitle) {
+		var ui_ = subInfo.userinfo || null;
+		var meta = [
+			E('span', {}, _('%d nodes').format(subInfo.node_count || 0)),
+			E('span', {}, agoText(subInfo.last_update))
+		];
+		if (withTitle && subInfo.title)
+			meta.unshift(E('span', { 'class': 'sb-dashboard-sub-title' }, subInfo.title));
+		if (ui_ && (ui_.total || ui_.download || ui_.upload)) {
+			var used = (+ui_.upload || 0) + (+ui_.download || 0);
+			meta.push(E('span', {}, fmtBytes(used) +
+				(ui_.total ? ' / ' + fmtBytes(ui_.total) : '')));
+		}
+		if (ui_ && ui_.expire)
+			meta.push(E('span', {}, fmtExpire(ui_.expire)));
+		return meta;
+	}
+
+	// DASH-3: render every subscription (keyed by UCI section name) into a
+	// dedicated panel, independent of whether it was expanded into a proxy
+	// group. A non-expanded subscription (sub_multi='0', the default) produces
+	// no clash-api group, so its traffic cap / expiry would otherwise never
+	// surface — even though sub_status returns the userinfo.
+	function renderSubscriptions() {
+		if (!state.ui) return;
+		var box = state.ui.subs;
+		box.innerHTML = '';
+		var names = Object.keys(state.subs || {});
+		if (!names.length) return;
+		names.sort();
+		var rows = names.map(function (name) {
+			var subInfo = state.subs[name] || {};
+			var meta = subMetaSpans(subInfo, false);
+			meta.push(E('button', { 'class': 'btn cbi-button sb-dashboard-sub-update',
+				'click': ui.createHandlerFn(this, (function (n) {
+					return function () { return updateSub(n); };
+				})(name)) }, _('Update')));
+			return E('div', { 'class': 'sb-dashboard-sub-row', 'data-sub': name }, [
+				E('b', { 'class': 'sb-dashboard-sub-name' }, subInfo.title || name),
+				E('div', { 'class': 'sb-dashboard-sub' }, meta)
+			]);
+		});
+		box.appendChild(E('div', { 'class': 'sb-dashboard-widget-title' }, _('Subscriptions')));
+		rows.forEach(function (r) { box.appendChild(r); });
 	}
 
 	function ingestConnections(data) {
@@ -223,32 +317,27 @@ function buildDashboard() {
 			var grp = proxies[gname];
 			var isSel = (grp.type || '').toLowerCase() === 'selector';
 			var members = sortMembers(grp.all || [], proxies);
+			var busy = !!state.testing[gname];
+			var testBtnAttrs = {
+				'class': 'btn cbi-button sb-dashboard-test' + (busy ? ' busy' : ''),
+				'click': ui.createHandlerFn(this, (function (g) {
+					return function () { return testGroup(g); };
+				})(gname))
+			};
+			if (busy) testBtnAttrs.disabled = '';
 			var header = E('div', { 'class': 'sb-dashboard-grp-head' }, [
 				E('b', {}, gname),
 				E('span', { 'class': 'sb-dashboard-grp-type' },
 					isSel ? _('selector') : _('auto')),
-				E('button', { 'class': 'btn cbi-button sb-dashboard-test',
-					'click': ui.createHandlerFn(this, (function (g) {
-						return function () { return testGroup(g); };
-					})(gname)) }, _('Test'))
+				E('button', testBtnAttrs, busy ? _('Testing…') : _('Test'))
 			]);
 			var subInfo = state.subs[gname];
 			var children = [ header ];
 			if (subInfo) {
-				var ui_ = subInfo.userinfo || null;
-				var meta = [
-					E('span', {}, _('%d nodes').format(subInfo.node_count || 0)),
-					E('span', {}, agoText(subInfo.last_update))
-				];
-				if (subInfo.title)
-					meta.unshift(E('span', { 'class': 'sb-dashboard-sub-title' }, subInfo.title));
-				if (ui_ && (ui_.total || ui_.download || ui_.upload)) {
-					var used = (+ui_.upload || 0) + (+ui_.download || 0);
-					meta.push(E('span', {}, fmtBytes(used) +
-						(ui_.total ? ' / ' + fmtBytes(ui_.total) : '')));
-				}
-				if (ui_ && ui_.expire)
-					meta.push(E('span', {}, fmtExpire(ui_.expire)));
+				// Per-group inline echo (convenience). The authoritative,
+				// always-present view of every subscription lives in the
+				// dedicated Subscriptions section (renderSubscriptions, DASH-3).
+				var meta = subMetaSpans(subInfo, true);
 				meta.push(E('button', { 'class': 'btn cbi-button sb-dashboard-sub-update',
 					'click': ui.createHandlerFn(this, (function (n) {
 						return function () { return updateSub(n); };
@@ -266,6 +355,7 @@ function buildDashboard() {
 	function repaint() {
 		if (!state.ui) mountChrome();
 		renderWidgets();
+		renderSubscriptions();
 		renderGroups();
 	}
 
