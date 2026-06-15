@@ -178,13 +178,17 @@ export async function dismissModal(page) {
 }
 
 // Toggle the "Show advanced fields" virtual flag in the currently-active tab.
+// Bug 4: inbound/outbound builders no longer carry this toggle — all fields are
+// shown immediately. When the row is absent we no-op, so callers that toggle
+// then assert an (already-visible) advanced field still pass. DNS/Route keep the
+// toggle, where this still clicks it.
 export async function toggleAdvanced(page) {
     await page.evaluate(() => {
         const ov = document.getElementById('modal_overlay');
         const activePane = ov.querySelector('[data-tab][data-tab-active="true"]') || ov;
         const row = Array.from(activePane.querySelectorAll('.cbi-value'))
             .find(r => /show advanced fields/i.test((r.querySelector('.cbi-value-title') || {}).textContent || ''));
-        if (!row) throw new Error('no "Show advanced fields" row in active tab');
+        if (!row) return;  // no advanced toggle (inbound/outbound) — fields already visible
         // LuCI Flag widget: hidden input + a button-like label.
         const checkbox = row.querySelector('input[type="checkbox"]');
         if (checkbox) {
