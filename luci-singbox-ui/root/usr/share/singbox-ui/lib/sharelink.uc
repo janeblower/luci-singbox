@@ -337,6 +337,43 @@ function parse_trojan(url) {
 	return out;
 }
 
+// parse_hysteria1(url) — Hysteria v1 share-link: hysteria://host:port?auth=...&...#name
+// (auth may also appear in userinfo). Maps to a sing-box hysteria outbound.
+function parse_hysteria1(url) {
+	// Hysteria v1: hysteria:// or hy:// with optional userinfo (auth token).
+	// Try with-userinfo pattern first (groups: [1]=userinfo [2]=host [3]=port [4]=query [5]=frag).
+	let m = match(url, /^hysteria:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
+	        match(url, /^hy:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let userauth = null;
+	let host, port, params, frag;
+	if (m) {
+		userauth = url_decode(m[1]);
+		host  = safe_host(m[2]);
+		port  = safe_port(m[3]);
+		params = m[4] ? parse_query(substr(m[4], 1)) : {};
+		frag  = m[5] ? url_decode(substr(m[5], 1)) : null;
+	} else {
+		// No userinfo — groups: [1]=host [2]=port [3]=query [4]=frag.
+		let m2 = match(url, /^hysteria:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
+		         match(url, /^hy:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+		if (!m2) return null;
+		host  = safe_host(m2[1]);
+		port  = safe_port(m2[2]);
+		params = m2[3] ? parse_query(substr(m2[3], 1)) : {};
+		frag  = m2[4] ? url_decode(substr(m2[4], 1)) : null;
+	}
+	if (!host || !port) return null;
+	// auth may be in userinfo (hysteria://TOKEN@host) or the ?auth= param.
+	if (length(userauth) && !length(params["auth"])) params["auth"] = userauth;
+	let out = {
+		type: "hysteria", server: host, server_port: port,
+		tag: safe_tag(length(frag) ? frag : host, url),
+		tls: { enabled: true, server_name: length(params["peer"]) ? params["peer"] : host },
+	};
+	smap.apply_params(params, smap.SPEC.hysteria, out);
+	return out;
+}
+
 // parse_vmess(url) — VMess share-link (v2rayN format): vmess://base64(json).
 // The decoded JSON is the v2rayN node object {v,ps,add,port,id,aid,net,type,
 // host,path,tls,sni,scy}. Mapped to a sing-box vmess outbound. S9.4.
@@ -402,6 +439,8 @@ function parse_proxy_url(url) {
 	if (match(url, /^hy2:\/\//) ||
 	    match(url, /^hysteria2:\/\//)) return parse_hy2(url);
 	if (match(url, /^tuic:\/\//))      return parse_tuic(url);
+	if (match(url, /^hysteria:\/\//) ||
+	    match(url, /^hy:\/\//))        return parse_hysteria1(url);
 	warn("sharelink.uc: unsupported proxy URL scheme: " + url + "\n");
 	return null;
 }
