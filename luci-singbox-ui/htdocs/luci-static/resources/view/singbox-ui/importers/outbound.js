@@ -12,6 +12,18 @@ var SB_OUTBOUND_KNOWN = {
 	'shadowsocks': true, 'tuic': true, 'anytls': true,
 };
 
+// parseIntField — see importers/inbound.js (IMP-1). A pasted non-numeric port
+// or rate must surface a parse error instead of writing the literal "NaN" into
+// UCI. Returns { ok, value }.
+function parseIntField(raw, min, max) {
+	var n = parseInt(raw, 10);
+	if (!isFinite(n)) return { ok: false };
+	if (String(n) !== String(raw).trim()) return { ok: false };
+	if (min != null && n < min) return { ok: false };
+	if (max != null && n > max) return { ok: false };
+	return { ok: true, value: n };
+}
+
 function jsonImportOutbound(o) {
 	var out = { ok: false, errors: [], fields: {} };
 	if (!o || typeof o !== 'object' || Array.isArray(o)) {
@@ -28,9 +40,16 @@ function jsonImportOutbound(o) {
 		return out;
 	}
 	var f = out.fields;
+	// bad(msg) — abort with a parse error and NO partial fields, consistent
+	// with the type/shape rejections above (IMP-1).
+	function bad(msg) { out.fields = {}; out.errors.push(msg); return out; }
 	f.type = o.type;
 	if (o.server)      f.server      = o.server;
-	if (o.server_port) f.server_port = +o.server_port;
+	if (o.server_port != null) {
+		var sp = parseIntField(o.server_port, 1, 65535);
+		if (!sp.ok) return bad(_('Invalid port: ') + o.server_port);
+		f.server_port = sp.value;
+	}
 
 	if (o.type === 'shadowsocks') {
 		if (o.method)   f.shadowsocks_method = o.method;
@@ -39,15 +58,27 @@ function jsonImportOutbound(o) {
 	if (o.type === 'vless' || o.type === 'vmess') {
 		if (o.uuid) f.server_uuid = o.uuid;
 		if (o.flow) f.vless_flow  = o.flow;
-		if (o.alter_id != null) f.vmess_alter_id = String(o.alter_id);
+		if (o.alter_id != null) {
+			var aid = parseIntField(o.alter_id, 0, null);
+			if (!aid.ok) return bad(_('Invalid alter_id: ') + o.alter_id);
+			f.vmess_alter_id = String(aid.value);
+		}
 		if (o.security)         f.vmess_security = o.security;
 	}
 	if (o.type === 'trojan' || o.type === 'hysteria2') {
 		if (o.password) f.server_password = o.password;
 	}
 	if (o.type === 'hysteria2') {
-		if (o.up_mbps   != null) f.up_mbps   = String(o.up_mbps);
-		if (o.down_mbps != null) f.down_mbps = String(o.down_mbps);
+		if (o.up_mbps != null) {
+			var up = parseIntField(o.up_mbps, 0, null);
+			if (!up.ok) return bad(_('Invalid up_mbps: ') + o.up_mbps);
+			f.up_mbps = String(up.value);
+		}
+		if (o.down_mbps != null) {
+			var dn = parseIntField(o.down_mbps, 0, null);
+			if (!dn.ok) return bad(_('Invalid down_mbps: ') + o.down_mbps);
+			f.down_mbps = String(dn.value);
+		}
 		if (o.obfs && o.obfs.type) {
 			f.obfs_type     = o.obfs.type;
 			f.obfs_password = o.obfs.password || '';

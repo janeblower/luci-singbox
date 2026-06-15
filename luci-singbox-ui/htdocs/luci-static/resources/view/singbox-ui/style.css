@@ -90,3 +90,12 @@ button.cbi-button.busy {
 .sb-dashboard-sub { font-size: .8em; opacity: .75; margin-top: .3em; display: flex;
 	gap: .6em; align-items: center; }
 .sb-dashboard-sub-update, .sb-sort-btn { margin-left: auto; }
+
+/* Dedicated Subscriptions section (DASH-3) — shows every subscription's
+ * traffic/expiry/title regardless of whether it was expanded to a proxy group. */
+.sb-dashboard-subs { margin: .5em 0 1em; }
+.sb-dashboard-sub-row { display: flex; align-items: center; gap: .6em; flex-wrap: wrap;
+	border: 1px solid var(--border-color-medium, #ccc); border-radius: 6px;
+	padding: .4em .6em; margin-top: .4em; }
+.sb-dashboard-sub-row .sb-dashboard-sub { margin-top: 0; flex: 1; }
+.sb-dashboard-sub-name { white-space: nowrap; }

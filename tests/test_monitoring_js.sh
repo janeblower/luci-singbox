@@ -297,6 +297,28 @@ function ok(label, cond) {
   ok('a failed per-row DELETE keeps the table mounted (9.1)',
      !!ctx.__test.find(m91b.node, (n) => n.tag === 'table'));
 
+  // --- MON-1: "Close all" failure re-polls, does NOT wipe the table ---------
+  // Symmetric with the per-row case (9.1): a benign bulk-DELETE failure (e.g.
+  // "nothing to close" / transient non-fatal clash-api response) must re-poll
+  // and keep the table, not blank it with "Clash API unreachable". Only a
+  // rejected poll() RPC clears the table.
+  let monConns = [{ id: 'z1', metadata: { sourceIP: '10.0.0.9', host: 'still-here' }, chains: [] }];
+  ctx.__test.setClashGet(() => Promise.resolve({ status:'ok',
+    body: JSON.stringify({ connections: monConns, downloadTotal: 0, uploadTotal: 0 }) }));
+  ctx.__test.setClashMutate(() => Promise.reject(new Error('nothing to close')));
+  const mAll = Mon.buildMonitoring();
+  await mAll.poll();
+  const isCloseAllBtn = (n) => n.tag === 'button' &&
+    n.attrs && /cbi-button-remove/.test(n.attrs['class'] || '') &&
+    typeof n.attrs.click === 'function' && (n.textContent || '') === 'Close all';
+  const closeAllBtn = ctx.__test.find(mAll.node, isCloseAllBtn);
+  ok('Close all button is rendered (MON-1)', !!closeAllBtn);
+  await closeAllBtn.attrs.click();                     // bulk DELETE rejects, then re-polls
+  ok('a failed Close all does NOT show unreachable (MON-1)',
+     mAll.node.textContent.indexOf('Clash API unreachable') < 0);
+  ok('a failed Close all keeps the table mounted (MON-1)',
+     !!ctx.__test.find(mAll.node, (n) => n.tag === 'table'));
+
   // --- audit 9.2: a vanished filter device resets the filter to "all" -------
   // Filter on a device, then let all its connections close. The select must not
   // strand the user on a stale IP with zero rows; the filter resets to "all".

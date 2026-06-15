@@ -50,16 +50,28 @@ function buildDnsMap() {
 		return _('DNS Server') + ': ' + id + (t ? ' (' + t + ')' : '');
 	};
 	addRenameField(s);
-	o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
-	o = s.option(form.ListValue, 'type', _('Type'));
+	var dnsSchema = (SbViewState.getSchema() || {}).dns || {};
+	// Declare the 'basic' tab up front and route the discriminator fields
+	// (enabled/type) through it, mirroring inbounds.js/outbounds.js. Otherwise
+	// enabled/type render in the untabbed section header while every descriptor
+	// field (applyMaterialized routes through s.taboption('basic', ...)) lives
+	// in a 'basic' tab pane — a split-region modal (UX-1). applyMaterialized's
+	// tab guard probes s.tabs and skips re-declaring 'basic', so this is safe.
+	s.tab('basic', _('Basic'));
+	o = s.taboption('basic', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
 	DNS_SERVER_TYPES.forEach(function (kv) { o.value(kv[0], kv[1]); });
 	o.default = 'https'; o.rmempty = false;
+	// INFO-1: version-gate the DNS server type selector for symmetry with
+	// inbounds/outbounds. No DNS type carries a min_version today, so this is a
+	// no-op now; it prevents a future silent gap where a gated DNS type would be
+	// offered with no "(requires X+)" note and no validate rejection.
+	SbCommon.applyVersionGate(o, dnsSchema, SbViewState.getCoreVersion());
 
 	// Descriptor-driven fields for all 14 DNS server types.
 	// applyMaterialized(s, 'dns', typeName, mat) gates every field from the
 	// descriptor with depends({type: typeName}) — same mechanism as outbounds —
 	// because kind='dns' resolves the discriminator field to 'type'.
-	var dnsSchema = (SbViewState.getSchema() || {}).dns || {};
 	DNS_SERVER_TYPES.forEach(function (kv) {
 		var typeName = kv[0];
 		var mat = dnsSchema[typeName];

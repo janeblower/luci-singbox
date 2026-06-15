@@ -274,6 +274,12 @@ function applyMaterialized(s, kind, protoName, materialized) {
         if (f.required)        opt.rmempty = false;
         if (f.default != null) opt.default = String(f.default);
         if (f.placeholder)     opt.placeholder = f.placeholder;
+        // UX-2: surface per-field inline help when the descriptor carries it.
+        // Accepts `ui_help` (preferred) or `description`; both are optional and
+        // must be whitelisted in schema_dump.uc FIELD_WHITELIST to reach the
+        // frontend. No-op for fields that don't declare one.
+        var help = f.ui_help || f.description;
+        if (help) opt.description = _(help);
 
         var values = {};
         if (!f.dynamic && Array.isArray(f.values))

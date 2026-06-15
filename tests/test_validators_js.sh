@@ -111,6 +111,43 @@ check('isHost with space invalid',  V.isHost('not a host!'),     'error');
 check('isHost leading dot invalid', V.isHost('.example.com'),    'error');
 check('isHost non-string invalid',  V.isHost(null),              'error');
 
+// --- INFO-2: tightened IPv6 shape — malformed colon strings now rejected ----
+// The old validator accepted any hex+colon string; these must now fail.
+check('isHost rejects bare quad colons "::::"',  V.isHost('::::'),  'error');
+check('isHost rejects too-few groups "1:2:3"',   V.isHost('1:2:3'), 'error');
+check('isHost rejects 5-digit group',
+	V.isHost('12345::1'), 'error');
+check('isHost rejects non-hex group "::g1"',     V.isHost('::g1'),  'error');
+check('isHost rejects double compressor "1::2::3"',
+	V.isHost('1::2::3'), 'error');
+check('isHost rejects 9 explicit groups',
+	V.isHost('1:2:3:4:5:6:7:8:9'), 'error');
+// Well-formed IPv6 still passes.
+check('isHost accepts loopback "::1"',           V.isHost('::1'),   true);
+check('isHost accepts "1::"',                    V.isHost('1::'),   true);
+check('isHost accepts full 8-group address',
+	V.isHost('2001:0db8:0000:0000:0000:ff00:0042:8329'), true);
+check('isHost accepts compressed "2001:db8::1"', V.isHost('2001:db8::1'), true);
+check('isHost accepts link-local with zone "fe80::1%eth0"',
+	V.isHost('fe80::1%eth0'), true);
+
+// isIPv6Shape is the boolean recognizer the isHost IPv6 branch delegates to.
+check('isIPv6Shape "::1" true',     V.isIPv6Shape('::1') === true,    true);
+check('isIPv6Shape "::::" false',   V.isIPv6Shape('::::') === false,  true);
+check('isIPv6Shape "1:2:3" false',  V.isIPv6Shape('1:2:3') === false, true);
+check('isIPv6Shape no-colon false', V.isIPv6Shape('ffff') === false,  true);
+
+// --- BUG-1: isUrl http(s):// shape check (subscription URL) -----------------
+check('isUrl https valid',
+	V.isUrl('https://sub.example.com/config'), true);
+check('isUrl http valid',
+	V.isUrl('http://1.2.3.4:8080/x'), true);
+check('isUrl empty invalid',          V.isUrl(''),                 'error');
+check('isUrl non-string invalid',     V.isUrl(null),               'error');
+check('isUrl missing scheme invalid', V.isUrl('sub.example.com'),  'error');
+check('isUrl ftp scheme invalid',     V.isUrl('ftp://host/x'),     'error');
+check('isUrl scheme-only invalid',    V.isUrl('https://'),         'error');
+
 // --- validateAlpn -----------------------------------------------------------
 // Per spec C2.2.3: empty ALPN is valid; only validates known protocol names.
 check('validateAlpn ["h2"] valid',

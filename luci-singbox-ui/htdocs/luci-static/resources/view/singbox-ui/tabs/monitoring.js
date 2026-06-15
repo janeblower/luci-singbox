@@ -53,8 +53,13 @@ function buildMonitoring() {
 			.then(poll, poll);
 	}
 	function closeAll() {
+		// Symmetric with closeConn() (audit 9.1 / MON-1): a failing bulk DELETE
+		// — e.g. a benign "nothing to close" / transient non-fatal response —
+		// must re-poll to resync, NOT wipe the whole table with showUnreachable.
+		// Only a rejected poll() RPC (real ubus/API failure) clears the table,
+		// via poll()'s own .catch(showUnreachable).
 		return callClashMutate('DELETE', '/connections', '')
-			.then(poll).catch(showUnreachable);
+			.then(poll, poll);
 	}
 
 	// --- derived-data ingest (was the top half of the old repaint) ----------
@@ -64,6 +69,12 @@ function buildMonitoring() {
 	function ingest(data) {
 		var conns = (data && data.connections) || [];
 		var nowIds = {}; conns.forEach(function (c) { if (c.id) nowIds[c.id] = c; });
+		// MON-2: a connection's close is detected one poll AFTER its last
+		// appearance, so the archived Down/Up figures are the LAST-OBSERVED
+		// sample (the prior poll's snapshot), not necessarily the connection's
+		// final totals. prevConns[id] is refreshed every poll, so this is the
+		// most recent value we ever saw — accurate to within one poll interval.
+		// The Closed tab is therefore a historical, last-observed view.
 		Object.keys(state.prevConns).forEach(function (id) {
 			if (!nowIds[id]) state.closed.unshift(state.prevConns[id]);
 		});
