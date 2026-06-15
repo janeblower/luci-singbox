@@ -90,6 +90,10 @@ const INVENTORY = {
               "type", "path", "host", "serviceName" ],
     hysteria2: [ "sni", "insecure", "alpn", "obfs", "obfs-password",
                  "pinSHA256", "mport", "up", "down" ],
+    ss: [ "plugin" ],
+    // vmess INVENTORY is the v2rayN base64-JSON key set, not URL query params.
+    vmess: [ "v", "ps", "add", "port", "id", "aid", "scy",
+             "net", "type", "host", "path", "tls", "sni", "alpn", "fp" ],
 };
 
 const SPEC = {
@@ -141,6 +145,28 @@ const SPEC = {
         { param: "mport",     unsupported: "port hopping — sing-box server_ports format differs" },
         { param: "up",        unsupported: "client up bandwidth — server-advertised in sing-box" },
         { param: "down",      unsupported: "client down bandwidth — server-advertised in sing-box" },
+    ],
+    ss: [
+        { param: "plugin", handler: "ss_plugin" },   // name;opts split is bespoke
+    ],
+    vmess: [
+        // Structural (parsed positionally in parse_vmess):
+        { param: "add",  handler: "structural" },
+        { param: "port", handler: "structural" },
+        { param: "id",   handler: "structural" },
+        { param: "ps",   handler: "structural" },
+        { param: "aid",  handler: "structural" },
+        { param: "scy",  handler: "structural" },
+        { param: "net",  handler: "transport" },
+        { param: "type", handler: "transport" },   // headerType
+        { param: "host", handler: "transport" },
+        { param: "path", handler: "transport" },
+        { param: "tls",  handler: "tls" },          // "tls" string enables block
+        { param: "sni",  handler: "tls" },
+        // Direct (only when tls=="tls"):
+        { param: "alpn", path: "tls.alpn", transform: "csv", when: { tls: "tls" } },
+        { param: "fp",   path: "tls.utls.fingerprint", enables: "tls.utls.enabled", when: { tls: "tls" } },
+        { param: "v",    unsupported: "v2rayN format-version marker — not a proxy field" },
     ],
 };
 

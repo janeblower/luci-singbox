@@ -138,4 +138,13 @@ out=$(je "
 [ "$out" = "OMIT" ] || die "hy2 pinSHA256 unsupported" "$out"
 ok "hysteria2 pinSHA256/mport declared unsupported"
 
+# MAP: vmess alpn/fp now land on the tls block (closing a prior gap).
+VMESS2="vmess://$(printf '%s' '{"v":"2","ps":"n","add":"e.com","port":"443","id":"11111111-1111-1111-1111-111111111111","aid":"0","net":"tcp","tls":"tls","sni":"s.com","alpn":"h2,http/1.1","fp":"chrome"}' | base64 -w0)"
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('$VMESS2');
+    print(sprintf('%s|%d|%s', r.tls.server_name, length(r.tls.alpn), r.tls.utls.fingerprint));
+")
+[ "$out" = "s.com|2|chrome" ] || die "vmess alpn/fp" "$out"
+ok "vmess alpn+fp mapped via SPEC"
+
 echo "OK"
