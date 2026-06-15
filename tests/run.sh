@@ -7,6 +7,14 @@ cd "$(dirname "$0")/.."
 # tests SKIP). Re-exec inside the OpenWrt VM so local runs match CI.
 # SINGBOX_TESTS_IN_VM=1 is the sentinel set by tests/run-vm.sh (and by
 # anyone running on a real OpenWrt host) that breaks the loop.
+#
+# HOST-COVERAGE NOTE (CI-tests/COV-1): the prod-critical paths — nft -f apply,
+# the mkdir-based apply-lock, the rpcd shebang/ubus path — are VM/root-only by
+# design (host ucode-mocks once missed the shebang -L bug, per CLAUDE.md). Their
+# tests (test_nftables_apply_lock / test_rpcd_prod_path) use fixed `sleep 1`
+# windows, a mild timing-flake risk on a loaded runner; harden to condition-
+# polling (FIFO/sentinel for the lock, `ubus list | grep singbox-ui` poll for
+# rpcd) if they ever flake. There is intentionally NO host-executable substitute.
 if [ "${SINGBOX_TESTS_IN_VM:-0}" != "1" ] && ! command -v ucode >/dev/null 2>&1; then
   echo "==> ucode not found on host; delegating to tests/run-vm.sh"
   echo "    (set SINGBOX_TESTS_IN_VM=1 to bypass and run the host-only subset)"
@@ -56,9 +64,22 @@ echo "==> Shell tests"
 # (documented headroom of ~6 over the ~19 worst-case baseline), and rely on
 # guard (A) — not the line count — to catch the degenerate ucode-missing case
 # (which trips (A) on the very first ucode SKIP). See spec S5-3 and audit 10.2.
+#
+# KNOWN LIMITATION (CI-tests/SKIP-1): guard (B) is a moving target — every new
+# node-gated *_js test legitimately SKIPs in the VM and eats one slot, so the
+# ceiling has crept (15 -> 25) and the headroom over the healthy baseline keeps
+# shrinking. The robust signal is guard (A) (any ucode SKIP -> hard fail) plus
+# the per-reason classification it embodies. If (B) ever needs to grow again,
+# prefer DECOUPLING expected SKIPs from the anomaly budget — sum only SKIPs that
+# do NOT match a known-benign allowlist (node|browser|bbolt|apk-tools|git|
+# jsonfilter) and gate that residual at a small fixed number — rather than
+# bumping the raw ceiling further. Left as-is for now (ceiling 25) to avoid
+# changing gate behaviour; the central "doc says 15" mismatch is fixed elsewhere.
 MAX_SKIPS="${SINGBOX_MAX_SKIPS:-25}"
 skip_total=0
 ucode_skips=0
+failed=""
+fail_count=0
 for t in tests/test_*.sh; do
   [ -e "$t" ] || continue
   echo "-- $t"
@@ -68,15 +89,21 @@ for t in tests/test_*.sh; do
   # substitution in a *simple assignment* (`out=$(sh "$t")`) terminates the
   # shell IMMEDIATELY, before `rc=$?` runs — so `out=$(...); rc=$?` would
   # never print the failing test's output (it is swallowed). We therefore
-  # bracket the capture with `set +e` / `set -e`, snapshot `$?`, print the
-  # output unconditionally, and only then re-assert failure with an explicit
-  # `exit "$rc"`. This both shows the failing test's output AND aborts.
+  # bracket the capture with `set +e` / `set -e`, snapshot `$?`, and print the
+  # output unconditionally.
   set +e
   out=$(sh "$t" 2>&1)
   rc=$?
   set -e
   printf '%s\n' "$out"
-  [ "$rc" -eq 0 ] || exit "$rc"
+  # Failure-COLLECTION (not fail-fast): record the failing test and keep going,
+  # so one VM run surfaces ALL failures instead of forcing N serial re-runs
+  # (each a full ~minutes-long VM boot). We still exit non-zero at the end.
+  if [ "$rc" -ne 0 ]; then
+    echo "   ^ FAILED ($t, exit $rc)"
+    failed="$failed $t"
+    fail_count=$((fail_count + 1))
+  fi
   # Count SKIP lines. Use `grep -cE` (ERE): a SKIP marker is either a line
   # starting with SKIP (optionally indented) or any line containing "SKIP:".
   # NOTE: `-E` is REQUIRED — with POSIX BRE the `|` in `^SKIP|SKIP:` is a
@@ -90,6 +117,14 @@ for t in tests/test_*.sh; do
   un=$(printf '%s\n' "$skips" | grep -ciE 'ucode') || true
   ucode_skips=$((ucode_skips + un))
 done
+
+# Report all collected test failures, then abort. Printed before the SKIP
+# guards so a real failure is always the headline.
+if [ "$fail_count" -gt 0 ]; then
+  echo "FAIL: $fail_count test(s) failed:"
+  for t in $failed; do echo "  - $t"; done
+  exit 1
+fi
 
 if [ "$ucode_skips" -gt 0 ]; then
   echo "FAIL: $ucode_skips test(s) SKIPped for a MISSING ucode interpreter —"
