@@ -227,7 +227,11 @@ function materialize(kind, type_) {
     let d = _registry[key];
     if (d == null) return null;
     let merged = [ ...(d.fields || []), ..._shared_fields(d) ];
-    let with_adv = _inject_advanced_flags(merged);
+    // Inbound/outbound builders show all fields (no Advanced toggle); DNS and
+    // route keep the per-tab _show_advanced_<tab> toggle.
+    let with_adv = (d.kind === "inbound" || d.kind === "outbound")
+        ? merged
+        : _inject_advanced_flags(merged);
     let result = {
         kind: d.kind,
         type: d.type,

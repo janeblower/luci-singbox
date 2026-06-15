@@ -54,6 +54,13 @@ function buildDashboard() {
 		return _('updated %dd ago').format(Math.floor(secs / 86400));
 	}
 
+	function fmtExpire(sec) {
+		sec = +sec || 0;
+		if (!sec) return '';
+		var d = new Date(sec * 1000);
+		return _('expires %s').format(d.toISOString().slice(0, 10));
+	}
+
 	function updateSub(name) {
 		return callRefresh('subscriptions', name).then(function () {
 			return Promise.all([ fetchSubs(), fetchProxies() ]).then(repaint);
@@ -228,14 +235,25 @@ function buildDashboard() {
 			var subInfo = state.subs[gname];
 			var children = [ header ];
 			if (subInfo) {
-				children.push(E('div', { 'class': 'sb-dashboard-sub' }, [
+				var ui_ = subInfo.userinfo || null;
+				var meta = [
 					E('span', {}, _('%d nodes').format(subInfo.node_count || 0)),
-					E('span', {}, agoText(subInfo.last_update)),
-					E('button', { 'class': 'btn cbi-button sb-dashboard-sub-update',
-						'click': ui.createHandlerFn(this, (function (n) {
-							return function () { return updateSub(n); };
-						})(gname)) }, _('Update'))
-				]));
+					E('span', {}, agoText(subInfo.last_update))
+				];
+				if (subInfo.title)
+					meta.unshift(E('span', { 'class': 'sb-dashboard-sub-title' }, subInfo.title));
+				if (ui_ && (ui_.total || ui_.download || ui_.upload)) {
+					var used = (+ui_.upload || 0) + (+ui_.download || 0);
+					meta.push(E('span', {}, fmtBytes(used) +
+						(ui_.total ? ' / ' + fmtBytes(ui_.total) : '')));
+				}
+				if (ui_ && ui_.expire)
+					meta.push(E('span', {}, fmtExpire(ui_.expire)));
+				meta.push(E('button', { 'class': 'btn cbi-button sb-dashboard-sub-update',
+					'click': ui.createHandlerFn(this, (function (n) {
+						return function () { return updateSub(n); };
+					})(gname)) }, _('Update')));
+				children.push(E('div', { 'class': 'sb-dashboard-sub' }, meta));
 			}
 			var rows = members.map(function (m) {
 				return nodeRow(gname, isSel, m, proxies, grp.now);

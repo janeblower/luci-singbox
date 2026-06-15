@@ -218,12 +218,13 @@ function applyMaterialized(s, kind, protoName, materialized) {
         var values = (f.depends && Array.isArray(f.depends.value))
             ? f.depends.value
             : (f.depends ? [f.depends.value] : [null]);
+        var noAdvGate = (kind === 'inbound' || kind === 'outbound');
         return values.map(function (v) {
             var d = {};
             d[discr] = protoName;
             if (f.depends) d[f.depends.field] = v;
             if (f.parent_enabled) d[f.parent_enabled] = '1';
-            if (f.advanced) d['_show_advanced_' + f.tab] = '1';
+            if (f.advanced && !noAdvGate) d['_show_advanced_' + f.tab] = '1';
             return d;
         });
     }

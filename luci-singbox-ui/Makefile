@@ -11,7 +11,7 @@ PKG_MAINTAINER:=Jyn
 PKG_CONFLICTS:=firewall
 
 LUCI_TITLE:=LuCI support for singbox-ui
-LUCI_DEPENDS:=+luci-base +nftables +sing-box +curl +ucode +ucode-mod-fs +kmod-nft-socket +kmod-nft-tproxy
+LUCI_DEPENDS:=+luci-base +sing-box +curl +ucode +ucode-mod-fs +kmod-nft-socket +kmod-nft-tproxy
 LUCI_PKGARCH:=all
 
 PO_DIR := $(CURDIR)/po
