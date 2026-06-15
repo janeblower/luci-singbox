@@ -60,4 +60,35 @@ out=$(je '
 [ "$out" = "CLEAN" ] || die "completeness INVENTORY<=>SPEC" "$out"
 ok "completeness: every param has a disposition (and vice-versa)"
 
+# --- behavioral: a maximal link per scheme lands at declared sing-box paths ---
+chk() { # name  url  ucode-expr-printing-result  expected
+    out=$(je "let r = require('sharelink').parse_proxy_url('$2'); print($3);")
+    [ "$out" = "$4" ] || die "behavioral $1" "$out"
+    ok "behavioral $1"
+}
+chk vless \
+  'vless://11111111-1111-1111-1111-111111111111@h.ex:443?security=reality&sni=s.com&pbk=PK&sid=ab&flow=xtls-rprx-vision&fp=chrome#n' \
+  "sprintf('%s|%s|%s|%s', r.flow, r.tls.reality.short_id, r.tls.reality.public_key, r.tls.utls.fingerprint)" \
+  'xtls-rprx-vision|ab|PK|chrome'
+chk trojan \
+  'trojan://pw@h.ex:443?sni=s.com&alpn=h2&type=grpc&serviceName=gs#n' \
+  "sprintf('%s|%s|%s', r.tls.server_name, r.transport.type, r.transport.service_name)" \
+  's.com|grpc|gs'
+chk hysteria2 \
+  'hy2://pw@h.ex:443?sni=s.com&insecure=1&alpn=h3#n' \
+  "sprintf('%s|%s|%d', r.tls.server_name, r.tls.insecure===true?'T':'?', length(r.tls.alpn))" \
+  's.com|T|1'
+chk tuic \
+  'tuic://11111111-1111-1111-1111-111111111111:pw@h.ex:443?congestion_control=bbr&sni=s.com#n' \
+  "sprintf('%s|%s|%s', r.uuid, r.congestion_control, r.tls.server_name)" \
+  '11111111-1111-1111-1111-111111111111|bbr|s.com'
+chk hysteria1 \
+  'hysteria://h.ex:443?auth=tok&peer=s.com&upmbps=50#n' \
+  "sprintf('%s|%s|%d', r.auth_str, r.tls.server_name, r.up_mbps)" \
+  'tok|s.com|50'
+chk anytls \
+  'anytls://pw@h.ex:443?sni=s.com&alpn=h2#n' \
+  "sprintf('%s|%d', r.tls.server_name, length(r.tls.alpn))" \
+  's.com|1'
+
 echo "OK"
