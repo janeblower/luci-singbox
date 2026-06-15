@@ -7,13 +7,11 @@
 //
 // Env overrides (used by tests):
 //   SINGBOX_TMPDIR (default /tmp/singbox-ui)
-//   SINGBOX        (default /usr/bin/sing-box)
 //   UCI_CONFIG_DIR (honoured by require("uci").cursor)
 //   SINGBOX_NO_RELOAD=1 — refresh skips the init.d reload (tests)
 //   SINGBOX_INITD  (default /etc/init.d/singbox-ui) — init.d path for reload (tests)
 
 const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
-const SINGBOX    = getenv("SINGBOX")        || "/usr/bin/sing-box";
 // Cap subscription bodies so a hostile or runaway source cannot OOM a 128–256 MB
 // router. cmd_fetch_subs enforces MAX_BODY via a post-download fs.stat() guard.
 const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
@@ -319,6 +317,7 @@ return {
 	is_stale,
 	_set_io_for_test,
 	_set_fetcher_for_test,
+	_fetcher_real_for_test: function(jobs) { return _fetcher(jobs); },
 	_read_raw_for_test,
 	_cmd_fetch_subs_for_test: function(cur) { return cmd_fetch_subs(cur); },
 	_cmd_sub_status_for_test: function(cur) { return cmd_sub_status(cur); },
