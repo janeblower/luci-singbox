@@ -82,7 +82,38 @@ function apply_params(params, entries, out) {
 }
 
 // INVENTORY / SPEC are filled in per scheme by later tasks.
-const INVENTORY = {};
-const SPEC = {};
+const INVENTORY = {
+    vless: [ "security", "sni", "type", "path", "host", "serviceName",
+             "flow", "fp", "pbk", "sid", "alpn", "allowInsecure",
+             "encryption", "spx", "mode", "headerType" ],
+};
+
+const SPEC = {
+    vless: [
+        // Delegated: TLS enable + default SNI, and the v2ray transport block,
+        // are multi-param / context-dependent — handled by sharelink.uc helpers.
+        { param: "security",    handler: "tls_security" },
+        { param: "sni",         handler: "tls_security" },
+        { param: "type",        handler: "transport" },
+        { param: "path",        handler: "transport" },
+        { param: "host",        handler: "transport" },
+        { param: "serviceName", handler: "transport" },
+        // Direct:
+        { param: "flow",         path: "flow" },
+        { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled",
+                                 when: { security: ["tls", "reality"] } },
+        { param: "pbk",          path: "tls.reality.public_key",  when: { security: "reality" } },
+        { param: "sid",          path: "tls.reality.short_id",    when: { security: "reality" } },
+        { param: "alpn",         path: "tls.alpn", transform: "csv",
+                                 when: { security: ["tls", "reality"] } },
+        { param: "allowInsecure", path: "tls.insecure", transform: "bool",
+                                 when: { security: ["tls", "reality"] } },
+        // Unsupported (documented no-ops):
+        { param: "encryption", unsupported: "sing-box VLESS has no encryption field (always none)" },
+        { param: "spx",        unsupported: "Xray spider_x — no sing-box equivalent" },
+        { param: "mode",       unsupported: "gRPC mode — no sing-box equivalent" },
+        { param: "headerType", unsupported: "tcp/http header obfuscation — unsupported" },
+    ],
+};
 
 return { INVENTORY, SPEC, apply_params, set_path, coerce };
