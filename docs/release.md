@@ -8,7 +8,7 @@ Before tagging, regenerate translation templates from JS sources:
 
 ## Tag & build
 
-1. Ensure `main` is green: `bash tests/run-docker.sh` returns PASS.
+1. Ensure `main` is green: `sh tests/run.sh` returns PASS (the single entry point; it delegates to `tests/run-vm.sh`).
 2. Move `## [Unreleased]` entries in `CHANGELOG.md` into `## [vX.Y.Z] — YYYY-MM-DD`.
    Then re-add an empty `## [Unreleased]` block at the top of the changelog.
 3. Commit: `git commit -am "docs: changelog vX.Y.Z"`.

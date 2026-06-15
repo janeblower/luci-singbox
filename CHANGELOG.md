@@ -4,6 +4,60 @@ All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+> Work accumulated since `v0.1.0` and not yet tagged. The dated phase blocks
+> below (Package rename, Phase G/E2/E1/B) are historical detail for the same
+> unreleased range, kept for provenance.
+
+### Added
+
+- **nft**: `socket transparent 1` fast-path for established flows
+  (requires `kmod-nft-socket`, now an explicit package dependency).
+- **uci**: new options on `singbox-ui.@global[0]`: `fwmark` (hex, default
+  `0x1`), `fwmark_mask` (hex, default `0x1`), `redirect_router_traffic`
+  (`0`/`1`, default `0`).
+- **uci-defaults**: new `90-singbox-ui-fwmark` seeds the three options on
+  upgrade (defaults reproduce the prior behaviour).
+- **pkg**: depend on `+kmod-nft-socket` and explicit `+kmod-nft-tproxy`.
+- **infra**: log-only smoke check after `nft -f` warns when no matching
+  `ip rule fwmark…` is found.
+- **tests**: `tests/test_nftables_ctmark.sh` structural guards,
+  `tests/test_uci_defaults_fwmark.sh` migration test,
+  `tests/test_nftables_ip_rule_smoke.sh` smoke-check test; per-protocol
+  browser matrix (7 inbound, 5 outbound) for builder field surfaces and
+  `preview_config` emit shape (20 browser tests total).
+- **ci**: new `browser-test` job in `.github/workflows/build.yml`.
+- **docs**: README operator section on the `ip rule` requirement and
+  router-traffic redirect; `tests/browser/README.md` for local-run / debug.
+
+### Changed
+
+- **nft**: per-flow decision via `ct mark`; `meta mark` only propagates the
+  bit into the TPROXY match. The two-chain layout `prerouting_mark`
+  (priority -150) + `prerouting_tproxy` (priority -149) is replaced by a
+  single `prerouting` chain at `priority mangle`. **Breaking (integrators
+  only):** external nft commands or other LuCI apps that hooked the old chain
+  names must retarget at `prerouting` / `output`. TPROXY match now uses
+  `meta mark and $MASK == $MARK`, coexisting with mwan3 / SQM / pbr without
+  bit collisions.
+- **infra**: rewrote `tests/test_browser.sh` to drive a Docker container
+  (`openwrt/rootfs:x86_64-25.12.3` + uhttpd + rpcd + sing-box) instead of
+  SSH-deploying to a live VM — one harness, identical locally and in CI;
+  switched `tests/browser/` from npm to bun (`trustedDependencies` controls
+  postinstall script execution).
+
+### Fixed
+
+- **nft**: `rs_*` rules now mark on a per-flow basis. Previously established
+  UDP and post-handshake TCP packets escaped the mark because `ct state new`
+  was filtering while `meta mark` was being stored — the bug the ctmark
+  refactor was triggered to fix.
+- `hysteria2.uc` inbound `server_password` ui_label changed from
+  `"Password (single user)"` to `"Password"` — the parenthetical was silently
+  dropped by `applyMaterialized`'s shared-key dedup (shadowsocks registers
+  `Password` first); this aligns descriptor truth with rendered UI.
+
 ## Package rename — `luci-app-singbox-ui` → `luci-singbox-ui` (2026-06-12)
 
 **Breaking (packaging / integrators):** the package and repository were renamed
@@ -53,56 +107,6 @@ a host-only subset run inside `openwrt/rootfs`. Either run tests on a host
 with KVM, or set `SINGBOX_TESTS_IN_VM=1` to bypass the delegation (and
 accept the SKIPs that come with no ucode).
 
-## Unreleased — Phase F (nftables ctmark refactor)
-
-**Breaking (integrators only):** The two-chain layout
-`prerouting_mark` (priority -150) + `prerouting_tproxy` (priority
--149) is replaced by a single `prerouting` chain at `priority
-mangle`. If you had external nft commands or other LuCI apps that
-hooked these chain names (rare but possible), retarget them at
-`prerouting` / `output`.
-
-- **nft**: per-flow decision via `ct mark`; `meta mark` only propagates
-  the bit into the TPROXY match.
-- **nft**: `socket transparent 1` fast-path for established flows
-  (requires `kmod-nft-socket`, now an explicit package dependency).
-- **nft**: TPROXY match uses `meta mark and $MASK == $MARK` — coexists
-  with mwan3 / SQM / pbr without bit collisions.
-- **uci**: new options on `singbox-ui.@global[0]`:
-  - `fwmark` (hex, default `0x1`)
-  - `fwmark_mask` (hex, default `0x1`)
-  - `redirect_router_traffic` (`0`/`1`, default `0`)
-- **uci-defaults**: new `90-singbox-ui-fwmark` seeds the three options
-  on upgrade (defaults reproduce the prior behaviour).
-- **pkg**: depend on `+kmod-nft-socket` and explicit `+kmod-nft-tproxy`.
-- **fix**: rs_* rules now mark on a per-flow basis. Previously
-  established UDP and post-handshake TCP packets escaped the mark
-  because `ct state new` was filtering but `meta mark` was being
-  stored — this is what the refactor was triggered to fix.
-- **infra**: log-only smoke check after `nft -f` warns when no matching
-  `ip rule fwmark…` is found.
-- **tests**: new `tests/test_nftables_ctmark.sh` structural guards,
-  `tests/test_uci_defaults_fwmark.sh` migration test,
-  `tests/test_nftables_ip_rule_smoke.sh` smoke-check test.
-- **docs**: README — operator section on `ip rule` requirement and
-  router-traffic redirect.
-
-## Unreleased — Phase E3 (browser tests, full coverage)
-
-- **infra**: rewrote `tests/test_browser.sh` to drive a Docker container
-  (`openwrt/rootfs:x86_64-25.12.3` + uhttpd + rpcd + sing-box) instead of
-  SSH-deploying to a live VM. One harness, identical locally and in CI.
-- **infra**: switched `tests/browser/` from npm to bun; `trustedDependencies`
-  controls postinstall script execution.
-- **tests**: added per-protocol matrix (7 inbound, 5 outbound) for builder
-  field surfaces and `preview_config` emit shape. Total 20 browser tests.
-- **ci**: new `browser-test` job in `.github/workflows/build.yml`.
-- **docs**: `tests/browser/README.md` for local-run / debug.
-- **fix**: `hysteria2.uc` inbound `server_password` ui_label changed from
-  `"Password (single user)"` to `"Password"` — the parenthetical was
-  silently dropped by `applyMaterialized`'s shared-key dedup (shadowsocks
-  registers `Password` first); this aligns descriptor truth with rendered UI.
-
 ## Phase E2 — Protocol Builder Rewrite (2026-06-09)
 
 ### Added
@@ -145,10 +149,10 @@ hooked these chain names (rare but possible), retarget them at
   a client-side eye-toggle (`decorateSecretInput` in `descriptor_form.js`).
 - Preview/read_config/export_section return plain JSON.
 
-## [Unreleased]
+## Phase B — protocol field coverage / JSON export / validation (2026-06-07)
 
-Phase B — completion of protocol field coverage, JSON export, form
-validation, share-link parsers, and a pre-apply dry-run preview.
+Completion of protocol field coverage, JSON export, form validation,
+share-link parsers, and a pre-apply dry-run preview.
 
 ### Added
 
