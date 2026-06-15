@@ -28,6 +28,17 @@ const CURL = getenv("CURL") || "/usr/bin/curl";
 const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 " +
                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
+// SEC-6: single source of truth for the share-link schemes we actually parse.
+// This list is kept aligned with lib/sharelink.uc::parse_proxy_url's dispatch
+// (vless/vmess/ss/trojan/hy2/hysteria2). Two consumers used to carry divergent
+// inline scheme sets — try_b64_decode's decode-trigger whitelist once included
+// `http`/`https`, contradicting the anti-false-positive heuristic it documents
+// (a plaintext error page line `visit https://…/help` would falsely trigger a
+// base64 decode). The line-scan stays deliberately generic (any `scheme://`,
+// with parse_proxy_url rejecting unsupported schemes downstream); only the
+// decode TRIGGER is narrowed to schemes we can actually parse.
+const PROXY_SCHEME_RE = /^(vmess|vless|ss|trojan|hy2|hysteria2):\/\//;
+
 let fs  = require("fs");
 let uci_mod = require("uci");
 let helpers = require("helpers");
@@ -38,6 +49,14 @@ let helpers = require("helpers");
 // identical, an illusion of separate channels.
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn("error: " + msg + "\n"); }
+
+// SEC-9: best-effort unlink that never throws. ucode's fs.unlink can throw on
+// some error conditions; an unguarded throw inside a per-job loop would abort
+// processing of every REMAINING job in the refresh cycle (one bad subscription
+// poisons the rest). Several in-loop unlinks here were bare while adjacent ones
+// were already try-wrapped — that ad-hoc asymmetry is the latent footgun. Route
+// every in-loop unlink through this helper so a single failure stays local.
+function unlink_quiet(p) { try { fs.unlink(p); } catch (_) {} }
 
 // I/O seams — overridable for tests, mirroring log._set_logger_for_test.
 // _reader(path) returns the raw body string (or null); _fetcher(jobs) runs
@@ -100,7 +119,10 @@ function try_b64_decode(s) {
 	let lines = split(dec, "\n");
 	for (let l in lines) {
 		let t = lc(trim(l));
-		if (match(t, /^(vmess|vless|ss|trojan|hy2|hysteria2|http|https):\/\//))
+		// SEC-6: trigger on PROXY_SCHEME_RE only (schemes parse_proxy_url
+		// supports), NOT a generic scheme set — http/https are excluded so a
+		// base64-encoded plaintext page does not get treated as proxy content.
+		if (match(t, PROXY_SCHEME_RE))
 			return dec;
 	}
 	return s;
@@ -167,7 +189,18 @@ function parse_headers(hdr) {
 		if (pt) {
 			let v = trim(pt[1]);
 			let b = match(v, /^base64:(.*)$/);
-			if (b) { try { v = b64dec(trim(b[1])) || v; } catch (_) {} }
+			if (b) {
+				// SEC-5: distinguish a decode FAILURE from an empty (but valid)
+				// decode. b64dec returns null on malformed input (and never
+				// throws here), but try-wrap it anyway in case a future runtime
+				// throws. On ANY successful decode (even "") honour the decoded
+				// value; only a hard failure falls back to the raw payload — and
+				// then WITHOUT the "base64:" prefix, so the dashboard never
+				// renders a literal "base64:..." title.
+				let dec = null;
+				try { dec = b64dec(trim(b[1])); } catch (_) {}
+				v = (dec != null) ? dec : trim(b[1]);
+			}
 			title = v;
 		}
 	}
@@ -225,53 +258,67 @@ function cmd_fetch_subs(cur, only) {
 		let st = fs.stat(m.body_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_subs: download failed for ${m.name}`);
-			fs.unlink(m.body_path);
-			try { fs.unlink(m.hdr_path); } catch (_) {}
+			unlink_quiet(m.body_path);
+			unlink_quiet(m.hdr_path);
 			continue;
 		}
 		if (st.size > MAX_BODY) {
 			log_err(`fetch_subs: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
-			fs.unlink(m.body_path);
-			try { fs.unlink(m.hdr_path); } catch (_) {}
+			unlink_quiet(m.body_path);
+			unlink_quiet(m.hdr_path);
 			continue;
 		}
 
 		let raw = _reader(m.body_path) ?? "";
-		fs.unlink(m.body_path);
+		unlink_quiet(m.body_path);
 		if (length(raw) === 0) {
 			log_err(`fetch_subs: empty body for ${m.name}`);
-			try { fs.unlink(m.hdr_path); } catch (_) {}
+			unlink_quiet(m.hdr_path);
 			continue;
 		}
 
 		// try_b64_decode returns either the decoded blob (scheme-bearing
-		// base64) or the original plaintext. Feed it straight into the line
-		// scan so we don't hold a separate `decoded` copy alongside `raw`.
+		// base64) or the original plaintext. The line scan stays generic (any
+		// `scheme://`); parse_proxy_url rejects unsupported schemes downstream.
+		let body = try_b64_decode(raw);
 		let urls = [];
-		for (let line in split(try_b64_decode(raw), "\n")) {
+		for (let line in split(body, "\n")) {
 			let t = trim(line);
 			if (t !== "" && match(lc(t), /^[a-z][a-z0-9+.-]*:\/\//))
 				push(urls, t);
 		}
 		if (!length(urls)) {
-			log_err(`fetch_subs: no valid proxy URL in response for ${m.name}`);
-			try { fs.unlink(m.hdr_path); } catch (_) {}
+			// SEC-6: log a truncated sample of the (post-decode) body so the
+			// operator can distinguish "unsupported scheme / wrong format" from
+			// "garbage body" — both previously surfaced the same opaque message.
+			let sample = trim(substr(body, 0, 120));
+			sample = replace(sample, /[\r\n]+/g, " ");
+			log_err(`fetch_subs: no valid proxy URL in response for ${m.name} (body starts: ${sample})`);
+			unlink_quiet(m.hdr_path);
 			continue;
 		}
 
 		if (!write_atomic(m.out_path, join("\n", urls) + "\n")) {
 			log_err(`fetch_subs: cannot write ${m.out_path}`);
-			try { fs.unlink(m.hdr_path); } catch (_) {}
+			unlink_quiet(m.hdr_path);
 			continue;
 		}
 		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
 		let hdr_raw = _reader(m.hdr_path) ?? "";
 		let meta = parse_headers(hdr_raw);
+		let meta_path = `${TMPDIR}/sub_${m.name}.meta`;
 		if (length(meta)) {
-			let meta_path = `${TMPDIR}/sub_${m.name}.meta`;
 			write_atomic(meta_path, sprintf("%J", meta));
+		} else {
+			// SEC-7: a prior fetch may have written meta (traffic/expiry/title)
+			// that THIS response no longer carries (server stopped sending the
+			// headers, or a different mirror). Drop the stale sidecar so the
+			// dashboard reflects the current response instead of indefinitely
+			// showing an expiry/quota that no longer applies. Mirrors the
+			// unconditional .hdr cleanup just below.
+			unlink_quiet(meta_path);
 		}
-		try { fs.unlink(m.hdr_path); } catch (_) {}
+		unlink_quiet(m.hdr_path);
 	}
 	return 0;
 }

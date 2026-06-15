@@ -94,19 +94,35 @@ case "$TMPDIR" in
 esac
 
 # ---- C2.1.16: local-ruleset cp failure cleans up raw_path ----
-# Structural check: the local-ruleset error branch must explicitly unlink
-# raw_path so a partial copy can't poison subsequent runs.
+# Structural check: the local-ruleset error branch must unlink raw_path so a
+# partial copy can't poison subsequent runs. SEC-9 routes this through the
+# never-throw unlink_quiet() helper (so one unlink failure can't abort the rest
+# of the refresh loop); accept either the bare or the wrapped form.
 echo "-- C2.1.16: local-ruleset cp-failure branch removes raw_path"
-grep -qE 'fs\.unlink\(raw_path\)' \
+grep -qE '(fs\.unlink|unlink_quiet)\(raw_path\)' \
 	"luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc" \
-	|| fail "nft-rulesets.uc: missing fs.unlink(raw_path) cleanup in local branch"
+	|| fail "nft-rulesets.uc: missing raw_path cleanup in local branch"
 pass "nft-rulesets.uc: local cp-failure cleans up raw_path"
+
+# ---- SEC-9: in-loop unlinks go through the never-throw unlink_quiet helper ----
+# A bare fs.unlink that throws inside the per-job loop would abort processing of
+# every REMAINING rule-set in the refresh cycle. Assert the helper exists and
+# that no bare fs.unlink(m.raw_path) survives in the decompile loop.
+echo "-- SEC-9: in-loop unlinks routed through unlink_quiet"
+grep -qE 'function unlink_quiet' \
+	"luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc" \
+	|| fail "nft-rulesets.uc: unlink_quiet helper missing (SEC-9)"
+grep -qE 'fs\.unlink\(m\.raw_path\)' \
+	"luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc" \
+	&& fail "nft-rulesets.uc: bare fs.unlink(m.raw_path) survives in the loop (SEC-9)" || true
+pass "nft-rulesets.uc: in-loop unlinks are exception-safe"
 
 # ---- S3-3: symlink whose target escapes the whitelist is rejected ----
 # The symlink path itself is under /tmp (whitelisted), but its target resolves
 # to /proc/version, under no whitelist prefix. cp would follow it; the handler
-# resolves the link with fs.readlink (lstat exposes no target field) and
-# re-checks the prefix guard, which must reject it.
+# resolves the link via resolve_local_source (lstat exposes no target field, so
+# it walks readlink hop-by-hop) and re-checks the prefix guard at the final
+# real path, which must reject it (SEC-8).
 echo "-- S3-3: local ruleset symlink escaping whitelist is rejected"
 mkdir -p "$TMPDIR/src"
 ln -sf /proc/version "$TMPDIR/src/sneaky.json"
@@ -149,6 +165,58 @@ fi
 [ -s "$SINGBOX_TMPDIR/rs_rsOk.json" ] \
 	|| fail "S3-3: in-whitelist symlink: expected rs_rsOk.json to be produced"
 pass "S3-3: in-whitelist symlink target is allowed"
+
+# ---- SEC-8: MULTI-HOP symlink chain escaping the whitelist is rejected ----
+# The OLD guard readlink'd only ONE hop: link -> hop2 (both under /tmp) passed
+# its single-hop check even though hop2 itself pointed OUTSIDE the whitelist.
+# resolve_local_source must follow the WHOLE chain. Build chain1 -> chain2
+# (whitelisted hop) -> /proc/version (outside). The single-hop guard would have
+# accepted chain1 (its target chain2 is under /tmp); the chain-walker rejects it.
+echo "-- SEC-8: multi-hop symlink chain escaping the whitelist is rejected"
+ln -sf /proc/version "$TMPDIR/src/chain2.json"            # hop2 -> outside whitelist
+ln -sf "$TMPDIR/src/chain2.json" "$TMPDIR/src/chain1.json" # hop1 -> hop2 (whitelisted path)
+cat >"$TMPDIR/singbox-ui" <<EOF
+config ruleset 'rsChain'
+	option type 'local'
+	option path '$TMPDIR/src/chain1.json'
+	option nft_rules '1'
+EOF
+rm -f "$SINGBOX_TMPDIR/rs_rsChain.json" "$SINGBOX_TMPDIR/rs_rsChain.raw"
+out=$(run_uc fetch 2>&1 || true)
+echo "$out" | grep -qiE 'outside the whitelist|not a regular file|escaping' \
+	|| { echo "$out"; fail "SEC-8: multi-hop chain escaping whitelist not rejected"; }
+if [ -f "$SINGBOX_TMPDIR/rs_rsChain.json" ] || [ -f "$SINGBOX_TMPDIR/rs_rsChain.raw" ]; then
+	fail "SEC-8: multi-hop chain should not have produced a file"
+fi
+pass "SEC-8: multi-hop symlink chain is rejected"
+
+# ---- SEC-8: a symlinked PARENT directory escaping the whitelist is rejected ----
+# /tmp/.../pdir is a symlink to a real dir OUTSIDE any whitelist prefix; the leaf
+# /tmp/.../pdir/list.json then resolves (via the parent) to a path outside the
+# whitelist. The old leaf-only lstat never inspected the parent. resolve_local_source
+# canonicalises the parent hop, so the final real path lands outside and is rejected.
+echo "-- SEC-8: symlinked-parent escape is rejected"
+REALOUT=$(mktemp -d)                                   # outside /tmp on most CI? usually /tmp — so force a non-whitelisted leaf
+mkdir -p "$REALOUT/d"; printf '{"version":1,"rules":[]}\n' > "$REALOUT/d/list.json"
+# Only meaningful when REALOUT is NOT under a whitelist prefix; /tmp IS whitelisted,
+# so emulate an out-of-whitelist parent by linking the parent to /proc (no list.json
+# there → final path /proc/list.json is outside whitelist anyway under /proc).
+ln -sf /proc "$TMPDIR/src/pdir"                        # parent symlink -> /proc (outside whitelist)
+cat >"$TMPDIR/singbox-ui" <<EOF
+config ruleset 'rsParent'
+	option type 'local'
+	option path '$TMPDIR/src/pdir/version'
+	option nft_rules '1'
+EOF
+rm -f "$SINGBOX_TMPDIR/rs_rsParent.json" "$SINGBOX_TMPDIR/rs_rsParent.raw"
+out=$(run_uc fetch 2>&1 || true)
+echo "$out" | grep -qiE 'outside the whitelist|not a regular file|escaping' \
+	|| { echo "$out"; fail "SEC-8: symlinked-parent escape not rejected"; }
+if [ -f "$SINGBOX_TMPDIR/rs_rsParent.json" ] || [ -f "$SINGBOX_TMPDIR/rs_rsParent.raw" ]; then
+	fail "SEC-8: symlinked-parent escape should not have produced a file"
+fi
+rm -rf "$REALOUT"
+pass "SEC-8: symlinked-parent escape is rejected"
 
 # ---- regression: inbound nft_rules='1' is NOT treated as a ruleset ----
 # Fixture: a tproxy inbound carrying nft_rules='1' and NO config ruleset section.

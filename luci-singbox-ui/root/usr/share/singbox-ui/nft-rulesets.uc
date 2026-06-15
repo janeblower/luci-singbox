@@ -29,6 +29,13 @@ let cache_mod = require("cache");
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn("error: " + msg + "\n"); }
 
+// SEC-9: best-effort unlink that never throws. ucode's fs.unlink can throw on
+// some error conditions; an unguarded throw inside a per-job loop would abort
+// processing of every REMAINING rule-set in the refresh cycle. Several in-loop
+// unlinks here were bare while adjacent ones were try-wrapped — route them all
+// through this helper so a single failure stays local (mirrors subscription.uc).
+function unlink_quiet(p) { try { fs.unlink(p); } catch (_) {} }
+
 // Local rule-set sources must live under a known prefix to keep a hostile
 // (or accidental) UCI value from copying /etc/shadow or similar into the
 // work dir for `sing-box rule-set decompile` to swallow. Today only the
@@ -40,6 +47,65 @@ function path_under_whitelist(p) {
 		if (substr(p, 0, length(pref)) === pref) return true;
 	}
 	return false;
+}
+
+// resolve_local_source(target) — SEC-8: resolve a local rule-set source to a
+// final REAL path that is provably (a) under the whitelist and (b) a regular
+// file, defeating symlink escapes the prior single-hop guard missed:
+//   - a multi-hop chain (/tmp/a -> /tmp/b -> /etc/shadow, each hop whitelisted
+//     at readlink time but the chain landing outside), and
+//   - a symlinked PARENT directory (/tmp/dir -> /, then /tmp/dir/etc/shadow):
+//     the kernel follows the parent symlink, so a textual whitelist check on the
+//     ORIGINAL path is fooled (it still starts with /tmp/) while the real file
+//     lives outside.
+//
+// Strategy: prefer fs.realpath, which canonicalises EVERY path component (parent
+// symlinks included) in one call, then whitelist-check the canonical path. If
+// realpath is absent on this ucode build (it is on some stock images — see the
+// historical note) or fails, fall back to a bounded readlink-chain walk that
+// catches the multi-hop LEAF case (it cannot see a symlinked parent, so the
+// textual whitelist check there is the best available without realpath —
+// strictly no weaker than the prior single-hop guard). The final target must
+// lstat as a regular "file" (not a dir/device/fifo/dangling link). Returns the
+// validated real path, or null (caller rejects + logs).
+const MAX_LINK_HOPS = 16;
+function resolve_local_source(target) {
+	if (!path_under_whitelist(target)) return null;
+
+	// Preferred path: canonicalise the WHOLE path (parent symlinks included).
+	if (type(fs.realpath) === "function") {
+		let real = null;
+		try { real = fs.realpath(target); } catch (_) {}
+		// realpath null/empty = missing component / dangling link → reject.
+		if (real == null || real === "") return null;
+		if (!path_under_whitelist(real)) return null;
+		let rst = fs.lstat(real);                    // canonical → never a link
+		if (!rst || rst.type !== "file") return null;
+		return real;
+	}
+
+	// Fallback (no realpath): bounded readlink-chain walk of the leaf.
+	let cur_path = target;
+	for (let hop = 0; hop <= MAX_LINK_HOPS; hop++) {
+		let lst = fs.lstat(cur_path);
+		if (!lst) return null;                       // missing component
+		if (lst.type !== "link") {
+			if (lst.type !== "file") return null;    // only a plain regular file
+			return path_under_whitelist(cur_path) ? cur_path : null;
+		}
+		if (hop === MAX_LINK_HOPS) return null;      // chain too long / cycle
+		let dest = null;
+		try { dest = fs.readlink(cur_path); } catch (_) {}
+		if (dest == null || dest === "") return null;
+		// Resolve a relative link target against the link's own directory.
+		if (substr(dest, 0, 1) !== "/") {
+			let dir = fs.dirname(cur_path) ?? "/";
+			dest = (dir === "/") ? `/${dest}` : `${dir}/${dest}`;
+		}
+		if (!path_under_whitelist(dest)) return null;
+		cur_path = dest;
+	}
+	return null;
 }
 
 // bbolt_available() — path to the executable bbolt-client, or null. Defined
@@ -65,12 +131,12 @@ function cache_extract_srs(db, tag, out_path) {
 	let tmp = sprintf("%s.tmp.%d", out_path, time());
 	let cmd = helpers.sq(bin) + " -r " + helpers.sq(db) + " rule_set " +
 	          helpers.sq(tag) + " > " + helpers.sq(tmp) + " 2>/dev/null";
-	if (system(["/bin/sh", "-c", cmd]) !== 0) { fs.unlink(tmp); return false; }
+	if (system(["/bin/sh", "-c", cmd]) !== 0) { unlink_quiet(tmp); return false; }
 	let st = fs.stat(tmp);
-	if (!st || st.size === 0) { fs.unlink(tmp); return false; }
+	if (!st || st.size === 0) { unlink_quiet(tmp); return false; }
 	let renamed = false;
 	try { renamed = fs.rename(tmp, out_path); } catch (_) { renamed = false; }
-	if (!renamed) { fs.unlink(tmp); return false; }
+	if (!renamed) { unlink_quiet(tmp); return false; }
 	return true;
 }
 
@@ -210,42 +276,26 @@ function cmd_fetch_rulesets(cur) {
 			push(jobs, { name: name, raw_path: raw_path, out_path: out_path,
 			             rs_type: rs_type, target: target, force_binary: true });
 		} else if (rs_type === "local") {
-			// Restrict local copies to a small set of known prefixes
-			// (/etc, /tmp, /var, /usr/share) — defense in depth so a
-			// hostile UCI value cannot pull /etc/shadow or similar.
-			if (!path_under_whitelist(target)) {
-				log_err(`fetch_rulesets: ${name} target path '${target}' outside whitelist (/etc, /tmp, /var, /usr/share), rejecting`);
+			// SEC-8: restrict local copies to a small set of known prefixes
+			// (/etc, /tmp, /var, /usr/share) AND follow the WHOLE symlink chain
+			// (incl. symlinked parents / multi-hop links) to a final regular
+			// file that is itself under the whitelist — defense in depth so a
+			// hostile UCI value cannot pull /etc/shadow or similar even via a
+			// chained or parent symlink. resolve_local_source returns the
+			// validated real path or null; cp then dereferences onto that same
+			// verified inode.
+			let real = resolve_local_source(target);
+			if (real == null) {
+				log_err(`fetch_rulesets: ${name} target path '${target}' is outside the whitelist (/etc, /tmp, /var, /usr/share), not a regular file, or a symlink escaping it — rejecting`);
 				continue;
 			}
-			// cp follows symlinks: a whitelisted path may itself be a symlink
-			// pointing OUTSIDE the whitelist (e.g. /tmp/x -> /proc/version).
-			// Detect the link with fs.lstat and resolve its destination with
-			// fs.readlink — the lstat struct does NOT expose the link target
-			// (no `.target` field); readlink is the ucode fs API for it. The
-			// call is try-wrapped so a build lacking readlink degrades to
-			// "reject the symlink" (dest stays null) rather than throwing. We
-			// re-check the prefix guard against the resolved destination; a
-			// relative or out-of-whitelist target is rejected (a relative
-			// ruleset symlink is never legitimate, and realpath may be absent).
-			let lst = fs.lstat(target);
-			if (lst && lst.type === "link") {
-				let dest = null;
-				try { dest = fs.readlink(target); } catch (_) {}
-				if (dest == null || substr(dest, 0, 1) !== "/") {
-					log_err(`fetch_rulesets: ${name} symlink '${target}' has unresolvable/relative target '${dest}', rejecting`);
-					continue;
-				}
-				if (!path_under_whitelist(dest)) {
-					log_err(`fetch_rulesets: ${name} symlink '${target}' resolved to '${dest}' outside whitelist, rejecting`);
-					continue;
-				}
-			}
-			// Local copies are cheap, do them inline.
-			if (system(["cp", "--", target, raw_path]) !== 0) {
+			// Local copies are cheap, do them inline. Copy the resolved real
+			// path so the verified inode is exactly what reaches the work dir.
+			if (system(["cp", "--", real, raw_path]) !== 0) {
 				log_err(`fetch_rulesets: cannot read: ${target}`);
 				// cp may have left a partial file behind; remove it so
 				// stale content never reaches sing-box rule-set decompile.
-				fs.unlink(raw_path);
+				unlink_quiet(raw_path);
 				continue;
 			}
 			push(jobs, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
@@ -264,12 +314,12 @@ function cmd_fetch_rulesets(cur) {
 		let st = fs.stat(m.raw_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_rulesets: download failed for ${m.name} (${m.target})`);
-			fs.unlink(m.raw_path);
+			unlink_quiet(m.raw_path);
 			continue;
 		}
 		if (st.size > MAX_BODY) {
 			log_err(`fetch_rulesets: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
-			fs.unlink(m.raw_path);
+			unlink_quiet(m.raw_path);
 			continue;
 		}
 		// Cache-extracted remote rule-sets are always compiled .srs (force
@@ -279,17 +329,17 @@ function cmd_fetch_rulesets(cur) {
 		if (fmt === "binary") {
 			if (system([SINGBOX, "rule-set", "decompile", m.raw_path, "-o", m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: decompile failed for ${m.name}`);
-				fs.unlink(m.raw_path);
+				unlink_quiet(m.raw_path);
 				continue;
 			}
 		} else {
 			if (system(["cp", "--", m.raw_path, m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: cannot copy source for ${m.name}`);
-				fs.unlink(m.raw_path);
+				unlink_quiet(m.raw_path);
 				continue;
 			}
 		}
-		fs.unlink(m.raw_path);
+		unlink_quiet(m.raw_path);
 		log(`fetch_rulesets: ${m.name} -> ${m.out_path}`);
 	}
 	return 0;
@@ -371,9 +421,22 @@ function wait_for_tags(db, tags, deadline_s) {
 // its caller.)
 function retry_eligible_cold_tags(cur, db, tags, force) {
 	let keys = cache_list_keys(db);
+	// SEC-10: a null result is a bbolt PROBE FAILURE (binary missing,
+	// cache.db transiently locked mid-upgrade), NOT confirmed evidence the
+	// tags are uncompiled. Treating it as "all cold" would trigger a full
+	// sing-box stop+start — dropping every live proxy connection — even on a
+	// forced UI refresh during a transient hiccup, and even if the tags are in
+	// fact warm. A failed probe is not a reason to bounce the daemon: defer the
+	// reload (empty eligible set) and surface why, so the next cycle retries
+	// once the probe recovers. The cron (non-force) path is already throttled
+	// by the cold-backoff sentinel; this closes the forced-refresh edge too.
+	if (keys == null) {
+		log("refresh: cache probe failed (bbolt unavailable / cache.db locked); deferring reload");
+		return [];
+	}
 	let out = [];
 	for (let t in tags) {
-		let cold = (keys == null) || (keys[t] !== true);
+		let cold = (keys[t] !== true);
 		if (cold && (force || cold_retry_eligible(cur, t))) push(out, t);
 	}
 	return out;
