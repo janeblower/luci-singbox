@@ -34,13 +34,25 @@ reference in `docs/` is mostly English.
 - Russian translation bundled. After install the page appears under
   **Services → Singbox-UI**.
 
-**Install** (noarch `.apk`, OpenWrt 24.10+; prebuilt in
-[Releases](../../releases)):
+**Install** (per-arch `.apk`, OpenWrt 25.12+; the package is built once per
+OpenWrt arch — ~20 arches — each embedding the matching `bbolt-client` binary,
+so you must install the asset for *your* device's arch, not a wildcard glob).
+The easiest path is the installer, which auto-detects the arch via
+`apk --print-arch`, downloads the matching `luci-singbox-ui-<arch>.apk` from the
+[latest release](../../releases) and verifies its sha256:
 
 ```sh
-apk add --allow-untrusted ./luci-singbox-ui_*.apk
-# optional Russian translation:
-apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
+wget -O- https://raw.githubusercontent.com/janeblower/luci-singbox/main/install.sh | sh
+```
+
+Or install a release asset manually — pick the file matching your arch
+(`apk --print-arch`):
+
+```sh
+ARCH=$(apk --print-arch)
+apk add --allow-untrusted ./luci-singbox-ui-${ARCH}.apk
+# optional Russian translation (noarch):
+apk add --allow-untrusted ./luci-i18n-singbox-ui-ru-*.apk
 ```
 
 **Or add the signed apk feed** (OpenWrt 25.12+; auto-updates with `apk upgrade`):
@@ -53,10 +65,18 @@ apk update && apk add luci-singbox-ui
 ```
 
 > ⚠️ **Conflicts with `firewall` (fw3).** This package drives nftables
-> directly, so installing it removes the `firewall` package and your
-> `/etc/config/firewall` rules stop being applied — make sure nothing depends
-> on fw3 first (the installer prints a warning before proceeding). Only `apk`
-> is supported; there is no `opkg`/`.ipk` build.
+> directly and is meant to *replace* fw3. The prebuilt `.apk` and `install.sh`
+> do **not** declare an apk conflict or auto-remove `firewall`, and neither
+> prints a warning — so fw3, if installed, keeps running and will clobber the
+> singbox-ui nftables ruleset on its next reload. Before relying on this
+> package, stop and remove fw3 yourself and confirm nothing depends on it:
+>
+> ```sh
+> /etc/init.d/firewall stop && /etc/init.d/firewall disable
+> apk del firewall   # only if nothing else needs fw3
+> ```
+>
+> Only `apk` is supported; there is no `opkg`/`.ipk` build.
 
 > ⚠️ **TPROXY requires an `ip rule` you must add yourself.** The ruleset marks
 > packets with `fwmark` (default `0x1/0x1`, UCI options
@@ -117,13 +137,23 @@ apk update && apk add luci-singbox-ui
 
 ## Установка
 
-Готовые `.apk` — в [Releases](../../releases). Пакет noarch: один файл
-подходит любой apk-совместимой сборке OpenWrt (24.10+).
+Готовые `.apk` — в [Releases](../../releases). Пакет собирается **по одному
+на арку** (~20 арок OpenWrt), в каждый вшит свой бинарь `bbolt-client` — ставить
+нужно ассет именно под арку вашего устройства, не по wildcard-маске. Проще всего
+через установщик: он сам определяет арку (`apk --print-arch`), качает подходящий
+`luci-singbox-ui-<arch>.apk` из последнего релиза и проверяет sha256:
 
 ```sh
-apk add --allow-untrusted ./luci-singbox-ui_*.apk
-# опционально — русский перевод:
-apk add --allow-untrusted ./luci-i18n-singbox-ui-ru_*.apk
+wget -O- https://raw.githubusercontent.com/janeblower/luci-singbox/main/install.sh | sh
+```
+
+Или вручную — выберите ассет под свою арку (`apk --print-arch`):
+
+```sh
+ARCH=$(apk --print-arch)
+apk add --allow-untrusted ./luci-singbox-ui-${ARCH}.apk
+# опционально — русский перевод (noarch):
+apk add --allow-untrusted ./luci-i18n-singbox-ui-ru-*.apk
 ```
 
 **Или подключить подписанный apk-feed** (OpenWrt 25.12+; обновляется через `apk upgrade`):
@@ -136,9 +166,16 @@ apk update && apk add luci-singbox-ui
 ```
 
 Пакет **конфликтует с `firewall` (fw3)**, потому что управляет nftables
-напрямую. При установке `apk`/`opkg` удалит `firewall`, и правила из
-`/etc/config/firewall` перестанут применяться — убедитесь, что от fw3
-ничего не зависит (инсталлятор печатает предупреждение перед установкой).
+напрямую и задуман как замена fw3. Но готовый `.apk` и `install.sh` **не**
+объявляют apk-конфликт, **не** удаляют `firewall` автоматически и **не**
+печатают предупреждение — поэтому установленный fw3 продолжит работать и при
+очередном reload затрёт nftables-правила singbox-ui. Перед использованием
+остановите и удалите fw3 вручную, убедившись, что от него ничего не зависит:
+
+```sh
+/etc/init.d/firewall stop && /etc/init.d/firewall disable
+apk del firewall   # только если fw3 больше никому не нужен
+```
 
 Сборка из исходников — `scripts/build-apk.sh <version>` поверх OpenWrt SDK.
 

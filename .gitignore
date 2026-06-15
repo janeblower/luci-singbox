@@ -1,6 +1,7 @@
 .build
 dist
 .claude
+.claire
 .claude-flow
 .swarm
 .mcp.json

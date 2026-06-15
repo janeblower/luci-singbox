@@ -1,7 +1,9 @@
-# Protocol Coverage — sing-box 1.12.x
+# Protocol Coverage — sing-box 1.12–1.14
 
-**Target sing-box version:** 1.12.x (latest of the 1.12 branch at the time of writing).
-**Scope:** active protocols for the OpenWrt 24.10 client/router use-case (TProxy + outbound proxies); see `../CHANGELOG.md` for per-phase coverage history.
+**Target sing-box version:** 1.12+ baseline, with per-protocol version gating up
+to 1.14 (e.g. `anytls` since 1.12, `naive` outbound since 1.13, `cloudflared`
+inbound since 1.14 — gated by each descriptor's `min_version`).
+**Scope:** active protocols for the OpenWrt 25.12 client/router use-case (TProxy + outbound proxies); see `../CHANGELOG.md` for per-phase coverage history.
 **Status legend:** `есть` (covered in `lib/inbound.uc` or `lib/outbound.uc`) / `нет` (planned) / `out-of-scope` (intentional, with rationale).
 **Cross-references:** `docs/uci-schema.md` for UCI field names, `../CHANGELOG.md` for the implementation history.
 
@@ -51,7 +53,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 
 ## Inbound protocols
 
-### tproxy (`lib/protocols/tproxy.uc` — E2 DSL)
+### tproxy (`lib/builder/protocols/tproxy.uc` — E2 DSL)
 | Field | Status |
 |---|---|
 | `listen`, `listen_port` | есть |
@@ -60,13 +62,13 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `interface` (UI-only list, controls nftables interface set) | есть |
 | `nft_rules` (UI-only, enables nftables rule generation) | есть |
 
-### mixed inbound (`lib/protocols/mixed.uc` — E2 DSL)
+### mixed inbound (`lib/builder/protocols/mixed.uc` — E2 DSL)
 | Field | Status |
 |---|---|
 | `listen`, `listen_port` | есть |
 | `mixed_user` (`username:password` per entry, optional auth list) | есть |
 
-### direct inbound (DNS listener, `lib/protocols/direct.uc` — E2 DSL)
+### direct inbound (DNS listener, `lib/builder/protocols/direct.uc` — E2 DSL)
 | Field | Status |
 |---|---|
 | `listen`, `listen_port` | есть |
@@ -74,7 +76,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `override_address`, `override_port` | есть (E2) |
 | `dns_listener` (UI-only flag for auto route-rule) | есть |
 
-### shadowsocks inbound (`lib/protocols/shadowsocks.uc` — E2 DSL)
+### shadowsocks inbound (`lib/builder/protocols/shadowsocks.uc` — E2 DSL)
 | Field | Status |
 |---|---|
 | `method`, `password` | есть (single-user via `server_password`) |
@@ -84,7 +86,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `multiplex` | есть | — |
 | `managed` (SSM API dynamic user) | out-of-scope |
 
-### vless inbound (`lib/protocols/vless.uc` — E2 DSL)
+### vless inbound (`lib/builder/protocols/vless.uc` — E2 DSL)
 | Field | Status |
 |---|---|
 | `listen`, `listen_port` | есть |
@@ -95,7 +97,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `transport_type`, transport block | есть (E2 shared block) |
 | `multiplex_enabled`, multiplex block | есть (E2 shared block) |
 
-### trojan inbound (`lib/protocols/trojan.uc` — E2 DSL)
+### trojan inbound (`lib/builder/protocols/trojan.uc` — E2 DSL)
 | Field | Status |
 |---|---|
 | `listen`, `listen_port` | есть |
@@ -106,7 +108,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `multiplex_enabled`, multiplex block | есть (E2 shared block) |
 | `fallback`, `fallback_for_alpn` | out-of-scope (rare) |
 
-### hysteria2 inbound (`lib/protocols/hysteria2.uc` — E2 DSL)
+### hysteria2 inbound (`lib/builder/protocols/hysteria2.uc` — E2 DSL)
 | Field | Status |
 |---|---|
 | `listen`, `listen_port` | есть |
@@ -120,11 +122,33 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `masquerade` | есть |
 | `brutal_debug` | есть |
 
+### redirect inbound (`lib/builder/protocols/redirect.uc` — protocol matrix)
+Linux/macOS REDIRECT-target inbound. No protocol options beyond the listen base.
+| Field | Status |
+|---|---|
+| `listen` (default `::`) | есть |
+| `listen_port` (default `7894`) | есть |
+
+### cloudflared inbound (`lib/builder/protocols/cloudflared.uc` — hand `emit()`, Since 1.14)
+Cloudflare Tunnel inbound. The only inbound with **no** `listen`/`listen_port`
+(built via the `emit()` escape-hatch, not the filler listen-base), gated by
+`min_version: "1.14.0"`. `control_dialer`/`tunnel_dialer` nested dial objects are out-of-scope.
+| Field | Status |
+|---|---|
+| `token` (required, secret) | есть |
+| `ha_connections` | есть (advanced) |
+| `protocol` (`cf_protocol`: `http2`/`quic`) | есть (advanced) |
+| `post_quantum` | есть (advanced) |
+| `edge_ip_version` (`4`/`6`) | есть (advanced) |
+| `datagram_version` | есть (advanced) |
+| `grace_period` | есть (advanced) |
+| `region` | есть (advanced) |
+
 ---
 
 ## Outbound protocols
 
-### vless outbound (`lib/protocols/vless.uc` — E2 DSL)
+### vless outbound (`lib/builder/protocols/vless.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
@@ -136,7 +160,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | E2 |
 | Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 
-### trojan outbound (`lib/protocols/trojan.uc` — E2 DSL)
+### trojan outbound (`lib/builder/protocols/trojan.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
@@ -145,7 +169,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `tls`, `transport`, `multiplex` | (see Shared TLS block) | n/a | есть | E2 |
 | Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 
-### hysteria2 outbound (`lib/protocols/hysteria2.uc` — E2 DSL)
+### hysteria2 outbound (`lib/builder/protocols/hysteria2.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
@@ -162,7 +186,7 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | Shared dial fields | (see Dial fields in uci-schema.md) | n/a | есть | E2 |
 | `server_ports[]`, `hop_interval`, `hop_interval_max` | — | n/a | out-of-scope (1.14+ feature) | — |
 
-### shadowsocks outbound (`lib/protocols/shadowsocks.uc` — E2 DSL)
+### shadowsocks outbound (`lib/builder/protocols/shadowsocks.uc` — E2 DSL)
 | sing-box JSON | UCI | Inbound | Outbound | Phase |
 |---|---|---|---|---|
 | `server` | `server` | n/a | есть | — |
@@ -312,7 +336,7 @@ Automatically selects the best outbound by latency test.
 | `interrupt_exist_connections` | `interrupt_exist_connections` | есть | matrix |
 
 ### direct outbound
-E2 DSL descriptor (`lib/protocols/direct.uc`). Replaces the legacy `type=interface` UCI outbound.
+E2 DSL descriptor (`lib/builder/protocols/direct.uc`). Replaces the legacy `type=interface` UCI outbound.
 | Field | Status |
 |---|---|
 | `bind_interface` | есть (via shared dial block) |
