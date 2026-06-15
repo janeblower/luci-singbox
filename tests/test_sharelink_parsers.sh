@@ -147,4 +147,12 @@ out=$(je "
 [ "$out" = "s.com|2|chrome" ] || die "vmess alpn/fp" "$out"
 ok "vmess alpn+fp mapped via SPEC"
 
+# NEW: tuic://uuid:password@host:port?params  -> sing-box tuic outbound.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('tuic://11111111-1111-1111-1111-111111111111:secret@h.ex:443?congestion_control=bbr&udp_relay_mode=native&sni=s.com&alpn=h3&allow_insecure=1#TU');
+    print(sprintf('%s|%s|%s|%s|%s|%d|%s|%s', r.type, r.uuid, r.password, r.congestion_control, r.udp_relay_mode, length(r.tls.alpn), r.tls.server_name, r.tls.insecure===true?'T':'?'));
+")
+[ "$out" = "tuic|11111111-1111-1111-1111-111111111111|secret|bbr|native|1|s.com|T" ] || die "tuic parse" "$out"
+ok "tuic:// parsed (uuid:password + congestion/udp_relay/tls)"
+
 echo "OK"
