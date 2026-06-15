@@ -43,4 +43,21 @@ out=$(je '
 [ "$out" = "x.com|2|T|OMIT|100|GATED|OK|E" ] || die "engine apply_params" "$out"
 ok "apply_params: set_path/csv/bool/int/gate/skip-handler"
 
+# --- completeness: INVENTORY param set ≡ SPEC param set, per scheme ---
+out=$(je '
+    let m = require("sharelink_map");
+    let problems = [];
+    for (let scheme in m.INVENTORY) {
+        let inv = {};
+        for (let p in m.INVENTORY[scheme]) inv[p] = true;
+        let spc = {};
+        for (let e in (m.SPEC[scheme] ?? [])) spc[e.param] = true;
+        for (let p in inv) if (!spc[p]) push(problems, sprintf("%s: INVENTORY param %s has no SPEC disposition", scheme, p));
+        for (let p in spc) if (!inv[p]) push(problems, sprintf("%s: SPEC param %s not in INVENTORY", scheme, p));
+    }
+    print(length(problems) ? join("\n", problems) : "CLEAN");
+')
+[ "$out" = "CLEAN" ] || die "completeness INVENTORY<=>SPEC" "$out"
+ok "completeness: every param has a disposition (and vice-versa)"
+
 echo "OK"
