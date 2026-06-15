@@ -3,6 +3,10 @@
 # Validates registry.materialize(kind, type): field union (protocol + shared
 # blocks gated by flags), per-tab _show_advanced_<tab> injection, and
 # rejection of malformed descriptors (missing tab, unknown shared key).
+# NOTE: _show_advanced_<tab> injection is now scoped to dns/route kinds only
+# (inbound/outbound show all fields, Bug 4), so the injection tests register
+# under kind "dns". The outbound "no toggle" side is covered by
+# tests/test_advanced_scope.sh.
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -18,14 +22,14 @@ fi
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
     let reg = require("builder.protocols.registry");
     reg.register({
-        kind: "outbound", type: "demo", sing_box_type: "demo",
+        kind: "dns", type: "demo", sing_box_type: "demo",
         shared: { tls: { enabled_field: "tls_enabled" } },
         fields: [
             { name: "server", type: "string", tab: "basic", required: true },
         ],
         emit: function(s) { return { type: "demo" }; },
     });
-    let m = reg.materialize("outbound", "demo");
+    let m = reg.materialize("dns", "demo");
     print(sprintf("tabs=%s fields=%d", join(",", m.tabs), length(m.fields)));
 ')
 case "$out" in
@@ -75,14 +79,14 @@ esac
 out=$("$UCODE_BIN" -L "$UCODE_LIB_DIR" -e '
     let reg = require("builder.protocols.registry");
     reg.register({
-        kind: "outbound", type: "advdemo", sing_box_type: "x",
+        kind: "dns", type: "advdemo", sing_box_type: "x",
         fields: [
             { name: "basic_f", type: "string", tab: "basic" },
             { name: "adv_f",   type: "string", tab: "basic", advanced: true },
         ],
         emit: function(s) { return {}; },
     });
-    let m = reg.materialize("outbound", "advdemo");
+    let m = reg.materialize("dns", "advdemo");
     print(m.fields[0].name);
 ')
 case "$out" in
