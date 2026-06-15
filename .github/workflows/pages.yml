@@ -32,20 +32,26 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Full history at the commit that triggered Build, so the gate below
-          # can diff it against its parent.
-          fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      # Rebuild the feed only when the push actually changed the published apks
-      # or the feed assets. A docs/tests/CI-only push leaves packages.adb and the
-      # page identical, so re-running the whole deploy is wasted work. The diff is
-      # the tip commit vs its parent (SHA^..SHA): this repo merges to main as
-      # single commits, so it's accurate in practice; a multi-commit push that
-      # touches packages only in a non-tip commit would be under-detected —
-      # recover with the workflow_dispatch button (which always deploys).
+      # Rebuild the feed only when the version published in the rolling `latest`
+      # release differs from the one already committed to gh-pages. This is the
+      # actual invariant we care about (gh-pages must mirror the release), and it
+      # is self-healing: the next successful Build reconciles any drift no matter
+      # which commit touched what.
+      #
+      # Why NOT a path-diff of the tip commit (the previous approach): the package
+      # version is `0.0.0-r<rev-list --count>`, so it bumps on EVERY commit —
+      # docs/tests included — which means packages.adb is never "identical" on a
+      # docs-only push, and the path-diff premise is false. Worse, the tip-commit
+      # diff is blind to (a) batched pushes whose tip is a docs/test commit while
+      # feed-relevant commits sit below it, and (b) feed-relevant commits whose
+      # own Build failed (Pages never ran). Both silently froze gh-pages behind
+      # the release until a manual workflow_dispatch. Version-compare fixes both.
       - name: Decide whether the feed needs rebuilding
         id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -eu
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -53,19 +59,27 @@ jobs:
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          SHA="${{ github.event.workflow_run.head_sha }}"
-          if ! git rev-parse "${SHA}^" >/dev/null 2>&1; then
-            echo "no parent commit (root/shallow) -> fail-open, deploy"
+          # Version published in the rolling release — build.yml titles it
+          # "Latest build (<version>)" (version == 0.0.0-r<count> on main).
+          REL="$(gh release view latest --repo "$GITHUB_REPOSITORY" --json name -q .name 2>/dev/null || true)"
+          NEW="$(printf '%s' "$REL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+' | head -n1 || true)"
+          if [ -z "$NEW" ]; then
+            echo "could not read latest-release version (name='$REL') -> fail-open, deploy"
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          if git diff --name-only "${SHA}^" "${SHA}" \
-              | grep -qE '^(luci-singbox-ui/|bbolt-client/|feed/|scripts/build-apk\.sh|scripts/build-feed\.sh|scripts/install-manifest\.txt|scripts/install-manifest-overrides\.txt)'; then
-            echo "feed-relevant change -> deploy"
-            echo "relevant=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "docs/tests/CI-only change -> skip deploy" | tee -a "$GITHUB_STEP_SUMMARY"
+          # Version already on gh-pages — embedded in the apk filenames
+          # (luci-singbox-ui-<version>.apk). Absent branch / no apk -> empty.
+          CUR="$(gh api "repos/$GITHUB_REPOSITORY/git/trees/gh-pages?recursive=1" -q '.tree[].path' 2>/dev/null \
+                  | grep -oE 'luci-singbox-ui-[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+\.apk' \
+                  | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+' | head -n1 || true)"
+          echo "latest-release: $NEW ; gh-pages: ${CUR:-<none>}"
+          if [ "$NEW" = "$CUR" ]; then
+            echo "gh-pages already at $NEW -> skip deploy" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "relevant=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "version drift (${CUR:-<none>} -> $NEW) -> deploy" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "relevant=true" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Install zstd
