@@ -86,6 +86,8 @@ const INVENTORY = {
     vless: [ "security", "sni", "type", "path", "host", "serviceName",
              "flow", "fp", "pbk", "sid", "alpn", "allowInsecure",
              "encryption", "spx", "mode", "headerType" ],
+    trojan: [ "sni", "peer", "alpn", "allowInsecure", "allowinsecure", "fp",
+              "type", "path", "host", "serviceName" ],
 };
 
 const SPEC = {
@@ -113,6 +115,19 @@ const SPEC = {
         { param: "spx",        unsupported: "Xray spider_x — no sing-box equivalent" },
         { param: "mode",       unsupported: "gRPC mode — no sing-box equivalent" },
         { param: "headerType", unsupported: "tcp/http header obfuscation — unsupported" },
+    ],
+    trojan: [
+        { param: "type",        handler: "transport" },
+        { param: "path",        handler: "transport" },
+        { param: "host",        handler: "transport" },
+        { param: "serviceName", handler: "transport" },
+        // peer first, sni second so an explicit sni wins (last write).
+        { param: "peer",         path: "tls.server_name" },
+        { param: "sni",          path: "tls.server_name" },
+        { param: "alpn",         path: "tls.alpn", transform: "csv" },
+        { param: "allowInsecure", path: "tls.insecure", transform: "bool" },
+        { param: "allowinsecure", path: "tls.insecure", transform: "bool" },
+        { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled" },
     ],
 };
 

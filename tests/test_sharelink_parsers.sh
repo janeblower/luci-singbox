@@ -114,4 +114,12 @@ out=$(je "
 [ "$out" = "TLS|NOREALITY" ] || die "vless reality without pbk omits reality" "$out"
 ok "vless reality missing pbk omits reality block (no FATAL config)"
 
+# MAP: trojan — sni/peer alias (sni wins), alpn csv, allowInsecure bool, transport ws.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('trojan://pw@h.ex:443?peer=p.com&sni=s.com&alpn=h2&allowInsecure=1&type=ws&path=%2Fw&host=ws.com#n');
+    print(sprintf('%s|%d|%s|%s|%s|%s', r.tls.server_name, length(r.tls.alpn), r.tls.insecure===true?'T':'?', r.transport.type, r.transport.path, r.transport.headers.Host));
+")
+[ "$out" = "s.com|1|T|ws|/w|ws.com" ] || die "trojan map" "$out"
+ok "trojan sni/peer+alpn+insecure+ws via SPEC"
+
 echo "OK"

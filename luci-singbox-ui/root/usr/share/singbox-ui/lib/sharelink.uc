@@ -294,41 +294,14 @@ function parse_trojan(url) {
 	if (!length(password) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
 	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
-
-	let sni = params["sni"] ?? params["peer"] ?? host;
 	let out = {
 		type: "trojan",
 		tag: safe_tag(length(frag) ? frag : host, url),
-		server: host,
-		server_port: port,
-		password: password,
-		tls: { enabled: true, server_name: sni },
+		server: host, server_port: port, password: password,
+		tls: { enabled: true, server_name: host },   // trojan is always TLS
 	};
-	if (params["allowInsecure"] === "1" || params["allowinsecure"] === "1")
-		out.tls.insecure = true;
-	if (length(params["alpn"])) {
-		let list = [];
-		for (let a in split(params["alpn"], ",")) {
-			let v = trim(a);
-			if (length(v)) push(list, v);
-		}
-		if (length(list)) out.tls.alpn = list;
-	}
-	if (length(params["fp"]))
-		out.tls.utls = { enabled: true, fingerprint: params["fp"] };
-
-	let tt = params["type"];
-	if (length(tt) && tt !== "tcp") {
-		let tr = { type: tt };
-		if (tt === "ws") {
-			if (length(params["path"])) tr.path = params["path"];
-			if (length(params["host"])) tr.headers = { Host: params["host"] };
-		} else if (tt === "grpc") {
-			if (length(params["serviceName"]))   tr.service_name = params["serviceName"];
-			else if (length(params["path"]))     tr.service_name = params["path"];
-		}
-		out.transport = tr;
-	}
+	h_transport(params, out);
+	smap.apply_params(params, smap.SPEC.trojan, out);
 	return out;
 }
 
