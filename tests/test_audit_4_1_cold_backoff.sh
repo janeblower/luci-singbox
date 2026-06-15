@@ -240,4 +240,19 @@ BBOLT_KNOWN="" run_uc refresh force >/dev/null 2>&1 || true
 [ "$(count_reloads)" -eq 1 ] || fail "force-refresh did not override backoff (got $(count_reloads), expected 1)"
 pass "force-refresh overrides the backoff window and reloads"
 
+# ============================================================
+echo "-- SEC-10: a bbolt PROBE FAILURE (null key list) must NOT trigger a reload"
+# When cache_list_keys() returns null (bbolt-client missing / cache.db locked
+# mid-upgrade) it is NOT evidence the tags are uncompiled. The old code treated
+# null as 'all cold' and, on a force-refresh, issued a full sing-box stop+start,
+# dropping every live proxy connection over a transient hiccup. SEC-10 defers the
+# reload on a null probe. Point SINGBOX_BBOLT_BIN at a nonexistent path so
+# bbolt_available()→null → cache_list_keys()→null, clear any sentinel so backoff
+# can't mask the result, and assert even a FORCE refresh issues zero reloads.
+: >"$RELOAD_LOG"
+rm -f "$SINGBOX_TMPDIR/.rs_cold_deadrs.attempt"
+SINGBOX_BBOLT_BIN="$TMPDIR/bin/does-not-exist" run_uc refresh force >/dev/null 2>&1 || true
+[ "$(count_reloads)" -eq 0 ] || fail "SEC-10: probe failure (null keys) triggered a reload (got $(count_reloads), expected 0)"
+pass "SEC-10: cache probe failure defers reload (no daemon bounce)"
+
 echo "OK"

@@ -593,16 +593,30 @@ const APPLY_LOCK_OWNER = `${APPLY_LOCK}/owner`;
 // release to avoid removing a lock another apply reclaimed after our TTL.
 let _lock_token = null;
 
-function _set_lock_owner(token) {
-	let f = fs.open(APPLY_LOCK_OWNER, "w");
-	if (!f) return;
-	f.write(token); f.close();
-}
+// _get_lock_owner() — read the persisted owner token (or null). Defined BEFORE
+// _set_lock_owner because the latter re-reads via this to verify the write, and
+// ucode has no function hoisting — a callee must precede its caller.
 function _get_lock_owner() {
 	let f = fs.open(APPLY_LOCK_OWNER, "r");
 	if (!f) return null;
 	let v = f.read("all"); f.close();
 	return v;
+}
+// _set_lock_owner(token) — write the owner token, then re-read and compare to
+// confirm it actually persisted. S5/SEC-3: the prior version ignored both the
+// fs.open failure and the f.write result, so a crash/ENOSPC between mkdir and a
+// completed owner write left the lock dir with an empty/absent owner — the
+// winner could then fail to release its OWN lock (release compares the token,
+// which no longer matches), wedging apply until the 60s TTL. Returns true only
+// when the token is verifiably on disk.
+function _set_lock_owner(token) {
+	let f = fs.open(APPLY_LOCK_OWNER, "w");
+	if (!f) return false;
+	let ok = true;
+	try { f.write(token); } catch (_) { ok = false; }
+	f.close();
+	if (!ok) return false;
+	return _get_lock_owner() === token;
 }
 
 // acquire_apply_lock() — atomic create-or-fail via fs.mkdir. mkdir is the
@@ -616,24 +630,51 @@ function acquire_apply_lock() {
 	fs.mkdir(TMPDIR, 0o755);
 	let token = rand_hex(8) ?? sprintf("%d-%d", time(), 0);
 	if (fs.mkdir(APPLY_LOCK, 0o755)) {
-		_set_lock_owner(token);
+		// SEC-3: confirm the owner token persisted. If the write failed
+		// (ENOSPC/crash window), we hold a lock we could never release by
+		// token — so drop it and report failure rather than wedge apply for
+		// the 60s TTL. The caller logs + the next apply retries cleanly.
+		if (!_set_lock_owner(token)) {
+			fs.rmdir(APPLY_LOCK);
+			return false;
+		}
 		_lock_token = token;
 		return true;
 	}
-	// Lock dir exists — reclaim only if stale (a crashed apply). S5.1: a plain
+	// Lock dir exists — reclaim if stale (a crashed apply). S5.1: a plain
 	// rmdir+mkdir reclaim is a TOCTOU race — two applies both observe "stale",
 	// both rmdir+mkdir, and both believe they won. Reclaim ATOMICALLY via
 	// rename instead: of N concurrent reclaimers, only one can rename the stale
 	// dir away (the rest get ENOENT — the source is already gone), so exactly
 	// one proceeds to recreate the lock.
+	//
+	// SEC-3: a lock dir is reclaimable EITHER (a) older than the 60s TTL, OR
+	// (b) it has no owner token AND is past a short grace period. A healthy
+	// holder writes (and now verifies) its owner microseconds after mkdir, so
+	// an owner-less dir older than the grace can only be a crash mid-acquire —
+	// reclaiming it ~58s sooner than the TTL avoids wedging on that crash.
+	// The grace is essential: WITHOUT it a concurrent acquirer that mkdir-loses
+	// the race could read the winner's lock in the instant BEFORE the winner's
+	// owner write lands, see "no owner", and steal the fresh lock — turning two
+	// concurrent applies into two winners. mtime resolution is 1s, so an owner
+	// write always completes well within the grace window; the grace never fires
+	// on a live holder, only on a stuck one.
+	const LOCK_NOOWNER_GRACE = 5;
 	let st = fs.stat(APPLY_LOCK);
-	if (st != null && (time() - st.mtime) > 60) {
+	let owner = _get_lock_owner();
+	let no_owner = (owner == null) || (trim(`${owner}`) === "");
+	let aged = (st != null) && ((time() - st.mtime) > 60);
+	let stuck_no_owner = (st != null) && no_owner && ((time() - st.mtime) >= LOCK_NOOWNER_GRACE);
+	if (aged || stuck_no_owner) {
 		let moved = `${APPLY_LOCK}.stale.${rand_hex(6) ?? sprintf("%d", time())}`;
 		if (fs.rename(APPLY_LOCK, moved)) {
-			fs.unlink(`${moved}/owner`);
+			try { fs.unlink(`${moved}/owner`); } catch (_) {}
 			fs.rmdir(moved);
 			if (fs.mkdir(APPLY_LOCK, 0o755)) {
-				_set_lock_owner(token);
+				if (!_set_lock_owner(token)) {
+					fs.rmdir(APPLY_LOCK);
+					return false;
+				}
 				_lock_token = token;
 				return true;
 			}
@@ -648,7 +689,7 @@ function acquire_apply_lock() {
 // rather than stealing it out from under the new holder.
 function release_apply_lock() {
 	if (_lock_token != null && _get_lock_owner() === _lock_token) {
-		fs.unlink(APPLY_LOCK_OWNER);
+		try { fs.unlink(APPLY_LOCK_OWNER); } catch (_) {}
 		fs.rmdir(APPLY_LOCK);
 	}
 	_lock_token = null;

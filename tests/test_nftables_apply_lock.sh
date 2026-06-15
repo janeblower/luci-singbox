@@ -65,10 +65,15 @@ if wait "$p2"; then rc2=0; else rc2=$?; fi
 [ ! -e /tmp/singbox-ui/.apply.lock ] || { echo "FAIL: S1-4 stale lock left behind"; exit 1; }
 echo "  PASS: S1-4 concurrent applies serialized (one ran, one skipped), lock released"
 
-echo "-- S1-4: a pre-existing fresh lock makes apply refuse (no race window)"
+echo "-- S1-4: a pre-existing fresh lock (with a live owner) makes apply refuse"
 mkdir -p /tmp/singbox-ui/.apply.lock
-# Run under `if` so `set -e` does NOT abort on the (expected, post-fix)
-# non-zero exit — that is the whole point of the assertion below.
+# SEC-3: an owner-LESS lock dir is now treated as immediately stale (a healthy
+# holder always writes its owner synchronously), so a real contention test must
+# stamp a non-empty owner AND a fresh mtime — otherwise apply would (correctly)
+# reclaim it. This proves a genuinely-held lock still blocks.
+printf 'deadbeefcafef00d' > /tmp/singbox-ui/.apply.lock/owner
+touch /tmp/singbox-ui/.apply.lock /tmp/singbox-ui/.apply.lock/owner
+# Run under `if` so `set -e` does NOT abort on the (expected) non-zero exit.
 # shellcheck disable=SC2086
 if PATH="$TMPDIR/bin:$PATH" UCI_CONFIG_DIR="$UCI" \
 		"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply >/dev/null 2>"$TMPDIR/locked.err"; then
@@ -78,10 +83,58 @@ else
 fi
 rm -rf /tmp/singbox-ui/.apply.lock
 [ "$rc" -ne 0 ] \
-	|| { echo "FAIL: S1-4 apply ignored an existing lock (no serialization)"; exit 1; }
+	|| { echo "FAIL: S1-4 apply ignored a live-owner lock (no serialization)"; exit 1; }
 grep -qi 'another apply\|lock' "$TMPDIR/locked.err" \
 	|| { echo "FAIL: S1-4 expected a lock-contention message"; cat "$TMPDIR/locked.err"; exit 1; }
-echo "  PASS: S1-4 existing lock blocks apply"
+echo "  PASS: S1-4 existing live-owner lock blocks apply"
+
+echo "-- SEC-3: an owner-less lock past the grace is reclaimed before the 60s TTL"
+# A crash between mkdir(APPLY_LOCK) and the owner write leaves a lock dir with no
+# owner token. The old guard treated only mtime>60s as stale, so this owner-less
+# lock wedged apply for the full TTL. SEC-3 reclaims it once it is past a short
+# grace (a live holder writes+verifies its owner within ms, so a grace-aged
+# owner-less dir can only be a crash). Backdate ~30s — past the 5s grace, well
+# UNDER the 60s TTL — so success here proves reclaim is owner-driven, not TTL.
+mkdir -p /tmp/singbox-ui/.apply.lock     # NO owner file inside
+PAST=$(( $(date +%s) - 30 ))
+if STAMP=$(date -d "@$PAST" +%Y%m%d%H%M.%S 2>/dev/null) && [ -n "$STAMP" ]; then
+	touch -t "$STAMP" /tmp/singbox-ui/.apply.lock 2>/dev/null \
+		|| touch -t 202001010000 /tmp/singbox-ui/.apply.lock
+else
+	# date -d @epoch unsupported: fall back to a far-past stamp. Still owner-less,
+	# still proves the owner-less reclaim path (this stamp is also past the TTL).
+	touch -t 202001010000 /tmp/singbox-ui/.apply.lock
+fi
+# shellcheck disable=SC2086
+if PATH="$TMPDIR/bin:$PATH" UCI_CONFIG_DIR="$UCI" \
+		"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply >/dev/null 2>"$TMPDIR/noowner.err"; then
+	rc=0
+else
+	rc=$?
+fi
+[ "$rc" -eq 0 ] \
+	|| { echo "FAIL: SEC-3 owner-less lock not reclaimed (apply rc=$rc)"; cat "$TMPDIR/noowner.err"; exit 1; }
+[ ! -e /tmp/singbox-ui/.apply.lock ] \
+	|| { echo "FAIL: SEC-3 lock not released after owner-less reclaim"; exit 1; }
+echo "  PASS: SEC-3 owner-less lock reclaimed and released"
+
+echo "-- SEC-3: a fresh owner-less lock WITHIN the grace is NOT yet reclaimed"
+# Symmetric guard: a just-created owner-less lock (mtime=now, inside the 5s grace)
+# must NOT be stolen — this is the window protecting a concurrent winner whose
+# owner write is still in flight. apply must refuse (rc!=0), proving the grace
+# closes the two-winners race the naive 'no owner => steal' would have opened.
+mkdir -p /tmp/singbox-ui/.apply.lock     # fresh mtime=now, NO owner file
+# shellcheck disable=SC2086
+if PATH="$TMPDIR/bin:$PATH" UCI_CONFIG_DIR="$UCI" \
+		"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" apply >/dev/null 2>"$TMPDIR/grace.err"; then
+	rc=0
+else
+	rc=$?
+fi
+rm -rf /tmp/singbox-ui/.apply.lock
+[ "$rc" -ne 0 ] \
+	|| { echo "FAIL: SEC-3 fresh owner-less lock stolen inside the grace (two-winners race open)"; cat "$TMPDIR/grace.err"; exit 1; }
+echo "  PASS: SEC-3 in-grace owner-less lock is held (race closed)"
 
 echo "-- S5.1/10.3: a stale (>60s) lock is reclaimed; apply succeeds and frees it"
 mkdir -p /tmp/singbox-ui/.apply.lock

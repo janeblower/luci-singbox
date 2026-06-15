@@ -312,12 +312,19 @@ pass "safe_tag fallback is deterministic"
 # starting with a known share-link scheme must NOT be silently re-decoded.
 # Done indirectly via fetch-subs + by structural assertion on the source.
 echo "-- C2.1.10: try_b64_decode requires a recognized scheme in decoded payload"
-# Structural check: the new strict heuristic must regex over share-link schemes
-# rather than just searching for "://".
-grep -qE 'vmess\|vless\|ss\|trojan\|hy2\|hysteria2\|http\|https' \
+# Structural check: the decode-trigger heuristic must regex over the SHARED
+# share-link scheme constant (SEC-6: PROXY_SCHEME_RE), aligned with
+# sharelink.uc::parse_proxy_url, rather than just searching for "://".
+grep -qE 'PROXY_SCHEME_RE[[:space:]]*=[[:space:]]*/\^\(vmess\|vless\|ss\|trojan\|hy2\|hysteria2\)' \
 	"$SUB_UC" \
-	|| fail "subscription.uc: try_b64_decode strict heuristic missing"
-pass "subscription.uc: try_b64_decode tests for known schemes"
+	|| fail "subscription.uc: PROXY_SCHEME_RE shared scheme constant missing/changed"
+grep -qE 'match\(t, PROXY_SCHEME_RE\)' "$SUB_UC" \
+	|| fail "subscription.uc: try_b64_decode no longer triggers on PROXY_SCHEME_RE"
+# SEC-6: http/https must NOT be in the decode-trigger whitelist (a plaintext
+# error page line `visit https://…/help` must not be treated as proxy content).
+grep -qE 'PROXY_SCHEME_RE.*http' "$SUB_UC" \
+	&& fail "subscription.uc: SEC-6 http/https leaked back into the decode-trigger set" || true
+pass "subscription.uc: try_b64_decode tests for known schemes (SEC-6 shared constant)"
 
 # Behavioural complement: feed a body that is b64("visit https://example.com")
 # Old behaviour: contains "://" → decodes → URL extractor finds no line starting
