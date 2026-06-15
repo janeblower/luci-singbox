@@ -620,6 +620,7 @@ run_gen
 check "log level debug"  '"level": "debug"'        "$TMPDIR/out.json"
 check "log output path"  '"output": "/tmp/x.log"'  "$TMPDIR/out.json"
 check "log timestamp"    '"timestamp": true'       "$TMPDIR/out.json"
+check "log disabled false" '"disabled": false'     "$TMPDIR/out.json"
 
 echo "-- log.enabled=1 without output omits the field"
 write_cfg "

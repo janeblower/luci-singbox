@@ -11,7 +11,7 @@ let headless = require("builder.route.headless");
 
 function detect_format(rs) {
     let src = (rs.type === "local") ? (rs.path ?? "") : (rs.url ?? "");
-    return helpers.detect_rs_format(src, rs.format);
+    return helpers.detect_rs_format(src);
 }
 
 // build_rule_sets(cur, referenced_names) -> [{tag, type, ...}, ...]

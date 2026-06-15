@@ -42,11 +42,12 @@ function as_array(v) {
 	return [v];
 }
 
-// detect_rs_format(target, override) — pick "binary" or "source" for a
-// rule-set source path/URL. Explicit override wins; otherwise extension.
-// Shared between ruleset.uc and subscription.uc so both agree on the rule.
-function detect_rs_format(target, override) {
-	if (override === "binary" || override === "source") return override;
+// detect_rs_format(target) — pick "binary" or "source" for a rule-set source
+// path/URL purely from its file extension (.srs→binary, .json→source, else
+// binary). There is no UI/UCI override: the `format` field was removed and the
+// sing-box `format` key is always derived here. Shared between ruleset.uc and
+// nft-rulesets.uc so both agree on the rule.
+function detect_rs_format(target) {
 	let lower = lc(target || "");
 	// Strip query string (and fragment) before suffix matching so URLs like
 	// https://x/path/file.srs?ver=1 are still recognized as binary instead
