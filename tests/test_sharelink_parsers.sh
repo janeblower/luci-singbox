@@ -122,4 +122,20 @@ out=$(je "
 [ "$out" = "s.com|1|T|ws|/w|ws.com" ] || die "trojan map" "$out"
 ok "trojan sni/peer+alpn+insecure+ws via SPEC"
 
+# MAP: hysteria2 closes gaps — alpn (csv) now lands; insecure bool; obfs preserved.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('hy2://pw@h.ex:443?sni=s.com&insecure=1&alpn=h3&obfs=salamander&obfs-password=op#n');
+    print(sprintf('%s|%s|%d|%s|%s', r.tls.server_name, r.tls.insecure===true?'T':'?', length(r.tls.alpn), r.obfs.type, r.obfs.password));
+")
+[ "$out" = "s.com|T|1|salamander|op" ] || die "hy2 alpn/insecure/obfs" "$out"
+ok "hysteria2 alpn+insecure+obfs via SPEC"
+
+# MAP: hysteria2 pinSHA256 is declared unsupported -> not emitted.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('hy2://pw@h.ex:443?sni=s.com&pinSHA256=abc#n');
+    print(r.tls.pinSHA256==null && r.fingerprint==null ? 'OMIT' : 'LEAK');
+")
+[ "$out" = "OMIT" ] || die "hy2 pinSHA256 unsupported" "$out"
+ok "hysteria2 pinSHA256/mport declared unsupported"
+
 echo "OK"

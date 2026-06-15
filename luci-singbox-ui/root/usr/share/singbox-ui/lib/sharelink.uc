@@ -151,25 +151,31 @@ function parse_vless(url) {
 	return out;
 }
 
+// h_obfs(params, out) — hysteria2 salamander obfuscation block.
+// Consumes the `obfs`/`obfs-password` params (SPEC Delegated).
+function h_obfs(params, out) {
+    if (params["obfs"] === "salamander" && length(params["obfs-password"]))
+        out.obfs = { type: "salamander", password: params["obfs-password"] };
+}
+
 function parse_hy2(url) {
-	// hy2://password@host:port?params#name  (also hysteria2://)
-	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
-	        match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
-	if (!m) return null;
-	let password = url_decode(m[1]);
-	let host = safe_host(m[2]);
-	let port = safe_port(m[3]);
-	if (!length(password) || !host || !port) return null;
-	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
-	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;   // S4.3: keep node name
-	let out = {
-		type: "hysteria2", server: host, server_port: port, password: password,
-		tag: safe_tag(length(frag) ? frag : host, url),
-		tls: { enabled: true, server_name: params["sni"] ?? host },
-	};
-	if (params["obfs"] === "salamander" && length(params["obfs-password"]))
-		out.obfs = { type: "salamander", password: params["obfs-password"] };
-	return out;
+    let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
+            match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+    if (!m) return null;
+    let password = url_decode(m[1]);
+    let host = safe_host(m[2]);
+    let port = safe_port(m[3]);
+    if (!length(password) || !host || !port) return null;
+    let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+    let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+    let out = {
+        type: "hysteria2", server: host, server_port: port, password: password,
+        tag: safe_tag(length(frag) ? frag : host, url),
+        tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
+    };
+    h_obfs(params, out);
+    smap.apply_params(params, smap.SPEC.hysteria2, out);
+    return out;
 }
 
 // b64_decode(s) — tolerant base64 decoder for share-link payloads.
