@@ -88,6 +88,8 @@ const INVENTORY = {
              "encryption", "spx", "mode", "headerType" ],
     trojan: [ "sni", "peer", "alpn", "allowInsecure", "allowinsecure", "fp",
               "type", "path", "host", "serviceName" ],
+    hysteria2: [ "sni", "insecure", "alpn", "obfs", "obfs-password",
+                 "pinSHA256", "mport", "up", "down" ],
 };
 
 const SPEC = {
@@ -128,6 +130,17 @@ const SPEC = {
         { param: "allowInsecure", path: "tls.insecure", transform: "bool" },
         { param: "allowinsecure", path: "tls.insecure", transform: "bool" },
         { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled" },
+    ],
+    hysteria2: [
+        { param: "obfs",          handler: "obfs" },
+        { param: "obfs-password", handler: "obfs" },
+        { param: "sni",      path: "tls.server_name" },
+        { param: "insecure", path: "tls.insecure", transform: "bool" },
+        { param: "alpn",     path: "tls.alpn", transform: "csv" },
+        { param: "pinSHA256", unsupported: "cert pinning — sing-box uses tls.certificate, not pin" },
+        { param: "mport",     unsupported: "port hopping — sing-box server_ports format differs" },
+        { param: "up",        unsupported: "client up bandwidth — server-advertised in sing-box" },
+        { param: "down",      unsupported: "client down bandwidth — server-advertised in sing-box" },
     ],
 };
 
