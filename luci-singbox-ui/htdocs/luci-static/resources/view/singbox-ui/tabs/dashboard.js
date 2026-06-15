@@ -54,12 +54,6 @@ function buildDashboard() {
 		return _('updated %dd ago').format(Math.floor(secs / 86400));
 	}
 
-	function fmtBytes(n) {
-		n = +n || 0;
-		var u = ['B','KB','MB','GB','TB'], i = 0;
-		while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-		return (i === 0 ? n : n.toFixed(1)) + ' ' + u[i];
-	}
 	function fmtExpire(sec) {
 		sec = +sec || 0;
 		if (!sec) return '';
