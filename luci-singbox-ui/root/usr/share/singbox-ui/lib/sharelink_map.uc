@@ -91,6 +91,8 @@ const INVENTORY = {
     hysteria2: [ "sni", "insecure", "alpn", "obfs", "obfs-password",
                  "pinSHA256", "mport", "up", "down" ],
     ss: [ "plugin" ],
+    tuic: [ "congestion_control", "udp_relay_mode", "alpn", "sni",
+            "allow_insecure", "disable_sni" ],
     // vmess INVENTORY is the v2rayN base64-JSON key set, not URL query params.
     vmess: [ "v", "ps", "add", "port", "id", "aid", "scy",
              "net", "type", "host", "path", "tls", "sni", "alpn", "fp" ],
@@ -148,6 +150,14 @@ const SPEC = {
     ],
     ss: [
         { param: "plugin", handler: "ss_plugin" },   // name;opts split is bespoke
+    ],
+    tuic: [
+        { param: "congestion_control", path: "congestion_control" },
+        { param: "udp_relay_mode",     path: "udp_relay_mode" },
+        { param: "sni",            path: "tls.server_name" },
+        { param: "alpn",           path: "tls.alpn", transform: "csv" },
+        { param: "allow_insecure", path: "tls.insecure", transform: "bool" },
+        { param: "disable_sni",    path: "tls.disable_sni", transform: "bool" },
     ],
     vmess: [
         // Structural (parsed positionally in parse_vmess):

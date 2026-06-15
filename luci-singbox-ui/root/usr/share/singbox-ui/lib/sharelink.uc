@@ -178,6 +178,31 @@ function parse_hy2(url) {
     return out;
 }
 
+// parse_tuic(url) — TUIC v5 share-link: tuic://<uuid>:<password>@host:port?params#name
+function parse_tuic(url) {
+	let m = match(url, /^tuic:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (!m) return null;
+	let userinfo = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!host || !port) return null;
+	let colon = index(userinfo, ":");
+	if (colon < 0) return null;                       // tuic needs uuid:password
+	let uuid = substr(userinfo, 0, colon);
+	let password = substr(userinfo, colon + 1);
+	if (!length(uuid) || !length(password)) return null;
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+	let out = {
+		type: "tuic", server: host, server_port: port,
+		uuid: uuid, password: password,
+		tag: safe_tag(length(frag) ? frag : host, url),
+		tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
+	};
+	smap.apply_params(params, smap.SPEC.tuic, out);
+	return out;
+}
+
 // b64_decode(s) — tolerant base64 decoder for share-link payloads.
 // Accepts both standard and url-safe alphabets and missing padding.
 // Returns the decoded string, or null on invalid input.
@@ -376,6 +401,7 @@ function parse_proxy_url(url) {
 	if (match(url, /^trojan:\/\//))    return parse_trojan(url);
 	if (match(url, /^hy2:\/\//) ||
 	    match(url, /^hysteria2:\/\//)) return parse_hy2(url);
+	if (match(url, /^tuic:\/\//))      return parse_tuic(url);
 	warn("sharelink.uc: unsupported proxy URL scheme: " + url + "\n");
 	return null;
 }
