@@ -98,6 +98,7 @@ const INVENTORY = {
     // vmess INVENTORY is the v2rayN base64-JSON key set, not URL query params.
     vmess: [ "v", "ps", "add", "port", "id", "aid", "scy",
              "net", "type", "host", "path", "tls", "sni", "alpn", "fp" ],
+    anytls: [ "sni", "insecure", "alpn", "hpkp" ],
 };
 
 const SPEC = {
@@ -172,6 +173,12 @@ const SPEC = {
         { param: "down",     path: "down_mbps", transform: "int" },
         { param: "obfs",     path: "obfs" },
         { param: "protocol", unsupported: "hysteria v1 transport protocol — sing-box is always QUIC" },
+    ],
+    anytls: [
+        { param: "sni",      path: "tls.server_name" },
+        { param: "insecure", path: "tls.insecure", transform: "bool" },
+        { param: "alpn",     path: "tls.alpn", transform: "csv" },
+        { param: "hpkp",     unsupported: "HPKP cert pinning — no sing-box equivalent" },
     ],
     vmess: [
         // Structural (parsed positionally in parse_vmess):

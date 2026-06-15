@@ -163,4 +163,12 @@ out=$(je "
 [ "$out" = "hysteria|tok|s.com|50|100|xplus|T" ] || die "hysteria v1 parse" "$out"
 ok "hysteria:// (v1) parsed (auth/up/down/peer/obfs)"
 
+# NEW: anytls://password@host:port?params -> sing-box anytls outbound.
+out=$(je "
+    let r = require('sharelink').parse_proxy_url('anytls://mypass@h.ex:443?sni=s.com&insecure=1&alpn=h2#AT');
+    print(sprintf('%s|%s|%s|%d|%s', r.type, r.password, r.tls.server_name, length(r.tls.alpn), r.tls.insecure===true?'T':'?'));
+")
+[ "$out" = "anytls|mypass|s.com|1|T" ] || die "anytls parse" "$out"
+ok "anytls:// parsed (password + tls/sni/alpn/insecure)"
+
 echo "OK"
