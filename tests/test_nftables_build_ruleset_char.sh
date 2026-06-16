@@ -88,10 +88,16 @@ check() { # $1=label, then emit args; asserts current == golden, byte-for-byte
 echo "-- build_ruleset characterization matrix (golden = committed baseline fixture, 849e2b9)"
 
 # emit argv positions: port v4 v6 iface[,iface] [mark] [mask] [router_out]
-check m_fakeip_v4_only     7893 "198.18.0.0/15" ""          "br-lan"
-check m_fakeip_v4_v6       7895 "198.18.0.0/15" "fc00::/18" "br-lan"
+# Default-path cases pass an explicit mark/mask (0x1/0x1) so this
+# characterization stays anchored on the build_ruleset SPLIT (its subject) and
+# is decoupled from the package default-mark value, which legitimately changed
+# (0x1 -> 0x40000000) and is covered by test_nftables_{ctmark,emit,uc}. Without
+# an explicit mark the baseline fixture (default 0x1) and current (default
+# 0x40000000) diverge on the fwmark_pair fallback, not on the split.
+check m_fakeip_v4_only     7893 "198.18.0.0/15" ""          "br-lan" 0x1 0x1
+check m_fakeip_v4_v6       7895 "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1
 check m_router_out_on      7895 "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1 1
-check m_multi_iface        7893 "198.18.0.0/15" ""          "br-lan,br-guest"
+check m_multi_iface        7893 "198.18.0.0/15" ""          "br-lan,br-guest" 0x1 0x1
 
 # Invalid/empty PORT → validate_port() returns null → emit_prerouting_chain's
 # `if (port_n != null)` tproxy block is SKIPPED. The 6-scenario base matrix
@@ -99,7 +105,7 @@ check m_multi_iface        7893 "198.18.0.0/15" ""          "br-lan,br-guest"
 # emit_prerouting_chain was never byte-compared. An empty-string PORT is a
 # valid positional (emit only requires argv>=5: PORT V4 V6 IFACE all present),
 # so it drives the skip through the real `emit` entrypoint.
-check m_port_empty_skip    ""   "198.18.0.0/15" "fc00::/18" "br-lan"
+check m_port_empty_skip    ""   "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1
 
 # Custom mark with mark != mask (0x40 & 0xc0 == 0x40, so fwmark_pair keeps it),
 # dual-stack + router_out. The base matrix only ever used 0x1/0x1 where
@@ -119,7 +125,7 @@ check m_mark_ne_mask_rout  7895 "198.18.0.0/15" "fc00::/18" "br-lan" 0x40 0xc0 1
 cat >"$RS/rs_char_set.json" <<'JSON'
 { "rules": [ { "ip_cidr": ["1.2.3.0/24","fe80::/10"], "network":"tcp" } ] }
 JSON
-check m_with_ruleset       7893 "198.18.0.0/15" "fc00::/18" "br-lan"
+check m_with_ruleset       7893 "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1
 check m_with_ruleset_rout  7893 "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1 1
 
 rm -f "$RS"/rs_char_*.json
