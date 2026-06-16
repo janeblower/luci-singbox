@@ -113,4 +113,21 @@ leak_check="$(printf '%s\n' "$dns_json" | "$UCODE_BIN" $UCODE_LIB_FLAGS -e '
 [ "$leak_check" = "CLEAN" ] || { echo "FAIL backend prop(s) leaked to dns schema: $leak_check"; exit 1; }
 echo "PASS schema dump strips all backend-only props from dns projection"
 
+# 5. fakeip descriptor exposes nft_rules bool field (UI/UCI-only; no json_key).
+# shellcheck disable=SC2086
+printf '%s\n' "$dns_json" | "$UCODE_BIN" $UCODE_LIB_FLAGS -e '
+	let fs = require("fs");
+	let raw = fs.stdin.read("all") || "";
+	let dns = json(raw);
+	let fakeip = dns["fakeip"];
+	if (fakeip == null) { warn("fakeip entry missing\n"); exit(1); }
+	let found = 0;
+	for (let f in (fakeip.fields || [])) {
+		if (f.name === "nft_rules" && f.type === "bool") { found = 1; break; }
+	}
+	if (!found) { warn("nft_rules bool field missing from fakeip schema\n"); exit(1); }
+	exit(0);
+' || { echo "FAIL: fakeip schema missing nft_rules bool field"; exit 1; }
+echo "PASS fakeip schema contains nft_rules bool field"
+
 echo "PASS test_dns_schema_rpc"
