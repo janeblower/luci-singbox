@@ -38,7 +38,7 @@ msgstr ""
 msgid "A logical rule cannot reference itself."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:71
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:78
 msgid "API secret (optional)"
 msgstr ""
 
@@ -69,7 +69,7 @@ msgstr ""
 msgid "Any"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:78
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:85
 msgid "Auto-update subscriptions"
 msgstr ""
 
@@ -81,7 +81,7 @@ msgstr ""
 msgid "Basic"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:74
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:81
 msgid "Bearer token for the Clash API. Leave empty for no auth."
 msgstr ""
 
@@ -122,7 +122,7 @@ msgstr ""
 msgid "Chain"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:55
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:62
 msgid "Clash API"
 msgstr ""
 
@@ -169,8 +169,8 @@ msgstr ""
 msgid "Copy failed — select the text and copy manually."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:21
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:25
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:27
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:31
 msgid "Custom path"
 msgstr ""
 
@@ -251,7 +251,7 @@ msgstr ""
 msgid "Down"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:37
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:44
 msgid "Effective only when a DNS server of type fakeip is enabled."
 msgstr ""
 
@@ -261,8 +261,8 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:61
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:86
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:42
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:59
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:49
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:66
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:139
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:124
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:43
@@ -274,7 +274,7 @@ msgstr ""
 msgid "Enable cache file"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:56
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:63
 msgid ""
 "Enables sing-box experimental.clash_api. Required by the Dashboard tab. "
 "Restart the service after changing."
@@ -316,7 +316,7 @@ msgstr ""
 msgid "Final server"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:20
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:26
 msgid "Flash (/etc/sing-box/, persistent)"
 msgstr ""
 
@@ -443,11 +443,11 @@ msgstr ""
 msgid "Legacy (address string)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:45
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:52
 msgid "Level"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:62
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:69
 msgid "Listen address"
 msgstr ""
 
@@ -465,7 +465,7 @@ msgstr ""
 msgid "Local system"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:40
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:47
 msgid "Log"
 msgstr ""
 
@@ -551,7 +551,7 @@ msgstr ""
 msgid "Outbounds"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:51
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:58
 msgid "Output file (empty = procd stdout)"
 msgstr ""
 
@@ -563,21 +563,21 @@ msgstr ""
 msgid "Paste a vless://, ss://, trojan:// or hysteria2:// link."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:29
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:35
 msgid "Path is required when storage = Custom"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:30
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:36
 msgid "Path must be absolute"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:80
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:87
 msgid ""
 "Periodically refresh subscriptions via cron (each sub honors its own update "
 "interval)."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:34
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:40
 msgid "Persist fakeip mappings"
 msgstr ""
 
@@ -585,7 +585,7 @@ msgstr ""
 msgid "Persistent cache for proxies, DNS responses, and fakeip mappings."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:66
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:73
 msgid "Port"
 msgstr ""
 
@@ -615,7 +615,7 @@ msgstr ""
 msgid "Protocol requires sing-box"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:19
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:25
 msgid "RAM (/tmp/, lost on reboot)"
 msgstr ""
 
@@ -737,7 +737,7 @@ msgstr ""
 msgid "Status unavailable"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:18
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:24
 msgid "Storage"
 msgstr ""
 
@@ -758,7 +758,7 @@ msgid "Subscription update failed"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:261
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:77
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:84
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:48
 msgid "Subscriptions"
 msgstr ""
