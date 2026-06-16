@@ -216,4 +216,35 @@ leak_check=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
 [ "$leak_check" = "CLEAN" ] || { echo "FAIL backend prop(s) leaked to schema: $leak_check"; exit 1; }
 echo "PASS schema dump strips all backend-only props"
 
+# 11. tproxy.nft_rules has exclusive:true (whitelisted in schema_dump → reaches frontend).
+excl=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
+	let fs = require("fs");
+	let raw = fs.stdin.read("all") || "";
+	let j; try { j = json(raw); } catch (_) { print("FAIL_PARSE\n"); exit(0); }
+	let tp = (j && j.schema && j.schema.inbound) ? j.schema.inbound.tproxy : null;
+	if (tp == null) { print("FAIL_NO_TPROXY\n"); exit(0); }
+	let f = null;
+	for (let x in tp.fields) if (x.name == "nft_rules") f = x;
+	if (f == null)               { print("FAIL_NO_NFT_RULES\n"); exit(0); }
+	if (f.exclusive !== true)    { print("FAIL_NOT_EXCLUSIVE:" + (f.exclusive ?? "<absent>") + "\n"); exit(0); }
+	print("OK\n");
+')
+[ "$excl" = "OK" ] || { echo "FAIL tproxy.nft_rules exclusive:true not in schema ($excl)"; exit 1; }
+echo "PASS tproxy.nft_rules exclusive:true reaches schema"
+
+# 12. tproxy has a fwmark field.
+fwm=$(printf '%s\n' "$response" | "$UCODE_BIN" -e '
+	let fs = require("fs");
+	let raw = fs.stdin.read("all") || "";
+	let j; try { j = json(raw); } catch (_) { print("FAIL_PARSE\n"); exit(0); }
+	let tp = (j && j.schema && j.schema.inbound) ? j.schema.inbound.tproxy : null;
+	if (tp == null) { print("FAIL_NO_TPROXY\n"); exit(0); }
+	let f = null;
+	for (let x in tp.fields) if (x.name == "fwmark") f = x;
+	if (f == null)  { print("FAIL_NO_FWMARK\n"); exit(0); }
+	print("OK\n");
+')
+[ "$fwm" = "OK" ] || { echo "FAIL tproxy.fwmark field not in schema ($fwm)"; exit 1; }
+echo "PASS tproxy.fwmark field present in schema"
+
 echo "PASS test_protocol_schema_rpc"
