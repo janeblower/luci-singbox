@@ -96,6 +96,7 @@ root/usr/share/singbox-ui/lib/post_process.uc	usr/share/singbox-ui/lib/post_proc
 root/usr/share/singbox-ui/lib/route.uc	usr/share/singbox-ui/lib/route.uc	data
 root/usr/share/singbox-ui/lib/ruleset.uc	usr/share/singbox-ui/lib/ruleset.uc	data
 root/usr/share/singbox-ui/lib/sharelink.uc	usr/share/singbox-ui/lib/sharelink.uc	data
+root/usr/share/singbox-ui/lib/sharelink_map.uc	usr/share/singbox-ui/lib/sharelink_map.uc	data
 root/usr/share/singbox-ui/nft-rulesets.uc	usr/share/singbox-ui/nft-rulesets.uc	data
 root/usr/share/singbox-ui/nftables.uc	usr/share/singbox-ui/nftables.uc	data
 root/usr/share/singbox-ui/subscription.uc	usr/share/singbox-ui/subscription.uc	data

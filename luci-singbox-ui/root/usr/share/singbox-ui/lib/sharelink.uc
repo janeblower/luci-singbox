@@ -9,6 +9,7 @@
 // (see drop_ctrl / safe_tag / safe_host).
 
 let helpers = require("helpers");
+let smap = require("sharelink_map");
 const fnv1a32 = helpers.fnv1a32;
 
 // drop_ctrl(s) — drop bytes < 0x20 from a string. Used to scrub already-
@@ -91,6 +92,43 @@ function parse_query(query_string) {
 	return params;
 }
 
+// h_tls_security(params, host, out) — enable the TLS block for security=tls|reality
+// and seed server_name (sni param wins, else the host). For reality, assemble the
+// reality sub-block (public_key + short_id) ONLY when pbk is present — emitting a
+// reality block without public_key makes sing-box FATAL at config load.
+// Consumes the `security`/`sni`/`pbk`/`sid` params (SPEC Delegated).
+function h_tls_security(params, host, out) {
+	let sec = params["security"];
+	if (sec !== "tls" && sec !== "reality") return;
+	out.tls = { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host };
+	if (sec === "reality" && length(params["pbk"])) {
+		out.tls.reality = { enabled: true, public_key: params["pbk"] };
+		if (length(params["sid"])) out.tls.reality.short_id = params["sid"];
+	}
+}
+
+// h_transport(params, out) — v2ray transport block from type/path/host/serviceName.
+// Consumes the `type`/`path`/`host`/`serviceName` params (SPEC Delegated).
+function h_transport(params, out) {
+	let tt = params["type"];
+	if (!length(tt) || tt === "tcp") return;
+	let tr = { type: (tt === "h2") ? "http" : tt };
+	if (tt === "ws") {
+		if (length(params["path"])) tr.path = params["path"];
+		if (length(params["host"])) tr.headers = { Host: params["host"] };
+	} else if (tt === "grpc") {
+		if (length(params["serviceName"])) tr.service_name = params["serviceName"];
+		else if (length(params["path"]))   tr.service_name = params["path"];
+	} else if (tt === "http" || tt === "h2") {
+		if (length(params["path"])) tr.path = params["path"];
+		if (length(params["host"])) tr.host = [ params["host"] ];
+	} else if (tt === "httpupgrade") {
+		if (length(params["path"])) tr.path = params["path"];
+		if (length(params["host"])) tr.host = params["host"];
+	}
+	out.transport = tr;
+}
+
 function parse_vless(url) {
 	// vless://uuid@host:port?params#name
 	let m = match(url, /^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
@@ -107,50 +145,84 @@ function parse_vless(url) {
 		type: "vless", server: host, server_port: port, uuid: uuid,
 		tag: safe_tag(length(frag) ? frag : host, url),
 	};
-	let security = params["security"];
-	if (security === "tls" || security === "reality") {
-		let sni = params["sni"] ?? host;
-		out.tls = { enabled: true, server_name: sni };
-		if (params["fp"]) out.tls.utls = { enabled: true, fingerprint: params["fp"] };
-		if (security === "reality" && params["pbk"]) {
-			out.tls.reality = { enabled: true, public_key: params["pbk"] };
-			// short_id (sid) is mandatory for the reality handshake when the
-			// server is configured with one — dropping it produces a dead
-			// outbound that cannot connect (and, via download_detour, makes
-			// remote rule-sets un-fetchable → sing-box FATALs at startup).
-			if (length(params["sid"])) out.tls.reality.short_id = params["sid"];
-		}
-		// Note: `spx` (reality spider_x) is an Xray-only client field; sing-box
-		// has no equivalent, so it is intentionally not mapped.
-	}
-	// flow (e.g. xtls-rprx-vision) is a top-level vless field. Without it the
-	// client won't negotiate XTLS-Vision and a server expecting it resets the
-	// connection — same dead-proxy failure mode as a missing short_id.
-	if (length(params["flow"])) out.flow = params["flow"];
-	let transport_type = params["type"];
-	if (transport_type && transport_type !== "tcp")
-		out.transport = { type: transport_type };
+	h_tls_security(params, host, out);   // Delegated: security + sni
+	h_transport(params, out);            // Delegated: type/path/host/serviceName
+	smap.apply_params(params, smap.SPEC.vless, out);  // Direct: flow/fp/pbk/sid/alpn/insecure
 	return out;
 }
 
+// h_obfs(params, out) — hysteria2 salamander obfuscation block.
+// Consumes the `obfs`/`obfs-password` params (SPEC Delegated).
+function h_obfs(params, out) {
+	if (params["obfs"] === "salamander" && length(params["obfs-password"]))
+		out.obfs = { type: "salamander", password: params["obfs-password"] };
+}
+
 function parse_hy2(url) {
-	// hy2://password@host:port?params#name  (also hysteria2://)
 	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
-	        match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+			match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let password = url_decode(m[1]);
 	let host = safe_host(m[2]);
 	let port = safe_port(m[3]);
 	if (!length(password) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
-	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;   // S4.3: keep node name
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
 	let out = {
 		type: "hysteria2", server: host, server_port: port, password: password,
 		tag: safe_tag(length(frag) ? frag : host, url),
-		tls: { enabled: true, server_name: params["sni"] ?? host },
+		tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
 	};
-	if (params["obfs"] === "salamander" && length(params["obfs-password"]))
-		out.obfs = { type: "salamander", password: params["obfs-password"] };
+	h_obfs(params, out);
+	smap.apply_params(params, smap.SPEC.hysteria2, out);
+	return out;
+}
+
+// parse_tuic(url) — TUIC v5 share-link: tuic://<uuid>:<password>@host:port?params#name
+function parse_tuic(url) {
+	let m = match(url, /^tuic:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (!m) return null;
+	let userinfo = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!host || !port) return null;
+	let colon = index(userinfo, ":");
+	if (colon < 0) return null;                       // tuic needs uuid:password
+	let uuid = substr(userinfo, 0, colon);
+	let password = substr(userinfo, colon + 1);
+	if (!length(uuid) || !length(password)) return null;
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+	let out = {
+		type: "tuic", server: host, server_port: port,
+		uuid: uuid, password: password,
+		tag: safe_tag(length(frag) ? frag : host, url),
+		tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
+	};
+	smap.apply_params(params, smap.SPEC.tuic, out);
+	return out;
+}
+
+// parse_anytls(url) — AnyTLS share-link: anytls://<password>@host:port?params#name
+// (userinfo "user:pass" form: the password is the part after ':', else the whole).
+function parse_anytls(url) {
+	let m = match(url, /^anytls:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (!m) return null;
+	let userinfo = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!host || !port) return null;
+	let colon = index(userinfo, ":");
+	let password = (colon >= 0) ? substr(userinfo, colon + 1) : userinfo;
+	if (!length(password)) return null;
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+	let out = {
+		type: "anytls", server: host, server_port: port, password: password,
+		tag: safe_tag(length(frag) ? frag : host, url),
+		tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
+	};
+	smap.apply_params(params, smap.SPEC.anytls, out);
 	return out;
 }
 
@@ -170,6 +242,61 @@ function b64_decode(s) {
 	let dec = null;
 	try { dec = b64dec(t); } catch (e) { return null; }
 	return dec;
+}
+
+// parse_socks(url) — SOCKS5 share-link: socks5://[user:pass@]host:port#name
+// userinfo is OPTIONAL: plain "user:pass" or base64("user:pass"). -> sing-box socks (v5).
+// Placed after b64_decode: ucode resolves top-level function refs by definition
+// order, so parse_socks (which calls b64_decode) must follow it.
+function parse_socks(url) {
+	let host, port, params, frag, raw = null;
+	// Pattern A: with userinfo  (m[1]=userinfo m[2]=host m[3]=port m[4]=query m[5]=frag)
+	let m = match(url, /^socks5?:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (m) {
+		raw  = m[1];
+		host = safe_host(m[2]); port = safe_port(m[3]);
+		params = m[4] ? parse_query(substr(m[4], 1)) : {};
+		frag   = m[5] ? url_decode(substr(m[5], 1)) : null;
+	} else {
+		// Pattern B: no userinfo  (m[1]=host m[2]=port m[3]=query m[4]=frag).
+		// Host class adds @ to its negation so this only matches a true no-@ URL.
+		m = match(url, /^socks5?:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+		if (!m) return null;
+		host = safe_host(m[1]); port = safe_port(m[2]);
+		params = m[3] ? parse_query(substr(m[3], 1)) : {};
+		frag   = m[4] ? url_decode(substr(m[4], 1)) : null;
+	}
+	if (!host || !port) return null;
+	let username = null, password = null;
+	if (length(raw)) {
+		let ui = url_decode(raw);
+		let colon = index(ui, ":");
+		if (colon < 0) {                              // maybe base64("user:pass")?
+			let dec = b64_decode(raw);                // decode the ORIGINAL raw, not url_decoded
+			if (dec != null) {
+				let decd = drop_ctrl(dec);
+				let dc = index(decd, ":");
+				// Only adopt the decoded form if it actually yields user:pass —
+				// a colon-less userinfo (e.g. "justuser") can be valid base64 yet
+				// decode to junk; in that case keep the literal raw as username.
+				if (dc >= 0) { ui = decd; colon = dc; }
+			}
+		}
+		if (colon >= 0) {
+			username = substr(ui, 0, colon);
+			password = substr(ui, colon + 1);
+		} else if (length(ui)) {
+			username = ui;
+		}
+	}
+	let out = {
+		type: "socks", server: host, server_port: port, version: "5",
+		tag: safe_tag(length(frag) ? frag : host, url),
+	};
+	if (length(username)) out.username = username;
+	if (length(password)) out.password = password;
+	smap.apply_params(params, smap.SPEC.socks, out);
+	return out;
 }
 
 // parse_ss(url) — Shadowsocks share-link.
@@ -252,6 +379,7 @@ function parse_ss(url) {
 	// The plugin value's first ';'-segment is the plugin name; the remainder is
 	// the opts string. parse_query splits on the first '=' only, so an
 	// unencoded (or %-encoded) ';'/'=' inside the value survives intact.
+	// SPEC ss: { param:"plugin", handler:"ss_plugin" } — bespoke name;opts split below
 	if (length(query)) {
 		let pl = parse_query(query)["plugin"];
 		if (length(pl)) {
@@ -276,41 +404,51 @@ function parse_trojan(url) {
 	if (!length(password) || !host || !port) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
 	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
-
-	let sni = params["sni"] ?? params["peer"] ?? host;
 	let out = {
 		type: "trojan",
 		tag: safe_tag(length(frag) ? frag : host, url),
-		server: host,
-		server_port: port,
-		password: password,
-		tls: { enabled: true, server_name: sni },
+		server: host, server_port: port, password: password,
+		tls: { enabled: true, server_name: host },   // trojan is always TLS
 	};
-	if (params["allowInsecure"] === "1" || params["allowinsecure"] === "1")
-		out.tls.insecure = true;
-	if (length(params["alpn"])) {
-		let list = [];
-		for (let a in split(params["alpn"], ",")) {
-			let v = trim(a);
-			if (length(v)) push(list, v);
-		}
-		if (length(list)) out.tls.alpn = list;
-	}
-	if (length(params["fp"]))
-		out.tls.utls = { enabled: true, fingerprint: params["fp"] };
+	h_transport(params, out);
+	smap.apply_params(params, smap.SPEC.trojan, out);
+	return out;
+}
 
-	let tt = params["type"];
-	if (length(tt) && tt !== "tcp") {
-		let tr = { type: tt };
-		if (tt === "ws") {
-			if (length(params["path"])) tr.path = params["path"];
-			if (length(params["host"])) tr.headers = { Host: params["host"] };
-		} else if (tt === "grpc") {
-			if (length(params["serviceName"]))   tr.service_name = params["serviceName"];
-			else if (length(params["path"]))     tr.service_name = params["path"];
-		}
-		out.transport = tr;
+// parse_hysteria1(url) — Hysteria v1 share-link: hysteria://host:port?auth=...&...#name
+// (auth may also appear in userinfo). Maps to a sing-box hysteria outbound.
+function parse_hysteria1(url) {
+	// Hysteria v1: hysteria:// or hy:// with optional userinfo (auth token).
+	// Try with-userinfo pattern first (groups: [1]=userinfo [2]=host [3]=port [4]=query [5]=frag).
+	let m = match(url, /^hysteria:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
+	        match(url, /^hy:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let userauth = null;
+	let host, port, params, frag;
+	if (m) {
+		userauth = url_decode(m[1]);
+		host  = safe_host(m[2]);
+		port  = safe_port(m[3]);
+		params = m[4] ? parse_query(substr(m[4], 1)) : {};
+		frag  = m[5] ? url_decode(substr(m[5], 1)) : null;
+	} else {
+		// No userinfo — groups: [1]=host [2]=port [3]=query [4]=frag.
+		let m2 = match(url, /^hysteria:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
+		         match(url, /^hy:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+		if (!m2) return null;
+		host  = safe_host(m2[1]);
+		port  = safe_port(m2[2]);
+		params = m2[3] ? parse_query(substr(m2[3], 1)) : {};
+		frag  = m2[4] ? url_decode(substr(m2[4], 1)) : null;
 	}
+	if (!host || !port) return null;
+	// auth may be in userinfo (hysteria://TOKEN@host) or the ?auth= param.
+	if (length(userauth) && !length(params["auth"])) params["auth"] = userauth;
+	let out = {
+		type: "hysteria", server: host, server_port: port,
+		tag: safe_tag(length(frag) ? frag : host, url),
+		tls: { enabled: true, server_name: length(params["peer"]) ? params["peer"] : host },
+	};
+	smap.apply_params(params, smap.SPEC.hysteria, out);
 	return out;
 }
 
@@ -359,6 +497,15 @@ function parse_vmess(url) {
 		if (!length(sni)) sni = length(whost) ? whost : host;
 		out.tls = { enabled: true, server_name: sni };
 	}
+	// Direct SPEC pass (alpn/fp onto the tls block). vmess params == the decoded
+	// v2rayN JSON object; apply_params reads it the same as a query map. The
+	// gate {tls:"tls"} ensures alpn/fp only attach when TLS is enabled.
+	let vparams = {
+		tls:  drop_ctrl(`${cfg.tls ?? ""}`),
+		alpn: drop_ctrl(`${cfg.alpn ?? ""}`),
+		fp:   drop_ctrl(`${cfg.fp ?? ""}`),
+	};
+	smap.apply_params(vparams, smap.SPEC.vmess, out);
 	return out;
 }
 
@@ -369,6 +516,11 @@ function parse_proxy_url(url) {
 	if (match(url, /^trojan:\/\//))    return parse_trojan(url);
 	if (match(url, /^hy2:\/\//) ||
 	    match(url, /^hysteria2:\/\//)) return parse_hy2(url);
+	if (match(url, /^tuic:\/\//))      return parse_tuic(url);
+	if (match(url, /^hysteria:\/\//) ||
+	    match(url, /^hy:\/\//))        return parse_hysteria1(url);
+	if (match(url, /^anytls:\/\//))    return parse_anytls(url);
+	if (match(url, /^socks5?:\/\//))   return parse_socks(url);
 	warn("sharelink.uc: unsupported proxy URL scheme: " + url + "\n");
 	return null;
 }
