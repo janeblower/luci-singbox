@@ -154,28 +154,28 @@ function parse_vless(url) {
 // h_obfs(params, out) — hysteria2 salamander obfuscation block.
 // Consumes the `obfs`/`obfs-password` params (SPEC Delegated).
 function h_obfs(params, out) {
-    if (params["obfs"] === "salamander" && length(params["obfs-password"]))
-        out.obfs = { type: "salamander", password: params["obfs-password"] };
+	if (params["obfs"] === "salamander" && length(params["obfs-password"]))
+		out.obfs = { type: "salamander", password: params["obfs-password"] };
 }
 
 function parse_hy2(url) {
-    let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
-            match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
-    if (!m) return null;
-    let password = url_decode(m[1]);
-    let host = safe_host(m[2]);
-    let port = safe_port(m[3]);
-    if (!length(password) || !host || !port) return null;
-    let params = m[4] ? parse_query(substr(m[4], 1)) : {};
-    let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
-    let out = {
-        type: "hysteria2", server: host, server_port: port, password: password,
-        tag: safe_tag(length(frag) ? frag : host, url),
-        tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
-    };
-    h_obfs(params, out);
-    smap.apply_params(params, smap.SPEC.hysteria2, out);
-    return out;
+	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
+			match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	if (!m) return null;
+	let password = url_decode(m[1]);
+	let host = safe_host(m[2]);
+	let port = safe_port(m[3]);
+	if (!length(password) || !host || !port) return null;
+	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
+	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+	let out = {
+		type: "hysteria2", server: host, server_port: port, password: password,
+		tag: safe_tag(length(frag) ? frag : host, url),
+		tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
+	};
+	h_obfs(params, out);
+	smap.apply_params(params, smap.SPEC.hysteria2, out);
+	return out;
 }
 
 // parse_tuic(url) — TUIC v5 share-link: tuic://<uuid>:<password>@host:port?params#name
