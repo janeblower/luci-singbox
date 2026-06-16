@@ -95,6 +95,10 @@ apk update && apk add luci-singbox-ui
 > `ip rule fwmark…` is found — check `logread -e singbox-ui`. See the Russian
 > section **«fwmark и `ip rule` для TPROXY»** below for details and how to use a
 > different mark bit.
+>
+> **Per-inbound override:** if a tproxy inbound has UCI `option fwmark` set, that
+> value overrides the global mark for that inbound's ruleset — the `ip rule` must
+> then use the per-inbound value, not the global one.
 
 ---
 
@@ -206,6 +210,10 @@ ip -6 route add local default dev lo table 100
 `mwan3` / `vpn-policy-routing`). После применения ruleset’а сервис пишет в
 syslog предупреждение, если подходящего `ip rule fwmark…` нет — проверяйте
 `logread -e singbox-ui` после включения tproxy-inbound.
+
+**Переопределение на уровне inbound:** если у tproxy-inbound выставлена UCI-опция
+`option fwmark`, она переопределяет глобальную метку для этого inbound-а — в
+этом случае `ip rule` должен использовать именно это значение, а не глобальное.
 
 Другой бит метки (например, если `0xff00` занят mwan3):
 
