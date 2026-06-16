@@ -72,8 +72,20 @@ const uci = {
 				{ '.name': 'rule_default', type: 'default' },
 				{ '.name': 'rule_logical', type: 'logical' },
 			];
+		if (config === 'singbox-ui' && type === 'inbound')
+			return [
+				{ '.name': 'tp1', enabled: '1', protocol: 'tproxy', nft_rules: '1' },
+				{ '.name': 'tp2', enabled: '1', protocol: 'tproxy' },
+			];
 		return [];
 	},
+	get: function (config, sid, opt) {
+		var rows = uci.sections('singbox-ui', 'inbound');
+		var row = rows.filter(function (r) { return r['.name'] === sid; })[0];
+		return row ? row[opt] : undefined;
+	},
+	_setCalls: [],
+	set: function (config, sid, opt, val) { uci._setCalls.push([sid, opt, val]); },
 };
 
 // SbViewState + SbCommon shims (require lines are stripped by the harness regex;
@@ -361,6 +373,36 @@ function test3() {
 	else fail('min_version gate skip', 'future_field should be skipped on 1.12 core');
 	if (cf7b) pass('min_version gate: 1.12 core, min_version 1.12 → field rendered');
 	else fail('min_version gate compat', 'compat_field with matching version should render');
+}
+
+// ---------------------------------------------------------------------------
+// 8. exclusive bool flag: second tproxy section is gated off; only the first
+//    owner may persist "1".
+// ---------------------------------------------------------------------------
+{
+	const { s, opts } = makeSection();
+	applyMaterialized(s, 'inbound', 'tproxy', {
+		tabs: ['basic'],
+		fields: [{ name: 'nft_rules', type: 'bool', tab: 'basic', exclusive: true }],
+	});
+	const o = findOpt(opts, 'nft_rules');
+	if (o && typeof o._exclusiveOwner === 'function') pass('exclusive: owner helper attached');
+	else fail('exclusive owner helper', 'missing _exclusiveOwner');
+
+	if (o && o._exclusiveOwner('tp2') === 'tp1') pass('exclusive: tp1 owns nft rules');
+	else fail('exclusive owner', 'expected tp1, got ' + (o && o._exclusiveOwner && o._exclusiveOwner('tp2')));
+
+	uci._setCalls = [];
+	o.write('tp2', '1');
+	const w2 = uci._setCalls.filter(function (c) { return c[0] === 'tp2'; })[0];
+	if (w2 && w2[2] === '0') pass('exclusive: non-owner write forced to 0');
+	else fail('exclusive non-owner write', JSON.stringify(uci._setCalls));
+
+	uci._setCalls = [];
+	o.write('tp1', '1');
+	const w1 = uci._setCalls.filter(function (c) { return c[0] === 'tp1'; })[0];
+	if (w1 && w1[2] === '1') pass('exclusive: owner write keeps 1');
+	else fail('exclusive owner write', JSON.stringify(uci._setCalls));
 }
 
 test3().then(function () {
