@@ -28,8 +28,8 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:10
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:114
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:304
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:328
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:308
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:332
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr ""
@@ -878,7 +878,7 @@ msgstr ""
 msgid "never updated"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:221
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:225
 #, javascript-format
 msgid "nftables rules already active on inbound \"%s\""
 msgstr ""
