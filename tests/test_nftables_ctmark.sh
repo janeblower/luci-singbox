@@ -48,7 +48,7 @@ echo "$out" | awk '
 ' | grep -q 'socket transparent 1' || { echo FAIL fast-path not first; exit 1; }
 
 echo "-- t_ct_mark_or_assignment"
-n=$(echo "$out" | grep -c 'ct mark set ct mark or 0x1')
+n=$(echo "$out" | grep -c 'ct mark set ct mark or 0x40000000')
 # Baseline emit (no ruleset files): fakeip4 + fakeip6 = 2 decisions.
 [ "$n" -ge 2 ] || { echo "FAIL: expected >=2 ct mark or decisions, got $n"; exit 1; }
 # No decision rule (line containing 'ct state new') may write meta mark.
@@ -61,9 +61,9 @@ n=$(echo "$out" | grep -c '^[[:space:]]*meta mark set ct mark$')
 [ "$n" -eq 2 ] || { echo "FAIL: expected exactly 2 mark-restore lines, got $n"; exit 1; }
 
 echo "-- t_tproxy_uses_and_mask"
-echo "$out" | grep -q 'meta mark and 0x1 == 0x1' || { echo FAIL and-mask; exit 1; }
-# Exact-equality match (the old form): 'meta mark 0x1' followed immediately by meta l4proto.
-echo "$out" | grep -q 'meta mark 0x1 meta l4proto' && { echo FAIL: exact equality still present; exit 1; }
+echo "$out" | grep -q 'meta mark and 0x40000000 == 0x40000000' || { echo FAIL and-mask; exit 1; }
+# Exact-equality match (the old form): 'meta mark 0x40000000' followed immediately by meta l4proto.
+echo "$out" | grep -q 'meta mark 0x40000000 meta l4proto' && { echo FAIL: exact equality still present; exit 1; }
 :
 
 echo "-- t_custom_fwmark_propagates"
@@ -89,8 +89,8 @@ echo "$out4" | grep -q 'chain output {' \
 
 echo "-- t_invalid_fwmark_falls_back"
 out5=$(emit 7895 198.18.0.0/15 fc00::/18 br-lan xyz 0 0 2>&1)
-echo "$out5" | grep -q 'ct mark set ct mark or 0x1' \
-	|| { echo FAIL fallback not 0x1; exit 1; }
+echo "$out5" | grep -q 'ct mark set ct mark or 0x40000000' \
+	|| { echo FAIL fallback not default; exit 1; }
 
 echo "-- t_rs_rule_uses_ct_mark — regression guard for the original bug"
 # Drop a rs_*.json with one v4 CIDR; assert the emitted decision rule

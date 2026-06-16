@@ -346,14 +346,14 @@ function safe_fwmark(v, fallback) {
 }
 
 // fwmark_pair(mark, mask) — enforce the invariant (mark & mask) == mark;
-// log and fall back to the default 0x1/0x1 if violated. Returns a list
-// [mark, mask] of validated values.
+// log and fall back to the default 0x40000000/0x40000000 if violated. Returns
+// a list [mark, mask] of validated values.
 function fwmark_pair(mark_raw, mask_raw) {
-	let mark = safe_fwmark(mark_raw, 0x1);
-	let mask = safe_fwmark(mask_raw, 0x1);
+	let mark = safe_fwmark(mark_raw, 0x40000000);
+	let mask = safe_fwmark(mask_raw, 0x40000000);
 	if ((mark & mask) !== mark) {
-		log_err(sprintf("nftables: fwmark 0x%x outside fwmark_mask 0x%x; falling back to 0x1/0x1", mark, mask));
-		return [0x1, 0x1];
+		log_err(sprintf("nftables: fwmark 0x%x outside fwmark_mask 0x%x; falling back to 0x40000000", mark, mask));
+		return [0x40000000, 0x40000000];
 	}
 	return [mark, mask];
 }
@@ -450,8 +450,8 @@ function emit_output_chain(buf, rules, mark, v4, v6) {
 
 function build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules) {
 	// Defensive defaults so old callers (e.g., legacy tests) keep working.
-	if (mark == null) mark = 0x1;
-	if (mask == null) mask = 0x1;
+	if (mark == null) mark = 0x40000000;
+	if (mask == null) mask = 0x40000000;
 	if (router_out == null) router_out = 0;
 
 	ifaces = filter_ifaces(ifaces);
@@ -769,7 +769,7 @@ function _cmd_apply_locked(cur) {
 	let rules = load_rs_rules();
 
 	// UCI-driven mark/mask + output-chain toggle. Defaults match the
-	// historical behaviour (mark=0x1, mask=0x1, no output chain) so existing
+	// historical behaviour (mark=0x40000000, mask=0x40000000, no output chain) so existing
 	// installs without the new options keep working.
 	let glob = null;
 	cur.foreach("singbox-ui", "global", function(s) { if (!glob) glob = s; });
