@@ -552,6 +552,9 @@ function any_nft_transparent(cur) {
 }
 
 // first_fakeip(cur) — ranges of the first enabled dns_server with type=fakeip.
+// A fakeip server with nft_rules="0" opts out of nft redirect: it contributes
+// no ranges, so no fakeip4/fakeip6 decision rule is emitted. Unset (default)
+// keeps the historical "always redirect fakeip" behaviour.
 function first_fakeip(cur) {
 	let r = { v4: "", v6: "" };
 	let found = false;
@@ -560,6 +563,7 @@ function first_fakeip(cur) {
 		if (s.enabled === "0") return;
 		if (s.type !== "fakeip") return;
 		found = true;
+		if (s.nft_rules === "0") return;
 		r.v4 = s.inet4_range ?? "";
 		r.v6 = s.inet6_range ?? "";
 	});
@@ -732,6 +736,47 @@ function ip_rule_smoke_check(mark, mask) {
 		want));
 }
 
+// gather_apply_params(cur) — collect everything _cmd_apply_locked needs from
+// UCI into one struct, so the decision logic (which tproxy owns the rules,
+// which mark, which fakeip ranges) is unit-testable on the host via the
+// `params` CLI without running `nft -f`. Per-inbound fwmark wins over the
+// global; the global stays the back-compat fallback (and is what the
+// operator's `ip rule` is keyed on). When the mark comes from the inbound,
+// mask is derived = mark so (mark & mask) == mark always holds.
+function gather_apply_params(cur) {
+	let tp = first_nft_tproxy(cur);
+
+	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : "7893";
+	let ifaces = tp ? helpers.as_array(tp.interface) : [];
+	if (!length(ifaces)) ifaces = [ "br-lan" ];
+
+	let fip = first_fakeip(cur);
+
+	let glob = null;
+	cur.foreach("singbox-ui", "global", function(s) { if (!glob) glob = s; });
+
+	let mark_raw, mask_raw;
+	if (tp && tp.fwmark != null && tp.fwmark !== "") {
+		mark_raw = tp.fwmark;
+		mask_raw = tp.fwmark;
+	} else {
+		mark_raw = glob ? glob.fwmark      : null;
+		mask_raw = glob ? glob.fwmark_mask : null;
+	}
+	let mp = fwmark_pair(mark_raw, mask_raw);
+	let routerout_raw = glob ? glob.redirect_router_traffic : null;
+
+	return {
+		transparent:  any_nft_transparent(cur) ? 1 : 0,
+		tproxy_count: count_nft_tproxy(cur),
+		port: port,
+		ifaces: ifaces,
+		v4: fip.v4, v6: fip.v6,
+		mark: mp[0], mask: mp[1],
+		router_out: (routerout_raw === "1" || routerout_raw === 1) ? 1 : 0,
+	};
+}
+
 // _cmd_apply_locked(cur) — the real apply body. Every return path here
 // (S1-2 invalid-port guard, table-removed, tmp-alloc/open failure, nft -f
 // failure, success) is reached *inside* the lock held by the cmd_apply
@@ -739,54 +784,40 @@ function ip_rule_smoke_check(mark, mask) {
 // so no early return can leak the lock. Defined before cmd_apply because
 // ucode does not hoist function declarations.
 function _cmd_apply_locked(cur) {
-	// G3: warn if more than one enabled tproxy inbound asks for nft
-	// rules — only the first contributes to the tproxy chain, any
-	// extras silently lose TPROXY traffic. We don't drop the extras
-	// (sing-box still binds their ports); the warning surfaces the
-	// inconsistency to the operator.
-	let n_tp = count_nft_tproxy(cur);
-	if (n_tp > 1) {
-		log_err(sprintf("nftables: %d enabled tproxy inbounds with nft_rules set; using only the first — multiple enabled tproxy inbounds are unsupported", n_tp));
+	let p = gather_apply_params(cur);
+
+	// Transparent gate: when no tproxy/tun inbound owns nft rules there is no
+	// table to build — drop any stale table and return success. This is what
+	// makes the fakeip and rule-set nft checkboxes no-ops when tproxy nft is
+	// off: their sets only ever live inside this table.
+	if (!p.transparent) {
+		nft_delete_table_quiet();
+		return 0;
 	}
 
-	let tp = first_nft_tproxy(cur);
-	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : "7893";
-	// S1-2: an invalid tproxy listen_port would make build_ruleset skip
-	// the tproxy block while still emitting the marking rules — packets
-	// get fwmarked but never redirected (silent blackhole). Surface it as
-	// an apply failure so the rpcd caller / operator sees it, instead of a
-	// 0 exit that looks like success.
-	if (validate_port(port) == null) {
-		log_err(sprintf("nftables: invalid tproxy listen_port %s (need int 1..65535); refusing to apply a marking-only ruleset", port));
+	// More than one tproxy inbound requests the chain: it points at the first
+	// one's port only, so any extras silently lose TPROXY traffic.
+	if (p.tproxy_count > 1) {
+		log_err(sprintf("nftables: %d enabled tproxy inbounds with nft_rules set; using only the first — multiple enabled tproxy inbounds are unsupported", p.tproxy_count));
+	}
+
+	// S1-2: an invalid tproxy listen_port would make build_ruleset skip the
+	// tproxy block while still emitting marking rules — a silent blackhole.
+	// Surface it as an apply failure instead of a 0 exit that looks like success.
+	if (validate_port(p.port) == null) {
+		log_err(sprintf("nftables: invalid tproxy listen_port %s (need int 1..65535); refusing to apply a marking-only ruleset", p.port));
 		return 1;
 	}
-	let ifaces = tp ? helpers.as_array(tp.interface) : [];
-	if (!length(ifaces)) ifaces = [ "br-lan" ];
 
-	let fip = first_fakeip(cur);
-	let v4 = fip.v4;
-	let v6 = fip.v6;
 	let rules = load_rs_rules();
 
-	// UCI-driven mark/mask + output-chain toggle. Defaults match the
-	// historical behaviour (mark=0x40000000, mask=0x40000000, no output chain) so existing
-	// installs without the new options keep working.
-	let glob = null;
-	cur.foreach("singbox-ui", "global", function(s) { if (!glob) glob = s; });
-	let mark_raw = glob ? glob.fwmark        : null;
-	let mask_raw = glob ? glob.fwmark_mask   : null;
-	let routerout_raw = glob ? glob.redirect_router_traffic : null;
-	let mp = fwmark_pair(mark_raw, mask_raw);
-	let mark = mp[0]; let mask = mp[1];
-	let router_out = (routerout_raw === "1" || routerout_raw === 1) ? 1 : 0;
-
-	if (v4 === "" && v6 === "" && !length(rules)) {
+	if (p.v4 === "" && p.v6 === "" && !length(rules)) {
 		nft_delete_table_quiet();
 		log_err("nftables: no fakeip ranges and no ruleset rules; table removed");
 		return 0;
 	}
 
-	let ruleset = build_ruleset(port, v4, v6, ifaces, mark, mask, router_out, rules);
+	let ruleset = build_ruleset(p.port, p.v4, p.v6, p.ifaces, p.mark, p.mask, p.router_out, rules);
 
 	// G6: tmp file path composed on the ucode side — no shell, no mktemp.
 	let tmp = make_nft_tmp();
@@ -829,7 +860,7 @@ function _cmd_apply_locked(cur) {
 	}
 	// Best-effort smoke check: warn (don't fail) when the host has no
 	// `ip rule` matching the fwmark/mask we baked into the ruleset.
-	ip_rule_smoke_check(mark, mask);
+	ip_rule_smoke_check(p.mark, p.mask);
 	return 0;
 }
 
@@ -871,6 +902,15 @@ case "remove": cmd_remove();   break;
 case "needed":
 	print(any_nft_transparent(cur) ? "1\n" : "0\n");
 	break;
+// `params` — read-only debug/test seam: print gathered apply parameters as
+// JSON (mark/mask in hex) without running `nft -f`. Used by host tests to
+// drive UCI fixtures through gather_apply_params(). Not wired to rpcd/ACL.
+case "params": {
+	let p = gather_apply_params(cur);
+	printf("{\"transparent\":%d,\"tproxy_count\":%d,\"port\":\"%s\",\"v4\":\"%s\",\"v6\":\"%s\",\"mark\":\"0x%x\",\"mask\":\"0x%x\",\"router_out\":%d}\n",
+		p.transparent, p.tproxy_count, p.port, p.v4, p.v6, p.mark, p.mask, p.router_out);
+	break;
+}
 case "emit":
 	// PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]
 	if (length(argv) < 5 || length(argv) > 8) {
@@ -883,6 +923,6 @@ case "emit":
 		length(argv) > 7 ? argv[7] : null);
 	break;
 default:
-	log_err("Usage: nftables.uc {apply|remove|needed|emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]}");
+	log_err("Usage: nftables.uc {apply|remove|needed|params|emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]}");
 	exit(2);
 }
