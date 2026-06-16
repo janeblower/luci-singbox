@@ -18,9 +18,9 @@ if ! uci -q get singbox-ui.@global[0] >/dev/null; then
     uci commit singbox-ui
 fi
 uci -q get singbox-ui.@global[0].fwmark >/dev/null || \
-    uci set singbox-ui.@global[0].fwmark='0x1'
+    uci set singbox-ui.@global[0].fwmark='0x40000000'
 uci -q get singbox-ui.@global[0].fwmark_mask >/dev/null || \
-    uci set singbox-ui.@global[0].fwmark_mask='0x1'
+    uci set singbox-ui.@global[0].fwmark_mask='0x40000000'
 uci -q get singbox-ui.@global[0].redirect_router_traffic >/dev/null || \
     uci set singbox-ui.@global[0].redirect_router_traffic='0'
 uci commit singbox-ui

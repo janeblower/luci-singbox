@@ -48,12 +48,12 @@ echo "$out" | awk '/chain prerouting \{/{flag=1; next} flag && /^\t\t[a-zA-Z]/ &
 
 echo "-- emit: rs_* and fakeip decision rules write ct mark, not meta mark"
 echo "$out" | grep 'ct state new' | grep -q 'meta mark set' && { echo "FAIL: decision uses meta mark"; exit 1; }
-echo "$out" | grep -q 'ct mark set ct mark or 0x1' || { echo "FAIL: no ct mark set"; exit 1; }
+echo "$out" | grep -q 'ct mark set ct mark or 0x40000000' || { echo "FAIL: no ct mark set"; exit 1; }
 :
 
 echo "-- emit: TPROXY uses AND-mask (not exact equality)"
-echo "$out" | grep -q 'meta mark and 0x1 == 0x1' || { echo "FAIL: not AND-mask"; exit 1; }
-echo "$out" | grep 'tproxy' | grep -q '^.*meta mark 0x1 meta l4proto' && { echo "FAIL: exact equality still present"; exit 1; }
+echo "$out" | grep -q 'meta mark and 0x40000000 == 0x40000000' || { echo "FAIL: not AND-mask"; exit 1; }
+echo "$out" | grep 'tproxy' | grep -q '^.*meta mark 0x40000000 meta l4proto' && { echo "FAIL: exact equality still present"; exit 1; }
 :
 
 echo "-- emit: tproxy targets present for tcp+udp, v4+v6, on the configured port (whitespace-agnostic)"
@@ -119,7 +119,7 @@ echo "$out" | grep -q "1.2.3.0/24"                       || { echo "FAIL: missin
 echo "$out" | grep -q "4.5.6.0/16"                       || { echo "FAIL: missing second cidr"; exit 1; }
 echo "$out" | grep -q "ip daddr @rs_test_basic_0_v4"     || { echo "FAIL: missing marking rule"; echo "$out"; exit 1; }
 echo "$out" | grep -q "meta l4proto { tcp, udp }"        || { echo "FAIL: missing l4proto (no network)"; exit 1; }
-echo "$out" | grep -q "ct mark set ct mark or 0x1"       || { echo "FAIL: missing ct mark set"; exit 1; }
+echo "$out" | grep -q "ct mark set ct mark or 0x40000000"       || { echo "FAIL: missing ct mark set"; exit 1; }
 echo "$out" | grep -q "ct state new"                     || { echo "FAIL: missing ct state new"; exit 1; }
 echo "$out" | grep -q "198.18.0.0/15"                    || { echo "FAIL: fakeip v4 rule missing alongside nfset"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_basic.json
@@ -152,7 +152,7 @@ cat >/tmp/singbox-ui/rs_test_port.json <<'JSON'
 JSON
 # shellcheck disable=SC2086
 out=$("$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7893 "198.18.0.0/15" "" "br-lan")
-echo "$out" | grep -q "ip daddr @rs_test_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new ct mark set ct mark or 0x1" \
+echo "$out" | grep -q "ip daddr @rs_test_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new ct mark set ct mark or 0x40000000" \
 	|| { echo "FAIL: missing tcp+port_range marking rule"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_port.json
 
@@ -173,7 +173,7 @@ echo "$out" | grep -q "set rs_test_scalar_0_v4" \
 	|| { echo "FAIL: scalar ip_cidr — set not emitted"; echo "$out"; exit 1; }
 echo "$out" | grep -Eq "elements = \{ 104\.16\.0\.0/12 \}" \
 	|| { echo "FAIL: scalar ip_cidr — element body wrong"; echo "$out"; exit 1; }
-echo "$out" | grep -q "ip daddr @rs_test_scalar_0_v4 meta l4proto udp udp dport 19000-20000 ct state new ct mark set ct mark or 0x1" \
+echo "$out" | grep -q "ip daddr @rs_test_scalar_0_v4 meta l4proto udp udp dport 19000-20000 ct state new ct mark set ct mark or 0x40000000" \
 	|| { echo "FAIL: scalar port_range — marking rule wrong"; echo "$out"; exit 1; }
 rm -f /tmp/singbox-ui/rs_test_scalar.json
 
@@ -266,7 +266,7 @@ echo "-- emit: extra fwmark/fwmask/router_out argv accepted (defaults applied wh
 "$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7895 198.18.0.0/15 fc00::/18 br-lan \
 	>/tmp/emit-default.nft
 # shellcheck disable=SC2086
-"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7895 198.18.0.0/15 fc00::/18 br-lan 0x1 0x1 0 \
+"$UCODE_BIN" $UCODE_LIB_FLAGS "$SCRIPT" emit 7895 198.18.0.0/15 fc00::/18 br-lan 0x40000000 0x40000000 0 \
 	>/tmp/emit-explicit.nft
 if ! cmp -s /tmp/emit-default.nft /tmp/emit-explicit.nft; then
 	echo "FAIL: default emit differs from explicit-default emit"

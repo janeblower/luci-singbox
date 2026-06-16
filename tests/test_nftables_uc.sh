@@ -49,7 +49,7 @@ JSON
 out=$(emit)
 echo "$out" | grep -q "set rs_uctest_scalar_0_v4" || fail "scalar: set missing"
 echo "$out" | grep -Eq "elements = \{ 104\.16\.0\.0/12 \}" || fail "scalar: element body wrong"
-echo "$out" | grep -q "ip daddr @rs_uctest_scalar_0_v4 meta l4proto { tcp, udp } ct state new ct mark set ct mark or 0x1" \
+echo "$out" | grep -q "ip daddr @rs_uctest_scalar_0_v4 meta l4proto { tcp, udp } ct state new ct mark set ct mark or 0x40000000" \
 	|| fail "scalar: marking rule wrong"
 rm /tmp/singbox-ui/rs_uctest_scalar.json
 pass "scalar ip_cidr"
@@ -74,7 +74,7 @@ cat >/tmp/singbox-ui/rs_uctest_port.json <<'JSON'
 { "rules": [ { "ip_cidr": "10.0.0.0/8", "network": "tcp", "port_range": "80:443" } ] }
 JSON
 out=$(emit)
-echo "$out" | grep -q "ip daddr @rs_uctest_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new ct mark set ct mark or 0x1" \
+echo "$out" | grep -q "ip daddr @rs_uctest_port_0_v4 meta l4proto tcp tcp dport 80-443 ct state new ct mark set ct mark or 0x40000000" \
 	|| { echo "$out"; fail "port: marking rule wrong"; }
 rm /tmp/singbox-ui/rs_uctest_port.json
 pass "tcp + scalar port_range"

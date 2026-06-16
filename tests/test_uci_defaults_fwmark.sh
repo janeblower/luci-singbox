@@ -20,16 +20,16 @@ uci() { command uci -c "$UCI_DIR" "$@"; }
 
 echo "-- first run seeds three defaults"
 sh "$SCRIPT"
-[ "$(uci get singbox-ui.@global[0].fwmark)" = "0x1" ] \
+[ "$(uci get singbox-ui.@global[0].fwmark)" = "0x40000000" ] \
 	|| { echo FAIL fwmark; exit 1; }
-[ "$(uci get singbox-ui.@global[0].fwmark_mask)" = "0x1" ] \
+[ "$(uci get singbox-ui.@global[0].fwmark_mask)" = "0x40000000" ] \
 	|| { echo FAIL fwmask; exit 1; }
 [ "$(uci get singbox-ui.@global[0].redirect_router_traffic)" = "0" ] \
 	|| { echo FAIL router_out; exit 1; }
 
 echo "-- second run is idempotent (no value change)"
 sh "$SCRIPT"
-[ "$(uci get singbox-ui.@global[0].fwmark)" = "0x1" ] \
+[ "$(uci get singbox-ui.@global[0].fwmark)" = "0x40000000" ] \
 	|| { echo FAIL fwmark; exit 1; }
 
 echo "-- does not overwrite user-set values"

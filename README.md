@@ -79,15 +79,15 @@ apk update && apk add luci-singbox-ui
 > Only `apk` is supported; there is no `opkg`/`.ipk` build.
 
 > ⚠️ **TPROXY requires an `ip rule` you must add yourself.** The ruleset marks
-> packets with `fwmark` (default `0x1/0x1`, UCI options
+> packets with `fwmark` (default `0x40000000/0x40000000`, UCI options
 > `singbox-ui.@global[0].fwmark` / `fwmark_mask`), but the package does **not**
 > install the policy route that delivers them to the local TPROXY socket. Add,
 > for both families:
 >
 > ```sh
-> ip -4 rule add fwmark 0x1/0x1 lookup 100
+> ip -4 rule add fwmark 0x40000000/0x40000000 lookup 100
 > ip -4 route add local default dev lo table 100
-> ip -6 rule add fwmark 0x1/0x1 lookup 100
+> ip -6 rule add fwmark 0x40000000/0x40000000 lookup 100
 > ip -6 route add local default dev lo table 100
 > ```
 >
@@ -189,15 +189,15 @@ apk del firewall   # только если fw3 больше никому не н
 
 Ruleset помечает пакеты, которые должен перехватить TPROXY-сокет sing-box.
 Значение метки берётся из UCI-опций `singbox-ui.@global[0].fwmark` /
-`fwmark_mask` (по умолчанию `0x1` / `0x1`).
+`fwmark_mask` (по умолчанию `0x40000000` / `0x40000000`).
 
 Чтобы помеченные пакеты дошли до локального сокета, ядру нужны `ip rule` и
 таблица маршрутизации:
 
 ```sh
-ip -4 rule add fwmark 0x1/0x1 lookup 100
+ip -4 rule add fwmark 0x40000000/0x40000000 lookup 100
 ip -4 route add local default dev lo table 100
-ip -6 rule add fwmark 0x1/0x1 lookup 100
+ip -6 rule add fwmark 0x40000000/0x40000000 lookup 100
 ip -6 route add local default dev lo table 100
 ```
 
@@ -217,7 +217,7 @@ uci commit singbox-ui
 ```
 
 После этого поправьте `ip rule`. Инвариант, который проверяет валидатор:
-`(fwmark & fwmark_mask) == fwmark`; при нарушении — откат к `0x1 / 0x1`
+`(fwmark & fwmark_mask) == fwmark`; при нарушении — откат к `0x40000000 / 0x40000000`
 с записью в лог.
 
 ## Перенаправление трафика самого роутера
