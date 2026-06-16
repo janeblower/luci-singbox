@@ -27,7 +27,17 @@ reg.register({
         { name: "interface", type: "list", tab: "basic",
           ui_label: "Interfaces to redirect (nftables)", dynamic: "devices" },
         { name: "nft_rules", type: "bool", tab: "basic",
-          ui_label: "Install nftables redirect rules", default: 1 },
+          ui_label: "Install nftables redirect rules", default: 1,
+          // Exclusive: only one enabled tproxy inbound may own the transparent
+          // table (single mark, single ip rule). descriptor_form forces the
+          // flag off + readonly on any further section and names the owner.
+          exclusive: true },
+        { name: "fwmark", type: "string", tab: "basic",
+          ui_label: "Firewall mark (fwmark)", default: "0x40000000",
+          // UI/UCI-only (no json_key) — consumed by nftables.uc. Shown only
+          // when this inbound owns the nft rules. Backend safe_fwmark validates
+          // and falls back to the default on a malformed value.
+          depends: { field: "nft_rules", value: "1" } },
         { name: "hijack_dns", type: "bool", tab: "basic",
           ui_label: "Hijack DNS via nftables", default: 0 },
     ],
