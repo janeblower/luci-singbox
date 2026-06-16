@@ -184,6 +184,47 @@ function makeVirtual(opt) {
     };
 }
 
+// Exclusive bool flag: only one enabled section of the same protocol may have
+// this flag set. If another section already owns it, this section's flag is
+// forced off + disabled in the UI (with a comment naming the owner) and can
+// never persist "1". Generic — driven by the field's `exclusive` property.
+function makeExclusive(opt, fieldName, discrKey) {
+    function ownerOf(section_id) {
+        var proto = uci.get('singbox-ui', section_id, discrKey);
+        var first = null;
+        uci.sections('singbox-ui', 'inbound').forEach(function (s) {
+            if (first) return;
+            if (s.enabled === '0') return;
+            if (s[discrKey] !== proto) return;
+            if (s[fieldName] !== '1') return;
+            first = s['.name'];
+        });
+        return first;
+    }
+    opt._exclusiveOwner = ownerOf;  // exposed for unit tests
+    var origWrite = opt.write;
+    opt.write = function (section_id, value) {
+        var first = ownerOf(section_id);
+        if (first != null && first !== section_id) value = '0';
+        if (typeof origWrite === 'function') return origWrite.call(this, section_id, value);
+        return uci.set('singbox-ui', section_id, fieldName, value);
+    };
+    var origRender = opt.renderWidget;
+    if (typeof origRender === 'function') {
+        opt.renderWidget = function (section_id, option_index, cfgvalue) {
+            var first = ownerOf(section_id);
+            var owned = (first != null && first !== section_id);
+            var node = origRender.call(this, section_id, option_index, owned ? '0' : cfgvalue);
+            if (owned && node && node.querySelectorAll) {
+                node.querySelectorAll('input, select').forEach(function (el) { el.disabled = true; });
+                node.appendChild(E('div', { 'class': 'cbi-value-description' },
+                    _('nftables rules already active on inbound "%s"').format(first)));
+            }
+            return node;
+        };
+    }
+}
+
 function applyMaterialized(s, kind, protoName, materialized) {
     if (!materialized || !Array.isArray(materialized.fields)) return;
     var discr = (kind === 'inbound') ? 'protocol' : 'type';
@@ -296,6 +337,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
         }
 
         if (f.virtual) makeVirtual(opt);
+        if (f.exclusive) makeExclusive(opt, f.name, discr);
 
         attachValidator(opt, f.validate);
         s._sbMatRegistry[key] = {
