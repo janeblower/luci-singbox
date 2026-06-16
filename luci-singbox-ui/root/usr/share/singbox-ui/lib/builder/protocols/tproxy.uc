@@ -37,6 +37,7 @@ reg.register({
           // UI/UCI-only (no json_key) — consumed by nftables.uc. Shown only
           // when this inbound owns the nft rules. Backend safe_fwmark validates
           // and falls back to the default on a malformed value.
+          ui_help: "Overrides the global mark for this inbound. The matching `ip rule` (policy route to the proxy table) must use THIS value.",
           depends: { field: "nft_rules", value: "1" } },
         { name: "hijack_dns", type: "bool", tab: "basic",
           ui_label: "Hijack DNS via nftables", default: 0 },

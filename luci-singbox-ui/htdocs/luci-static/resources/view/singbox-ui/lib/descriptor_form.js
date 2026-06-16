@@ -196,7 +196,11 @@ function makeExclusive(opt, fieldName, discrKey) {
             if (first) return;
             if (s.enabled === '0') return;
             if (s[discrKey] !== proto) return;
-            if (s[fieldName] !== '1') return;
+            // Treat unset (undefined/empty) as owner-qualifying — matches the
+            // backend's `nft_rules !== "0"` polarity in first_nft_tproxy /
+            // any_nft_transparent (descriptor default 1 is not written to UCI
+            // until the modal is saved for the first time).
+            if (s[fieldName] === '0') return;
             first = s['.name'];
         });
         return first;

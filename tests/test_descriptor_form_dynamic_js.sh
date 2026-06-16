@@ -405,6 +405,32 @@ function test3() {
 	else fail('exclusive owner write', JSON.stringify(uci._setCalls));
 }
 
+// ---------------------------------------------------------------------------
+// 9. exclusive owner polarity: an UNSET nft_rules on the first enabled section
+//    still qualifies as owner (matches backend `!== "0"`). If unset counted as
+//    "not owner", the UI would name tp2 as owner while nftables.uc picks tpA.
+// ---------------------------------------------------------------------------
+{
+	var _origSections = uci.sections;
+	uci.sections = function (config, type) {
+		if (config === 'singbox-ui' && type === 'inbound')
+			return [
+				{ '.name': 'tpA', enabled: '1', protocol: 'tproxy' },            // nft_rules UNSET
+				{ '.name': 'tpB', enabled: '1', protocol: 'tproxy', nft_rules: '1' },
+			];
+		return _origSections(config, type);
+	};
+	const { s, opts } = makeSection();
+	applyMaterialized(s, 'inbound', 'tproxy', {
+		tabs: ['basic'],
+		fields: [{ name: 'nft_rules', type: 'bool', tab: 'basic', exclusive: true }],
+	});
+	const oo = findOpt(opts, 'nft_rules');
+	if (oo && oo._exclusiveOwner('tpB') === 'tpA') pass('exclusive: unset first inbound qualifies as owner');
+	else fail('exclusive unset-owner', 'expected tpA, got ' + (oo && oo._exclusiveOwner && oo._exclusiveOwner('tpB')));
+	uci.sections = _origSections;
+}
+
 test3().then(function () {
 	if (failures) {
 		console.error('test_descriptor_form_dynamic_js: ' + failures + ' failure(s)');
