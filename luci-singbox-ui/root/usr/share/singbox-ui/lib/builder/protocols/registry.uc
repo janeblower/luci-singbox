@@ -8,7 +8,8 @@
 //     shared:        { tls?: {...}, transport?: {...}, multiplex?: {...}, dial?: true },
 //     fields:        [{ name, type, tab, required?, default?, validate?, secret?,
 //                       advanced?, depends?: {field,value}, parent_enabled?,
-//                       placeholder?, values?, item?, virtual?, min_version? }, ...],
+//                       placeholder?, values?, item?, virtual?,
+//                       min_version?, max_version? }, ...],
 //     emit:          function(section) -> sing-box JSON object,
 //     min_version:   "<major>.<minor>"  (per-type version gate; frontend hides
 //                    the type/field on an older core),
@@ -97,6 +98,14 @@ function validate_field(f, ctx) {
         assert(type(f.requires) === "string" ||
                (type(f.requires) === "object" && f.requires.field != null && f.requires.value != null),
                sprintf("%s.%s: requires must be a string or {field,value}", ctx, f.name));
+    function _ver_ok(v) {
+        // 2-part or 3-part dotted numeric, e.g. "1.13" / "1.13.0".
+        return type(v) === "string" && match(v, /^[0-9]+\.[0-9]+(\.[0-9]+)?$/) != null;
+    }
+    if (f.min_version != null)
+        assert(_ver_ok(f.min_version), sprintf("%s.%s: min_version must be X.Y[.Z]", ctx, f.name));
+    if (f.max_version != null)
+        assert(_ver_ok(f.max_version), sprintf("%s.%s: max_version must be X.Y[.Z]", ctx, f.name));
 }
 
 function validate_shared(shared, ctx) {
@@ -160,8 +169,9 @@ function register(descriptor) {
     assert(descriptor.kind != null,            "descriptor.kind required");
     assert(descriptor.kind === "inbound" || descriptor.kind === "outbound" ||
            descriptor.kind === "dns" || descriptor.kind === "route_rule" ||
-           descriptor.kind === "rule_set",
-        "descriptor.kind must be 'inbound', 'outbound', 'dns', 'route_rule', or 'rule_set'");
+           descriptor.kind === "rule_set" || descriptor.kind === "dns_rule" ||
+           descriptor.kind === "cache" || descriptor.kind === "clash_api",
+        "descriptor.kind must be one of inbound/outbound/dns/route_rule/rule_set/dns_rule/cache/clash_api");
     assert(descriptor.type != null,            "descriptor.type required");
     // A descriptor builds its JSON either via a hand-written emit() (legacy /
     // escape-hatch) or declaratively via fields[] consumed by builder._filler.
