@@ -55,6 +55,7 @@ root/usr/share/singbox-ui/lib/builder/dns/tailscale.uc	usr/share/singbox-ui/lib/
 root/usr/share/singbox-ui/lib/builder/dns/tcp.uc	usr/share/singbox-ui/lib/builder/dns/tcp.uc	data
 root/usr/share/singbox-ui/lib/builder/dns/tls.uc	usr/share/singbox-ui/lib/builder/dns/tls.uc	data
 root/usr/share/singbox-ui/lib/builder/dns/udp.uc	usr/share/singbox-ui/lib/builder/dns/udp.uc	data
+root/usr/share/singbox-ui/lib/builder/dns_rule/registry.uc	usr/share/singbox-ui/lib/builder/dns_rule/registry.uc	data
 root/usr/share/singbox-ui/lib/builder/protocols/anytls.uc	usr/share/singbox-ui/lib/builder/protocols/anytls.uc	data
 root/usr/share/singbox-ui/lib/builder/protocols/cloudflared.uc	usr/share/singbox-ui/lib/builder/protocols/cloudflared.uc	data
 root/usr/share/singbox-ui/lib/builder/protocols/direct.uc	usr/share/singbox-ui/lib/builder/protocols/direct.uc	data
@@ -84,6 +85,7 @@ root/usr/share/singbox-ui/lib/builder/route/registry.uc	usr/share/singbox-ui/lib
 root/usr/share/singbox-ui/lib/builder/route/ruleset_inline.uc	usr/share/singbox-ui/lib/builder/route/ruleset_inline.uc	data
 root/usr/share/singbox-ui/lib/builder/route/ruleset_local.uc	usr/share/singbox-ui/lib/builder/route/ruleset_local.uc	data
 root/usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc	usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc	data
+root/usr/share/singbox-ui/lib/builder/settings/registry.uc	usr/share/singbox-ui/lib/builder/settings/registry.uc	data
 root/usr/share/singbox-ui/lib/cache.uc	usr/share/singbox-ui/lib/cache.uc	data
 root/usr/share/singbox-ui/lib/clash.uc	usr/share/singbox-ui/lib/clash.uc	data
 root/usr/share/singbox-ui/lib/dns.uc	usr/share/singbox-ui/lib/dns.uc	data

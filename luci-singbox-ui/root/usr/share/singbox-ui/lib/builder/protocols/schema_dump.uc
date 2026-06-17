@@ -4,7 +4,7 @@ const FIELD_WHITELIST = [
     "name", "type", "tab", "required", "default", "validate",
     "ui_label", "ui_help", "secret", "values", "item", "dynamic",
     "advanced", "depends", "parent_enabled", "placeholder", "virtual",
-    "multiline", "min_version", "exclusive",
+    "multiline", "min_version", "max_version", "exclusive",
 ];
 
 function project_field(f) {
@@ -29,10 +29,15 @@ function project_materialized(m) {
 
 function dump_all() {
     let reg = require("builder.protocols.registry");
-    require("builder.dns.registry");     // ensure dns descriptors register
-    require("builder.route.registry");   // ensure route_rule/rule_set descriptors register
-    let out = { outbound: {}, inbound: {}, dns: {}, route_rule: {}, rule_set: {} };
-    for (let k in [ "outbound", "inbound", "dns", "route_rule", "rule_set" ])
+    require("builder.dns.registry");     // dns servers
+    require("builder.route.registry");   // route_rule / rule_set
+    require("builder.dns_rule.registry");// dns_rule (default/logical)
+    require("builder.settings.registry");// cache + clash_api singletons
+    let kinds = [ "outbound", "inbound", "dns", "route_rule", "rule_set",
+                  "dns_rule", "cache", "clash_api" ];
+    let out = {};
+    for (let k in kinds) out[k] = {};
+    for (let k in kinds)
         for (let proto in reg.types_for_kind(k)) {
             let m = reg.materialize(k, proto);
             if (m != null) out[k][proto] = project_materialized(m);
