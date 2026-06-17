@@ -1,1 +1,14 @@
-# stub
+# tests/parity/coverage_allowlist.txt
+# Declared json_keys that are deliberately NOT covered by a parity golden.
+# One leaf key (or emit-only:<kind>:<type>) per line. Inline '#' comments.
+# The parity-coverage guard (tests/backend/test_parity_coverage_guard.sh)
+# subtracts these. Add an entry ONLY with a concrete reason.
+
+# --- hysteria v1 deprecated fields removed in sing-box 1.14 ---
+disable_mtu_discovery   # max_version 1.14: removed; emitting it asserts pre-1.14 behavior we no longer target
+
+# --- legacy DNS server type (empty `type`), removed sing-box 1.14 ---
+# The dns `legacy` descriptor's type field is gated max_version 1.14; its
+# distinctive keys are shared with other dns types, so nothing unique to
+# allowlist here — kept as documentation that legacy is intentionally
+# fixture-free per the design spec (allowlist instead of fixtures).
