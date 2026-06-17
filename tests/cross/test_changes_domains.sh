@@ -95,4 +95,24 @@ grep -qE 'tests/lib/domain_classify\.sh' "$BY" || fail "changes job does not sou
 # push gating uses the before-SHA (not only PR base).
 grep -qE 'github\.event\.before' "$BY" || fail "changes job does not diff against the push before-SHA"
 
+# --- goal-e isolation matrix (documented) ---
+# | changed path                          | bbolt | backend | ui  | pkg |
+# |---------------------------------------|-------|---------|-----|-----|
+# | bbolt-client/src/main.rs              | true  | false   | F   | F   |
+# | singbox-ui/.../outbound.uc            | false | true    | F   | F   |
+# | luci-app-singbox-ui/.../main.js       | false | false   | T   | F   |
+# | scripts/build-apk.sh                  | false | false   | F   | T   |
+# | tests/lib/sb_helpers.sh (shared)      | true  | true    | T   | T   |
+matrix() { # files var1=want1 var2=want2 ...
+	_f="$1"; shift
+	for kv in "$@"; do
+		expect "$_f" "${kv%%=*}" "${kv#*=}"
+	done
+}
+matrix "bbolt-client/src/main.rs"                                            bbolt=true backend=false ui=false packaging=false
+matrix "singbox-ui/root/usr/share/singbox-ui/lib/outbound.uc"                bbolt=false backend=true ui=false packaging=false
+matrix "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js" bbolt=false backend=false ui=true packaging=false
+matrix "scripts/build-apk.sh"                                                bbolt=false backend=false ui=false packaging=true
+matrix "tests/lib/sb_helpers.sh"                                             bbolt=true backend=true ui=true packaging=true
+
 echo "OK"
