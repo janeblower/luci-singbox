@@ -50,7 +50,7 @@ function buildRouteRulesMap() {
 	// today, so it is a no-op — it future-proofs against a gated type being
 	// silently offered with no "(requires X+)" note and no validate rejection.
 	SbCommon.applyVersionGate(o,
-		(SbViewState.getSchema() || {}).route_rule || {}, SbViewState.getCoreVersion());
+		(SbViewState.getSchema() || {}).route_rule || {}, SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
 
 	// Read-only "Used by" badge column (grid only).
 	o = s.taboption('match', form.DummyValue, '_used_by', _('Used by'));
@@ -107,7 +107,7 @@ function buildRuleSetsMap() {
 
 	var rs = (SbViewState.getSchema() || {}).rule_set || {};
 	// INFO-1: version-gate the rule_set type selector (no-op today; symmetry).
-	SbCommon.applyVersionGate(o, rs, SbViewState.getCoreVersion());
+	SbCommon.applyVersionGate(o, rs, SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
 	RULE_SET_TYPES.forEach(function (kv) {
 		var mat = rs[kv[0]];
 		if (mat) descriptor_form.applyMaterialized(s, 'rule_set', kv[0], mat);

@@ -195,35 +195,38 @@ function compareVersions(a, b) {
 	return 0;
 }
 
-// applyVersionGate(o, schemaByType, coreVersion): for each <option> whose
-// protocol min_version is newer than coreVersion, disable it and suffix the
-// label with " (requires X.Y+)". Also reject a gated value on validate.
-function applyVersionGate(o, schemaByType, coreVersion) {
-	var gated = {};
+// applyVersionGate(o, schemaByType, coreVersion, compatOnly): for each <option>
+// whose type is out of the [min_version, max_version) window relative to
+// coreVersion: when compatOnly is OFF, disable it + suffix the label with
+// " (requires X.Y+)" or " (removed in X.Y)"; when ON, remove the option.
+function applyVersionGate(o, schemaByType, coreVersion, compatOnly) {
+	var gated = {};   // value -> note string
 	Object.keys(schemaByType || {}).forEach(function (k) {
-		var mv = schemaByType[k] && schemaByType[k].min_version;
-		if (mv && compareVersions(coreVersion, mv) < 0) {
-			var minor = mv.split('.').slice(0, 2).join('.');
-			gated[k] = minor;
-		}
+		var e = schemaByType[k] || {};
+		if (e.min_version && compareVersions(coreVersion, e.min_version) < 0)
+			gated[k] = '(' + _('requires') + ' ' + e.min_version.split('.').slice(0, 2).join('.') + '+)';
+		else if (e.max_version && compareVersions(coreVersion, e.max_version) > 0)
+			gated[k] = '(' + _('removed in') + ' ' + e.max_version.split('.').slice(0, 2).join('.') + ')';
 	});
 	var origRender = o.renderWidget;
 	o.renderWidget = function (section_id, option_index, cfgvalue) {
 		var node = origRender.call(this, section_id, option_index, cfgvalue);
 		var sel = (node.tagName === 'SELECT') ? node
 			: (node.querySelector && node.querySelector('select'));
-		if (sel) Array.prototype.forEach.call(sel.options, function (opt) {
-			if (gated[opt.value]) {
+		if (sel) {
+			var opts = Array.prototype.slice.call(sel.options);
+			opts.forEach(function (opt) {
+				if (!gated[opt.value]) return;
+				if (compatOnly) { if (opt.parentNode) opt.parentNode.removeChild(opt); return; }
 				opt.disabled = true;
-				if (opt.textContent.indexOf('(requires') < 0)
-					opt.textContent += ' (' + _('requires') + ' ' + gated[opt.value] + '+)';
-			}
-		});
+				if (opt.textContent.indexOf(gated[opt.value]) < 0)
+					opt.textContent += ' ' + gated[opt.value];
+			});
+		}
 		return node;
 	};
 	o.validate = function (_section_id, value) {
-		if (gated[value])
-			return _('Protocol requires sing-box') + ' ' + gated[value] + '+';
+		if (gated[value]) return _('Incompatible with installed sing-box') + ' ' + gated[value];
 		return true;
 	};
 }

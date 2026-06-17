@@ -66,7 +66,7 @@ function buildDnsMap() {
 	// inbounds/outbounds. No DNS type carries a min_version today, so this is a
 	// no-op now; it prevents a future silent gap where a gated DNS type would be
 	// offered with no "(requires X+)" note and no validate rejection.
-	SbCommon.applyVersionGate(o, dnsSchema, SbViewState.getCoreVersion());
+	SbCommon.applyVersionGate(o, dnsSchema, SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
 
 	// Descriptor-driven fields for all 14 DNS server types.
 	// applyMaterialized(s, 'dns', typeName, mat) gates every field from the
