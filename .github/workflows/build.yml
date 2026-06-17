@@ -436,6 +436,81 @@ jobs:
             bbolt-client/bbolt-client-rs-mips
           if-no-files-found: error
 
+  # Packaging/cross suite host-mode lane. The cross tests (feed index, i18n
+  # .lmo, install.sh, manifest, ACL) need REAL apk-tools 3.0.5+: test_build_feed
+  # builds fixtures with `apk mkpkg --info`, which the OpenWrt qemu VM's older
+  # apk-tools lacks (it SKIPs there). So this domain runs on the host, NOT in the
+  # VM (SB_DOMAIN=packaging is excluded from entrypoint.sh's VM domain set), and
+  # acquires apk from the same OpenWrt SDK the `build` job uses — the SDK ships a
+  # host `apk` (staging_dir/host/bin/apk) at apk-tools 3.0.5+ with `mkpkg --info`.
+  # Exported as SINGBOX_APK_BIN, which the cross tests honour (falling back to
+  # `command -v apk`). Gated on the packaging domain; never delegates to qemu.
+  packaging:
+    name: Packaging suite (host, apk-tools 3.0.5+)
+    runs-on: ubuntu-24.04
+    needs: [lint, changes]
+    if: ${{ needs.changes.outputs.packaging == 'true' || github.event_name != 'pull_request' }}
+    timeout-minutes: 20
+    env:
+      # Single source of the SDK version within this job (mirrors the `build`
+      # job): interpolated into both SDK_URL and the cache key so a bump can't
+      # leave the key matching a stale extract.
+      SDK_VERSION: 25.12.3
+      SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zstd wget
+
+      # Cache the extracted SDK so the host apk is available without a cold
+      # download every run. Shares no state with the `build` job's cache key
+      # (different path), but the same SDK tarball — restore-keys warm-starts.
+      - name: Cache OpenWrt SDK (host apk)
+        uses: actions/cache@v5
+        with:
+          path: .pkg-sdk
+          key: pkg-sdk-${{ env.SDK_VERSION }}-x86-64-v1
+          restore-keys: |
+            pkg-sdk-${{ env.SDK_VERSION }}-x86-64-
+
+      # Extract the SDK's host `apk` (apk-tools 3.0.5+, has `mkpkg --info`) and
+      # export its path. This is the SAME apk binary the `build` job uses via
+      # scripts/build-apk.sh ($SDK_DIR/staging_dir/host/bin/apk).
+      - name: Obtain apk-tools 3.0.5+ from the OpenWrt SDK
+        run: |
+          set -eu
+          SDK_DIR="$PWD/.pkg-sdk"
+          APK_BIN="$SDK_DIR/staging_dir/host/bin/apk"
+          if [ ! -x "$APK_BIN" ]; then
+            echo ">>> Downloading SDK: $SDK_URL"
+            wget -q -O sdk.tar.zst "$SDK_URL"
+            echo ">>> Extracting SDK"
+            rm -rf "$SDK_DIR"
+            mkdir -p "$SDK_DIR.tmp"
+            tar --zstd -xf sdk.tar.zst -C "$SDK_DIR.tmp"
+            root_dir="$(find "$SDK_DIR.tmp" -maxdepth 1 -mindepth 1 -type d | head -1)"
+            mv "$root_dir" "$SDK_DIR"
+            rm -rf "$SDK_DIR.tmp" sdk.tar.zst
+          fi
+          [ -x "$APK_BIN" ] || { echo "apk host tool missing at $APK_BIN" >&2; exit 1; }
+          "$APK_BIN" mkpkg --help 2>&1 | grep -q -- '--info' \
+            || { echo "SDK apk lacks 'mkpkg --info' (apk-tools too old)" >&2; exit 1; }
+          echo "SINGBOX_APK_BIN=$APK_BIN" >> "$GITHUB_ENV"
+
+      - name: Run packaging suite (host-mode, no VM)
+        env:
+          SB_SUITE: cross
+          SB_DOMAIN: packaging
+          # Bypass run.sh's auto-delegation to the qemu VM: this lane runs the
+          # cross suite directly on the host (ucode is absent here, so the few
+          # ucode-gated cross tests SKIP benignly — the feed/i18n/manifest/ACL
+          # assertions that need real apk-tools run on the host where apk lives).
+          SINGBOX_TESTS_IN_VM: '1'
+        run: sh tests/run.sh
+
   build:
     name: Build OpenWrt packages (apk)
     # Pinned (not floating ubuntu-latest): this job installs apt build-deps and
