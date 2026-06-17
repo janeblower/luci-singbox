@@ -1,7 +1,12 @@
 // 50-inbound-mixed.mjs — required-field + emit smoke for the `mixed` inbound.
+// This is the canonical inbound Add flow: open the grid's Add modal, pick a
+// protocol, fill required fields, Save, and assert the section emits into
+// preview_config — i.e. it genuinely exercises grid.inbound.add.
 import { runTest, openAddModal, setProtocolInModal, fillField,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
          assert, wait } from './_setup.mjs';
+
+export const COVERS = ["grid.inbound.add"];
 
 await runTest('inbound:mixed — required + emit', async ({ page }) => {
     await openAddModal(page, 'inbound', 'mixed_in');
