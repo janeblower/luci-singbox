@@ -56,20 +56,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Read OpenWrt version
+        id: ver
+        run: |
+          V=$(tr -d '[:space:]' < tests/docker/openwrt-version.txt)
+          [ -n "$V" ] || { echo "openwrt-version.txt empty"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "OpenWrt version: $V"
+
       - name: Compute tags
         id: tags
         run: |
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           REPO="ghcr.io/${OWNER}/luci-singbox/openwrt-test"
           SHA="${GITHUB_SHA::12}"
+          VER="${{ steps.ver.outputs.version }}"
           {
             echo "tags<<EOF"
-            echo "${REPO}:openwrt-25.12.3-${SHA}"
-            echo "${REPO}:openwrt-25.12.3"
+            echo "${REPO}:openwrt-${VER}-${SHA}"
+            echo "${REPO}:openwrt-${VER}"
             echo "${REPO}:latest"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
-          echo "primary=${REPO}:openwrt-25.12.3-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "primary=${REPO}:openwrt-${VER}-${SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build + push
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -83,6 +92,8 @@ jobs:
           # mode=max caches intermediate layers too (the rootfs download +
           # snapshot bake), not just the final image — the expensive bits.
           cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            OPENWRT_VERSION=${{ steps.ver.outputs.version }}
 
       # actions/cache can't atomically overwrite; the build writes to a new dir
       # and we swap it in (standard buildx-cache GHA dance) so the cache never
