@@ -71,6 +71,10 @@ function dynamicChoices(source) {
         return uci.sections('singbox-ui', 'route_rule')
             .filter(function (s) { return (s.type || 'default') === 'default'; })
             .map(function (s) { return [s['.name'], s['.name']]; });
+    if (source === 'dns_rules')
+        return uci.sections('singbox-ui', 'dns_rule')
+            .filter(function (s) { return (s.type || 'default') === 'default'; })
+            .map(function (s) { return [s['.name'], s['.name']]; });
     return [];
 }
 
