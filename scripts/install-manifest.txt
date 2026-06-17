@@ -56,6 +56,9 @@ root/usr/share/singbox-ui/lib/builder/dns/tailscale.uc	usr/share/singbox-ui/lib/
 root/usr/share/singbox-ui/lib/builder/dns/tcp.uc	usr/share/singbox-ui/lib/builder/dns/tcp.uc	data
 root/usr/share/singbox-ui/lib/builder/dns/tls.uc	usr/share/singbox-ui/lib/builder/dns/tls.uc	data
 root/usr/share/singbox-ui/lib/builder/dns/udp.uc	usr/share/singbox-ui/lib/builder/dns/udp.uc	data
+root/usr/share/singbox-ui/lib/builder/dns_rule/default.uc	usr/share/singbox-ui/lib/builder/dns_rule/default.uc	data
+root/usr/share/singbox-ui/lib/builder/dns_rule/headless.uc	usr/share/singbox-ui/lib/builder/dns_rule/headless.uc	data
+root/usr/share/singbox-ui/lib/builder/dns_rule/logical.uc	usr/share/singbox-ui/lib/builder/dns_rule/logical.uc	data
 root/usr/share/singbox-ui/lib/builder/dns_rule/registry.uc	usr/share/singbox-ui/lib/builder/dns_rule/registry.uc	data
 root/usr/share/singbox-ui/lib/builder/protocols/anytls.uc	usr/share/singbox-ui/lib/builder/protocols/anytls.uc	data
 root/usr/share/singbox-ui/lib/builder/protocols/cloudflared.uc	usr/share/singbox-ui/lib/builder/protocols/cloudflared.uc	data
