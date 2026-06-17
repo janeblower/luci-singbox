@@ -1,8 +1,12 @@
 #!/bin/sh
 # tests/backend/test_parity_coverage_guard.sh — hard gate: every declared
 # json_key (descriptor fields + groups + shared-block emit_spec + *_action
-# fields) and every emit-only descriptor must have golden coverage under
-# tests/parity/golden/. Minus the documented coverage_allowlist.txt.
+# fields, INCLUDING version-gated min/max_version fields read straight from the
+# raw registry) and every emit-only descriptor type must have golden coverage
+# under tests/parity/golden/. Minus the documented coverage_allowlist.txt.
+# NOTE: protocol descriptors (outbound/inbound) are NOT loaded by dump_all() —
+# they are eager-required below, mirroring outbound.uc / inbound.uc, so their
+# fields and emit-only types are actually enumerated (this was the blind spot).
 set -eu
 . "$(dirname "$0")/../lib/sb_helpers.sh"
 cd "$(dirname "$0")/../.."
@@ -14,7 +18,24 @@ out=$("$UCODE_BIN" -L tests/parity -L "$LIB" -e '
   let fs    = require("fs");
   let canon = require("canon").canon;
   let reg   = require("builder.protocols.registry");
-  require("builder.protocols.schema_dump").dump_all();  // eager-loads all registries
+  require("builder.protocols.schema_dump").dump_all();  // eager-loads dns/route/dns_rule/settings registries
+  // dump_all() does NOT load the protocol descriptors (outbound/inbound) —
+  // those are eager-required by outbound.uc / inbound.uc on the production
+  // path, not by schema_dump. Without this the guard enumerated ZERO protocol
+  // json_keys and ZERO emit-only protocol types, so every protocol field
+  // (including version-gated ones like hysteria.disable_mtu_discovery) and the
+  // json/sharelink emit-only types were silently exempt from coverage. Mirror
+  // both production require chains so types_for_kind("outbound"/"inbound") is
+  // fully populated before enumeration.
+  for (let _m in [
+      "builder.protocols.direct", "builder.protocols.shadowsocks", "builder.protocols.vless",
+      "builder.protocols.trojan", "builder.protocols.hysteria2", "builder.protocols.hysteria",
+      "builder.protocols.tuic", "builder.protocols.anytls", "builder.protocols.shadowtls",
+      "builder.protocols.json_raw", "builder.protocols.socks", "builder.protocols.http",
+      "builder.protocols.vmess", "builder.protocols.ssh", "builder.protocols.naive",
+      "builder.protocols.groups", "builder.protocols.tproxy", "builder.protocols.redirect",
+      "builder.protocols.mixed", "builder.protocols.cloudflared" ])
+    require(_m);
 
   // ---- 1. collect every declared json_key across all descriptors ----
   let declared = {};   // json_key leaf -> 1
@@ -79,6 +100,18 @@ out=$("$UCODE_BIN" -L tests/parity -L "$LIB" -e '
     collect(canon(j));
   }
 
+  // 2b. corpus fixtures keyed by exact "<kind>:<type>" whose golden exists.
+  // emit-only descriptors expose no declarative json_key, so the guard binds
+  // each to a parity fixture that the protocol-parity test actually BUILDS for
+  // that exact kind+type and deep-equals against a golden. This is stricter
+  // than a golden-filename prefix match (which would let an outbound:json
+  // golden satisfy inbound:json) — the kind+type must line up.
+  let corpus_kt = {};     // "<kind>:<type>" -> 1 (fixture present AND golden on disk)
+  let corpus = require("corpus");
+  for (let fx in (corpus || []))
+    if (golden_names[fx.name])
+      corpus_kt[sprintf("%s:%s", fx.kind, fx.type)] = 1;
+
   // ---- 3. allowlist ----
   let allow = {};
   let af = fs.open("tests/parity/coverage_allowlist.txt", "r");
@@ -97,13 +130,11 @@ out=$("$UCODE_BIN" -L tests/parity -L "$LIB" -e '
   let missing = [];
   for (let k in keys(declared))
     if (!present[k] && !allow[k]) push(missing, k);
-  // emit-only descriptors: require a golden whose name starts with the type
-  for (let kt in keys(emit_only)) {
-    let tp = split(kt, ":")[1];
-    let found = false;
-    for (let g in keys(golden_names)) if (index(g, tp) === 0) found = true;
-    if (!found && !allow[kt]) push(missing, sprintf("emit-only:%s", kt));
-  }
+  // emit-only descriptors: require a corpus fixture of the SAME kind+type whose
+  // golden exists on disk (so the parity test exercises it). allowlistable by
+  // the "<kind>:<type>" key if a fixture is structurally impossible.
+  for (let kt in keys(emit_only))
+    if (!corpus_kt[kt] && !allow[kt]) push(missing, sprintf("emit-only:%s", kt));
   if (length(missing)) {
     for (let k in sort(missing)) print(sprintf("UNCOVERED %s\n", k));
     print(sprintf("FAILS=%d\n", length(missing)));
