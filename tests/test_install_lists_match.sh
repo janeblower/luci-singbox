@@ -17,6 +17,7 @@
 #      the manifest (catches the "added a new file but forgot to ship
 #      it" footgun).
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 MANIFEST="scripts/install-manifest.txt"
@@ -71,7 +72,7 @@ tree_tmp=$(mktemp)
 missing_tmp=$(mktemp)
 trap 'rm -f "$listed_tmp" "$tree_tmp" "$missing_tmp"' EXIT
 
-find luci-singbox-ui/root luci-singbox-ui/htdocs -type f \
+find ${SB_BACKEND_ROOT} ${SB_UI_HTDOCS} -type f \
     | sed 's#^luci-singbox-ui/##' \
     | LC_ALL=C sort > "$tree_tmp"
 

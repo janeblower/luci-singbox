@@ -2,13 +2,14 @@
 # tests/test_json_import.sh — drives the JSON-import parser in main.js
 # through node. Skips when node is unavailable.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 if ! command -v node >/dev/null 2>&1; then
 	echo "SKIP: node not available" >&2
 	exit 0
 fi
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js
+JS=${SB_VIEW}/main.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
@@ -294,8 +295,8 @@ if ! command -v ucode >/dev/null 2>&1; then
 	exit 0
 fi
 UCODE_BIN=$(command -v ucode)
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
-EXPORT_UC="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/export_section.uc"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
+EXPORT_UC="$PWD/${SB_SHARE}/export_section.uc"
 
 UCI_DIR="$TMP/uci"
 mkdir -p "$UCI_DIR"

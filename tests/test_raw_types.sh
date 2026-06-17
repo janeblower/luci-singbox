@@ -4,8 +4,9 @@
 #   type=sharelink raw_link  -> parsed by sharelink.uc at generate, tag = section
 #   protocol=json  raw_json  -> inbound spliced verbatim, tag = section
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_raw_types (ucode missing)"; exit 0; }
 
 je() { "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e "$1"; }

@@ -4,6 +4,7 @@
 # tabs/inbounds.js must either be one of the whitelisted column names or
 # have modalonly=true on one of the next 5 lines.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 WHITELIST='enabled _export _address type protocol __rename'
@@ -31,7 +32,7 @@ check_file() {
 }
 
 fail=0
-check_file luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js || fail=1
-check_file luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js  || fail=1
+check_file ${SB_VIEW}/tabs/outbounds.js || fail=1
+check_file ${SB_VIEW}/tabs/inbounds.js  || fail=1
 [ "$fail" -eq 0 ] && echo "PASS test_grid_columns"
 exit $fail

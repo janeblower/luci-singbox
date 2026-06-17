@@ -4,12 +4,13 @@
 # from UCI + the fetched sub_<name>.txt files. No network. We drive subscription.uc
 # directly as a CLI subcommand (sub-status) with a fixture UCI dir + tmp dir.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
 
-LIB="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib"
-SUB="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/subscription.uc"
+LIB="$PWD/${SB_LIB}"
+SUB="$PWD/${SB_SHARE}/subscription.uc"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/uci" "$TMP/run"
 

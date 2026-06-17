@@ -7,13 +7,14 @@
 # CLASH_CURL with a script that echoes the URL it was handed, so the handler's
 # {status:"ok",body:<url>} lets us assert the exact constructed URL.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
 
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
-HANDLER="$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
+HANDLER="$PWD/${SB_RPCD}"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 # curl stub: print the LAST argv element (clash_proxy puts the URL last).

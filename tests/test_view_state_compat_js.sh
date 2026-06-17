@@ -1,8 +1,9 @@
 #!/bin/sh
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 command -v node >/dev/null 2>&1 || { echo "SKIP: no node"; exit 0; }
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
-VS="luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/view_state.js"
+VS="${SB_VIEW}/lib/view_state.js"
 cat > "$WORK/t.js" <<'JS'
 const fs = require('fs');
 let body = fs.readFileSync(process.argv[2], 'utf8')

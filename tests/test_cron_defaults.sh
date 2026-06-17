@@ -3,8 +3,9 @@
 # The uci-defaults cron installer is idempotent: adds exactly one singbox-ui
 # refresh line to the crontab and never duplicates it on re-run.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
-SCRIPT="$PWD/luci-singbox-ui/root/etc/uci-defaults/91-singbox-ui-cron"
+SCRIPT="$PWD/${SB_BACKEND_ROOT}/etc/uci-defaults/91-singbox-ui-cron"
 [ -f "$SCRIPT" ] || { echo "FAIL: cron uci-defaults missing"; exit 1; }
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 mkdir -p "$TMP/crontabs"
@@ -32,7 +33,7 @@ unrelated=$(grep -c '/bin/true' "$TMP/crontabs/root" 2>/dev/null || true)
 # Regression guard: 99-luci-singbox-ui must NOT touch the crontab (cron ownership
 # consolidated into 91). A re-introduced cron block in 99 would re-create the
 # conflict the split was meant to remove.
-NINETYNINE="$PWD/luci-singbox-ui/root/etc/uci-defaults/99-luci-singbox-ui"
+NINETYNINE="$PWD/${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui"
 if grep -qE 'crontab|CRON_LINE|CRON_FILE' "$NINETYNINE"; then
 	echo "FAIL: 99-luci-singbox-ui still manipulates the crontab (cron must live only in 91)"; exit 1
 fi

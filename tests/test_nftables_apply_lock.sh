@@ -5,17 +5,18 @@
 # lock dir is released afterwards (no stale lock). The lock is a *directory*
 # (fs.mkdir is the atomic primitive; fs.open(path,"x") does not create in ucode).
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 else
 	echo "SKIP: ucode not available"; exit 0
 fi
 
-SCRIPT=$PWD/luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc
+SCRIPT=$PWD/${SB_SHARE}/nftables.uc
 TMPDIR=$(mktemp -d)
 mkdir -p /tmp/singbox-ui
 trap 'rm -rf "$TMPDIR"; rm -rf /tmp/singbox-ui/.apply.lock' EXIT

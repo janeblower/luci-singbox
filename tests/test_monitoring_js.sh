@@ -3,6 +3,7 @@
 # Loads the LuCI view fragment into a vm sandbox (mirrors tests/test_json_import.sh)
 # and asserts async-safety + DOM-stability of the connection monitor.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 if ! command -v node >/dev/null 2>&1; then
@@ -10,7 +11,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 0
 fi
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js
+JS=${SB_VIEW}/tabs/monitoring.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

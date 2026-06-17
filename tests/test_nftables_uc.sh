@@ -4,22 +4,23 @@
 # via `emit` (the only subcommand that's pure-output and side-effect free)
 # and asserts that the printed nft text reflects each rs_*.json shape.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 # Mirror test_generate.sh / test_subscription_uc.sh: SKIP when ucode is
 # unavailable on the dev box.
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
 	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
-	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 else
 	echo "SKIP: ucode not available"
 	exit 0
 fi
 
-SCRIPT=luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc
+SCRIPT=${SB_SHARE}/nftables.uc
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"; rm -f /tmp/singbox-ui/rs_uctest_*.json' EXIT
 

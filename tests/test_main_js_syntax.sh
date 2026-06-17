@@ -1,8 +1,9 @@
 #!/bin/sh
 # tests/test_main_js_syntax.sh
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js
+JS=${SB_VIEW}/main.js
 
 if [ ! -f "$JS" ]; then
   echo "FAIL: $JS not present"; exit 1
@@ -40,29 +41,29 @@ grep -q "'require tools.widgets as widgets'" "$JS" || { echo "FAIL: missing 'req
 
 echo "-- references input UCI sections"
 # fakeip lives in tabs/dns.js after modularization (Task 11)
-DNS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+DNS_TAB=${SB_VIEW}/tabs/dns.js
 grep -q "fakeip"   "$DNS_TAB" || { echo "FAIL: no fakeip section (checked tabs/dns.js)"; exit 1; }
 # tproxy lives in tabs/inbounds.js after modularization (Task 7)
-INBOUNDS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js
+INBOUNDS_TAB=${SB_VIEW}/tabs/inbounds.js
 grep -q "tproxy"   "$INBOUNDS_TAB" || { echo "FAIL: no tproxy section (checked tabs/inbounds.js)"; exit 1; }
 
 echo "-- references all three output GridSections"
 # GridSection usage lives in extracted tab modules after modularization
-DNS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+DNS_TAB=${SB_VIEW}/tabs/dns.js
 ( grep -q "GridSection" "$JS" || grep -q "GridSection" "$DNS_TAB" ) || { echo "FAIL: no GridSection"; exit 1; }
 # 'outbound', 'ruleset', 'route_rule' live in tabs/route.js after route-tab refactor
-ROUTE_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/route.js
+ROUTE_TAB=${SB_VIEW}/tabs/route.js
 grep -q "'outbound'"            "$ROUTE_TAB" || { echo "FAIL: no outbound section type (checked tabs/route.js)"; exit 1; }
 grep -q "'ruleset'"             "$ROUTE_TAB" || { echo "FAIL: no ruleset section type (checked tabs/route.js)"; exit 1; }
 grep -q "'route_rule'"          "$ROUTE_TAB" || { echo "FAIL: no route_rule section type (checked tabs/route.js)"; exit 1; }
 # modaltitle lives in extracted tab modules after modularization
-ROUTE_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/route.js
-DNS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+ROUTE_TAB=${SB_VIEW}/tabs/route.js
+DNS_TAB=${SB_VIEW}/tabs/dns.js
 ( grep -q "modaltitle" "$JS" || grep -q "modaltitle" "$ROUTE_TAB" || grep -q "modaltitle" "$DNS_TAB" ) || { echo "FAIL: no modaltitle"; exit 1; }
 
 echo "-- references new outbound types (merged type field)"
 # These fields live in tabs/outbounds.js after modularization (Task 8)
-OUTBOUNDS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
+OUTBOUNDS_TAB=${SB_VIEW}/tabs/outbounds.js
 grep -q "'vless'"                "$OUTBOUNDS_TAB" || { echo "FAIL: no type=vless (checked tabs/outbounds.js)"; exit 1; }
 grep -q "'subscription'"         "$OUTBOUNDS_TAB" || { echo "FAIL: no type=subscription (checked tabs/outbounds.js)"; exit 1; }
 # E2: proxy_url (share-link URL type) replaced by openShareLinkModal import button.
@@ -75,16 +76,16 @@ grep -q "sub_interval"           "$OUTBOUNDS_TAB" || { echo "FAIL: no sub_interv
 ! grep -q "'json'"               "$JS" || { echo "FAIL: legacy json outbound type still present"; exit 1; }
 
 echo "-- references ruleset fields (descriptor-driven)"
-RS_REMOTE=luci-singbox-ui/root/usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc
+RS_REMOTE=${SB_LIB}/builder/route/ruleset_remote.uc
 grep -q "nft_rules"       "$RS_REMOTE" || { echo "FAIL: no nft_rules field (checked builder/route/ruleset_remote.uc)"; exit 1; }
 grep -q "update_interval" "$RS_REMOTE" || { echo "FAIL: no update_interval field (checked builder/route/ruleset_remote.uc)"; exit 1; }
 # rule-sets are descriptor-driven in tabs/route.js
-ROUTE_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/route.js
+ROUTE_TAB=${SB_VIEW}/tabs/route.js
 grep -q "applyMaterialized" "$ROUTE_TAB" || { echo "FAIL: route.js must use descriptor_form.applyMaterialized"; exit 1; }
 
 echo "-- references DNS tab sections"
 # dns_server, dns_rule, descriptor-driven fields, default_resolver live in tabs/dns.js after modularization (Task 11)
-DNS_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js
+DNS_TAB=${SB_VIEW}/tabs/dns.js
 grep -q "'dns_server'"          "$DNS_TAB" || { echo "FAIL: no dns_server section type (checked tabs/dns.js)"; exit 1; }
 grep -q "'dns_rule'"            "$DNS_TAB" || { echo "FAIL: no dns_rule section type (checked tabs/dns.js)"; exit 1; }
 grep -q "data-tab.*dns"         "$JS" || { echo "FAIL: no dns tab marker"; exit 1; }
@@ -100,7 +101,7 @@ echo "-- references Monitoring tab"
 grep -q "buildMonitoring"        "$JS" || { echo "FAIL: no buildMonitoring"; exit 1; }
 # clash_request was split into clash_get + clash_mutate (C1 Task 4). lib/rpc.js
 # must declare BOTH wrappers (and the RPC method names they bind to).
-LIB_RPC=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/rpc.js
+LIB_RPC=${SB_VIEW}/lib/rpc.js
 [ -f "$LIB_RPC" ] || { echo "FAIL: $LIB_RPC missing"; exit 1; }
 grep -q "callClashGet"    "$LIB_RPC" || { echo "FAIL: no callClashGet wrapper in lib/rpc.js"; exit 1; }
 grep -q "callClashMutate" "$LIB_RPC" || { echo "FAIL: no callClashMutate wrapper in lib/rpc.js"; exit 1; }
@@ -119,12 +120,12 @@ echo "-- has handleSaveApply via ui.changes.apply"
 grep -q "handleSaveApply"  "$JS" || { echo "FAIL: no handleSaveApply"; exit 1; }
 grep -q "ui.changes.apply" "$JS" || { echo "FAIL: no ui.changes.apply call (needed for /admin/uci/apply_rollback)"; exit 1; }
 # 'enabled' flag lives in extracted tab modules after modularization
-GENERAL_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js
+GENERAL_TAB=${SB_VIEW}/tabs/general.js
 ( grep -q "'enabled'" "$JS" || grep -q "'enabled'" "$GENERAL_TAB" ) || { echo "FAIL: no enabled flag"; exit 1; }
 
 echo "-- references General tab sections"
 # 'cache' and 'log' live in tabs/general.js after modularization (Task 12)
-GENERAL_TAB=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/general.js
+GENERAL_TAB=${SB_VIEW}/tabs/general.js
 grep -q "'cache'"               "$GENERAL_TAB" || { echo "FAIL: no cache section type (checked tabs/general.js)"; exit 1; }
 grep -q "'log'"                 "$GENERAL_TAB" || { echo "FAIL: no log section type (checked tabs/general.js)"; exit 1; }
 grep -q "data-tab.*general"     "$JS" || { echo "FAIL: no general tab marker"; exit 1; }

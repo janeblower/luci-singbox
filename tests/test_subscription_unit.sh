@@ -3,10 +3,11 @@
 # Unit-tests the pure / injectable functions of subscription.uc by importing
 # the script as a module (require), not via the full network path.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
-APP_LIB="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
-SUB_DIR="$PWD/luci-singbox-ui/root/usr/share/singbox-ui"
+APP_LIB="${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
+SUB_DIR="$PWD/${SB_SHARE}"
 
 # Mirror test_subscription_uc.sh: skip if ucode/uci-mod unavailable on dev box.
 # In addition, add the script's own directory to the lib flags so that

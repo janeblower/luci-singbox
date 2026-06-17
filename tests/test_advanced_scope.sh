@@ -1,7 +1,8 @@
 #!/bin/sh
 # Guards Bug 4: no _show_advanced_* toggle for inbound/outbound; kept for dns/route.
 set -eu
-LIB="luci-singbox-ui/root/usr/share/singbox-ui"
+. "$(dirname "$0")/lib/sb_helpers.sh"
+LIB="${SB_SHARE}"
 UCODE="${UCODE_BIN:-ucode}"
 command -v "$UCODE" >/dev/null 2>&1 || { echo "SKIP: no ucode"; exit 0; }
 

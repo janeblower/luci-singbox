@@ -7,14 +7,15 @@
 # parsing (no jsonfilter/python, no grep-on-source); auto-discovered by the
 # tests/run.sh glob.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
 
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
-HANDLER="$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
-ACL="$PWD/luci-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
+HANDLER="$PWD/${SB_RPCD}"
+ACL="$PWD/${SB_ACL}"
 
 [ -x "$HANDLER" ] || { echo "FAIL: handler missing/not exec: $HANDLER"; exit 1; }
 [ -f "$ACL" ]     || { echo "FAIL: ACL file missing: $ACL"; exit 1; }

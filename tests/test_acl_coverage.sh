@@ -4,9 +4,10 @@
 # and write.ubus is on an expected whitelist. Catches drift where a
 # write-side method is accidentally added to read.ubus.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
-ACL_FILE="luci-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json"
+ACL_FILE="${SB_ACL}"
 
 if [ ! -f "$ACL_FILE" ]; then
     echo "FAIL: ACL file missing at $ACL_FILE"

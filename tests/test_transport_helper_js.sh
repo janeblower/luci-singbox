@@ -3,10 +3,11 @@
 # (spec S2-QUAL): importers/transport.js exists and both importers route
 # transport fields through it identically.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-ROOT=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui
+ROOT=${SB_VIEW}
 HELPER="$ROOT/importers/transport.js"
 [ -f "$HELPER" ] || { echo "FAIL: $HELPER missing"; exit 1; }
 

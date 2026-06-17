@@ -2,21 +2,22 @@
 # tests/test_nft_rulesets_uc.sh
 # Drives nft-rulesets.uc local-source path validation with a fixture UCI dir + a fake sing-box. No network.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 # Mirror test_generate.sh: skip if ucode/uci-mod unavailable on dev box.
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
 	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
-	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 else
 	echo "SKIP: ucode not available"
 	exit 0
 fi
 
-SUB_UC=luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc
+SUB_UC=${SB_SHARE}/nft-rulesets.uc
 TMPDIR=$(mktemp -d)
 trap 'rm -rf "$TMPDIR"' EXIT
 
@@ -100,7 +101,7 @@ esac
 # of the refresh loop); accept either the bare or the wrapped form.
 echo "-- C2.1.16: local-ruleset cp-failure branch removes raw_path"
 grep -qE '(fs\.unlink|unlink_quiet)\(raw_path\)' \
-	"luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc" \
+	"${SB_SHARE}/nft-rulesets.uc" \
 	|| fail "nft-rulesets.uc: missing raw_path cleanup in local branch"
 pass "nft-rulesets.uc: local cp-failure cleans up raw_path"
 
@@ -110,10 +111,10 @@ pass "nft-rulesets.uc: local cp-failure cleans up raw_path"
 # that no bare fs.unlink(m.raw_path) survives in the decompile loop.
 echo "-- SEC-9: in-loop unlinks routed through unlink_quiet"
 grep -qE 'function unlink_quiet' \
-	"luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc" \
+	"${SB_SHARE}/nft-rulesets.uc" \
 	|| fail "nft-rulesets.uc: unlink_quiet helper missing (SEC-9)"
 grep -qE 'fs\.unlink\(m\.raw_path\)' \
-	"luci-singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc" \
+	"${SB_SHARE}/nft-rulesets.uc" \
 	&& fail "nft-rulesets.uc: bare fs.unlink(m.raw_path) survives in the loop (SEC-9)" || true
 pass "nft-rulesets.uc: in-loop unlinks are exception-safe"
 

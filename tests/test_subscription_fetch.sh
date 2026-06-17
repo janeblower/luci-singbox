@@ -1,7 +1,8 @@
 #!/bin/sh
 # Unit-tests subscription.uc curl fetch wiring with injected seams (no curl, no net).
 set -eu
-LIB="luci-singbox-ui/root/usr/share/singbox-ui"
+. "$(dirname "$0")/lib/sb_helpers.sh"
+LIB="${SB_SHARE}"
 UCODE="${UCODE_BIN:-ucode}"
 command -v "$UCODE" >/dev/null 2>&1 || { echo "SKIP: no ucode"; exit 0; }
 

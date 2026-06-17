@@ -2,12 +2,13 @@
 # tests/test_share_link_js.sh — exercises importers/outbound.shareLinkImport
 # from Node so the JS-side share-link parsing has regression coverage.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 NODE_BIN="${NODE_BIN:-node}"
 command -v "$NODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_share_link_js (node missing)"; exit 0; }
 
-JS_FILE=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js
+JS_FILE=${SB_VIEW}/importers/outbound.js
 
 "$NODE_BIN" -e "
 const fs = require('fs');

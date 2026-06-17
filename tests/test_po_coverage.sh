@@ -4,10 +4,11 @@
 # - Number of msgid entries in po should be within 5 of unique _('...') in JS.
 # - At most 5 entries may be untranslated (empty msgstr "").
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
-JS_DIR="luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui"
-PO="luci-singbox-ui/po/ru/luci-singbox-ui.po"
+JS_DIR="${SB_VIEW}"
+PO="${SB_PO_DIR}/ru/luci-singbox-ui.po"
 
 # Count unique _('...') strings in JS (single- and double-quoted).
 js_count=$(grep -rho "_('[^']*')\|_(\"[^\"]*\")" "$JS_DIR" \

@@ -2,9 +2,10 @@
 # tests/test_version_gating.sh — schema carries min_version for gated protocols;
 # status_detail exposes core_version.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-LIB="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+LIB="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_version_gating (ucode missing)"; exit 0; }
 
 out=$("$UCODE_BIN" -L "$LIB" -e '

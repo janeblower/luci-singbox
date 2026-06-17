@@ -3,9 +3,10 @@
 # 9.4 vmess, 9.3 ss SIP002 plugin, 4.3 vless/hy2 #fragment tag, 1.4/4.4
 # percent-encoded query keys, 4.2 IPv6 bracket strip).
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_sharelink_parsers (ucode missing)"; exit 0; }
 command -v base64 >/dev/null 2>&1 || { echo "SKIP test_sharelink_parsers (base64 missing)"; exit 0; }
 

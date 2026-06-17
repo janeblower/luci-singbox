@@ -6,10 +6,11 @@
 # the loaded descriptors drifting apart. `direct` is a registered outbound that
 # is deliberately NOT a proxy kind (own dispatch branch), so it is excluded.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_protocol_list_consistency (ucode missing)"; exit 0; }
 
 # NON_PROXY_OUTBOUNDS mirrors the deliberate exclusions in helpers.uc.

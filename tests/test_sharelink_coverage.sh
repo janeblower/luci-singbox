@@ -5,9 +5,10 @@
 # at its declared sing-box path (behavioral). Also unit-tests the apply_params
 # engine (set_path / coerce / gates).
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_sharelink_coverage (ucode missing)"; exit 0; }
 
 je() { "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e "$1"; }

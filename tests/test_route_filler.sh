@@ -2,9 +2,10 @@
 # tests/test_route_filler.sh — filler builds a route_rule body with no type/tag
 # header, num_array coercion, and array-valued requires gating.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-LIB="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+LIB="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_route_filler (ucode missing)"; exit 0; }
 
 out=$("$UCODE_BIN" -L "$LIB" -e '

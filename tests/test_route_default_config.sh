@@ -6,10 +6,11 @@
 # emitted route block uses only valid sing-box rule actions and resolves its
 # rule-set references. (Caught a fresh-install-breaking stale default once.)
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-LIB="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
-CFG="luci-singbox-ui/root/etc/config/singbox-ui"
+LIB="${UCODE_LIB_DIR:-${SB_LIB}}"
+CFG="${SB_BACKEND_ROOT}/etc/config/singbox-ui"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_route_default_config (ucode missing)"; exit 0; }
 
 out=$("$UCODE_BIN" -L "$LIB" -e '

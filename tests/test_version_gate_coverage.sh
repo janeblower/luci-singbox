@@ -4,7 +4,8 @@
 # (post-1.12 additions) and max_version (deprecated-removed) tags survive the
 # dump_all() projection — catches a regression that strips the version metadata.
 set -eu
-LIB="luci-singbox-ui/root/usr/share/singbox-ui/lib"
+. "$(dirname "$0")/lib/sb_helpers.sh"
+LIB="${SB_LIB}"
 UCODE="${UCODE_BIN:-ucode}"
 command -v "$UCODE" >/dev/null 2>&1 || { echo "SKIP: no ucode"; exit 0; }
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT

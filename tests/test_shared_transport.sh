@@ -2,9 +2,10 @@
 # tests/test_shared_transport.sh — declarative emit_spec path via filler for
 # the shared transport block.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-${SB_LIB}}"
 if ! command -v "$UCODE_BIN" >/dev/null 2>&1; then
     echo "SKIP test_shared_transport (ucode missing)"; exit 0
 fi

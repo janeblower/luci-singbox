@@ -2,9 +2,10 @@
 # tests/test_match_shared.sh — match.fields(ctx) returns clean field copies and
 # excludes rule_set/inbound/auth_user/clash_mode from the headless context.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-LIB="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+LIB="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_match_shared (ucode missing)"; exit 0; }
 
 out=$("$UCODE_BIN" -L "$LIB" -e '

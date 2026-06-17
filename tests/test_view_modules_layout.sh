@@ -2,7 +2,8 @@
 # tests/test_view_modules_layout.sh
 # Verifies the modularized view layout under htdocs/luci-static/resources/view/singbox-ui/.
 set -e
-ROOT="luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui"
+. "$(dirname "$0")/lib/sb_helpers.sh"
+ROOT="${SB_VIEW}"
 
 REQUIRED="
 $ROOT/main.js
@@ -74,7 +75,7 @@ fi
 
 # Rule-sets are descriptor-driven (Route tab refactor): nft_rules is a field in
 # the rule_set descriptors, not a hand-written form.Flag in a tab module.
-if ! grep -q "nft_rules" "luci-singbox-ui/root/usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc"; then
+if ! grep -q "nft_rules" "${SB_LIB}/builder/route/ruleset_remote.uc"; then
   echo "FAIL: nft_rules missing from rule_set remote descriptor"
   fail=1
 fi
@@ -125,7 +126,7 @@ fi
 
 # D1.8: build_constructor_for must remain dispatcher-only.
 # Count total lines from `function build_constructor_for` to the next `^function`.
-OUTBOUND_UC="luci-singbox-ui/root/usr/share/singbox-ui/lib/outbound.uc"
+OUTBOUND_UC="${SB_LIB}/outbound.uc"
 end_marker=$(grep -n '^function ' "$OUTBOUND_UC" | \
              awk -F: '$2 ~ /build_constructor_for/{found=1; next} found{print $1; exit}')
 start=$(grep -n '^function build_constructor_for' "$OUTBOUND_UC" | cut -d: -f1)
@@ -149,8 +150,8 @@ fi
 # be zero for each of the descriptor-owned types. We grep for each name and
 # count.
 
-OUTBOUNDS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js
-INBOUNDS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js
+OUTBOUNDS=${SB_VIEW}/tabs/outbounds.js
+INBOUNDS=${SB_VIEW}/tabs/inbounds.js
 
 fail_depends=0
 for proto in ssh trojan shadowsocks vless vmess hysteria2 tuic anytls; do

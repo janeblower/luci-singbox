@@ -3,11 +3,12 @@
 # call_refresh forwards a valid `name` as the 3rd CLI arg (`refresh force <name>`) to subscription.uc and
 # rejects an invalid name (falls back to a global refresh, no name forwarded).
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
-LIB="$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib"
-HANDLER="$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
+LIB="$PWD/${SB_LIB}"
+HANDLER="$PWD/${SB_RPCD}"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 # Stub subscription.uc: a .uc script that records its ARGV to $ARGV_OUT and exits 0.

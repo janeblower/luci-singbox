@@ -1,8 +1,9 @@
 #!/bin/sh
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 command -v node >/dev/null 2>&1 || { echo "SKIP: no node"; exit 0; }
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
-DF="luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js"
+DF="${SB_VIEW}/lib/descriptor_form.js"
 cat > "$WORK/t.js" <<'JS'
 const fs = require('fs');
 global._ = (s) => s;
