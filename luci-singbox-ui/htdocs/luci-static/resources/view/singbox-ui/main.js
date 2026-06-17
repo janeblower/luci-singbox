@@ -42,7 +42,14 @@ return view.extend({
 			L.resolveDefault(callStatusDetail(), null).then(function (r) {
 				if (r && r.core_version != null) SbViewState.setCoreVersion(r.core_version);
 			}),
-		]);
+		]).then(function () {
+			// ui_compat_only is a UI-only flag on the main/global settings
+			// section, read once per page load. When set, version-incompatible
+			// fields are hidden instead of shown disabled (see descriptor_form /
+			// common.js version gates). Absent section/option → default false.
+			var v = uci.get('singbox-ui', 'main', 'ui_compat_only');
+			SbViewState.setCompatOnly(v === '1');
+		});
 	},
 
 	render: function () {
