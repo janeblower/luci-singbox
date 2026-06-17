@@ -38,6 +38,18 @@ jobs:
         with:
           buildkitd-flags: --allow-insecure-entitlement security.insecure
 
+      # Cache the image's build layers across runs so a re-dispatch with an
+      # unchanged Dockerfile/rootfs reuses layers instead of re-downloading the
+      # ~50MB OpenWrt rootfs and re-baking the snapshot. type=local feeds the
+      # build-push-action cache-from/cache-to below. Keyed on the Docker context
+      # so a Dockerfile/script change busts the cache; restore-keys warm-starts.
+      - name: Cache buildx layers
+        uses: actions/cache@v5
+        with:
+          path: /tmp/.buildx-cache
+          key: openwrt-test-img-${{ hashFiles('tests/docker/**') }}
+          restore-keys: openwrt-test-img-
+
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ghcr.io
@@ -67,6 +79,18 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           allow: security.insecure
           provenance: false
+          cache-from: type=local,src=/tmp/.buildx-cache
+          # mode=max caches intermediate layers too (the rootfs download +
+          # snapshot bake), not just the final image — the expensive bits.
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+      # actions/cache can't atomically overwrite; the build writes to a new dir
+      # and we swap it in (standard buildx-cache GHA dance) so the cache never
+      # grows unbounded across runs.
+      - name: Rotate buildx cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       - name: Smoke-run the published image
         run: |
