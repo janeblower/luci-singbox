@@ -1,0 +1,1 @@
+{ "action": "route", "domain_suffix": [ ".cn" ], "ip_cidr": [ "10.0.0.0/8" ], "network": [ "udp" ], "query_type": [ "A", "AAAA" ], "rule_set": [ "geoip-cn" ], "server": "dns1" }

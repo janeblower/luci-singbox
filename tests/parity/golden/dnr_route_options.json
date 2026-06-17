@@ -1,0 +1,1 @@
+{ "action": "route-options", "disable_cache": true, "domain_keyword": [ "ads" ], "rewrite_ttl": 300 }
