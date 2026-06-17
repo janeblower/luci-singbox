@@ -1,0 +1,1 @@
+{ "download_detour": "proxy", "format": "binary", "tag": "geosite", "type": "remote", "url": "https://example.com/geosite.srs" }
