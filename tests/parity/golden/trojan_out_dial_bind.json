@@ -1,0 +1,1 @@
+{ "fallback_delay": "300ms", "inet4_bind_address": "10.0.0.2", "inet6_bind_address": "fd00::2", "netns": "/var/run/netns/vpn", "network_strategy": "fallback", "password": "p", "reuse_addr": true, "server": "ex.com", "server_port": 443, "tag": "tdb", "tcp_multi_path": true, "type": "trojan" }
