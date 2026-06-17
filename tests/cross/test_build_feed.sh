@@ -15,25 +15,28 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
-# Locate a real apk-tools 3: VM has it on PATH; host may have the SDK copy.
+# Locate a real apk-tools 3: packaging-domain container / CI provides apk-tools
+# 3.0.5+ on PATH; a host with the SDK apk also works; SINGBOX_APK_BIN overrides.
 APK="${SINGBOX_APK_BIN:-}"
 [ -z "$APK" ] && APK="$(command -v apk 2>/dev/null || true)"
 [ -z "$APK" ] && [ -x "$ROOT/.build/sdk/staging_dir/host/bin/apk" ] && APK="$ROOT/.build/sdk/staging_dir/host/bin/apk"
-if [ -z "$APK" ] || ! "$APK" --version 2>/dev/null | grep -q "apk-tools 3"; then
-  echo "SKIP: apk-tools 3 not available (need apk on PATH or SDK build)"
-  exit 0
-fi
 
-# Fixtures below are built with `apk mkpkg --info KEY:VALUE` (apk-tools 3.0.5+).
-# Some OpenWrt apk-tools 3 builds — including the CI qemu image — predate the
-# --info long option and abort fixture creation with "unrecognized option
-# 'info'", which would fail the whole suite. Probe once and SKIP gracefully when
-# the running apk can't build fixtures; real coverage still runs wherever a
-# capable apk exists (host SDK copy, dev boxes).
-if ! "$APK" mkpkg --help 2>&1 | grep -q -- '--info'; then
-  echo "SKIP test_build_feed: apk mkpkg lacks --info (apk-tools build too old)"
-  exit 0
-fi
+# Hard-fail (not SKIP) on a missing capability: the packaging domain MUST run in
+# an environment with a capable apk so the feed contract is really exercised. A
+# silent SKIP previously let an on-device-broken feed pass CI. The only escape is
+# SINGBOX_FEED_TEST_ALLOW_SKIP=1, reserved for environments that genuinely cannot
+# supply apk-tools 3.0.5+ (set explicitly, never the default).
+skip_or_fail() {
+  if [ "${SINGBOX_FEED_TEST_ALLOW_SKIP:-0}" = "1" ]; then
+    echo "SKIP test_build_feed: $1 (SINGBOX_FEED_TEST_ALLOW_SKIP=1)"
+    exit 0
+  fi
+  fail "missing capability: $1 (need apk-tools 3.0.5+; set SINGBOX_FEED_TEST_ALLOW_SKIP=1 only if truly unavailable)"
+}
+
+[ -n "$APK" ] || skip_or_fail "no apk binary on PATH or SDK build"
+"$APK" --version 2>/dev/null | grep -q "apk-tools 3" || skip_or_fail "apk-tools 3 not found ($("$APK" --version 2>/dev/null | head -1))"
+"$APK" mkpkg --help 2>&1 | grep -q -- '--info' || skip_or_fail "apk mkpkg lacks --info (apk-tools build too old)"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
