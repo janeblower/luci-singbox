@@ -78,35 +78,26 @@ function buildDnsMap() {
 		if (mat) descriptor_form.applyMaterialized(s, 'dns', typeName, mat);
 	});
 
-	// -- Rules --
+	// -- Rules (descriptor-driven: default + logical) --
 	s = m.section(form.GridSection, 'dns_rule', _('DNS Rules'));
 	s.anonymous = false; s.addremove = true; s.sortable = true;
 	s.modaltitle = function (id) { return _('DNS Rule') + ': ' + id; };
 	addRenameField(s);
 	o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
-	o = s.option(form.MultiValue, 'ruleset', _('Rule-Sets'));
-	o.load = function (section_id) {
-		this.keylist = []; this.vallist = [];
-		uci.sections('singbox-ui', 'ruleset').forEach(function (sec) {
-			this.value(sec['.name'], sec['.name']);
-		}.bind(this));
-		return form.MultiValue.prototype.load.apply(this, arguments);
-	};
-	o = s.option(form.Value, 'domain_suffix', _('Domain suffix (comma-separated)')); o.modalonly = true;
-	o = s.option(form.Value, 'domain_keyword', _('Domain keyword (comma-separated)')); o.modalonly = true;
-	o = s.option(form.ListValue, 'clash_mode', _('Clash mode'));
-	[['','any'],['global','global'],['direct','direct'],['rule','rule']].forEach(function (p) {
-		o.value(p[0], p[1] === 'any' ? _('Any') : p[1]);
+	o = s.option(form.ListValue, 'type', _('Type'));
+	o.value('default', _('Default')); o.value('logical', _('Logical'));
+	o.default = 'default'; o.modalonly = true;
+	// INFO-1: version-gate the dns_rule type selector for symmetry with
+	// inbounds/outbounds/route_rule. No dns_rule type carries a min_version
+	// today, so it is a no-op — future-proofs against a gated type being
+	// silently offered with no "(requires X+)" note and no validate rejection.
+	SbCommon.applyVersionGate(o,
+		(SbViewState.getSchema() || {}).dns_rule || {}, SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
+	var dnsRuleSchema = (SbViewState.getSchema() || {}).dns_rule || {};
+	['default', 'logical'].forEach(function (tn) {
+		var mat = dnsRuleSchema[tn];
+		if (mat) descriptor_form.applyMaterialized(s, 'dns_rule', tn, mat);
 	});
-	o.modalonly = true;
-	o = s.option(form.ListValue, 'server', _('Target server')); loadDnsServerList(o);
-	o = s.option(form.Value, 'rewrite_ttl', _('Rewrite TTL (s)'));
-	o.modalonly  = true;
-	o.datatype   = 'uinteger';
-	o.placeholder = '60';
-	o.default    = '60';
-	o.description = _('Forces this TTL on responses matched by the rule. ' +
-	                  '0 disables rewriting. Default is 60.');
 
 	// -- Settings --
 	s = m.section(form.NamedSection, 'dns', 'dns', _('DNS Settings'));
