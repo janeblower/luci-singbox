@@ -1,12 +1,22 @@
 'use strict';
 'require form';
 'require uci';
+'require view.singbox-ui.lib.descriptor_form as descriptor_form';
+'require view.singbox-ui.lib.view_state as SbViewState';
 
 function buildGeneralMap() {
 	var m = new form.Map('singbox-ui', _('General'),
 		_('Global sing-box settings: cache file, log.'));
 
 	var s, o;
+
+	// --- UI preferences ---
+	s = m.section(form.NamedSection, 'main', 'singbox-ui', _('UI preferences'));
+	o = s.option(form.Flag, 'ui_compat_only',
+		_('Show only parameters compatible with the installed sing-box version'));
+	o.default = '0';
+	o.rmempty = false;
+	o.description = _('When on, version-incompatible fields are hidden instead of shown disabled. Takes effect after save/reload.');
 
 	// --- Cache file ---
 	s = m.section(form.NamedSection, 'cache', 'cache', _('Cache file'),
@@ -58,27 +68,13 @@ function buildGeneralMap() {
 	o = s.option(form.Value, 'output', _('Output file (empty = procd stdout)'));
 	o.depends('enabled', '1');
 
-	// --- Clash API (drives the Dashboard tab) ---
+	// --- Clash API (descriptor-driven; drives the Dashboard tab) ---
 	s = m.section(form.NamedSection, 'clash_api', 'clash_api', _('Clash API'),
 		_('Enables sing-box experimental.clash_api. Required by the Dashboard tab. ' +
 		  'Restart the service after changing.'));
-
-	o = s.option(form.Flag, 'enabled', _('Enable'));
-	o.default = '0';
-
-	o = s.option(form.Value, 'listen', _('Listen address'));
-	o.default = '127.0.0.1';
-	o.depends('enabled', '1');
-
-	o = s.option(form.Value, 'port', _('Port'));
-	o.default = '9090';
-	o.datatype = 'port';
-	o.depends('enabled', '1');
-
-	o = s.option(form.Value, 'secret', _('API secret (optional)'));
-	o.password = true;
-	o.depends('enabled', '1');
-	o.description = _('Bearer token for the Clash API. Leave empty for no auth.');
+	var clashSchema = (SbViewState.getSchema() || {}).clash_api || {};
+	if (clashSchema.clash_api)
+		descriptor_form.applyMaterializedNamed(s, 'clash_api', 'clash_api', clashSchema.clash_api);
 
 	// --- Subscriptions ---
 	s = m.section(form.NamedSection, 'subscriptions', 'subscriptions', _('Subscriptions'));

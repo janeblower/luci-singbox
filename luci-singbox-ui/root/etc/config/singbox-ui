@@ -90,3 +90,6 @@ config clash_api 'clash_api'
 
 config subscriptions 'subscriptions'
 	option auto_update '1'
+
+config singbox-ui 'main'
+	option ui_compat_only '0'
