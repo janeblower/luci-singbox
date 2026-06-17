@@ -24,6 +24,7 @@ function project_materialized(m) {
         fields: fields,
     };
     out.min_version = m.min_version ?? "";
+    out.max_version = m.max_version ?? "";
     return out;
 }
 

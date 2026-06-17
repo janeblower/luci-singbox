@@ -301,6 +301,7 @@ function materialize(kind, type_) {
         tabs: _tabs_for(with_adv),
     };
     if (d.min_version != null) result.min_version = d.min_version;
+    if (d.max_version != null) result.max_version = d.max_version;
     _materialize_cache[key] = result;
     return result;
 }
