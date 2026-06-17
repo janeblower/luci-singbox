@@ -1,0 +1,1 @@
+{ "idle_timeout": "30m", "interrupt_exist_connections": true, "interval": "3m", "outbounds": [ "proxy-a", "proxy-b" ], "tag": "utf", "tolerance": 50, "type": "urltest", "url": "https://www.gstatic.com/generate_204" }
