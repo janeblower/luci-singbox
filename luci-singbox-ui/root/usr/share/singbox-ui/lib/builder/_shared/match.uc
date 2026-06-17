@@ -5,15 +5,22 @@
 // block). fields(ctx) returns shallow copies with the internal _ctx key removed.
 //
 // contexts:
-//   "route"    — full set (top-level route rule)
-//   "headless" — route minus rule_set/inbound/auth_user/clash_mode
-//                (sing-box rejects those inside rule-set headless rules)
-//   "dns"      — reserved for a future dns_rule unification (currently unused)
+//   "route"        — route rule top-level
+//   "headless"     — route rule-set headless (minus rule_set/inbound/auth_user/clash_mode)
+//   "dns"          — dns rule top-level
+//   "dns_headless" — dns logical sub-rule (minus rule_set/inbound/auth_user/clash_mode/
+//                    rule_set_ip_cidr_match_source)
 
-const FULL = [ "route", "headless", "dns" ];
-const NO_HL = [ "route", "dns" ];   // not valid in headless rules
+// contexts:
+//   "route" / "headless"   — route rule top-level / rule-set headless
+//   "dns" / "dns_headless" — dns rule top-level / dns logical sub-rule
+const FULL   = [ "route", "headless", "dns", "dns_headless" ]; // valid everywhere
+const NO_HL  = [ "route", "dns" ];                 // not valid in any headless
+const ROUTE  = [ "route", "headless" ];            // route-only (incl. route headless)
+const DNS    = [ "dns", "dns_headless" ];          // dns-only, both
+const DNS_TL = [ "dns" ];                          // dns-only, top-level only
 
-// L: list/string-array matcher.  opts: {ctx, advanced?, values?, dynamic?, min_version?, ui_label?}
+// L: list/string-array matcher.  opts: {ctx, advanced?, values?, dynamic?, min_version?, max_version?, ui_label?}
 function L(name, opts) {
     let f = { name: name, type: "list", tab: "match", json_key: name,
               coerce: "array", _ctx: opts.ctx };
@@ -21,6 +28,7 @@ function L(name, opts) {
     if (opts.values)      f.values = opts.values;
     if (opts.dynamic)     f.dynamic = opts.dynamic;
     if (opts.min_version) f.min_version = opts.min_version;
+    if (opts.max_version) f.max_version = opts.max_version;
     if (opts.ui_label)    f.ui_label = opts.ui_label;
     return f;
 }
@@ -32,6 +40,7 @@ function B(name, opts) {
               coerce: "bool", _ctx: opts.ctx };
     if (opts.advanced)    f.advanced = true;
     if (opts.min_version) f.min_version = opts.min_version;
+    if (opts.max_version) f.max_version = opts.max_version;
     if (opts.ui_label)    f.ui_label = opts.ui_label;
     return f;
 }
@@ -57,7 +66,7 @@ const _FIELDS = [
     { name: "ip_version", type: "enum", tab: "match", json_key: "ip_version",
       coerce: "num", values: [ "4", "6" ], advanced: true, _ctx: FULL,
       ui_label: "IP version" },
-    L("client",          { ctx: FULL, advanced: true, min_version: "1.10" }),
+    L("client",          { ctx: ROUTE, advanced: true, min_version: "1.10" }),
     L("auth_user",       { ctx: NO_HL, advanced: true }),
     NL("source_port",    { ctx: FULL, advanced: true }),
     L("source_port_range", { ctx: FULL, advanced: true }),
@@ -82,7 +91,20 @@ const _FIELDS = [
     B("ip_is_private",        { ctx: FULL, advanced: true }),
     B("source_ip_is_private", { ctx: FULL, advanced: true }),
     B("rule_set_ip_cidr_match_source",  { ctx: NO_HL, advanced: true }),
-    B("rule_set_ip_cidr_accept_empty",  { ctx: NO_HL, advanced: true, min_version: "1.10" }),
+    B("rule_set_ip_cidr_accept_empty",  { ctx: NO_HL, advanced: true, min_version: "1.10", max_version: "1.16" }),
+    // -- DNS-only matchers --
+    L("query_type",      { ctx: DNS, ui_label: "Query type" }),
+    B("ip_accept_any",   { ctx: DNS, advanced: true, min_version: "1.12" }),
+    L("interface_address",         { ctx: DNS_TL, advanced: true, min_version: "1.13" }),
+    L("network_interface_address", { ctx: DNS_TL, advanced: true, min_version: "1.13" }),
+    L("default_interface_address", { ctx: DNS_TL, advanced: true, min_version: "1.13" }),
+    L("preferred_by",    { ctx: DNS, advanced: true, min_version: "1.14" }),
+    B("match_response",  { ctx: DNS, advanced: true, min_version: "1.14" }),
+    L("response_rcode",  { ctx: DNS, advanced: true, min_version: "1.14",
+        values: [ "NOERROR", "FORMERR", "SERVFAIL", "NXDOMAIN", "NOTIMP", "REFUSED" ] }),
+    L("response_answer", { ctx: DNS, advanced: true, min_version: "1.14" }),
+    L("response_ns",     { ctx: DNS, advanced: true, min_version: "1.14" }),
+    L("response_extra",  { ctx: DNS, advanced: true, min_version: "1.14" }),
     B("invert",          { ctx: FULL, advanced: true }),
 ];
 
