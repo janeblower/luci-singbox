@@ -16,7 +16,9 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PKG_DIR="$ROOT/luci-singbox-ui"
+# Three-way split: the LuCI frontend (htdocs JS + po/) lives in
+# luci-app-singbox-ui/. The translation DOMAIN/basename stays luci-singbox-ui.
+PKG_DIR="$ROOT/luci-app-singbox-ui"
 # Path of the JS source tree *relative to PKG_DIR* — xgettext is invoked with
 # cwd=PKG_DIR so the emitted `#:` comments stay repo-relative and portable.
 JS_REL="htdocs/luci-static/resources/view/singbox-ui"

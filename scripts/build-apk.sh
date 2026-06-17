@@ -1,11 +1,18 @@
 #!/usr/bin/env bash
-# Build the luci-singbox-ui .apk packages directly via the OpenWrt SDK's
-# host `apk` tool, skipping the full SDK build orchestration.
+# Build the singbox-ui .apk package set directly via the OpenWrt SDK's host
+# `apk` tool, skipping the full SDK build orchestration.
 #
-# Produces:
-#   - luci-singbox-ui_<version>_<exact-arch>.apk  one per covered OpenWrt arch
-#     (20 arches total), each embedding the correct bbolt-client binary
-#   - luci-i18n-singbox-ui-ru_<version>.apk        noarch Russian translation
+# Produces FOUR packages (dependency chain bbolt-client <- singbox-ui <-
+# luci-app-singbox-ui <- luci-i18n-singbox-ui-ru):
+#   - bbolt-client_<version>_<exact-arch>.apk   one per covered OpenWrt arch
+#     (20 arches total), each embedding the correct bbolt-client binary at
+#     usr/libexec/singbox-ui/bbolt-client. arch=<exact OpenWrt arch>.
+#   - singbox-ui_<version>.apk                  noarch backend (ucode handlers,
+#     init.d, rpcd, uci-defaults, default config). depends on bbolt-client.
+#   - luci-app-singbox-ui_<version>.apk         noarch LuCI frontend (htdocs JS,
+#     menu, acl). depends on singbox-ui + luci-base.
+#   - luci-i18n-singbox-ui-ru_<version>.apk     noarch Russian translation.
+#     depends on luci-app-singbox-ui.
 #
 # Usage: build-apk.sh [version] [output_dir]
 #   version defaults to the most recent git tag (leading 'v' stripped).
@@ -14,34 +21,71 @@
 #   BBOLT_BIN_DIR        dir containing bbolt-client-rs-<abi> for the 5 ABIs.
 #                        Required unless SINGBOX_SKIP_BBOLT=1.
 #   SINGBOX_SKIP_BBOLT=1 allow a binary-less local build — no BBOLT_BIN_DIR
-#                        required, bbolt binary NOT embedded; the per-arch loop
-#                        still runs so you get 20 apks without the binary.
+#                        required. The bbolt-client binary cannot be embedded,
+#                        so the per-arch bbolt-client apks are SKIPPED entirely;
+#                        the three noarch packages (singbox-ui,
+#                        luci-app-singbox-ui, luci-i18n-singbox-ui-ru) are
+#                        still built.
 #   APK_MKPKG_STUB=1     replace real `apk mkpkg` with a touch stub (CI unit
 #                        tests). Also skips SDK download/extract/po2lmo and
 #                        the verify_root_owner check.
-set -euo pipefail
+#
+# Intended interpreter is bash (CI / tests invoke it as `bash build-apk.sh`),
+# but the body is kept POSIX-compatible so the CI verify gate's
+# `sh build-apk.sh` works under dash too: pipefail is enabled only when the
+# shell supports it, and the script path falls back to $0 when BASH_SOURCE is
+# unset.
+set -eu
+# shellcheck disable=SC3040  # pipefail is bash/ksh-only; guarded so dash skips it
+( set -o pipefail ) 2>/dev/null && set -o pipefail || true
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-APP_NAME="luci-singbox-ui"
-APP_DESC="LuCI support for singbox-ui"
-# Runtime dependencies baked into the shipped .apk. This is the PRIMARY delivery
-# path (releases + feed + install.sh), so it MUST carry the same runtime needs as
-# the buildroot path (LUCI_DEPENDS in luci-singbox-ui/Makefile) — keep the two in
-# sync (guarded by tests/test_makefile_deps.sh):
+# A literal TAB for manifest field-splitting. `IFS=$'\t'` is bash ANSI-C
+# quoting and silently fails to split under dash (the whole line lands in the
+# first field), so use a printf-derived tab that both shells honour.
+TAB="$(printf '\t')"
+
+# ---------------------------------------------------------------------------
+# Package identity / metadata
+# ---------------------------------------------------------------------------
+# 1) bbolt-client — per-arch native binary (cache.db reader).
+BBOLT_NAME="bbolt-client"
+BBOLT_DESC="bbolt cache.db reader for singbox-ui"
+BBOLT_DEPENDS="libc"
+
+# 2) singbox-ui — noarch backend. Runtime dependencies baked into the shipped
+# .apk. This is the PRIMARY delivery path (releases + feed + install.sh), so it
+# MUST carry the same runtime needs as the buildroot path (DEPENDS in
+# singbox-ui/Makefile) — keep the two in sync (guarded by
+# tests/test_makefile_deps.sh):
+#   - bbolt-client   the per-arch native cache.db reader package (above)
+#   - sing-box       the proxy core this UI drives
 #   - curl           subscription bodies are fetched via curl (subscription.uc)
 #   - ucode + ucode-mod-fs  shipped .uc handlers require('fs') (helpers/generate/...)
 #   - kmod-nft-socket / kmod-nft-tproxy  nftables.uc emits `socket transparent` and
 #                    `tproxy ... to` expressions; without the kmods tproxy apply fails.
 # NOTE: `nftables` is intentionally NOT listed — it ships in OpenWrt base / fw4.
 # (libc is apk's base dep; jq was dropped — not used by any shipped on-device code.)
-APP_DEPENDS="libc luci-base sing-box curl ucode ucode-mod-fs kmod-nft-socket kmod-nft-tproxy"
-APP_CONFFILE="/etc/config/singbox-ui"
+SINGBOX_NAME="singbox-ui"
+SINGBOX_DESC="singbox-ui backend (config generator, nftables, subscriptions)"
+SINGBOX_DEPENDS="libc bbolt-client sing-box curl ucode ucode-mod-fs kmod-nft-socket kmod-nft-tproxy"
+SINGBOX_CONFFILE="/etc/config/singbox-ui"
 
+# 3) luci-app-singbox-ui — noarch LuCI frontend. luci-base is implicit via the
+# LuCI build machinery in the buildroot path; we list it explicitly here.
+LUCIAPP_NAME="luci-app-singbox-ui"
+LUCIAPP_DESC="LuCI support for singbox-ui"
+LUCIAPP_DEPENDS="libc singbox-ui luci-base"
+
+# 4) luci-i18n-singbox-ui-ru — noarch Russian translation. The i18n DOMAIN (and
+# therefore the .po/.lmo basename) stays `luci-singbox-ui`; do NOT rename it.
 I18N_NAME="luci-i18n-singbox-ui-ru"
-I18N_DESC="Translation for luci-singbox-ui — Русский (Russian)"
-I18N_DEPENDS="libc $APP_NAME"
+I18N_DESC="Translation for luci-app-singbox-ui — Русский (Russian)"
+I18N_DEPENDS="libc $LUCIAPP_NAME"
+I18N_DOMAIN="luci-singbox-ui"
 
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_URL="https://github.com/janeblower/luci-singbox"
@@ -102,12 +146,23 @@ get_arches_for_abi() {
 }
 
 BBOLT_BIN_DIR="${BBOLT_BIN_DIR:-}"
-if [ -z "$BBOLT_BIN_DIR" ] && [ "${SINGBOX_SKIP_BBOLT:-0}" != "1" ]; then
-    echo "BBOLT_BIN_DIR unset (dir with bbolt-client-rs-<abi>). Set it, or SINGBOX_SKIP_BBOLT=1 for a binary-less local build." >&2
+if [ -z "$BBOLT_BIN_DIR" ] \
+   && [ "${SINGBOX_SKIP_BBOLT:-0}" != "1" ] \
+   && [ "${APK_MKPKG_STUB:-0}" != "1" ]; then
+    echo "BBOLT_BIN_DIR unset (dir with bbolt-client-rs-<abi>). Set it, or SINGBOX_SKIP_BBOLT=1 for a binary-less local build (or APK_MKPKG_STUB=1 for the CI unit-test stub)." >&2
     exit 1
 fi
 
 APK_MKPKG_STUB="${APK_MKPKG_STUB:-0}"
+SINGBOX_SKIP_BBOLT="${SINGBOX_SKIP_BBOLT:-0}"
+
+# When the bbolt binary cannot be embedded (SINGBOX_SKIP_BBOLT=1) we skip the
+# per-arch bbolt-client apks entirely but still build the three noarch packages.
+BUILD_BBOLT=1
+if [ "$SINGBOX_SKIP_BBOLT" = "1" ]; then
+    BUILD_BBOLT=0
+    echo ">>> SINGBOX_SKIP_BBOLT=1 — skipping per-arch bbolt-client apks; building noarch packages only"
+fi
 
 # ---------------------------------------------------------------------------
 # SDK / po2lmo (skipped entirely under APK_MKPKG_STUB=1)
@@ -159,21 +214,126 @@ else
     PO2LMO_BIN="__stub__"
 fi
 
-PKG_SRC="$ROOT_DIR/luci-singbox-ui"
-MANIFEST="$SCRIPT_DIR/install-manifest.txt"
-[ -f "$MANIFEST" ] || { echo "install-manifest.txt missing at $MANIFEST" >&2; exit 1; }
+# ---------------------------------------------------------------------------
+# Source trees + manifests for the two file-set noarch packages.
+# (bbolt-client carries only the binary; i18n is po2lmo-generated.)
+# ---------------------------------------------------------------------------
+SINGBOX_SRC="$ROOT_DIR/singbox-ui"
+SINGBOX_MANIFEST="$SCRIPT_DIR/install-manifest-singbox-ui.txt"
+[ -f "$SINGBOX_MANIFEST" ] || { echo "install-manifest-singbox-ui.txt missing at $SINGBOX_MANIFEST" >&2; exit 1; }
+
+LUCIAPP_SRC="$ROOT_DIR/luci-app-singbox-ui"
+LUCIAPP_MANIFEST="$SCRIPT_DIR/install-manifest-luci-app-singbox-ui.txt"
+[ -f "$LUCIAPP_MANIFEST" ] || { echo "install-manifest-luci-app-singbox-ui.txt missing at $LUCIAPP_MANIFEST" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Helper: write the three post-install/deinstall/upgrade scripts into a dir
+# Generic manifest installer: lay down a package root from a tab-separated
+# manifest (src<TAB>dst<TAB>mode; modes bin/conf/data).  Comments and blank
+# lines are skipped.
 # ---------------------------------------------------------------------------
-write_app_scripts() {
+install_manifest() {
+    local manifest="$1" pkg_src="$2" pkg_root="$3"
+    local src dst mode
+    while IFS="$TAB" read -r src dst mode; do
+        case "$src" in '#'*|'') continue ;; esac
+        install -d "$pkg_root/$(dirname "$dst")"
+        case "$mode" in
+            bin)  install -m 0755 "$pkg_src/$src" "$pkg_root/$dst" ;;
+            conf) install -m 0644 "$pkg_src/$src" "$pkg_root/$dst" ;;
+            data) install -m 0644 "$pkg_src/$src" "$pkg_root/$dst" ;;
+            *)    echo "$manifest: unknown mode '$mode' for $src" >&2; exit 1 ;;
+        esac
+    done < "$manifest"
+}
+
+# ---------------------------------------------------------------------------
+# .list builder: enumerate package files (excluding the apk bookkeeping dir)
+# into lib/apk/packages/<name>.list.
+# ---------------------------------------------------------------------------
+write_pkg_list() {
+    local pkg_root="$1" name="$2"
+    local list_dir="$pkg_root/lib/apk/packages"
+    mkdir -p "$list_dir"
+    (cd "$pkg_root" && find . -type f ! -path './lib/apk/packages/*' \
+        | LC_ALL=C sort | sed 's#^\./#/#') > "$list_dir/${name}.list"
+}
+
+# ===========================================================================
+# 1) bbolt-client (per-arch) — populate + mkpkg helpers
+# ===========================================================================
+# populate_bbolt_root <exact-arch> <abi>
+#   Assembles the per-arch bbolt-client package root: just the native binary at
+#   usr/libexec/singbox-ui/bbolt-client (copied from
+#   $BBOLT_BIN_DIR/bbolt-client-rs-<abi>) plus its .list.  Does NOT run apk
+#   mkpkg — callers do that after establishing correct ownership.
+#   Root is written to $WORK_DIR/pkg-root-bbolt-<exact-arch> so binaries don't
+#   bleed between arches and the test can inspect each root independently.
+#   Under APK_MKPKG_STUB=1 also touches the stub output apk.
+populate_bbolt_root() {
+    local exact_arch="$1"
+    local abi="$2"
+
+    local root="$WORK_DIR/pkg-root-bbolt-$exact_arch"
+    local out="$OUTPUT_DIR/${BBOLT_NAME}_${VERSION}_${exact_arch}.apk"
+    rm -rf "$root"
+
+    if [ -n "$BBOLT_BIN_DIR" ]; then
+        install -D -m0755 "$BBOLT_BIN_DIR/bbolt-client-rs-$abi" \
+            "$root/usr/libexec/singbox-ui/bbolt-client"
+    else
+        # Stub-only path (no BBOLT_BIN_DIR): lay down a placeholder so .list and
+        # the package root are non-empty. Only reachable under APK_MKPKG_STUB=1
+        # (SINGBOX_SKIP_BBOLT=1 takes the BUILD_BBOLT=0 branch and never calls us).
+        install -D -m0755 /dev/null "$root/usr/libexec/singbox-ui/bbolt-client"
+    fi
+
+    write_pkg_list "$root" "$BBOLT_NAME"
+
+    if [ "$APK_MKPKG_STUB" = "1" ]; then
+        : > "$out"
+        return
+    fi
+}
+
+# mkpkg_bbolt <exact-arch>
+#   Runs apk mkpkg for one per-arch bbolt-client package.  Must be called after
+#   populate_bbolt_root and after the root has correct (root:root) ownership.
+mkpkg_bbolt() {
+    local exact_arch="$1"
+    local root="$WORK_DIR/pkg-root-bbolt-$exact_arch"
+    local out="$OUTPUT_DIR/${BBOLT_NAME}_${VERSION}_${exact_arch}.apk"
+    "$APK_BIN" mkpkg \
+        --files "$root" \
+        --output "$out" \
+        -I "name:$BBOLT_NAME" \
+        -I "version:$VERSION" \
+        -I "description:$BBOLT_DESC" \
+        -I "arch:$exact_arch" \
+        -I "license:$PKG_LICENSE" \
+        -I "origin:$BBOLT_NAME" \
+        -I "maintainer:$PKG_MAINTAINER" \
+        -I "url:$PKG_URL" \
+        -I "depends:$BBOLT_DEPENDS" \
+        -I "provides:${BBOLT_NAME}-any"
+}
+
+# ===========================================================================
+# 2) singbox-ui (noarch) — populate + mkpkg
+# ===========================================================================
+SINGBOX_ROOT="$WORK_DIR/pkg-root-singbox-ui"
+SINGBOX_SCRIPTS="$WORK_DIR/scripts-singbox-ui"
+SINGBOX_OUT="$OUTPUT_DIR/${SINGBOX_NAME}_${VERSION}.apk"
+
+# write_singbox_scripts <scripts_dir>
+#   post-install / pre-deinstall / post-upgrade for the backend service.
+write_singbox_scripts() {
     local scripts_dir="$1"
     mkdir -p "$scripts_dir"
     # NOTE: default_postinst derives the package name from `basename "${1%.*}"`,
     # i.e. the post-install script's filename minus its extension. With apk-mkpkg
     # we name the script "post-install.sh", so it resolves to "post-install" and
-    # the package's file list at /lib/apk/packages/luci-singbox-ui.list is
-    # never found — which silently skips the init.d enable+start block. We call
+    # the package's file list at /lib/apk/packages/singbox-ui.list is never
+    # found — which silently skips the init.d enable+start block. We call
     # default_postinst for any side-effects (uci-defaults runner) and then enable
     # /start /etc/init.d/singbox-ui explicitly. Both ops are idempotent.
     cat > "$scripts_dir/post-install.sh" <<'EOF'
@@ -187,8 +347,6 @@ default_postinst $0 $@
     /etc/init.d/singbox-ui enable
     /etc/init.d/singbox-ui start
   fi
-  rm -f /tmp/luci-indexcache.*
-  rm -rf /tmp/luci-modulecache/
   killall -HUP rpcd 2>/dev/null
 }
 exit 0
@@ -220,6 +378,110 @@ default_postinst $0 $@
     # daemon down between stop and start.
     /etc/init.d/singbox-ui restart
   fi
+  killall -HUP rpcd 2>/dev/null
+}
+exit 0
+EOF
+    chmod 0755 "$scripts_dir"/*.sh
+}
+
+# populate_singbox_root
+#   Lay down the backend file set + .list/.conffiles + service scripts. Does
+#   NOT run apk mkpkg (ownership established by callers).
+populate_singbox_root() {
+    rm -rf "$SINGBOX_ROOT" "$SINGBOX_SCRIPTS"
+    install_manifest "$SINGBOX_MANIFEST" "$SINGBOX_SRC" "$SINGBOX_ROOT"
+
+    # .list/.conffiles for the conffile /etc/config/singbox-ui.
+    write_pkg_list "$SINGBOX_ROOT" "$SINGBOX_NAME"
+    local list_dir="$SINGBOX_ROOT/lib/apk/packages"
+    local conffile_hash
+    conffile_hash="$(sha256sum "$SINGBOX_ROOT$SINGBOX_CONFFILE" | awk '{print $1}')"
+    printf '%s\n' "$SINGBOX_CONFFILE" > "$list_dir/${SINGBOX_NAME}.conffiles"
+    printf '%s %s\n' "$SINGBOX_CONFFILE" "$conffile_hash" > "$list_dir/${SINGBOX_NAME}.conffiles_static"
+
+    write_singbox_scripts "$SINGBOX_SCRIPTS"
+
+    if [ "$APK_MKPKG_STUB" = "1" ]; then
+        : > "$SINGBOX_OUT"
+    fi
+}
+
+# mkpkg_singbox
+#   apk mkpkg for the noarch backend.  Must run after populate_singbox_root and
+#   after ownership is correct.
+#
+# The package conflicts with `firewall` (it manages its own nft ruleset). apk
+# mkpkg may reject a `conflicts:` install-info field; if so we OMIT it rather
+# than fail the build (the buildroot Makefile carries PKG_CONFLICTS:=firewall).
+mkpkg_singbox() {
+    local conflicts_arg=""
+    if "$APK_BIN" mkpkg --help 2>&1 | grep -q 'conflicts'; then
+        conflicts_arg=1
+    fi
+    # Probe once whether mkpkg tolerates an -I "conflicts:..." field. If the
+    # help text doesn't mention it, omit it (don't fail the build).
+    if [ -n "$conflicts_arg" ]; then
+        "$APK_BIN" mkpkg \
+            --files "$SINGBOX_ROOT" \
+            --output "$SINGBOX_OUT" \
+            -I "name:$SINGBOX_NAME" \
+            -I "version:$VERSION" \
+            -I "description:$SINGBOX_DESC" \
+            -I "arch:noarch" \
+            -I "license:$PKG_LICENSE" \
+            -I "origin:$SINGBOX_NAME" \
+            -I "maintainer:$PKG_MAINTAINER" \
+            -I "url:$PKG_URL" \
+            -I "depends:$SINGBOX_DEPENDS" \
+            -I "provides:${SINGBOX_NAME}-any" \
+            -I "conflicts:firewall" \
+            -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
+            -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
+            -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh" \
+        && return 0
+        # If mkpkg rejected the conflicts field at runtime, fall through to the
+        # no-conflicts variant rather than failing the build.
+        echo ">>> apk mkpkg rejected 'conflicts:firewall' — retrying without it" >&2
+    fi
+    "$APK_BIN" mkpkg \
+        --files "$SINGBOX_ROOT" \
+        --output "$SINGBOX_OUT" \
+        -I "name:$SINGBOX_NAME" \
+        -I "version:$VERSION" \
+        -I "description:$SINGBOX_DESC" \
+        -I "arch:noarch" \
+        -I "license:$PKG_LICENSE" \
+        -I "origin:$SINGBOX_NAME" \
+        -I "maintainer:$PKG_MAINTAINER" \
+        -I "url:$PKG_URL" \
+        -I "depends:$SINGBOX_DEPENDS" \
+        -I "provides:${SINGBOX_NAME}-any" \
+        -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
+        -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
+        -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh"
+}
+
+# ===========================================================================
+# 3) luci-app-singbox-ui (noarch) — populate + mkpkg
+# ===========================================================================
+LUCIAPP_ROOT="$WORK_DIR/pkg-root-luci-app"
+LUCIAPP_SCRIPTS="$WORK_DIR/scripts-luci-app"
+LUCIAPP_OUT="$OUTPUT_DIR/${LUCIAPP_NAME}_${VERSION}.apk"
+
+# write_luciapp_scripts <scripts_dir>
+#   post-install only: default_postinst + flush LuCI caches + HUP rpcd. NO
+#   init.d (the frontend has no service of its own).
+write_luciapp_scripts() {
+    local scripts_dir="$1"
+    mkdir -p "$scripts_dir"
+    cat > "$scripts_dir/post-install.sh" <<'EOF'
+#!/bin/sh
+[ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
+[ -s ${IPKG_INSTROOT}/lib/functions.sh ] || exit 0
+. ${IPKG_INSTROOT}/lib/functions.sh
+default_postinst $0 $@
+[ -n "${IPKG_INSTROOT}" ] || {
   rm -f /tmp/luci-indexcache.*
   rm -rf /tmp/luci-modulecache/
   killall -HUP rpcd 2>/dev/null
@@ -229,116 +491,76 @@ EOF
     chmod 0755 "$scripts_dir"/*.sh
 }
 
-# ---------------------------------------------------------------------------
-# populate_app_root <exact-arch> <abi>
-#   Assembles the per-arch package root (manifest install, bbolt binary copy,
-#   .list/.conffiles, scripts).  Does NOT run apk mkpkg — callers do that
-#   after establishing correct ownership.
-#   Root is written to $WORK_DIR/pkg-root-app-<exact-arch> so binaries don't
-#   bleed between arches and the test can inspect each root independently.
-#   Under APK_MKPKG_STUB=1 also touches the stub output apk.
-# ---------------------------------------------------------------------------
-populate_app_root() {
-    local exact_arch="$1"
-    local abi="$2"
-
-    local app_root="$WORK_DIR/pkg-root-app-$exact_arch"
-    local app_scripts="$WORK_DIR/scripts-app-$exact_arch"
-    local app_out="$OUTPUT_DIR/${APP_NAME}_${VERSION}_${exact_arch}.apk"
-    rm -rf "$app_root" "$app_scripts"
-
-    # Install file set from manifest
-    while IFS=$'\t' read -r src dst mode; do
-        case "$src" in '#'*|'') continue ;; esac
-        install -d "$app_root/$(dirname "$dst")"
-        case "$mode" in
-            bin)  install -m 0755 "$PKG_SRC/$src" "$app_root/$dst" ;;
-            conf) install -m 0644 "$PKG_SRC/$src" "$app_root/$dst" ;;
-            data) install -m 0644 "$PKG_SRC/$src" "$app_root/$dst" ;;
-            *)    echo "install-manifest.txt: unknown mode '$mode' for $src" >&2; exit 1 ;;
-        esac
-    done < "$MANIFEST"
-
-    # Embed the bbolt binary (if BBOLT_BIN_DIR is set)
-    if [ -n "$BBOLT_BIN_DIR" ]; then
-        install -D -m0755 "$BBOLT_BIN_DIR/bbolt-client-rs-$abi" \
-            "$app_root/usr/libexec/singbox-ui/bbolt-client"
-    fi
-
-    # Build .list and .conffiles AFTER binary copy so the binary is included
-    local list_dir="$app_root/lib/apk/packages"
-    mkdir -p "$list_dir"
-    (cd "$app_root" && find . -type f ! -path './lib/apk/packages/*' \
-        | LC_ALL=C sort | sed 's#^\./#/#') > "$list_dir/${APP_NAME}.list"
-    local conffile_hash
-    conffile_hash="$(sha256sum "$app_root$APP_CONFFILE" | awk '{print $1}')"
-    printf '%s\n' "$APP_CONFFILE" > "$list_dir/${APP_NAME}.conffiles"
-    printf '%s %s\n' "$APP_CONFFILE" "$conffile_hash" > "$list_dir/${APP_NAME}.conffiles_static"
-
-    write_app_scripts "$app_scripts"
+# populate_luciapp_root
+#   Lay down the frontend file set (htdocs->www mapping already in the manifest
+#   dst column) + .list + post-install script. No conffiles.
+populate_luciapp_root() {
+    rm -rf "$LUCIAPP_ROOT" "$LUCIAPP_SCRIPTS"
+    install_manifest "$LUCIAPP_MANIFEST" "$LUCIAPP_SRC" "$LUCIAPP_ROOT"
+    write_pkg_list "$LUCIAPP_ROOT" "$LUCIAPP_NAME"
+    write_luciapp_scripts "$LUCIAPP_SCRIPTS"
 
     if [ "$APK_MKPKG_STUB" = "1" ]; then
-        : > "$app_out"
-        return
+        : > "$LUCIAPP_OUT"
     fi
 }
 
-# ---------------------------------------------------------------------------
-# mkpkg_main <exact-arch>
-#   Runs apk mkpkg for one per-arch main package.  Must be called after
-#   populate_app_root and after the root directory has correct (root:root)
-#   ownership.
-# ---------------------------------------------------------------------------
-mkpkg_main() {
-    local exact_arch="$1"
-    local app_root="$WORK_DIR/pkg-root-app-$exact_arch"
-    local app_scripts="$WORK_DIR/scripts-app-$exact_arch"
-    local app_out="$OUTPUT_DIR/${APP_NAME}_${VERSION}_${exact_arch}.apk"
+# mkpkg_luciapp
+#   apk mkpkg for the noarch frontend. provides/replaces the legacy
+#   luci-singbox-ui name so installs migrate cleanly.
+mkpkg_luciapp() {
     "$APK_BIN" mkpkg \
-        --files "$app_root" \
-        --output "$app_out" \
-        -I "name:$APP_NAME" \
+        --files "$LUCIAPP_ROOT" \
+        --output "$LUCIAPP_OUT" \
+        -I "name:$LUCIAPP_NAME" \
         -I "version:$VERSION" \
-        -I "description:$APP_DESC" \
-        -I "arch:$exact_arch" \
+        -I "description:$LUCIAPP_DESC" \
+        -I "arch:noarch" \
         -I "license:$PKG_LICENSE" \
-        -I "origin:$APP_NAME" \
+        -I "origin:$LUCIAPP_NAME" \
         -I "maintainer:$PKG_MAINTAINER" \
         -I "url:$PKG_URL" \
-        -I "depends:$APP_DEPENDS" \
-        -I "provides:${APP_NAME}-any" \
-        -s "post-install:$app_scripts/post-install.sh" \
-        -s "pre-deinstall:$app_scripts/pre-deinstall.sh" \
-        -s "post-upgrade:$app_scripts/post-upgrade.sh"
+        -I "depends:$LUCIAPP_DEPENDS" \
+        -I "provides:luci-singbox-ui" \
+        -I "provides:${LUCIAPP_NAME}-any" \
+        -I "replaces:luci-singbox-ui" \
+        -s "post-install:$LUCIAPP_SCRIPTS/post-install.sh"
 }
 
-# ---------------------------------------------------------------------------
-# i18n-ru package root (built once, noarch)
-# ---------------------------------------------------------------------------
+# ===========================================================================
+# 4) luci-i18n-singbox-ui-ru (noarch) — populate + mkpkg
+# ===========================================================================
 I18N_ROOT="$WORK_DIR/pkg-root-i18n-ru"
 I18N_SCRIPTS="$WORK_DIR/scripts-i18n-ru"
-rm -rf "$I18N_ROOT" "$I18N_SCRIPTS"
+I18N_OUT="$OUTPUT_DIR/${I18N_NAME}_${VERSION}.apk"
 
-PO_FILE="$PKG_SRC/po/ru/${APP_NAME}.po"
+# The i18n .po now lives under the LuCI frontend package source tree. The DOMAIN
+# (and the .po/.lmo basename) stays luci-singbox-ui — do NOT rename it.
+PO_FILE="$LUCIAPP_SRC/po/ru/${I18N_DOMAIN}.po"
 if [ ! -f "$PO_FILE" ]; then
     echo "Russian .po missing: $PO_FILE" >&2
     exit 1
 fi
 
-install -d \
-    "$I18N_ROOT/usr/lib/lua/luci/i18n" \
-    "$I18N_ROOT/etc/uci-defaults"
+# populate_i18n_root
+#   po2lmo the Russian .po into the LuCI i18n dir + language uci-default + .list
+#   + post-install script.
+populate_i18n_root() {
+    rm -rf "$I18N_ROOT" "$I18N_SCRIPTS"
+    install -d \
+        "$I18N_ROOT/usr/lib/lua/luci/i18n" \
+        "$I18N_ROOT/etc/uci-defaults"
 
-if [ "$APK_MKPKG_STUB" = "1" ]; then
-    # Under stub: SDK not available, so skip po2lmo. Touch a placeholder .lmo
-    # so the root assembly doesn't fail. The test only checks file counts and
-    # main-apk binary contents, not i18n internals.
-    touch "$I18N_ROOT/usr/lib/lua/luci/i18n/${APP_NAME}.ru.lmo"
-else
-    "$PO2LMO_BIN" "$PO_FILE" "$I18N_ROOT/usr/lib/lua/luci/i18n/${APP_NAME}.ru.lmo"
-fi
+    if [ "$APK_MKPKG_STUB" = "1" ]; then
+        # Under stub: SDK not available, so skip po2lmo. Touch a placeholder .lmo
+        # so the root assembly doesn't fail. The test only checks file counts and
+        # apk naming, not i18n internals.
+        touch "$I18N_ROOT/usr/lib/lua/luci/i18n/${I18N_DOMAIN}.ru.lmo"
+    else
+        "$PO2LMO_BIN" "$PO_FILE" "$I18N_ROOT/usr/lib/lua/luci/i18n/${I18N_DOMAIN}.ru.lmo"
+    fi
 
-cat > "$I18N_ROOT/etc/uci-defaults/${I18N_NAME}" <<'EOF'
+    cat > "$I18N_ROOT/etc/uci-defaults/${I18N_NAME}" <<'EOF'
 #!/bin/sh
 uci -q batch <<UCI
 set luci.languages.ru='Русский (Russian)'
@@ -346,15 +568,12 @@ commit luci
 UCI
 exit 0
 EOF
-chmod 0755 "$I18N_ROOT/etc/uci-defaults/${I18N_NAME}"
+    chmod 0755 "$I18N_ROOT/etc/uci-defaults/${I18N_NAME}"
 
-i18n_list_dir="$I18N_ROOT/lib/apk/packages"
-mkdir -p "$i18n_list_dir"
-(cd "$I18N_ROOT" && find . -type f ! -path './lib/apk/packages/*' \
-    | LC_ALL=C sort | sed 's#^\./#/#') > "$i18n_list_dir/${I18N_NAME}.list"
+    write_pkg_list "$I18N_ROOT" "$I18N_NAME"
 
-mkdir -p "$I18N_SCRIPTS"
-cat > "$I18N_SCRIPTS/post-install.sh" <<'EOF'
+    mkdir -p "$I18N_SCRIPTS"
+    cat > "$I18N_SCRIPTS/post-install.sh" <<'EOF'
 #!/bin/sh
 [ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
 [ -s ${IPKG_INSTROOT}/lib/functions.sh ] || exit 0
@@ -362,36 +581,16 @@ cat > "$I18N_SCRIPTS/post-install.sh" <<'EOF'
 default_postinst $0 $@
 exit 0
 EOF
-chmod 0755 "$I18N_SCRIPTS"/*.sh
+    chmod 0755 "$I18N_SCRIPTS"/*.sh
 
-I18N_OUT="$OUTPUT_DIR/${I18N_NAME}_${VERSION}.apk"
-rm -f "$I18N_OUT"
+    if [ "$APK_MKPKG_STUB" = "1" ]; then
+        : > "$I18N_OUT"
+    fi
+}
 
-# ---------------------------------------------------------------------------
-# Run apk mkpkg for all per-arch main packages + one noarch i18n
-# ---------------------------------------------------------------------------
-echo ">>> Building apk packages"
-
-if [ "$APK_MKPKG_STUB" = "1" ]; then
-    # Stub path: populate all per-arch roots + i18n without SDK or ownership.
-    for abi in $BBOLT_ABIS; do
-        for exact in $(get_arches_for_abi "$abi"); do
-            populate_app_root "$exact" "$abi"
-        done
-    done
-    : > "$I18N_OUT"
-elif [ "$(id -u)" -eq 0 ]; then
-    # Already running as root — populate the root, then mkpkg sees correct ownership.
-    for abi in $BBOLT_ABIS; do
-        for exact in $(get_arches_for_abi "$abi"); do
-            app_root="$WORK_DIR/pkg-root-app-$exact"
-            app_scripts="$WORK_DIR/scripts-app-$exact"
-            populate_app_root "$exact" "$abi"
-            chown -R 0:0 "$app_root" "$app_scripts"
-            mkpkg_main "$exact"
-        done
-    done
-    chown -R 0:0 "$I18N_ROOT" "$I18N_SCRIPTS"
+# mkpkg_i18n
+#   apk mkpkg for the noarch Russian translation.
+mkpkg_i18n() {
     "$APK_BIN" mkpkg \
         --files "$I18N_ROOT" \
         --output "$I18N_OUT" \
@@ -400,22 +599,84 @@ elif [ "$(id -u)" -eq 0 ]; then
         -I "description:$I18N_DESC" \
         -I "arch:noarch" \
         -I "license:$PKG_LICENSE" \
-        -I "origin:$APP_NAME" \
+        -I "origin:$LUCIAPP_NAME" \
         -I "maintainer:$PKG_MAINTAINER" \
         -I "url:$PKG_URL" \
         -I "depends:$I18N_DEPENDS" \
         -I "provides:${I18N_NAME}-any" \
         -s "post-install:$I18N_SCRIPTS/post-install.sh"
+}
+
+# ===========================================================================
+# Build dispatch — three ownership modes, all four packages.
+# ===========================================================================
+echo ">>> Building apk packages"
+
+if [ "$APK_MKPKG_STUB" = "1" ]; then
+    # Stub path: populate every root + touch stub outputs. No SDK or ownership.
+    if [ "$BUILD_BBOLT" = "1" ]; then
+        for abi in $BBOLT_ABIS; do
+            for exact in $(get_arches_for_abi "$abi"); do
+                populate_bbolt_root "$exact" "$abi"
+            done
+        done
+    fi
+    populate_singbox_root
+    populate_luciapp_root
+    populate_i18n_root
+elif [ "$(id -u)" -eq 0 ]; then
+    # Already running as root — populate the roots, chown 0:0, then mkpkg sees
+    # correct ownership.
+    if [ "$BUILD_BBOLT" = "1" ]; then
+        for abi in $BBOLT_ABIS; do
+            for exact in $(get_arches_for_abi "$abi"); do
+                root="$WORK_DIR/pkg-root-bbolt-$exact"
+                populate_bbolt_root "$exact" "$abi"
+                chown -R 0:0 "$root"
+                mkpkg_bbolt "$exact"
+            done
+        done
+    fi
+
+    populate_singbox_root
+    chown -R 0:0 "$SINGBOX_ROOT" "$SINGBOX_SCRIPTS"
+    mkpkg_singbox
+
+    populate_luciapp_root
+    chown -R 0:0 "$LUCIAPP_ROOT" "$LUCIAPP_SCRIPTS"
+    mkpkg_luciapp
+
+    populate_i18n_root
+    chown -R 0:0 "$I18N_ROOT" "$I18N_SCRIPTS"
+    mkpkg_i18n
 elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
     # Unprivileged user namespace: populate roots as current user (no mkpkg yet),
     # then chown+mkpkg exactly once inside the namespace where UID 0 is mapped to us.
-    for abi in $BBOLT_ABIS; do
-        for exact in $(get_arches_for_abi "$abi"); do
-            populate_app_root "$exact" "$abi"
+    if [ "$BUILD_BBOLT" = "1" ]; then
+        for abi in $BBOLT_ABIS; do
+            for exact in $(get_arches_for_abi "$abi"); do
+                populate_bbolt_root "$exact" "$abi"
+            done
         done
-    done
+    fi
+    populate_singbox_root
+    populate_luciapp_root
+    populate_i18n_root
+
+    # Whether mkpkg tolerates -I "conflicts:..." — probed in parent (the inner
+    # shell can't run our bash functions), passed through to the namespaced sh.
+    SINGBOX_CONFLICTS_OK=0
+    if "$APK_BIN" mkpkg --help 2>&1 | grep -q 'conflicts'; then
+        SINGBOX_CONFLICTS_OK=1
+    fi
+
     # Export everything the inline shell needs.
-    export APP_NAME APP_DESC APP_DEPENDS APP_CONFFILE \
+    export BUILD_BBOLT \
+           BBOLT_NAME BBOLT_DESC BBOLT_DEPENDS \
+           SINGBOX_NAME SINGBOX_DESC SINGBOX_DEPENDS SINGBOX_CONFFILE \
+           SINGBOX_ROOT SINGBOX_SCRIPTS SINGBOX_OUT SINGBOX_CONFLICTS_OK \
+           LUCIAPP_NAME LUCIAPP_DESC LUCIAPP_DEPENDS \
+           LUCIAPP_ROOT LUCIAPP_SCRIPTS LUCIAPP_OUT \
            I18N_NAME I18N_DESC I18N_DEPENDS \
            I18N_ROOT I18N_SCRIPTS I18N_OUT \
            APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER \
@@ -424,31 +685,86 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
            bbolt_arches_mipsel bbolt_arches_mips BBOLT_ABIS
     # shellcheck disable=SC2016
     unshare -r sh -c '
-        for abi in $BBOLT_ABIS; do
-            eval "exacts=\$bbolt_arches_$abi"
-            for exact in $exacts; do
-                app_root="$WORK_DIR/pkg-root-app-$exact"
-                app_scripts="$WORK_DIR/scripts-app-$exact"
-                app_out="$OUTPUT_DIR/${APP_NAME}_${VERSION}_${exact}.apk"
-                chown -R 0:0 "$app_root" "$app_scripts"
-                "$APK_BIN" mkpkg \
-                    --files "$app_root" \
-                    --output "$app_out" \
-                    -I "name:$APP_NAME" \
-                    -I "version:$VERSION" \
-                    -I "description:$APP_DESC" \
-                    -I "arch:$exact" \
-                    -I "license:$PKG_LICENSE" \
-                    -I "origin:$APP_NAME" \
-                    -I "maintainer:$PKG_MAINTAINER" \
-                    -I "url:$PKG_URL" \
-                    -I "depends:$APP_DEPENDS" \
-                    -I "provides:${APP_NAME}-any" \
-                    -s "post-install:$app_scripts/post-install.sh" \
-                    -s "pre-deinstall:$app_scripts/pre-deinstall.sh" \
-                    -s "post-upgrade:$app_scripts/post-upgrade.sh"
+        if [ "$BUILD_BBOLT" = "1" ]; then
+            for abi in $BBOLT_ABIS; do
+                eval "exacts=\$bbolt_arches_$abi"
+                for exact in $exacts; do
+                    root="$WORK_DIR/pkg-root-bbolt-$exact"
+                    out="$OUTPUT_DIR/${BBOLT_NAME}_${VERSION}_${exact}.apk"
+                    chown -R 0:0 "$root"
+                    "$APK_BIN" mkpkg \
+                        --files "$root" \
+                        --output "$out" \
+                        -I "name:$BBOLT_NAME" \
+                        -I "version:$VERSION" \
+                        -I "description:$BBOLT_DESC" \
+                        -I "arch:$exact" \
+                        -I "license:$PKG_LICENSE" \
+                        -I "origin:$BBOLT_NAME" \
+                        -I "maintainer:$PKG_MAINTAINER" \
+                        -I "url:$PKG_URL" \
+                        -I "depends:$BBOLT_DEPENDS" \
+                        -I "provides:${BBOLT_NAME}-any"
+                done
             done
-        done
+        fi
+
+        chown -R 0:0 "$SINGBOX_ROOT" "$SINGBOX_SCRIPTS"
+        if [ "$SINGBOX_CONFLICTS_OK" = "1" ]; then
+            "$APK_BIN" mkpkg \
+                --files "$SINGBOX_ROOT" \
+                --output "$SINGBOX_OUT" \
+                -I "name:$SINGBOX_NAME" \
+                -I "version:$VERSION" \
+                -I "description:$SINGBOX_DESC" \
+                -I "arch:noarch" \
+                -I "license:$PKG_LICENSE" \
+                -I "origin:$SINGBOX_NAME" \
+                -I "maintainer:$PKG_MAINTAINER" \
+                -I "url:$PKG_URL" \
+                -I "depends:$SINGBOX_DEPENDS" \
+                -I "provides:${SINGBOX_NAME}-any" \
+                -I "conflicts:firewall" \
+                -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
+                -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
+                -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh"
+        else
+            "$APK_BIN" mkpkg \
+                --files "$SINGBOX_ROOT" \
+                --output "$SINGBOX_OUT" \
+                -I "name:$SINGBOX_NAME" \
+                -I "version:$VERSION" \
+                -I "description:$SINGBOX_DESC" \
+                -I "arch:noarch" \
+                -I "license:$PKG_LICENSE" \
+                -I "origin:$SINGBOX_NAME" \
+                -I "maintainer:$PKG_MAINTAINER" \
+                -I "url:$PKG_URL" \
+                -I "depends:$SINGBOX_DEPENDS" \
+                -I "provides:${SINGBOX_NAME}-any" \
+                -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
+                -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
+                -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh"
+        fi
+
+        chown -R 0:0 "$LUCIAPP_ROOT" "$LUCIAPP_SCRIPTS"
+        "$APK_BIN" mkpkg \
+            --files "$LUCIAPP_ROOT" \
+            --output "$LUCIAPP_OUT" \
+            -I "name:$LUCIAPP_NAME" \
+            -I "version:$VERSION" \
+            -I "description:$LUCIAPP_DESC" \
+            -I "arch:noarch" \
+            -I "license:$PKG_LICENSE" \
+            -I "origin:$LUCIAPP_NAME" \
+            -I "maintainer:$PKG_MAINTAINER" \
+            -I "url:$PKG_URL" \
+            -I "depends:$LUCIAPP_DEPENDS" \
+            -I "provides:luci-singbox-ui" \
+            -I "provides:${LUCIAPP_NAME}-any" \
+            -I "replaces:luci-singbox-ui" \
+            -s "post-install:$LUCIAPP_SCRIPTS/post-install.sh"
+
         chown -R 0:0 "$I18N_ROOT" "$I18N_SCRIPTS"
         "$APK_BIN" mkpkg \
             --files "$I18N_ROOT" \
@@ -458,7 +774,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
             -I "description:$I18N_DESC" \
             -I "arch:noarch" \
             -I "license:$PKG_LICENSE" \
-            -I "origin:$APP_NAME" \
+            -I "origin:$LUCIAPP_NAME" \
             -I "maintainer:$PKG_MAINTAINER" \
             -I "url:$PKG_URL" \
             -I "depends:$I18N_DEPENDS" \
