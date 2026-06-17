@@ -27,7 +27,8 @@ fi
 export UCODE_STUB_DIR
 [ -n "${UCODE_BIN:-}" ] && export UCODE_BIN
 [ -n "${UCODE_LIB_DIR:-}" ] && export UCODE_LIB_DIR
-: "${UCODE_APP_LIB_DIR:=$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+# Backend ucode lib now lives in the singbox-ui/ package (three-package split).
+: "${UCODE_APP_LIB_DIR:=$PWD/singbox-ui/root/usr/share/singbox-ui/lib}"
 export UCODE_APP_LIB_DIR
 
 echo "==> Shell tests"
