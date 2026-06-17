@@ -16,11 +16,14 @@ grep -qE "SB_DOMAIN=[\"'][^\"']*\bui\b" "$EP" \
 	&& fail "entrypoint SB_DOMAIN still includes the ui domain (node tests would run in VM)"
 
 # Dry-run the resolved VM list with the same SB_DOMAIN the entrypoint uses and
-# assert NO tests/ui/ files (those are the node-gated ones) are selected.
-out=$(SB_DRY_RUN=1 SINGBOX_TESTS_IN_VM=1 SB_DOMAIN="backend packaging bbolt" \
+# assert NO tests/ui/ files (node-gated) and NO tests/cross/ files (packaging,
+# run in their own apk lane) are selected — only backend.
+out=$(SB_DRY_RUN=1 SINGBOX_TESTS_IN_VM=1 SB_DOMAIN=backend \
 	SB_SUITE="backend ui cross" sh tests/run.sh 2>/dev/null)
 printf '%s\n' "$out" | grep -q 'tests/ui/' \
 	&& fail "tests/ui/ files still selected under the VM SB_DOMAIN"
+printf '%s\n' "$out" | grep -q 'tests/cross/' \
+	&& fail "tests/cross/ (packaging) files selected under VM SB_DOMAIN=backend"
 printf '%s\n' "$out" | grep -q 'tests/backend/' \
 	|| fail "backend tests missing from the VM list"
 
