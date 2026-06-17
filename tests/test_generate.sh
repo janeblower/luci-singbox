@@ -439,7 +439,9 @@ config ruleset 'geosite_cn'
 
 config dns_rule 'cn_fakeip'
 	option enabled '1'
-	list ruleset 'geosite_cn'
+	option type 'default'
+	list rule_set 'geosite_cn'
+	option action 'route'
 	option server 'fakeip'
 "
 run_gen

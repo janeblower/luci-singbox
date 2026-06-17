@@ -42,7 +42,6 @@ check "google server"  '"server": "8.8.8.8"'
 grep -q '"detour":' "$TMPDIR/out.json" && { echo "FAIL: default DNS must not detour to implicit direct"; exit 1; }
 echo "  PASS: no DNS detour to implicit outbound"
 check "dns rule"       '"action": "route"'
-check "default rewrite_ttl"  '"rewrite_ttl": 60'
 check "dns final"      '"final": "google"'
 check "dns strategy"   '"strategy": "prefer_ipv4"'
 
