@@ -246,9 +246,16 @@ export async function openAddModal(page, kind, name) {
         const tbl = document.getElementById(`cbi-singbox-ui-${kind}`);
         if (!tbl) return { ok: false, reason: `no #cbi-singbox-ui-${kind}` };
 
-        // LuCI renders a .cbi-section-create row above the table when
-        // s.addremove is true. The name input has class .cbi-section-create-name.
-        const nameInp = tbl.parentElement.querySelector('.cbi-section-create-name')
+        // LuCI renders a .cbi-section-create row INSIDE the GridSection div
+        // (#cbi-singbox-ui-<kind> is the .cbi-section element itself). Query
+        // WITHIN that element first — when several grids share one Map (DNS:
+        // dns_server + dns_rule + settings under one cbi-map), a parentElement
+        // query would grab the first grid's create-name and open the WRONG
+        // modal. Scoped-within is correct for every grid (verified inbound/
+        // outbound/dns_server/dns_rule). Fall back to the looser lookups only
+        // if the section-scoped one is somehow absent.
+        const nameInp = tbl.querySelector('.cbi-section-create-name')
+                       || tbl.parentElement.querySelector('.cbi-section-create-name')
                        || document.querySelector(`#cbi-singbox-ui-${kind} ~ .cbi-section-create .cbi-section-create-name`)
                        || document.querySelector('.cbi-section-create-name');
         if (!nameInp) return { ok: false, reason: 'no .cbi-section-create-name input' };
