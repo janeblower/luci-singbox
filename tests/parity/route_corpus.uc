@@ -14,7 +14,8 @@ return [
     { name: "route_reject", kind: "rule", tag: null,
       sections: [
         { type: "route_rule", name: "r1",
-          opts: { enabled: "1", type: "default", action: "reject", method: "drop" },
+          opts: { enabled: "1", type: "default", action: "reject", method: "drop",
+                  no_drop: "1" },
           lists: { ip_cidr: [ "10.0.0.0/8" ] } },
       ] },
     { name: "route_sniff", kind: "rule", tag: null,
@@ -52,7 +53,9 @@ return [
           opts: { enabled: "1", type: "default", action: "route-options",
                   override_address: "10.0.0.1", override_port: "5353",
                   network_strategy: "fallback", fallback_delay: "300ms",
-                  udp_connect: "1", udp_timeout: "5m", udp_disable_domain_unmapping: "1" },
+                  udp_connect: "1", udp_timeout: "5m", udp_disable_domain_unmapping: "1",
+                  tls_fragment: "1", tls_fragment_fallback_delay: "500ms",
+                  tls_record_fragment: "1" },
           lists: { domain_suffix: [ "example.com" ] } },
       ] },
     { name: "route_clash_mode", kind: "rule", tag: null,
@@ -61,6 +64,15 @@ return [
           opts: { enabled: "1", type: "default", clash_mode: "Global",
                   action: "route", outbound: "proxy" },
           lists: {} },
+        { type: "outbound", name: "proxy", opts: { type: "vless" }, lists: {} },
+      ] },
+    // `client` matcher is route-only (ctx ROUTE: route + route headless), not
+    // valid in dns rules — so it must be exercised through the route pipeline.
+    { name: "route_client_matcher", kind: "rule", tag: null,
+      sections: [
+        { type: "route_rule", name: "r1",
+          opts: { enabled: "1", type: "default", action: "route", outbound: "proxy" },
+          lists: { client: [ "chrome" ] } },
         { type: "outbound", name: "proxy", opts: { type: "vless" }, lists: {} },
       ] },
     { name: "rs_remote_detour", kind: "ruleset", tag: "geosite",

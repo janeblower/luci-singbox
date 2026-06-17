@@ -8,7 +8,12 @@
 disable_mtu_discovery   # max_version 1.14: removed; emitting it asserts pre-1.14 behavior we no longer target
 
 # --- legacy DNS server type (empty `type`), removed sing-box 1.14 ---
-# The dns `legacy` descriptor's type field is gated max_version 1.14; its
-# distinctive keys are shared with other dns types, so nothing unique to
-# allowlist here — kept as documentation that legacy is intentionally
-# fixture-free per the design spec (allowlist instead of fixtures).
+# The dns `legacy` descriptor is gated max_version 1.14 and is intentionally
+# fixture-free per the design spec (allowlist instead of fixtures). These three
+# json_keys are UNIQUE to the legacy address-string descriptor (its other keys
+# — strategy/detour/client_subnet — are shared with non-legacy dns types and
+# covered there). Emitting them in a golden would assert pre-1.14 behavior we
+# no longer target.
+address                 # legacy DNS address-string field, removed in 1.14
+address_resolver        # legacy DNS address resolver tag, removed in 1.14
+address_strategy        # legacy DNS address strategy, removed in 1.14
