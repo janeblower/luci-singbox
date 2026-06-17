@@ -4,8 +4,6 @@
 # one container per run, snapshots /etc/config/singbox-ui inside it, then
 # restores before each test file. Puppeteer/Chrome run on the host via bun.
 set -eu
-. "$(dirname "$0")/../lib/sb_helpers.sh"
-set -o pipefail
 cd "$(dirname "$0")/../.."
 
 # tests/run.sh globs the test files and runs each one inside whichever
@@ -23,6 +21,16 @@ fi
 # and runs the suite for real there.
 command -v bun    >/dev/null 2>&1 || { echo "SKIP test_browser: bun not available (browser-test lane only)"; exit 0; }
 command -v docker >/dev/null 2>&1 || { echo "SKIP test_browser: docker not available (browser-test lane only)"; exit 0; }
+
+# Past the guards => this IS the browser lane. run.sh invokes every test via
+# `sh "$t"` (dash on the GitHub ubuntu runner / packaging lane), but the harness
+# below needs bash (set -o pipefail + the puppeteer driver). dash would die on
+# `set -o pipefail`; the POSIX-safe guards above already ran, so re-exec under
+# bash now for the real run. (Kept after the guards so non-browser lanes skip
+# cleanly under dash without even needing bash present.)
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
+. "$(dirname "$0")/../lib/sb_helpers.sh"
+set -o pipefail
 
 # Build/cache image keyed on the container source files.
 IMG_HASH=$(cat tests/browser-container/Dockerfile \
