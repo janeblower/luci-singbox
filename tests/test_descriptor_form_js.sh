@@ -56,6 +56,13 @@ const sandbox = {
 	form:       form,
 	ui:         {},
 	validators: validators,
+	// descriptor_form.js references these for the per-field version gate
+	// (versionGate runs for every field). Stub them so the module loads;
+	// getCoreVersion '' => fail-open (no gating), getCompatOnly false.
+	SbViewState: { getCoreVersion: () => '', getCompatOnly: () => false,
+	               getSchema: () => ({}) },
+	SbCommon:    { compareVersions: () => 0 },
+	network:    {},
 	console:    console,
 };
 const ctx = vm.createContext(sandbox);
