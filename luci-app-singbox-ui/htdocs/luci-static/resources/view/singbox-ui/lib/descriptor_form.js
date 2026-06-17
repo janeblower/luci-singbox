@@ -163,7 +163,13 @@ function disableWithNote(opt, note) {
 
 function attachValidator(opt, validateName) {
     if (!validateName) return;
-    var fn = validators[validateName];
+    // Descriptors declare short names ("port"/"uuid"/"host"); the validators
+    // module exports them PascalCased with an `is` prefix (isPort/isUuid/
+    // isHost). Accept the literal name first, then fall back to the
+    // `is<Capitalized>` form — otherwise the custom range/format validators
+    // never attach and only LuCI's built-in non-empty/datatype check fires.
+    var fn = validators[validateName]
+        || validators['is' + validateName.charAt(0).toUpperCase() + validateName.slice(1)];
     if (typeof fn === 'function')
         opt.validate = function (_section_id, value) { return fn(value); };
 }
