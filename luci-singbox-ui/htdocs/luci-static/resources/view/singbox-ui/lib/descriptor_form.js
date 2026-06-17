@@ -387,6 +387,48 @@ function applyMaterialized(s, kind, protoName, materialized) {
     });
 }
 
+// applyMaterializedNamed(s, kind, typeName, materialized) — render a singleton
+// (NamedSection) descriptor: no type discriminator, no grid modal. Field
+// vocabulary identical to applyMaterialized; version gate + advanced toggle +
+// secret + dynamic + validators all reused. Fields with json_key are persisted
+// by LuCI as ordinary NamedSection options.
+function applyMaterializedNamed(s, kind, typeName, materialized) {
+    if (!materialized || !Array.isArray(materialized.fields)) return;
+    materialized.fields.forEach(function (f) {
+        var gate = versionGate(f);
+        if (gate.mode === 'hide') return;
+        var opt = s.option(widgetFor(f), f.name, _(labelFor(f)));
+        if (f.required)        opt.rmempty = false;
+        if (f.default != null) opt.default = String(f.default);
+        if (f.placeholder)     opt.placeholder = f.placeholder;
+        var help = f.ui_help || f.description;
+        if (help) opt.description = _(help);
+        // depends arms: advanced toggle + per-value depends + parent_enabled.
+        // No discriminator arm — singletons have a single type.
+        if (f.depends) {
+            var vals = Array.isArray(f.depends.value) ? f.depends.value : [f.depends.value];
+            vals.forEach(function (v) {
+                var d = {}; d[f.depends.field] = v;
+                if (f.advanced) d['_show_advanced_' + f.tab] = '1';
+                if (f.parent_enabled) d[f.parent_enabled] = '1';
+                opt.depends(d);
+            });
+        } else if (f.advanced) {
+            opt.depends('_show_advanced_' + f.tab, '1');
+        } else if (f.parent_enabled) {
+            opt.depends(f.parent_enabled, '1');
+        }
+        if (!f.dynamic && Array.isArray(f.values))
+            f.values.forEach(function (v) { opt.value(v, v === '' ? _('(none)') : v); });
+        if (f.dynamic) attachDynamic(opt, f);
+        if (f.secret) { opt.password = true; decorateSecretInput(opt); }
+        if (f.virtual) makeVirtual(opt);
+        attachValidator(opt, f.validate);
+        if (gate.mode === 'disable') disableWithNote(opt, gate.note);
+    });
+}
+
 return L.Class.extend({
-    applyMaterialized: applyMaterialized,
+    applyMaterialized:      applyMaterialized,
+    applyMaterializedNamed: applyMaterializedNamed,
 });
