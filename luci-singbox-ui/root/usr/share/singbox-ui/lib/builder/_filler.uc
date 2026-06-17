@@ -201,11 +201,12 @@ function _emit_shared(out, s, kind, d) {
 // (declaration order), then optional post() escape-hatch.
 function build(d, s) {
     let out;
+    const HEADERLESS = { route_rule: 1, dns_rule: 1, cache: 1, clash_api: 1 };
     if (d.kind === "inbound") {
         out = dial_blk.build_listen_base(s, d.sing_box_type);
         if (out == null) return null;
-    } else if (d.kind === "route_rule") {
-        out = {};                                  // rules have no type/tag header
+    } else if (HEADERLESS[d.kind]) {
+        out = {};                                  // no type/tag header
     } else {
         out = { type: d.sing_box_type, tag: s[".name"] };
     }
