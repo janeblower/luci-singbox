@@ -23,7 +23,7 @@ msgstr "%d узлов"
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:118
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:344
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:368
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:426
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:432
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr "(нет)"
@@ -669,7 +669,8 @@ msgstr "Показать"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:16
 msgid "Show only parameters compatible with the installed sing-box version"
-msgstr "Показывать только параметры, совместимые с установленной версией sing-box"
+msgstr ""
+"Показывать только параметры, совместимые с установленной версией sing-box"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:205
 msgid "Sort by latency"
