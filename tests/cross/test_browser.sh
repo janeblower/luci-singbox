@@ -8,17 +8,21 @@ set -eu
 set -o pipefail
 cd "$(dirname "$0")/../.."
 
-# tests/run.sh globs tests/test_*.sh and runs each one inside whichever
-# environment is active — including the OpenWrt qemu VM, where this suite
-# has no business running (no bun, no nested docker). Skip gracefully when
-# the sentinel set by run-vm.sh is present.
+# tests/run.sh globs the test files and runs each one inside whichever
+# environment is active. This suite runs for real ONLY in the dedicated
+# browser-test CI lane (a host with bun + docker). It must skip gracefully
+# everywhere else it gets swept up by run.sh: the OpenWrt qemu VM (sentinel
+# below) and the packaging lane (ubuntu, apk-tools but no bun → skip below).
 if [ "${SINGBOX_TESTS_IN_VM:-0}" = "1" ]; then
     echo "SKIP test_browser: not runnable inside the OpenWrt qemu VM"
     exit 0
 fi
 
-command -v bun    >/dev/null 2>&1 || { echo "ERROR: bun missing (curl -fsSL https://bun.sh/install | bash)"; exit 2; }
-command -v docker >/dev/null 2>&1 || { echo "ERROR: docker missing"; exit 2; }
+# Missing bun/docker => this is not the browser lane (e.g. the packaging lane).
+# Skip gracefully rather than erroring; the browser-test job provides bun+docker
+# and runs the suite for real there.
+command -v bun    >/dev/null 2>&1 || { echo "SKIP test_browser: bun not available (browser-test lane only)"; exit 0; }
+command -v docker >/dev/null 2>&1 || { echo "SKIP test_browser: docker not available (browser-test lane only)"; exit 0; }
 
 # Build/cache image keyed on the container source files.
 IMG_HASH=$(cat tests/browser-container/Dockerfile \
