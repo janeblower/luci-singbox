@@ -24,10 +24,17 @@ const mat={sing_box_type:'clash_api',tabs:['basic'],shared:{},fields:[
   {name:'secret',type:'string',tab:'basic',secret:true},
   {name:'listen',type:'string',tab:'basic',default:'127.0.0.1'},
   {name:'mode',type:'enum',tab:'basic',values:['','rule','global']},
+  // advanced + parent_enabled, NO depends — must get ONE compound arm gating on
+  // BOTH the advanced toggle AND the parent flag (regression: else-if dropped parent).
+  {name:'adv1',type:'string',tab:'basic',advanced:true,parent_enabled:'enabled'},
 ]};
 mod.applyMaterializedNamed(section,'clash_api','clash_api',mat);
 if(!section._opts['secret']||!section._opts['listen']||!section._opts['mode']){console.log('FAIL: fields not created');process.exit(1);}
 if(section._opts['listen'].default!=='127.0.0.1'){console.log('FAIL: default not applied');process.exit(1);}
+const adv=section._opts['adv1'];
+if(!adv||adv.deps.length!==1){console.log('FAIL: adv1 should have exactly one depends arm');process.exit(1);}
+if(adv.deps[0]['_show_advanced_basic']!=='1'||adv.deps[0]['enabled']!=='1'){
+  console.log('FAIL: adv1 depends arm must gate on BOTH advanced toggle and parent_enabled: '+JSON.stringify(adv.deps[0]));process.exit(1);}
 console.log('PASS');
 JS
 node "$WORK/t.js" "$DF"

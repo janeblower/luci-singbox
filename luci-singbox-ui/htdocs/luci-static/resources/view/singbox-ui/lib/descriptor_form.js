@@ -417,10 +417,16 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
                 if (f.parent_enabled) d[f.parent_enabled] = '1';
                 opt.depends(d);
             });
-        } else if (f.advanced) {
-            opt.depends('_show_advanced_' + f.tab, '1');
-        } else if (f.parent_enabled) {
-            opt.depends(f.parent_enabled, '1');
+        } else if (f.advanced || f.parent_enabled) {
+            // Combine advanced + parent_enabled into ONE arm so a field that
+            // declares both (e.g. cache store_rdrc, clash external_ui) stays
+            // hidden until BOTH the Advanced toggle AND the parent flag are on.
+            // (A two-branch else-if would honor only the first and wrongly show
+            // the field while the section is disabled.)
+            var da = {};
+            if (f.advanced)       da['_show_advanced_' + f.tab] = '1';
+            if (f.parent_enabled) da[f.parent_enabled] = '1';
+            opt.depends(da);
         }
         if (!f.dynamic && Array.isArray(f.values))
             f.values.forEach(function (v) { opt.value(v, v === '' ? _('(none)') : v); });
