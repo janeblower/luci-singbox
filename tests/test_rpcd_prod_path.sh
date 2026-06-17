@@ -31,7 +31,9 @@ command -v rpcd >/dev/null 2>&1 || { echo "SKIP: no rpcd in this env"; exit 0; }
 SRC=${SB_BACKEND_ROOT}
 HANDLER_SRC="$SRC/usr/libexec/rpcd/singbox-ui"
 LIB_SRC="$SRC/usr/share/singbox-ui/lib"
-ACL_SRC="$SRC/usr/share/rpcd/acl.d/luci-singbox-ui.json"
+# After the three-package split the ACL ships with the luci-app-singbox-ui
+# package, so it lives under the UI tree ($SB_ACL), not the backend $SRC.
+ACL_SRC="$SB_ACL"
 
 [ -x "$HANDLER_SRC" ] || { echo "FAIL: $HANDLER_SRC not executable"; exit 1; }
 [ -d "$LIB_SRC" ]     || { echo "FAIL: $LIB_SRC missing"; exit 1; }
