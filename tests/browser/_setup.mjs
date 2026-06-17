@@ -273,6 +273,43 @@ export async function openAddModal(page, kind, name) {
     await wait(3500);
 }
 
+// Click a TOP-LEVEL view tab (data-tab on .sb-tab-header > li). Unlike
+// clickTab(), this is NOT inside #modal_overlay — it switches the whole-page
+// tab wired by main.js render(). Returns true on success.
+export async function clickTopTab(page, dataTab) {
+    const ok = await page.evaluate((dataTab) => {
+        const li = document.querySelector(`.sb-tab-header > li[data-tab="${dataTab}"]`);
+        if (!li) return false;
+        const a = li.querySelector('a') || li;
+        a.click();
+        return true;
+    }, dataTab);
+    await wait(800);  // let the dashboard/monitoring start()/stop() hooks settle
+    return ok;
+}
+
+// Click a Route sub-tab (.sb-subtab-header > li[data-tab=routerules|rulesets|routedef]).
+export async function clickSubTab(page, dataTab) {
+    const ok = await page.evaluate((dataTab) => {
+        const li = document.querySelector(`.sb-subtab-header > li[data-tab="${dataTab}"]`);
+        if (!li) return false;
+        const a = li.querySelector('a') || li;
+        a.click();
+        return true;
+    }, dataTab);
+    await wait(400);
+    return ok;
+}
+
+// Node-side: parse one .mjs source string for `export const COVERS = [ ... ]`
+// and return the array of string ids (or [] if none). Tolerant of single/double
+// quotes and newlines. Shared by the ui-surface guard and run-all bookkeeping.
+export function extractCovers(src) {
+    const m = src.match(/export\s+const\s+COVERS\s*=\s*\[([\s\S]*?)\]/);
+    if (!m) return [];
+    return Array.from(m[1].matchAll(/['"]([^'"]+)['"]/g)).map(x => x[1]);
+}
+
 // Fill a labeled field in the currently-open modal. opts.kind selects
 // the writer: 'flag' clicks a checkbox; 'select' sets value+dispatches
 // change; 'text'/'number' (default) writes to input.value+input event.
