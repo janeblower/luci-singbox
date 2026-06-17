@@ -1,3 +1,5 @@
+# shellcheck shell=sh
+# shellcheck disable=SC2034  # vars are consumed by the tests that source this file
 # tests/lib/sb_helpers.sh — single source of truth for source-tree paths used by
 # the shell test suite. Sourced by tests that locate package source. All paths
 # are relative to the repo root (tests run with CWD=repo root) and overridable

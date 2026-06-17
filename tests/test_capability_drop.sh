@@ -13,7 +13,7 @@ done
 echo "PASS: capability file lists 3 required caps"
 
 # init.d declares capabilities param
-grep -q 'procd_set_param capabilities' ${SB_BACKEND_ROOT}/etc/init.d/singbox-ui \
+grep -q 'procd_set_param capabilities' "${SB_BACKEND_ROOT}"/etc/init.d/singbox-ui \
 	|| { echo "FAIL: init.d missing procd_set_param capabilities"; exit 1; }
 echo "PASS: init.d wires capability file"
 

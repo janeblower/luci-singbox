@@ -54,7 +54,7 @@ config outbound 'interface_out'
 EOF
 
 # Run the uci-defaults script (idempotent, multi-step).
-sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui >/tmp/mig.log 2>&1 \
+sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui >/tmp/mig.log 2>&1 \
     || { echo "FAIL: migration crashed"; cat /tmp/mig.log; rm -f "$CONFIG"; exit 1; }
 
 # Assertions: removed sections must be gone.
@@ -83,7 +83,7 @@ done
 echo "PASS: migration A renames applied"
 
 # Idempotent rerun.
-sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui >/tmp/mig2.log 2>&1 \
+sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui >/tmp/mig2.log 2>&1 \
     || { echo "FAIL: rerun crashed"; rm -f "$CONFIG"; exit 1; }
 
 rm -f "$CONFIG"
