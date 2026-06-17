@@ -504,11 +504,15 @@ jobs:
         env:
           SB_SUITE: cross
           SB_DOMAIN: packaging
-          # Bypass run.sh's auto-delegation to the qemu VM: this lane runs the
-          # cross suite directly on the host (ucode is absent here, so the few
-          # ucode-gated cross tests SKIP benignly — the feed/i18n/manifest/ACL
-          # assertions that need real apk-tools run on the host where apk lives).
-          SINGBOX_TESTS_IN_VM: '1'
+          # This lane runs the cross suite directly on the host for the
+          # apk-tools-3.0.5+ feed/i18n/manifest tests. ucode/uci are absent here,
+          # so the ucode/uci-gated cross tests (rpcd/json_import/migration/...)
+          # SKIP — their REAL coverage is the VM/backend lane. SINGBOX_UCODE_ABSENT_OK
+          # tells run.sh that is expected: it bypasses VM auto-delegation AND treats
+          # ucode/uci SKIPs as benign (guard A does not hard-fail). Unlike the old
+          # SINGBOX_TESTS_IN_VM=1 hack it does not make tests think they run inside
+          # a real OpenWrt guest (e.g. test_browser now takes its no-bun skip path).
+          SINGBOX_UCODE_ABSENT_OK: '1'
         run: sh tests/run.sh
 
   build:

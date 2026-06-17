@@ -15,7 +15,8 @@ cd "$(dirname "$0")/.."
 # windows, a mild timing-flake risk on a loaded runner; harden to condition-
 # polling (FIFO/sentinel for the lock, `ubus list | grep singbox-ui` poll for
 # rpcd) if they ever flake. There is intentionally NO host-executable substitute.
-if [ "${SB_DRY_RUN:-0}" != "1" ] && [ "${SINGBOX_TESTS_IN_VM:-0}" != "1" ] && ! command -v ucode >/dev/null 2>&1; then
+if [ "${SB_DRY_RUN:-0}" != "1" ] && [ "${SINGBOX_TESTS_IN_VM:-0}" != "1" ] \
+   && [ "${SINGBOX_UCODE_ABSENT_OK:-0}" != "1" ] && ! command -v ucode >/dev/null 2>&1; then
   echo "==> ucode not found on host; delegating to tests/run-vm.sh"
   echo "    (set SINGBOX_TESTS_IN_VM=1 to bypass and run the host-only subset)"
   exec sh "$(dirname "$0")/run-vm.sh" "$@"
@@ -83,6 +84,17 @@ MAX_SKIPS="${SINGBOX_MAX_SKIPS:-25}"   # ceiling on RESIDUAL (non-benign) SKIPs
 # (matched with `grep -E`); keep in sync with the tools the guest legitimately
 # lacks. Matched case-insensitively against the full SKIP line.
 BENIGN_SKIP_RE='node|browser|bbolt|apk|git|jsonfilter|bash|xgettext|msgmerge|base64'
+# Lanes that intentionally run WITHOUT ucode/uci declare SINGBOX_UCODE_ABSENT_OK=1
+# (the packaging CI lane: it runs the cross suite on a plain host for the
+# apk-tools-3.0.5+ feed/manifest/i18n tests; the ucode/uci-gated cross tests are
+# backend concerns whose REAL coverage is the VM/backend lane). There a ucode/uci
+# SKIP is benign — NOT a degraded interpreter — so fold those reasons into the
+# benign allowlist (keeps them out of both guard A and the residual budget).
+# The VM lane does NOT set this flag, so guard A still protects the real VM,
+# where ucode MUST be present.
+if [ "${SINGBOX_UCODE_ABSENT_OK:-0}" = "1" ]; then
+  BENIGN_SKIP_RE="${BENIGN_SKIP_RE}|ucode|uci"
+fi
 skip_total=0
 residual_skips=0
 ucode_skips=0
@@ -163,7 +175,11 @@ if [ "$fail_count" -gt 0 ]; then
   exit 1
 fi
 
-if [ "$ucode_skips" -gt 0 ]; then
+# Guard (A) — UNLESS the lane declared ucode legitimately absent
+# (SINGBOX_UCODE_ABSENT_OK=1, the packaging lane). In the VM lane the flag is
+# unset, so a ucode SKIP there still hard-fails (it would mean a degraded guest
+# interpreter = zero coverage masquerading as green).
+if [ "$ucode_skips" -gt 0 ] && [ "${SINGBOX_UCODE_ABSENT_OK:-0}" != "1" ]; then
   echo "FAIL: $ucode_skips test(s) SKIPped for a MISSING ucode interpreter —"
   echo "      that is zero real coverage masquerading as green, NOT a pass."
   echo "      Run inside the OpenWrt VM via 'sh tests/run.sh' on a host"
