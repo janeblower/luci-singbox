@@ -123,6 +123,40 @@ function labelFor(field) {
     return field.name.charAt(0).toUpperCase() + field.name.slice(1).replace(/_/g, ' ');
 }
 
+// Two-sided version gate. Returns {mode:'show'} | {mode:'disable', note} | {mode:'hide'}.
+// Fail-open: unknown core version never gates.
+function versionGate(f) {
+    var core = (SbViewState.getCoreVersion && SbViewState.getCoreVersion()) || '';
+    if (!core) return { mode: 'show' };
+    var out = null;
+    if (f.min_version && SbCommon.compareVersions(core, f.min_version) < 0) {
+        var lo = f.min_version.split('.').slice(0, 2).join('.');
+        out = _('requires') + ' ' + lo + '+';
+    } else if (f.max_version && SbCommon.compareVersions(core, f.max_version) >= 0) {
+        var hi = f.max_version.split('.').slice(0, 2).join('.');
+        out = _('removed in') + ' ' + hi;
+    }
+    if (!out) return { mode: 'show' };
+    var compatOnly = SbViewState.getCompatOnly && SbViewState.getCompatOnly();
+    return compatOnly ? { mode: 'hide' } : { mode: 'disable', note: '(' + out + ')' };
+}
+
+// Disable an option's widget (read-only) and append a note to its title.
+function disableWithNote(opt, note) {
+    var t = opt.title || '';
+    if (t.indexOf(note) < 0) opt.title = t + (t ? ' ' : '') + note;
+    opt.readonly = true;
+    var orig = opt.renderWidget;
+    if (typeof orig === 'function') {
+        opt.renderWidget = function (section_id, option_index, cfgvalue) {
+            var node = orig.call(this, section_id, option_index, cfgvalue);
+            if (node && node.querySelectorAll)
+                node.querySelectorAll('input, select, textarea').forEach(function (el) { el.disabled = true; });
+            return node;
+        };
+    }
+}
+
 function attachValidator(opt, validateName) {
     if (!validateName) return;
     var fn = validators[validateName];
@@ -276,12 +310,10 @@ function applyMaterialized(s, kind, protoName, materialized) {
 
     materialized.fields.forEach(function (f) {
         var key = f.tab + '\t' + f.name;
-        // Per-field version gate: a field requiring a newer sing-box than the
-        // running core is skipped entirely. Fail-open when core is unknown.
-        if (f.min_version) {
-            var _core = SbViewState.getCoreVersion && SbViewState.getCoreVersion();
-            if (_core && SbCommon.compareVersions(_core, f.min_version) < 0) return;
-        }
+        // Two-sided version gate: hide (compatOnly) or disable+note (default).
+        // Fail-open when core version is unknown.
+        var gate = versionGate(f);
+        if (gate.mode === 'hide') return;   // compatOnly: drop incompatible field
         var registered = s._sbMatRegistry[key];
         if (registered) {
             // Same shared field appearing for another protocol: extend the
@@ -344,6 +376,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
         if (f.exclusive) makeExclusive(opt, f.name, discr);
 
         attachValidator(opt, f.validate);
+        if (gate.mode === 'disable') disableWithNote(opt, gate.note);
         s._sbMatRegistry[key] = {
             opt: opt, values: values,
             // Track whether THIS first registration already carried an explicit
