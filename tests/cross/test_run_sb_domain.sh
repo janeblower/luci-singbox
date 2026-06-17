@@ -11,7 +11,12 @@ fail() { echo "FAIL: $1" >&2; exit 1; }
 # words arrive via "$@" from variable expansion, and POSIX shells do NOT
 # re-recognise an expanded word as an assignment — `SB_SUITE=backend cross`
 # would be run as a command (127). `env` reparses them into the environment.
-list() { SB_DRY_RUN=1 env "$@" sh tests/run.sh 2>/dev/null; }
+# We also seed SB_DOMAIN= and SB_SUITE= empty FIRST so this test is hermetic
+# against an ambient SB_DOMAIN/SB_SUITE (the packaging CI lane exports
+# SB_DOMAIN=packaging SB_SUITE=cross — without the reset, "unfiltered" calls
+# would inherit it and wrongly drop backend files). env applies assignments
+# left-to-right, so any explicit value in "$@" overrides the empty default.
+list() { SB_DRY_RUN=1 env SB_DOMAIN= SB_SUITE= "$@" sh tests/run.sh 2>/dev/null; }
 
 # No SB_DOMAIN => all areas in SB_SUITE appear (backend + cross sample present).
 out=$(list SB_SUITE="backend cross")
