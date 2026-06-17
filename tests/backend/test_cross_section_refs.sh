@@ -130,16 +130,13 @@ run_gen || { echo "FAIL: circular detour made generate exit non-zero (should not
 jpath_true "circular: A present" '(function(){for(let o in d.outbounds)if(o.tag=="A")return true;return false;})()' "$TMPDIR/out.json"
 jpath_true "circular: B present" '(function(){for(let o in d.outbounds)if(o.tag=="B")return true;return false;})()' "$TMPDIR/out.json"
 
-# ---- dangling detour: documents CURRENT behavior (NOT scrubbed today) ----
-# GAP/finding: outbound->outbound `detour` pointing at a non-existent tag is NOT
-# scrubbed. post_process.uc scrub_implicit_refs only scrubs references to
-# IMPLICIT tags (e.g. "direct") and only for dns.servers[].detour / dns.detour /
-# route.rules[].outbound / route.final. outbound.uc's dangling-drop validates
-# only selector/urltest group members + `default`, never a plain outbound's
-# `detour`. So `detour='ghost'` survives into the emitted config (sing-box would
-# fatally reject it at load). This assert documents the gap rather than papering
-# over it: generate must SUCCEED and 'real' must be present.
-echo "-- dangling detour to a missing outbound: documents current (un-scrubbed) behavior"
+# ---- dangling detour: a plain outbound's `detour` at a missing/disabled tag is SCRUBBED ----
+# FINDING B fix: outbound->outbound `detour` pointing at a tag with no matching
+# emitted outbound (non-existent OR disabled) is now scrubbed by
+# post_process.uc scrub_dangling_detours, mirroring the route/dns dangling-drop
+# idiom (sing-box fatally rejects a detour to an undefined outbound at load).
+# A detour to a VALID enabled outbound (incl. forward references) is preserved.
+echo "-- dangling detour to a missing outbound: scrubbed (key deleted)"
 write_cfg "
 config outbound 'real'
 	option enabled '1'
@@ -149,5 +146,42 @@ config outbound 'real'
 	option detour 'ghost'
 "
 run_gen || { echo "FAIL: generate exited non-zero (dangling detour)"; cat "$TMPDIR/gen.stderr"; exit 1; }
-jpath_true "generate succeeds and 'real' is present (dangling detour un-scrubbed; see GAP note)" '(function(){for(let o in d.outbounds)if(o.tag=="real")return true;return false;})()' "$TMPDIR/out.json"
+jpath_true "generate succeeds and 'real' is present" '(function(){for(let o in d.outbounds)if(o.tag=="real")return true;return false;})()' "$TMPDIR/out.json"
+jpath_eq "dangling detour 'ghost' scrubbed from 'real'" '(function(){for(let o in d.outbounds)if(o.tag=="real")return o.detour;return "<none>";})()' '<<UNDEF>>' "$TMPDIR/out.json"
+
+# ---- detour to a DISABLED outbound is also scrubbed (target absent from emitted config) ----
+echo "-- detour to a disabled outbound: scrubbed"
+write_cfg "
+config outbound 'gone'
+	option enabled '0'
+	option type 'interface'
+	option interface 'eth0'
+
+config outbound 'live'
+	option enabled '1'
+	option type 'socks'
+	option server '10.0.0.1'
+	option server_port '1080'
+	option detour 'gone'
+"
+run_gen || { echo "FAIL: generate exited non-zero (detour to disabled)"; cat "$TMPDIR/gen.stderr"; exit 1; }
+jpath_eq "detour to disabled 'gone' scrubbed from 'live'" '(function(){for(let o in d.outbounds)if(o.tag=="live")return o.detour;return "<none>";})()' '<<UNDEF>>' "$TMPDIR/out.json"
+
+# ---- forward reference to a VALID enabled outbound is PRESERVED (not a false-positive) ----
+echo "-- forward reference detour to a valid enabled outbound: preserved"
+write_cfg "
+config outbound 'first'
+	option enabled '1'
+	option type 'socks'
+	option server '10.0.0.1'
+	option server_port '1080'
+	option detour 'later'
+
+config outbound 'later'
+	option enabled '1'
+	option type 'interface'
+	option interface 'eth0'
+"
+run_gen || { echo "FAIL: generate exited non-zero (forward detour)"; cat "$TMPDIR/gen.stderr"; exit 1; }
+jpath_eq "forward detour 'first'->'later' preserved" '(function(){for(let o in d.outbounds)if(o.tag=="first")return o.detour;return "<none>";})()' 'later' "$TMPDIR/out.json"
 echo "OK"
