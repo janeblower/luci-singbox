@@ -1,45 +1,34 @@
 #!/bin/sh
-# luci-singbox-ui installer for OpenWrt 25.12.x (apk).
-# Detects the device's exact arch via `apk --print-arch`, downloads the
-# matching per-arch luci-singbox-ui-<arch>.apk from the latest release,
-# sha256-verifies it, and installs it.  bbolt-client is embedded in the apk.
+# luci-singbox-ui installer for OpenWrt 25.12.x (apk), FEED-based.
+# Adds the signed GitHub Pages apk feed (repository + signing key) for the
+# device's exact arch (via `apk --print-arch`) and installs the package by
+# name — apk resolves the full dependency stack (singbox-ui, bbolt-client,
+# curl, …) from the signed index.
 #
 #   wget -O- https://raw.githubusercontent.com/janeblower/luci-singbox/main/install.sh | sh
 #
 # Env overrides (used by tests / mirrors):
-#   APK_BASE              base URL for the apk assets  (default: GitHub latest release)
-#   SINGBOX_INSTALL_TEST  set to 1 to skip `apk update` (dry-run mode)
+#   PAGES_URL             base URL of the apk feed (default: project GitHub Pages)
+#   SINGBOX_FEED_MINOR    OpenWrt minor for the feed path (e.g. 25.12); else
+#                         parsed from /etc/os-release VERSION_ID, else 25.12
+#   APK_KEYS_DIR          where to drop the signing pubkey (default /etc/apk/keys)
+#   APK_REPO_DIR          where to write the repo .list (default
+#                         /etc/apk/repositories.d)
+#   SINGBOX_INSTALL_TEST  set to 1 to skip `apk update` + `apk add` (dry-run)
 set -eu
 
-# NOTE: fixed tag form (/releases/download/latest/), NOT /releases/latest/download/.
-# The rolling release is a *prerelease*, and the /releases/latest/ selector ignores
-# prereleases (→ 404). "latest" here is the literal tag name.
-APK_BASE="${APK_BASE:-https://github.com/janeblower/luci-singbox/releases/download/latest/}"
+PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
+APK_KEYS_DIR="${APK_KEYS_DIR:-/etc/apk/keys}"
+APK_REPO_DIR="${APK_REPO_DIR:-/etc/apk/repositories.d}"
 
 die() { echo "install: $1" >&2; exit 1; }
 info() { echo ">> $1"; }
 
 [ "$(id -u)" = "0" ] || die "must run as root"
+command -v apk >/dev/null 2>&1 || die "apk not found (this installer targets OpenWrt 25.12+)"
 
-# Downloader: prefer wget/uclient-fetch (present by default; curl is a package dep
-# and not installed yet). On OpenWrt /usr/bin/wget is usually a symlink to
-# uclient-fetch, but a minimal image may ship only the uclient-fetch binary with
-# no wget alias — uclient-fetch takes the same -q -O flags, so probe it
-# explicitly rather than falling through to the (not-yet-installed) curl branch.
-# fetch <url> <out>
-if command -v wget >/dev/null 2>&1; then
-  fetch() { wget -q -O "$2" "$1"; }
-elif command -v uclient-fetch >/dev/null 2>&1; then
-  fetch() { uclient-fetch -q -O "$2" "$1"; }
-elif command -v curl >/dev/null 2>&1; then
-  fetch() { curl -sfL -o "$2" "$1"; }
-else
-  die "no downloader (need wget, uclient-fetch or curl)"
-fi
-
-# Arch detection: prefer apk --print-arch (exact OpenWrt arch string including
-# variant suffix); fall back to uname -m only when apk is absent.
-ARCH="$(apk --print-arch 2>/dev/null || uname -m)"
+# Arch detection via apk --print-arch (exact OpenWrt arch string incl. variant).
+ARCH="$(apk --print-arch)"
 [ -n "$ARCH" ] || die "could not determine device architecture"
 
 # Covered arches — MUST stay in sync with the bbolt_arches_* variables in
@@ -51,52 +40,55 @@ case " $COVERED " in
 esac
 info "detected arch: $ARCH"
 
-APK_NAME="luci-singbox-ui-${ARCH}.apk"
-# Russian translation package (noarch). Best-effort: installed only if present in
-# the release. Same trust model as the main apk (sha256 + --allow-untrusted).
-I18N_NAME="luci-i18n-singbox-ui-ru.apk"
+# OpenWrt minor for the feed path (feed tree is <PAGES_URL>/<minor>/<arch>/...).
+# Explicit override wins; else derive from /etc/os-release VERSION_ID
+# (e.g. 25.12.3 -> 25.12); else default to 25.12.
+MINOR="${SINGBOX_FEED_MINOR:-}"
+if [ -z "$MINOR" ] && [ -r /etc/os-release ]; then
+  # shellcheck disable=SC1091
+  . /etc/os-release
+  if [ -n "${VERSION_ID:-}" ]; then MINOR="${VERSION_ID%.*}"; fi
+fi
+[ -n "$MINOR" ] || MINOR="25.12"
+info "openwrt feed minor: $MINOR"
 
-TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT INT TERM
-
-# verify_sha256 <file_basename>: look <file> up in sha256sums.txt and die on a
-# mismatch. die when the file has no entry (we only verify what we ship).
-verify_sha256() {
-  vs_name="$1"
-  vs_want=$(awk -v a="$vs_name" '$2==a || $2=="*"a {print $1; exit}' "$TMP/sha256sums.txt")
-  [ -n "$vs_want" ] || die "no sha256 entry for $vs_name"
-  vs_have=$(sha256sum "$TMP/$vs_name" | cut -d' ' -f1)
-  [ "$vs_want" = "$vs_have" ] || die "sha256 mismatch for $vs_name — refusing to install"
-  info "verified $vs_name sha256"
-}
-
-# Download the per-arch apk + sha256sums.txt, verify integrity before installing.
-# Installed with --allow-untrusted (not signed by a device-trusted key); sha256
-# check is the integrity gate — die on mismatch or missing entry. NOTE: the
-# sha256sums.txt is co-located with the artifact on the same release host, so it
-# only defends against transport corruption, NOT a compromised/MITM'd host that
-# can serve both a malicious apk and a matching hash. For a stronger trust
-# boundary use the signed apk-feed (its index is signed; see feed/luci-singbox.pem).
-info "downloading $APK_NAME + sha256sums.txt"
-fetch "${APK_BASE}${APK_NAME}" "$TMP/$APK_NAME" || die "apk download failed"
-fetch "${APK_BASE}sha256sums.txt" "$TMP/sha256sums.txt" || die "sha256sums.txt download failed"
-
-verify_sha256 "$APK_NAME"
-
-# Russian i18n is optional — only fetch+verify it if the release carries it.
-HAVE_I18N=0
-if fetch "${APK_BASE}${I18N_NAME}" "$TMP/$I18N_NAME" 2>/dev/null; then
-  verify_sha256 "$I18N_NAME"
-  HAVE_I18N=1
+# Downloader: prefer wget/uclient-fetch (present by default; curl is a package
+# dep and not installed yet). On OpenWrt /usr/bin/wget is usually a symlink to
+# uclient-fetch, but a minimal image may ship only the uclient-fetch binary with
+# no wget alias — uclient-fetch takes the same -q -O flags, so probe it
+# explicitly rather than relying on a wget alias.
+# fetch <url> <out>
+if command -v wget >/dev/null 2>&1; then
+  fetch() { wget -q -O "$2" "$1"; }
+elif command -v uclient-fetch >/dev/null 2>&1; then
+  fetch() { uclient-fetch -q -O "$2" "$1"; }
 else
-  info "no $I18N_NAME in release — skipping Russian translation"
+  die "no downloader (need wget or uclient-fetch)"
 fi
 
-if [ "${SINGBOX_INSTALL_TEST:-}" != "1" ]; then apk update || die "apk update failed"; fi
-info "installing $APK_NAME (deps from feeds)"
-apk add --allow-untrusted "$TMP/$APK_NAME" || die "apk add failed"
-if [ "$HAVE_I18N" = "1" ]; then
-  info "installing $I18N_NAME"
-  apk add --allow-untrusted "$TMP/$I18N_NAME" || die "apk add (i18n) failed"
+# 1. Fetch the feed signing pubkey into apk's trusted keys dir.
+mkdir -p "$APK_KEYS_DIR"
+info "fetching feed signing key"
+fetch "$PAGES_URL/luci-singbox.pem" "$APK_KEYS_DIR/luci-singbox.pem" \
+  || die "failed to fetch signing key from $PAGES_URL/luci-singbox.pem"
+
+# 2. Point apk at the signed feed index for this arch.
+#    The URL MUST reference packages.adb directly (apk-tools 3 falls back to a
+#    legacy APKINDEX.tar.gz path — 404 — when given a directory).
+mkdir -p "$APK_REPO_DIR"
+REPO_URL="$PAGES_URL/$MINOR/$ARCH/luci-singbox/packages.adb"
+echo "$REPO_URL" > "$APK_REPO_DIR/luci-singbox.list"
+info "added feed repo: $REPO_URL"
+
+# 3. Install by name — apk resolves singbox-ui + bbolt-client + curl from the
+#    signed index. SINGBOX_INSTALL_TEST=1 stops here (dry-run for the test).
+if [ "${SINGBOX_INSTALL_TEST:-}" = "1" ]; then
+  info "SINGBOX_INSTALL_TEST=1 — skipping apk update/add"
+else
+  info "updating package index"
+  apk update || die "apk update failed"
+  info "installing luci-app-singbox-ui (+ ru translation)"
+  apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru || die "apk add failed"
 fi
 
 cat <<EOF

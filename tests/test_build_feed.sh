@@ -3,9 +3,13 @@
 # it; a host with the SDK apk also works). A previous stub-based version of this
 # test passed while the feed was actually broken on-device: apk reconstructs each
 # package URL as "<name>-<version>.apk" and the feed served release-asset names
-# (luci-singbox-ui-<arch>.apk) -> 404 on download. So this test now builds real
-# tiny apks, runs the feed builder, and asserts that every package the generated
-# index references actually exists on disk under apk's naming convention.
+# -> 404 on download. So this test now builds real tiny apks, runs the feed
+# builder, and asserts that every package the generated index references actually
+# exists on disk under apk's naming convention.
+#
+# Four-package split: the per-arch package is bbolt-client-<arch>.apk; the noarch
+# trio (singbox-ui / luci-app-singbox-ui / luci-i18n-singbox-ui-ru) is duplicated
+# into every arch dir, so each arch dir holds FOUR <name>-<version>.apk files.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
@@ -33,14 +37,33 @@ fi
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
-# Build two real apks named like the GitHub release assets (arch in the filename,
-# but real name/version/arch metadata inside).
-mkdir -p "$TMP/dist" "$TMP/m/x"; echo a > "$TMP/m/x/a"
-( cd "$TMP/m" && "$APK" mkpkg \
-    --info name:luci-singbox-ui --info version:9.9.9-r1 --info arch:x86_64 \
+# Build the four-package split as real apks. bbolt-client-<arch>.apk is the only
+# per-arch one (arch in the filename); the noarch trio carries real metadata.
+mkdir -p "$TMP/dist"
+
+# Per-arch: bbolt-client (one sample arch is enough for the layout contract).
+mkdir -p "$TMP/b/x"; echo a > "$TMP/b/x/a"
+( cd "$TMP/b" && "$APK" mkpkg \
+    --info name:bbolt-client --info version:9.9.9-r1 --info arch:x86_64 \
     --info description:t --info license:GPL-2.0-or-later \
-    --files x -o "$TMP/dist/luci-singbox-ui-x86_64.apk" >/dev/null )
-mkdir -p "$TMP/i/x"; echo b > "$TMP/i/x/b"
+    --files x -o "$TMP/dist/bbolt-client-x86_64.apk" >/dev/null )
+
+# Noarch core.
+mkdir -p "$TMP/c/x"; echo b > "$TMP/c/x/b"
+( cd "$TMP/c" && "$APK" mkpkg \
+    --info name:singbox-ui --info version:9.9.9-r1 --info arch:all \
+    --info description:t --info license:GPL-2.0-or-later \
+    --files x -o "$TMP/dist/singbox-ui.apk" >/dev/null )
+
+# Noarch LuCI app.
+mkdir -p "$TMP/a/x"; echo c > "$TMP/a/x/c"
+( cd "$TMP/a" && "$APK" mkpkg \
+    --info name:luci-app-singbox-ui --info version:9.9.9-r1 --info arch:all \
+    --info description:t --info license:GPL-2.0-or-later \
+    --files x -o "$TMP/dist/luci-app-singbox-ui.apk" >/dev/null )
+
+# Noarch i18n.
+mkdir -p "$TMP/i/x"; echo d > "$TMP/i/x/d"
 ( cd "$TMP/i" && "$APK" mkpkg \
     --info name:luci-i18n-singbox-ui-ru --info version:9.9.9-r1 --info arch:all \
     --info description:t --info license:GPL-2.0-or-later \
@@ -57,11 +80,18 @@ APK_BIN="$APK" \
 
 d="$TMP/out/25.12/x86_64/luci-singbox"
 
-# Packages stored under apk's <name>-<version>.apk convention, NOT the asset name.
-[ -f "$d/luci-singbox-ui-9.9.9-r1.apk" ] || fail "main pkg not named <name>-<version>.apk"
+# All FOUR packages stored under apk's <name>-<version>.apk convention (per-arch
+# bbolt-client + the noarch trio), NOT the release-asset name.
+[ -f "$d/bbolt-client-9.9.9-r1.apk" ] || fail "bbolt-client pkg not named <name>-<version>.apk"
+[ -f "$d/singbox-ui-9.9.9-r1.apk" ] || fail "core pkg not named <name>-<version>.apk"
+[ -f "$d/luci-app-singbox-ui-9.9.9-r1.apk" ] || fail "app pkg not named <name>-<version>.apk"
 [ -f "$d/luci-i18n-singbox-ui-ru-9.9.9-r1.apk" ] || fail "i18n pkg not named <name>-<version>.apk"
-[ -f "$d/luci-singbox-ui-x86_64.apk" ] && fail "release-asset name was not renamed"
+[ -f "$d/bbolt-client-x86_64.apk" ] && fail "release-asset name was not renamed"
 [ -f "$d/packages.adb" ] || fail "packages.adb missing"
+
+# Exactly four <name>-<version>.apk files in the arch dir (the four-package stack).
+napk=$(find "$d" -maxdepth 1 -name '*.apk' | wc -l)
+[ "$napk" -eq 4 ] || fail "arch dir must hold FOUR apks, found $napk"
 
 # REGRESSION GUARD: every package the index references must exist on disk as the
 # exact <name>-<version>.apk file apk will try to download. The index lists
@@ -92,7 +122,7 @@ PARSER='
 grep -q '/^  name: /    && n=="" { n=\$2 }' "$ROOT/scripts/build-feed.sh" \
   || fail "FEED-1: build-feed.sh feed_pkg_filename no longer anchors on top-level '  name: '"
 cat > "$TMP/dump" <<'DUMP'
-  name: luci-singbox-ui
+  name: bbolt-client
   version: 9.9.9-r1
   arch: x86_64
   scripts:
@@ -101,7 +131,7 @@ cat > "$TMP/dump" <<'DUMP'
       version: 0.0.0-r0
 DUMP
 got="$(awk "$PARSER" "$TMP/dump")" || fail "FEED-1: parser exited nonzero on a valid dump"
-[ "$got" = "luci-singbox-ui-9.9.9-r1.apk" ] \
+[ "$got" = "bbolt-client-9.9.9-r1.apk" ] \
   || fail "FEED-1: nested name:/version: hijacked the filename; got '$got'"
 while read -r want; do
   [ -f "$d/$want" ] || fail "index references missing file: $want"
@@ -119,7 +149,10 @@ grep -q "jekyll-theme-midnight" "$TMP/out/_config.yml" || fail "midnight theme n
 # Root landing (index.md) rendered with substitutions, install snippet, no junk.
 [ -f "$TMP/out/index.md" ] || fail "landing index.md missing"
 grep -q "example.test/luci-singbox" "$TMP/out/index.md" || fail "PAGES_URL not substituted"
-grep -q "apk add luci-singbox-ui" "$TMP/out/index.md" || fail "install snippet missing"
+grep -q "apk add luci-app-singbox-ui" "$TMP/out/index.md" || fail "install snippet missing"
+# The split-era install target is luci-app-singbox-ui (deps pull the rest); the
+# old per-arch asset name must not leak into the landing page.
+grep -q "luci-singbox-ui-" "$TMP/out/index.md" && fail "stale luci-singbox-ui- asset name in landing"
 grep -q "packages.adb" "$TMP/out/index.md" || fail "repo URL must point at packages.adb"
 grep -q "github.com/acme/luci-singbox" "$TMP/out/index.md" || fail "RELEASE_REPO not substituted"
 # No unsubstituted placeholders left.
