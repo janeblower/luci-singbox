@@ -26,15 +26,48 @@ cd "$(dirname "$0")/.."
 
 REGEN=scripts/regen-po.sh
 BUILDSH=scripts/build-apk.sh
-MAKEFILE=luci-singbox-ui/Makefile
+# Three-way split: three Makefiles. The install-loop hard-fail check (12.4)
+# targets the backend Makefile (which ships the file set via the manifest
+# while-read loop); the LuCI Makefile carries the same loop and is checked
+# alongside it. bbolt-client ships only a binary (no manifest loop).
+MAKEFILE=singbox-ui/Makefile
+LUCIAPP_MAKEFILE=luci-app-singbox-ui/Makefile
+BBOLT_MAKEFILE=bbolt-client/Makefile
 POT=${SB_PO_DIR}/templates/luci-singbox-ui.pot
 PO=${SB_PO_DIR}/ru/luci-singbox-ui.po
 
-for f in "$REGEN" "$BUILDSH" "$MAKEFILE" "$POT" "$PO"; do
+for f in "$REGEN" "$BUILDSH" "$MAKEFILE" "$LUCIAPP_MAKEFILE" "$BBOLT_MAKEFILE" "$POT" "$PO"; do
     [ -f "$f" ] || { echo "FAIL: $f missing"; exit 1; }
 done
 
 fail=0
+
+# ---------------------------------------------------------------------------
+# G6 split — the three package Makefiles exist and carry their key fields.
+# (CANON: bbolt-client <- singbox-ui <- luci-app-singbox-ui <- luci-i18n-*-ru.)
+# ---------------------------------------------------------------------------
+echo "-- split: three package Makefiles carry PKG_NAME and key fields"
+# backend (plain package — rules.mk + package.mk, NOT luci.mk)
+grep -q '^PKG_NAME:=singbox-ui' "$MAKEFILE" \
+    || { echo "FAIL: $MAKEFILE missing PKG_NAME:=singbox-ui"; fail=1; }
+grep -q 'BuildPackage' "$MAKEFILE" \
+    || { echo "FAIL: $MAKEFILE missing BuildPackage"; fail=1; }
+grep -Eq '^[[:space:]]*DEPENDS:=.*\+bbolt-client' "$MAKEFILE" \
+    || { echo "FAIL: $MAKEFILE DEPENDS must include +bbolt-client"; fail=1; }
+# LuCI frontend (luci.mk)
+grep -q '^PKG_NAME:=luci-app-singbox-ui' "$LUCIAPP_MAKEFILE" \
+    || { echo "FAIL: $LUCIAPP_MAKEFILE missing PKG_NAME:=luci-app-singbox-ui"; fail=1; }
+grep -q 'luci.mk' "$LUCIAPP_MAKEFILE" \
+    || { echo "FAIL: $LUCIAPP_MAKEFILE must include luci.mk"; fail=1; }
+grep -Eq '^[[:space:]]*LUCI_DEPENDS:=.*\+singbox-ui' "$LUCIAPP_MAKEFILE" \
+    || { echo "FAIL: $LUCIAPP_MAKEFILE LUCI_DEPENDS must include +singbox-ui"; fail=1; }
+# bbolt-client (plain package — libc only)
+grep -q '^PKG_NAME:=bbolt-client' "$BBOLT_MAKEFILE" \
+    || { echo "FAIL: $BBOLT_MAKEFILE missing PKG_NAME:=bbolt-client"; fail=1; }
+grep -q 'BuildPackage' "$BBOLT_MAKEFILE" \
+    || { echo "FAIL: $BBOLT_MAKEFILE missing BuildPackage"; fail=1; }
+grep -Eq '^[[:space:]]*DEPENDS:=.*\+libc' "$BBOLT_MAKEFILE" \
+    || { echo "FAIL: $BBOLT_MAKEFILE DEPENDS must include +libc"; fail=1; }
 
 # ---------------------------------------------------------------------------
 # 12.1 — committed .pot/.po are portable (no leaked absolute homedir paths)
@@ -154,20 +187,23 @@ fi
 
 # ---------------------------------------------------------------------------
 # 12.4 — Makefile install loop hard-fails on unknown mode (no 0644 degrade)
+# Both manifest-driven Makefiles (backend + LuCI frontend) carry the same loop.
 # ---------------------------------------------------------------------------
-echo "-- 12.4 Makefile install loop hard-fails on unknown mode"
-# The catch-all must NOT install (no `install -m 0644 ... "\$(1)" `) and must
-# echo+exit 1 instead. We assert the source shape directly...
-if grep -E '^\s*\*\)\s*install -m 0644' "$MAKEFILE" >/dev/null 2>&1; then
-    echo "FAIL: Makefile catch-all still silently installs unknown modes as 0644"; fail=1
-fi
-grep -q "case \"\$\$mode\" in" "$MAKEFILE" \
-    || { echo "FAIL: Makefile no longer dispatches on \$\$mode"; fail=1; }
-grep -Eq '\*\).*unknown mode.*exit 1' "$MAKEFILE" \
-    || { echo "FAIL: Makefile catch-all must echo 'unknown mode' and exit 1"; fail=1; }
-echo "-- 12.4 Makefile enumerates data) explicitly (parity with build-apk.sh)"
-grep -Eq '\bdata\)\s*install -m 0644' "$MAKEFILE" \
-    || { echo "FAIL: Makefile must enumerate data) -> 0644 explicitly"; fail=1; }
+for mk in "$MAKEFILE" "$LUCIAPP_MAKEFILE"; do
+    echo "-- 12.4 $mk install loop hard-fails on unknown mode"
+    # The catch-all must NOT install (no `install -m 0644 ... "\$(1)" `) and must
+    # echo+exit 1 instead. We assert the source shape directly...
+    if grep -E '^\s*\*\)\s*install -m 0644' "$mk" >/dev/null 2>&1; then
+        echo "FAIL: $mk catch-all still silently installs unknown modes as 0644"; fail=1
+    fi
+    grep -q "case \"\$\$mode\" in" "$mk" \
+        || { echo "FAIL: $mk no longer dispatches on \$\$mode"; fail=1; }
+    grep -Eq '\*\).*unknown mode.*exit 1' "$mk" \
+        || { echo "FAIL: $mk catch-all must echo 'unknown mode' and exit 1"; fail=1; }
+    echo "-- 12.4 $mk enumerates data) explicitly (parity with build-apk.sh)"
+    grep -Eq '\bdata\)\s*install -m 0644' "$mk" \
+        || { echo "FAIL: $mk must enumerate data) -> 0644 explicitly"; fail=1; }
+done
 
 # ...and verify the equivalent shell loop body actually hard-fails at runtime
 # (make strips one '$' from '$$mode' and joins the backslash continuations, so

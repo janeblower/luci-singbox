@@ -1,93 +1,121 @@
 #!/bin/sh
 # tests/test_install_lists_match.sh
 #
-# Architectural invariant: scripts/install-manifest.txt is the SINGLE
-# source of truth for the install file set. Both the SDK Makefile and
-# scripts/build-apk.sh must consume it. Drift between the two builders
-# was the original failure mode (C2.3.1).
+# Architectural invariant (three-way split): each package's install manifest is
+# the SINGLE source of truth for that package's install file set. The package's
+# buildroot Makefile AND scripts/build-apk.sh must both consume it. Drift
+# between the two builders was the original failure mode (C2.3.1).
 #
-# This test asserts:
-#   1. The manifest file exists.
-#   2. Both builders reference it (i.e. neither has slipped back to
-#      hardcoded install lines).
+# Two file-set packages, two manifests, two source trees:
+#   backend  singbox-ui/          -> scripts/install-manifest-singbox-ui.txt
+#   frontend luci-app-singbox-ui/ -> scripts/install-manifest-luci-app-singbox-ui.txt
+#
+# For EACH package this test asserts:
+#   1. The manifest file exists and is non-empty.
+#   2. Both builders reference it (package Makefile's while-read loop +
+#      scripts/build-apk.sh) — neither has slipped back to hardcoded install
+#      lines.
 #   3. Every (non-comment) row is a 3-field TSV (src, dst, mode).
-#   4. Every src listed exists in the source tree.
+#   4. Every src listed exists in that package's source tree.
 #   5. Every mode is one of bin|conf|data.
-#   6. Every file under luci-singbox-ui/{root,htdocs} is covered by
-#      the manifest (catches the "added a new file but forgot to ship
-#      it" footgun).
+#   6. Every shippable file under the package's source tree is covered by the
+#      manifest (catches the "added a new file but forgot to ship it" footgun).
 set -e
 . "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
-MANIFEST="scripts/install-manifest.txt"
-MAKEFILE="luci-singbox-ui/Makefile"
 BUILDSH="scripts/build-apk.sh"
-
-[ -f "$MANIFEST" ] || { echo "FAIL: $MANIFEST missing"; exit 1; }
-[ -f "$MAKEFILE" ] || { echo "FAIL: $MAKEFILE missing"; exit 1; }
-[ -f "$BUILDSH" ]  || { echo "FAIL: $BUILDSH missing";  exit 1; }
-
-grep -q 'install-manifest.txt' "$MAKEFILE" \
-    || { echo "FAIL: $MAKEFILE doesn't reference install-manifest.txt"; exit 1; }
-grep -q 'install-manifest.txt' "$BUILDSH" \
-    || { echo "FAIL: $BUILDSH doesn't reference install-manifest.txt"; exit 1; }
-echo "  PASS: both builders reference single manifest"
+[ -f "$BUILDSH" ] || { echo "FAIL: $BUILDSH missing"; exit 1; }
 
 TAB=$(printf '\t')
 fail=0
-listed_tmp=$(mktemp)
-trap 'rm -f "$listed_tmp"' EXIT
 
-while IFS="$TAB" read -r src dst mode rest; do
-    # Strip leading whitespace from comment detection on src
-    case "$src" in '#'*|'') continue ;; esac
+# check_pkg <label> <pkg-src-dir> <manifest> <makefile> <coverage-glob...>
+#   coverage-glob = space-separated list of dirs (relative to repo root) whose
+#   files must all appear in the manifest.
+check_pkg() {
+    label="$1"; src_dir="$2"; manifest="$3"; makefile="$4"; shift 4
+    cov_dirs="$*"
 
-    # Must be exactly 3 tab-separated fields — no extras, no missing.
-    [ -n "$src" ] && [ -n "$dst" ] && [ -n "$mode" ] && [ -z "$rest" ] \
-        || { echo "FAIL: not a 3-field TSV row: src='$src' dst='$dst' mode='$mode' rest='$rest'"; fail=1; continue; }
+    echo "== $label =="
+    [ -f "$manifest" ] || { echo "FAIL: $manifest missing"; fail=1; return; }
+    [ -s "$manifest" ] || { echo "FAIL: $manifest is empty"; fail=1; return; }
+    [ -f "$makefile" ] || { echo "FAIL: $makefile missing"; fail=1; return; }
 
-    if [ ! -f "luci-singbox-ui/$src" ]; then
-        echo "FAIL: manifest src missing in source tree: $src"
+    man_base="$(basename "$manifest")"
+
+    # Both builders must reference THIS package's manifest by name.
+    grep -q "$man_base" "$makefile" \
+        || { echo "FAIL: $makefile doesn't reference $man_base"; fail=1; }
+    grep -q "$man_base" "$BUILDSH" \
+        || { echo "FAIL: $BUILDSH doesn't reference $man_base"; fail=1; }
+    # The Makefile must drive install from a manifest while-read loop, not
+    # hardcoded install lines.
+    grep -q 'while .*read .*src .*dst .*mode' "$makefile" \
+        || { echo "FAIL: $makefile has no manifest-driven install loop"; fail=1; }
+    echo "  PASS: both builders reference $man_base via a manifest-driven loop"
+
+    listed_tmp=$(mktemp)
+
+    while IFS="$TAB" read -r src dst mode rest; do
+        case "$src" in '#'*|'') continue ;; esac
+
+        # Exactly 3 tab-separated fields — no extras, no missing.
+        [ -n "$src" ] && [ -n "$dst" ] && [ -n "$mode" ] && [ -z "$rest" ] \
+            || { echo "FAIL: not a 3-field TSV row in $man_base: src='$src' dst='$dst' mode='$mode' rest='$rest'"; fail=1; continue; }
+
+        if [ ! -f "$src_dir/$src" ]; then
+            echo "FAIL: $man_base src missing in source tree: $src_dir/$src"
+            fail=1
+        fi
+
+        case "$mode" in
+            bin|conf|data) ;;
+            *) echo "FAIL: invalid mode '$mode' for $src in $man_base"; fail=1 ;;
+        esac
+
+        printf '%s\n' "$src" >> "$listed_tmp"
+    done < "$manifest"
+    echo "  PASS: all $man_base entries valid (src exists, mode in {bin,conf,data})"
+
+    # Coverage: every file under the coverage dirs must be listed.
+    # (BusyBox-portable: awk, not comm.)
+    tree_tmp=$(mktemp)
+    missing_tmp=$(mktemp)
+    # shellcheck disable=SC2086  # cov_dirs is an intentional multi-path list
+    find $cov_dirs -type f \
+        | sed "s#^$src_dir/##" \
+        | LC_ALL=C sort > "$tree_tmp"
+
+    awk 'NR==FNR {listed[$0]=1; next} !($0 in listed)' \
+        "$listed_tmp" "$tree_tmp" > "$missing_tmp"
+    if [ -s "$missing_tmp" ]; then
+        echo "FAIL: files in $src_dir not listed in $man_base:"
+        sed 's/^/    /' "$missing_tmp"
         fail=1
+    else
+        echo "  PASS: every shippable $label source-tree file is covered by $man_base"
     fi
 
-    case "$mode" in
-        bin|conf|data) ;;
-        *) echo "FAIL: invalid mode '$mode' for $src"; fail=1 ;;
-    esac
+    rm -f "$listed_tmp" "$tree_tmp" "$missing_tmp"
+}
 
-    printf '%s\n' "$src" >> "$listed_tmp"
-done < "$MANIFEST"
+# Backend: ships everything under singbox-ui/root/.
+check_pkg "backend (singbox-ui)" \
+    "singbox-ui" \
+    "scripts/install-manifest-singbox-ui.txt" \
+    "singbox-ui/Makefile" \
+    "singbox-ui/root"
 
-if [ $fail -eq 0 ]; then
-    echo "  PASS: all manifest entries valid (src exists, mode in {bin,conf,data})"
-fi
+# Frontend: ships htdocs (-> www) + root/ (menu.d, acl.d). po/ is compiled by
+# po2lmo separately (not manifest-driven) so it's NOT a coverage dir.
+check_pkg "frontend (luci-app-singbox-ui)" \
+    "luci-app-singbox-ui" \
+    "scripts/install-manifest-luci-app-singbox-ui.txt" \
+    "luci-app-singbox-ui/Makefile" \
+    "luci-app-singbox-ui/htdocs luci-app-singbox-ui/root"
 
-# Coverage: every file under root/ and htdocs/ must be listed. Catches
-# the C1-style regression where someone adds lib/scrub.uc but forgets to
-# add it to the install set. Implemented with awk (BusyBox-portable —
-# `comm` isn't available in the OpenWrt rootfs Docker image).
-tree_tmp=$(mktemp)
-missing_tmp=$(mktemp)
-trap 'rm -f "$listed_tmp" "$tree_tmp" "$missing_tmp"' EXIT
-
-find ${SB_BACKEND_ROOT} ${SB_UI_HTDOCS} -type f \
-    | sed 's#^luci-singbox-ui/##' \
-    | LC_ALL=C sort > "$tree_tmp"
-
-# Files in $tree_tmp but NOT in $listed_tmp = uncovered.
-awk 'NR==FNR {listed[$0]=1; next} !($0 in listed)' \
-    "$listed_tmp" "$tree_tmp" > "$missing_tmp"
-if [ -s "$missing_tmp" ]; then
-    echo "FAIL: files in source tree not listed in $MANIFEST:"
-    sed 's/^/    /' "$missing_tmp"
-    fail=1
-else
-    echo "  PASS: every source-tree file is covered by the manifest"
-fi
-
-if [ $fail -eq 0 ]; then
+if [ "$fail" -eq 0 ]; then
     echo "OK"
     exit 0
 fi

@@ -29,8 +29,8 @@ fi
 
 # Nothing in the lib tree may still require reveal.uc / scrub.uc.
 hits=$(grep -rn -E 'require\("reveal"\)|require\("scrub"\)|reveal\.uc|scrub\.uc' \
-    ${SB_SHARE}/ \
-    ${SB_BACKEND_ROOT}/usr/libexec/ 2>/dev/null || true)
+    "${SB_SHARE}"/ \
+    "${SB_BACKEND_ROOT}"/usr/libexec/ 2>/dev/null || true)
 if [ -n "$hits" ]; then
     echo "FAIL: server-side reveal/scrub references still present:"
     echo "$hits"

@@ -39,7 +39,7 @@ EOF
 
 log=$(mktemp)
 trap 'cleanup; rm -f "$log"' EXIT
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
     >"$log" 2>&1 || {
         echo "FAIL: uci-defaults script crashed:"
         cat "$log"; exit 1
@@ -80,7 +80,7 @@ config outbound 'p'
 	option expose_port '1080'
 EOF
 
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: migration crashed"; cat "$log"; exit 1; }
 
 # tproxy section removed
@@ -109,7 +109,7 @@ uci -q get singbox-ui.p.expose_proxy >/dev/null 2>&1 \
 echo "  PASS: expose_* dropped from outbound"
 
 # Idempotent: re-run must not crash or recreate the tproxy section
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: rerun crashed"; cat "$log"; exit 1; }
 uci -q get singbox-ui.tproxy >/dev/null 2>&1 \
 	&& { echo "FAIL: rerun resurrected tproxy section"; exit 1; }
@@ -136,7 +136,7 @@ config ruleset 'ru'
 	option dns_fakeip_tag 'fakeip'
 EOF
 
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: DNS migration crashed"; cat "$log"; exit 1; }
 
 [ "$(uci get singbox-ui.fakeip 2>/dev/null)" = "dns_server" ] \
@@ -162,7 +162,7 @@ rule=$(uci -q show singbox-ui | sed -n 's/^singbox-ui\.\([^.]*\)=dns_rule$/\1/p'
 [ "$(uci get "singbox-ui.$rule.server")" = "fakeip" ] || { echo "FAIL: dns_rule.server != fakeip"; exit 1; }
 echo "  PASS: ruleset.dns_fakeip → dns_rule"
 
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: DNS migration rerun crashed"; cat "$log"; exit 1; }
 uci -q get singbox-ui.dns_outbound >/dev/null 2>&1 && { echo "FAIL: rerun resurrected dns_outbound"; exit 1; }
 echo "  PASS: DNS migration idempotent"
@@ -175,12 +175,12 @@ config clash_api 'clash_api'
 	option listen '127.0.0.1'
 	option port '9090'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: secret gen crashed"; cat "$log"; exit 1; }
 sec1=$(uci -q get singbox-ui.clash_api.secret 2>/dev/null || true)
 [ -n "$sec1" ] || { echo "FAIL: secret not generated"; exit 1; }
 echo "  PASS: secret generated ($sec1)"
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: secret rerun crashed"; cat "$log"; exit 1; }
 sec2=$(uci -q get singbox-ui.clash_api.secret)
 [ "$sec1" = "$sec2" ] || { echo "FAIL: secret changed on rerun ($sec1 → $sec2)"; exit 1; }
@@ -193,7 +193,7 @@ config cache 'cache'
 	option enabled '0'
 	option path '/tmp/singbox-ui-cache.db'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: cache migration crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.cache.enabled 2>/dev/null)" = "1" ] \
 	|| { echo "FAIL: cache enabled not flipped to 1"; uci show singbox-ui.cache; exit 1; }
@@ -215,7 +215,7 @@ config cache 'cache'
 	option enabled '1'
 	option path '/srv/my.db'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: cache custom migration crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" = "custom" ] \
 	|| { echo "FAIL: custom storage != custom"; uci show singbox-ui.cache; exit 1; }
@@ -231,7 +231,7 @@ config cache 'cache'
 	option enabled '0'
 	option path '/srv/explicit.db'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: explicit-disable migration crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" = "custom" ] \
 	|| { echo "FAIL: explicit-disable storage != custom"; uci show singbox-ui.cache; exit 1; }
@@ -251,7 +251,7 @@ config inbound 'tproxy_in'
 	option protocol 'tproxy'
 	option listen_port '7893'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: dns_in creation crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.dns_in 2>/dev/null)" = "inbound" ] \
 	|| { echo "FAIL: dns_in section type != inbound"; uci show singbox-ui; exit 1; }
@@ -279,7 +279,7 @@ config inbound 'dns_in'
 	option listen_port '53'
 	option dns_listener '1'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: dns_in preserve crashed"; cat "$log"; exit 1; }
 [ "$(uci get singbox-ui.dns_in.listen)" = "127.0.0.99" ] \
 	|| { echo "FAIL: dns_in.listen was overwritten (expected 127.0.0.99)"; exit 1; }
@@ -297,7 +297,7 @@ config outbound 'b'
 	option protocol 'vless'
 	option extra_json '{"x":1}'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: purge_extra_json crashed"; cat "$log"; exit 1; }
 uci -q get singbox-ui.a.extra_json >/dev/null 2>&1 \
 	&& { echo "FAIL: extra_json should be absent from inbound 'a'"; uci show singbox-ui.a; exit 1; }
@@ -315,7 +315,7 @@ config inbound 'ib_json'
 	option mode 'json'
 	option inbound_json '{"type":"vless","tag":"vless-in","listen":"::","listen_port":1080}'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: purge_inbound_mode_json (json) crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.ib_json.enabled 2>/dev/null)" = "0" ] \
 	|| { echo "FAIL: mode=json inbound should be disabled after migration"; uci show singbox-ui.ib_json; exit 1; }
@@ -336,7 +336,7 @@ config inbound 'ib_ctor'
 	option mode 'constructor'
 	option listen_port '7893'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: purge_inbound_mode_json (constructor) crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.ib_ctor.enabled 2>/dev/null)" = "1" ] \
 	|| { echo "FAIL: mode=constructor inbound enabled should stay 1"; uci show singbox-ui.ib_ctor; exit 1; }
@@ -355,7 +355,7 @@ config outbound 'ob_ctor'
 	option server 'v.example.com'
 	option server_port '443'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: migrate_outbound_type (constructor+vless) crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.ob_ctor.type 2>/dev/null)" = "vless" ] \
 	|| { echo "FAIL: expected type=vless after migration"; uci show singbox-ui.ob_ctor; exit 1; }
@@ -375,7 +375,7 @@ config outbound 'ob_${_pt}'
 	option enabled '1'
 	option proxy_type '${_pt}'
 EOF
-	IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+	IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 		>"$log" 2>&1 || { echo "FAIL: migrate_outbound_type (${_pt}) crashed"; cat "$log"; exit 1; }
 	_got=$(uci -q get "singbox-ui.ob_${_pt}.type" 2>/dev/null)
 	[ "$_got" = "$_pt" ] \
@@ -393,7 +393,7 @@ config outbound 'ob_interface'
 	option enabled '1'
 	option proxy_type 'interface'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: migrate (interface) crashed"; cat "$log"; exit 1; }
 uci -q get singbox-ui.ob_interface >/dev/null 2>&1 \
 	&& { echo "FAIL: ob_interface should be deleted by E2 Migration B"; uci show "singbox-ui.ob_interface"; exit 1; }
@@ -407,7 +407,7 @@ config outbound 'ob_json'
 	option proxy_type 'json'
 	option proxy_json '{"type":"vless","tag":"x"}'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: migrate_outbound_type (json) crashed"; cat "$log"; exit 1; }
 [ "$(uci -q get singbox-ui.ob_json.enabled 2>/dev/null)" = "0" ] \
 	|| { echo "FAIL: proxy_type=json outbound should be disabled after migration"; uci show singbox-ui.ob_json; exit 1; }
@@ -441,7 +441,7 @@ config inbound 'edge_in'
 	option transport 'ws'
 	option server_password 'a=b.c=d'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
 	>"$log" 2>&1 || { echo "FAIL: S1-7 migration crashed"; cat "$log"; exit 1; }
 # migrate_rename_e2_keys renamed transport → transport_type: proves the inbound
 # section WAS enumerated despite the '.'/'='-bearing sibling value.
@@ -467,7 +467,7 @@ ver=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
     || { echo "FAIL: _meta.schema_version not set (got '$ver')"; uci show singbox-ui._meta 2>/dev/null; exit 1; }
 echo "  PASS: _meta.schema_version=$ver"
 
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
     >"$log" 2>&1 || { echo "FAIL: re-run crashed"; cat "$log"; exit 1; }
 ver2=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
 [ "$ver" = "$ver2" ] \
@@ -483,7 +483,7 @@ echo "  PASS: migration is idempotent (schema_version stable on re-run)"
 # ---------------------------------------------------------------------------
 echo "-- C2.1.3: single uci commit in migration script"
 commits_in_file=$(grep -Ec '^[[:space:]]*uci[[:space:]]+(-q[[:space:]]+)?commit[[:space:]]+singbox-ui' \
-    ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui)
+    "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui)
 [ "$commits_in_file" -eq 1 ] \
     || { echo "FAIL: expected exactly 1 'uci commit singbox-ui' in script, got $commits_in_file"; exit 1; }
 echo "  PASS: single 'uci commit singbox-ui' in script ($commits_in_file)"
@@ -494,7 +494,7 @@ echo "  PASS: single 'uci commit singbox-ui' in script ($commits_in_file)"
 echo "-- C2.1.2: fresh install (no existing config) initialises _meta"
 rm -f "$CONFIG"
 touch "$CONFIG"
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
     >"$log" 2>&1 || { echo "FAIL: fresh-install migration crashed"; cat "$log"; exit 1; }
 ver_fresh=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
 [ "$ver_fresh" -ge 1 ] 2>/dev/null \
@@ -517,7 +517,7 @@ config fakeip 'fakeip'
 	list inet4_range '198.18.0.0/15'
 	list inet4_range '198.30.0.0/15'
 EOF
-IPKG_INSTROOT='' sh ${SB_BACKEND_ROOT}/etc/uci-defaults/99-luci-singbox-ui \
+IPKG_INSTROOT='' sh "${SB_BACKEND_ROOT}"/etc/uci-defaults/99-luci-singbox-ui \
     >"$log" 2>&1 || { echo "FAIL: future-schema rerun crashed"; cat "$log"; exit 1; }
 # fakeip should NOT have been migrated to dns_server (it should still be a
 # fakeip section with a list inet4_range), proving early-exit fired.

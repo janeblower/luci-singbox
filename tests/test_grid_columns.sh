@@ -32,7 +32,7 @@ check_file() {
 }
 
 fail=0
-check_file ${SB_VIEW}/tabs/outbounds.js || fail=1
-check_file ${SB_VIEW}/tabs/inbounds.js  || fail=1
+check_file "${SB_VIEW}"/tabs/outbounds.js || fail=1
+check_file "${SB_VIEW}"/tabs/inbounds.js  || fail=1
 [ "$fail" -eq 0 ] && echo "PASS test_grid_columns"
 exit $fail
