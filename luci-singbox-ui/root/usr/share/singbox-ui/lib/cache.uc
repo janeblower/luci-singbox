@@ -1,12 +1,11 @@
 // lib/cache.uc — sing-box experimental.cache_file.
-// UCI `cache` section:
-//   enabled '1'        → on
-//   storage  ram|flash|custom (default ram)
-//   path     absolute path; required when storage=custom, else derived:
-//                 ram   → /tmp/singbox-ui-cache.db
-//                 flash → /etc/sing-box/cache.db
-//   store_fakeip '1'   → adds store_fakeip:true when an enabled fakeip
-//                        dns_server exists; otherwise dropped silently.
+// Field→JSON mapping is declarative (builder.settings.cache); this module owns
+// the two cross-cutting pieces the filler can't express: storage→path
+// resolution and the fakeip cross-gate (store_fakeip only when a fakeip
+// dns_server is enabled). cache_db_path() is the single source of truth for the
+// on-disk path (consumed by nft-rulesets.uc).
+let reg    = require("builder.settings.registry");
+let filler = require("builder._filler");
 
 function resolve_path(s) {
 	let storage = (s.storage == null || s.storage === "") ? "ram" : s.storage;
@@ -21,16 +20,15 @@ function resolve_path(s) {
 function build_cache(cur) {
 	let s = cur.get_all("singbox-ui", "cache");
 	if (s == null || s.enabled !== "1") return null;
-	let out = {
-		enabled: true,
-		path: resolve_path(s),
-	};
+	let d = reg.get("cache", "cache");
+	let out = filler.build(d, s);
+	out.path = resolve_path(s);
+	// fakeip cross-gate: store_fakeip is meaningless without a fakeip server.
 	let has_fakeip = false;
-	cur.foreach("singbox-ui", "dns_server", function(d) {
-		if (d.enabled !== "0" && d.type === "fakeip") has_fakeip = true;
+	cur.foreach("singbox-ui", "dns_server", function(dsrv) {
+		if (dsrv.enabled !== "0" && dsrv.type === "fakeip") has_fakeip = true;
 	});
-	if (has_fakeip && s.store_fakeip === "1")
-		out.store_fakeip = true;
+	if (!has_fakeip) delete out.store_fakeip;
 	return out;
 }
 

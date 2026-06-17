@@ -110,16 +110,16 @@ let cur = uci.cursor(getenv("UCI_CONFIG_DIR"));
 print(cache.cache_db_path(cur) ?? "null");
 UCODE
 mkdir -p "$TMPDIR/cfg2"
-printf 'config cache "cache"\n\toption enabled "1"\n' >"$TMPDIR/cfg2/singbox-ui"
+printf "config cache 'cache'\n\toption enabled '1'\n" >"$TMPDIR/cfg2/singbox-ui"
 # shellcheck disable=SC2086
 out=$(UCI_CONFIG_DIR="$TMPDIR/cfg2" "$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/run2.uc")
 [ "$out" = "/tmp/singbox-ui-cache.db" ] || { echo "FAIL cache_db_path enabled: got '$out'"; exit 1; }
-printf 'config cache "cache"\n\toption enabled "0"\n' >"$TMPDIR/cfg2/singbox-ui"
+printf "config cache 'cache'\n\toption enabled '0'\n" >"$TMPDIR/cfg2/singbox-ui"
 # shellcheck disable=SC2086
 out=$(UCI_CONFIG_DIR="$TMPDIR/cfg2" "$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/run2.uc")
 [ "$out" = "null" ] || { echo "FAIL cache_db_path disabled: got '$out'"; exit 1; }
 # flash storage → /etc path
-printf 'config cache "cache"\n\toption enabled "1"\n\toption storage "flash"\n' >"$TMPDIR/cfg2/singbox-ui"
+printf "config cache 'cache'\n\toption enabled '1'\n\toption storage 'flash'\n" >"$TMPDIR/cfg2/singbox-ui"
 # shellcheck disable=SC2086
 out=$(UCI_CONFIG_DIR="$TMPDIR/cfg2" "$UCODE_BIN" $UCODE_LIB_FLAGS "$TMPDIR/run2.uc")
 [ "$out" = "/etc/sing-box/cache.db" ] || { echo "FAIL cache_db_path flash: got '$out'"; exit 1; }
