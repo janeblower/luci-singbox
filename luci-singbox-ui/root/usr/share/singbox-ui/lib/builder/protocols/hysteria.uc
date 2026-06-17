@@ -33,7 +33,7 @@ reg.register({
           json_key: "recv_window", coerce: "num" },
         { name: "disable_mtu_discovery", type: "bool", tab: "basic",
           ui_label: "Disable MTU discovery (deprecated)", advanced: true,
-          json_key: "disable_mtu_discovery", coerce: "bool" },
+          json_key: "disable_mtu_discovery", coerce: "bool", max_version: "1.14" },
     ],
 });
 

@@ -8,7 +8,8 @@ reg.register({
         { name: "accept_default_resolvers", type: "bool", tab: "basic", default: 0,
           ui_label: "Accept default resolvers", json_key: "accept_default_resolvers", coerce: "bool" },
         { name: "accept_search_domain", type: "bool", tab: "basic", default: 0,
-          ui_label: "Accept search domain", json_key: "accept_search_domain", coerce: "bool" },
+          ui_label: "Accept search domain", json_key: "accept_search_domain", coerce: "bool",
+          min_version: "1.14" },
     ],
 });
 

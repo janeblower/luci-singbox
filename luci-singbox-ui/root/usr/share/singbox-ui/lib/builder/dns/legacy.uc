@@ -4,6 +4,7 @@
 let reg = require("builder.protocols.registry");
 reg.register({
     kind: "dns", type: "legacy", sing_box_type: "",
+    max_version: "1.14",   // legacy DNS server format removed in sing-box 1.14
     fields: [
         { name: "address", type: "string", tab: "basic", required: true,
           ui_label: "Address (with scheme)", placeholder: "tls://1.1.1.1",
