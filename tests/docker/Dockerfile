@@ -40,9 +40,14 @@ COPY build-snapshot.sh        /opt/build-snapshot.sh
 COPY entrypoint.sh            /opt/entrypoint.sh
 RUN chmod +x /opt/wait-ssh.sh /opt/build-snapshot.sh /opt/entrypoint.sh
 
-# OpenWrt rootfs — pinned. Bump both URL and SHA256 together.
-ENV IMAGE_URL=https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-25.12.3-x86-64-generic-squashfs-combined.img.gz
-ENV IMAGE_FILE=openwrt-25.12.3-x86-64-generic-squashfs-combined.img.gz
+# OpenWrt rootfs — version comes from tests/docker/openwrt-version.txt, passed
+# in by the test-image workflow as --build-arg OPENWRT_VERSION=... (single
+# source of truth). The ARG default keeps a bare `docker build` working. Only
+# IMAGE_SHA256 stays an explicit pin — a checksum can't be derived from the
+# version string, so bump it alongside the version file.
+ARG OPENWRT_VERSION=25.12.3
+ENV IMAGE_URL=https://downloads.openwrt.org/releases/${OPENWRT_VERSION}/targets/x86/64/openwrt-${OPENWRT_VERSION}-x86-64-generic-squashfs-combined.img.gz
+ENV IMAGE_FILE=openwrt-${OPENWRT_VERSION}-x86-64-generic-squashfs-combined.img.gz
 ENV IMAGE_SHA256=41c52550808286fb609cee4ae2d903feb506a5404f499f2f3a24e52108f8a809
 
 WORKDIR /var/lib/qemu-image
