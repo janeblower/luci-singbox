@@ -17,6 +17,14 @@ set -e
 . "$(dirname "$0")/../lib/sb_helpers.sh"
 cd "$(dirname "$0")/../.."
 
+# Self-guard (de-flake invariant): this test must not reintroduce a fixed
+# `sleep` for rpcd settling — it polls readiness instead. The guard greps its
+# own source; a stray `sleep N` (other than inside this guard's own grep
+# pattern) fails fast.
+if grep -nE '^[[:space:]]*sleep[[:space:]]+[0-9]' "$0" | grep -qv 'self-guard'; then
+	echo "FAIL: fixed sleep reintroduced in $0 — use condition polling"; exit 1
+fi
+
 # Only meaningful inside the OpenWrt qemu VM, where a live rpcd + ubus
 # exist. On a plain host (and in the host-only subset) there is no ubus to
 # talk to, so SKIP — the string-form shebang assert in test_rpcd_handler.sh
@@ -51,14 +59,22 @@ cp -f "$ACL_SRC" /usr/share/rpcd/acl.d/luci-singbox-ui.json
 # Restart rpcd so it re-scans /usr/libexec/rpcd and registers the object,
 # launching the handler via its shebang the next time a method is called.
 /etc/init.d/rpcd restart
-# Give rpcd a moment to settle before the first call (mirrors
-# test_browser.sh:99 which sleeps after an rpcd reload).
-i=0; while [ $i -lt 10 ]; do
-	ubus list 2>/dev/null | grep -q '^singbox-ui$' && break
-	i=$((i + 1)); sleep 1
-done
+# Poll for readiness instead of a fixed sleep. `ubus wait_for <obj>` blocks
+# until the object registers (or its internal timeout), so on a fast box it
+# returns immediately and on a loaded runner it waits exactly as long as needed
+# — no fixed-grid flake. Fall back to a busy-poll bounded by a deadline if
+# wait_for is unavailable on this build (still no fixed per-iteration sleep:
+# we spin on `ubus list` until a monotonic deadline using `date +%s`).
+if ubus -t 30 wait_for singbox-ui 2>/dev/null; then
+	:
+else
+	_deadline=$(( $(date +%s) + 30 ))
+	while ! ubus list 2>/dev/null | grep -q '^singbox-ui$'; do
+		[ "$(date +%s)" -ge "$_deadline" ] && break
+	done
+fi
 ubus list 2>/dev/null | grep -q '^singbox-ui$' \
-	|| { echo "FAIL: rpcd did not register the 'singbox-ui' ubus object"; exit 1; }
+	|| { echo "FAIL: rpcd did not register the 'singbox-ui' ubus object after 30s poll"; exit 1; }
 echo "  PASS: singbox-ui ubus object registered via rpcd"
 
 # 1) `status` must succeed through the shebang path. is_singbox_running()
