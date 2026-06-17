@@ -17,7 +17,7 @@ grep -q 'procd_set_param capabilities' ${SB_BACKEND_ROOT}/etc/init.d/singbox-ui 
 	|| { echo "FAIL: init.d missing procd_set_param capabilities"; exit 1; }
 echo "PASS: init.d wires capability file"
 
-# Manifest installs it
-grep -q 'root/etc/capabilities/singbox-ui.json' scripts/install-manifest.txt \
-	|| { echo "FAIL: capability file not in install-manifest"; exit 1; }
+# Manifest installs it (backend package)
+grep -q 'root/etc/capabilities/singbox-ui.json' scripts/install-manifest-singbox-ui.txt \
+	|| { echo "FAIL: capability file not in install-manifest-singbox-ui.txt"; exit 1; }
 echo "PASS: capability file in manifest"

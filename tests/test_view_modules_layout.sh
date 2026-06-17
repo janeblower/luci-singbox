@@ -111,16 +111,17 @@ if [ "$fallback_in_importers" != "0" ]; then
   fail=1
 fi
 
-# C2 E.4: shared style.css must exist + be in the install manifest.
-# (After C2.3.1 the Makefile and build-apk.sh both consume
-# scripts/install-manifest.txt — that file is the source of truth for
-# what gets shipped, not per-file lines in the Makefile.)
+# C2 E.4: shared style.css must exist + be in the UI install manifest.
+# (The Makefile and build-apk.sh both consume the per-package manifest —
+# that file is the source of truth for what gets shipped, not per-file
+# lines in the Makefile.)
+UI_MANIFEST=scripts/install-manifest-luci-app-singbox-ui.txt
 if [ ! -f "$ROOT/style.css" ]; then
   echo "FAIL: $ROOT/style.css missing"
   fail=1
 fi
-if ! grep -q 'style\.css' scripts/install-manifest.txt; then
-  echo "FAIL: scripts/install-manifest.txt does not include style.css"
+if ! grep -q 'style\.css' "$UI_MANIFEST"; then
+  echo "FAIL: $UI_MANIFEST does not include style.css"
   fail=1
 fi
 
