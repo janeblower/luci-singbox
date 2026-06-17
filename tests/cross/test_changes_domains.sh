@@ -80,4 +80,19 @@ expect "" backend   false
 expect "" ui        false
 expect "" packaging false
 
+# --- static wiring guard: build.yml must consume each domain output ---
+BY=.github/workflows/build.yml
+grep -qE 'echo "bbolt=' "$BY"     || fail "build.yml changes job does not emit bbolt output"
+grep -qE 'echo "backend=' "$BY"   || fail "build.yml changes job does not emit backend output"
+grep -qE 'echo "ui=' "$BY"        || fail "build.yml changes job does not emit ui output"
+grep -qE 'echo "packaging=' "$BY" || fail "build.yml changes job does not emit packaging output"
+# Heavy jobs gate on their domain output (bbolt no longer always-runs).
+grep -qE "needs\.changes\.outputs\.bbolt == 'true'"     "$BY" || fail "bbolt job not gated on bbolt domain"
+grep -qE "needs\.changes\.outputs\.backend == 'true'"   "$BY" || fail "test job not gated on backend domain"
+grep -qE "needs\.changes\.outputs\.ui == 'true'"        "$BY" || fail "ui jobs not gated on ui domain"
+# changes job sources the shared classifier (single source of truth).
+grep -qE 'tests/lib/domain_classify\.sh' "$BY" || fail "changes job does not source domain_classify.sh"
+# push gating uses the before-SHA (not only PR base).
+grep -qE 'github\.event\.before' "$BY" || fail "changes job does not diff against the push before-SHA"
+
 echo "OK"
