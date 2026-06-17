@@ -1,0 +1,1 @@
+{ "cache_id": "id", "enabled": true, "rdrc_timeout": "5m", "store_fakeip": true, "store_rdrc": true }

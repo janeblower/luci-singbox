@@ -18,40 +18,12 @@ function buildGeneralMap() {
 	o.rmempty = false;
 	o.description = _('When on, version-incompatible fields are hidden instead of shown disabled. Takes effect after save/reload.');
 
-	// --- Cache file ---
+	// --- Cache file (descriptor-driven) ---
 	s = m.section(form.NamedSection, 'cache', 'cache', _('Cache file'),
 		_('Persistent cache for proxies, DNS responses, and fakeip mappings.'));
-
-	o = s.option(form.Flag, 'enabled', _('Enable cache file'));
-	o.default = '1';
-	// rmempty=false: LuCI drops a Flag from UCI when its value equals the
-	// default ('1'), so a checked-but-default cache toggle silently lost
-	// `enabled` on save. cache.uc gates on `enabled === "1"`, so the cache_file
-	// block then vanished from the generated config (and with it the nft/bbolt
-	// rule-set path). Persist the option unconditionally.
-	o.rmempty = false;
-
-	o = s.option(form.ListValue, 'storage', _('Storage'));
-	o.value('ram',    _('RAM (/tmp/, lost on reboot)'));
-	o.value('flash',  _('Flash (/etc/sing-box/, persistent)'));
-	o.value('custom', _('Custom path'));
-	o.default = 'ram';
-	o.depends('enabled', '1');
-
-	o = s.option(form.Value, 'path', _('Custom path'));
-	o.placeholder = '/srv/singbox-cache.db';
-	o.depends({ enabled: '1', storage: 'custom' });
-	o.validate = function (section_id, value) {
-		if (value == null || value === '') return _('Path is required when storage = Custom');
-		if (value.charAt(0) !== '/') return _('Path must be absolute');
-		return true;
-	};
-
-	o = s.option(form.Flag, 'store_fakeip', _('Persist fakeip mappings'));
-	o.default = '1';
-	o.rmempty = false;   // same default-stripping footgun as `enabled` above
-	o.depends('enabled', '1');
-	o.description = _('Effective only when a DNS server of type fakeip is enabled.');
+	var cacheSchema = (SbViewState.getSchema() || {}).cache || {};
+	if (cacheSchema.cache)
+		descriptor_form.applyMaterializedNamed(s, 'cache', 'cache', cacheSchema.cache);
 
 	// -- Log --
 	s = m.section(form.NamedSection, 'log', 'log', _('Log'));
