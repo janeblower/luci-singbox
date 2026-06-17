@@ -10,7 +10,9 @@
 #
 # Usage: build-feed.sh <version> <dist_dir> <out_dir>
 #   version   OpenWrt minor used as the top path segment (e.g. 25.12)
-#   dist_dir  dir containing luci-singbox-ui-<arch>.apk + luci-i18n-...-ru.apk
+#   dist_dir  dir containing bbolt-client-<arch>.apk (the only per-arch package)
+#             + the noarch trio singbox-ui.apk / luci-app-singbox-ui.apk /
+#             luci-i18n-singbox-ui-ru.apk
 #   out_dir   output dir (wiped and recreated); this is what is deployed to Pages
 #
 # Env knobs:
@@ -25,8 +27,9 @@
 # filename. The client reconstructs the download URL as "<name>-<version>.apk"
 # relative to the repository's packages.adb directory (verified against the
 # official OpenWrt feed: e.g. csstidy-2021.06.13~707feaec-r1.apk). The GitHub
-# release assets are named luci-singbox-ui-<arch>.apk, so each package is copied
-# into the feed under its apk "<name>-<version>.apk" name instead.
+# release assets are named bbolt-client-<arch>.apk (per-arch) and the noarch
+# trio singbox-ui.apk / luci-app-singbox-ui.apk / luci-i18n-singbox-ui-ru.apk, so
+# each package is copied into the feed under its apk "<name>-<version>.apk" name.
 set -eu
 
 VERSION="${1:?usage: build-feed.sh <version> <dist_dir> <out_dir>}"
@@ -34,6 +37,10 @@ DIST="${2:?usage: build-feed.sh <version> <dist_dir> <out_dir>}"
 OUT="${3:?usage: build-feed.sh <version> <dist_dir> <out_dir>}"
 
 REPO_NAME="luci-singbox"
+# Noarch packages duplicated into every per-arch dir so apk at arch X can resolve
+# the whole stack from one packages.adb.
+CORE="singbox-ui.apk"
+APP="luci-app-singbox-ui.apk"
 I18N="luci-i18n-singbox-ui-ru.apk"
 PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
 FEED_PUBKEY="${FEED_PUBKEY:-feed/luci-singbox.pem}"
@@ -82,14 +89,19 @@ gen_dir_index() {
 }
 
 # Assemble one arch directory: copy apks (renamed), build/sign the index, indexes.
+# Four packages land here: the per-arch bbolt-client plus the noarch trio
+# (core/app/i18n), the trio duplicated into every arch dir so apk at arch X
+# resolves the whole stack from this single packages.adb.
 build_arch_dir() {
   ba_arch="$1"
   ba_d="$OUT/$VERSION/$ba_arch/$REPO_NAME"
   mkdir -p "$ba_d"
-  copy_pkg "$DIST/luci-singbox-ui-$ba_arch.apk" "$ba_d"
-  if [ -f "$DIST/$I18N" ]; then
-    copy_pkg "$DIST/$I18N" "$ba_d"
-  fi
+  copy_pkg "$DIST/bbolt-client-$ba_arch.apk" "$ba_d"
+  for ba_noarch in "$CORE" "$APP" "$I18N"; do
+    if [ -f "$DIST/$ba_noarch" ]; then
+      copy_pkg "$DIST/$ba_noarch" "$ba_d"
+    fi
+  done
   if [ -n "${FEED_SIGN_KEY:-}" ]; then
     ( cd "$ba_d" && "$APK_BIN" mkndx --allow-untrusted --sign-key "$FEED_SIGN_KEY" -o packages.adb ./*.apk )
   else
@@ -102,17 +114,17 @@ build_arch_dir() {
 rm -rf "$OUT"
 mkdir -p "$OUT/$VERSION"
 
-# Discover arches from the per-arch package filenames (never hardcode the list).
+# Discover arches from the only per-arch package (bbolt-client); never hardcode.
 found=0
-for apk in "$DIST"/luci-singbox-ui-*.apk; do
+for apk in "$DIST"/bbolt-client-*.apk; do
   [ -e "$apk" ] || continue
   base="$(basename "$apk")"
-  arch="${base#luci-singbox-ui-}"
+  arch="${base#bbolt-client-}"
   arch="${arch%.apk}"
   build_arch_dir "$arch"
   found=1
 done
-[ "$found" = "1" ] || { echo "no luci-singbox-ui-*.apk in $DIST" >&2; exit 1; }
+[ "$found" = "1" ] || { echo "no bbolt-client-*.apk in $DIST" >&2; exit 1; }
 
 # Version-level browsable index (lists arches).
 gen_dir_index "$OUT/$VERSION" "OpenWrt $VERSION - architectures"
@@ -147,7 +159,7 @@ On the router (OpenWrt ${VERSION}.x+, apk-based):
 ARCH=\$(apk --print-arch)
 wget -O /etc/apk/keys/luci-singbox.pem ${PAGES_URL}/luci-singbox.pem
 echo "${PAGES_URL}/${VERSION}/\$ARCH/luci-singbox/packages.adb" > /etc/apk/repositories.d/luci-singbox.list
-apk update && apk add luci-singbox-ui
+apk update && apk add luci-app-singbox-ui
 \`\`\`
 
 ## Browse

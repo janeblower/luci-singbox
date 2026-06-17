@@ -1,6 +1,9 @@
 #!/bin/sh
-# Unit test for install.sh: stub the downloader (wget), apk, sha256sum, uname/apk-arch
-# via PATH + env overrides so nothing hits the network or the real filesystem.
+# Unit test for the FEED-based install.sh. Drives the new flow WITHOUT network:
+# stub `apk` (records args; --print-arch prints the chosen arch; update/add are
+# no-ops) and stub the downloader (wget) to write a placeholder key file, both on
+# PATH ahead of the real binaries. Root paths (/etc/apk/...) are redirected via
+# install.sh's APK_KEYS_DIR / APK_REPO_DIR env hooks into a temp fakeroot.
 set -eu
 HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/.." && pwd)
@@ -9,108 +12,104 @@ BIN="$TMP/bin"; mkdir -p "$BIN"
 PATH="$BIN:$PATH"
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
+PAGES_URL="http://example.test/feed"
+KEYS_DIR="$TMP/keys"
+REPO_DIR="$TMP/repos"
+LIST="$REPO_DIR/luci-singbox.list"
+
 # --- stubs ---
-# apk: --print-arch -> chosen arch (reads $ARCHFILE); add -> record invocation
-ARCHFILE="$TMP/arch"; echo "aarch64_cortex-a53" > "$ARCHFILE"
+# apk: --print-arch -> chosen arch (reads $ARCHFILE); update -> no-op;
+#      add -> record full invocation to $TMP/apk.log
+ARCHFILE="$TMP/arch"; echo "x86_64" > "$ARCHFILE"
 cat > "$BIN/apk" <<EOF
 #!/bin/sh
 case "\$1" in
   --print-arch) cat "$ARCHFILE" ;;
   update) : ;;
-  add) echo "apk add \$*" >> "$TMP/apk.log" ;;
+  add) shift; echo "apk add \$*" >> "$TMP/apk.log" ;;
+  *) : ;;
 esac
 EOF
 chmod +x "$BIN/apk"
 
-# wget: serve files from $TMP/serve based on the requested URL's basename
-mkdir -p "$TMP/serve"
+# wget: record the requested URL, write a placeholder file to -O <out>.
+# busybox form: wget -q -O <out> <url>
 cat > "$BIN/wget" <<EOF
 #!/bin/sh
-# busybox wget form: wget -O <out> <url>
 out=""; url=""
 while [ \$# -gt 0 ]; do case "\$1" in -O) out="\$2"; shift 2 ;; -q|-nv) shift ;; *) url="\$1"; shift ;; esac; done
-base=\${url##*/}
-[ -f "$TMP/serve/\$base" ] || { echo "404 \$base" >&2; exit 1; }
-cp "$TMP/serve/\$base" "\$out"
+echo "\$url" >> "$TMP/wget.log"
+[ -n "\$out" ] && echo "PLACEHOLDER-KEY" > "\$out"
+exit 0
 EOF
 chmod +x "$BIN/wget"
-command -v sha256sum >/dev/null || fail "host needs sha256sum for the test"
 
 # id: pretend root
 printf '#!/bin/sh\necho 0\n' > "$BIN/id"; chmod +x "$BIN/id"
 
-# --- fixtures served for aarch64_cortex-a53 ---
-# serve_fixtures: (re)create the served apks + a matching sha256sums.txt. With
-# an argument of "noi18n" the Russian translation package is NOT served (so the
-# 404 path can be exercised).
-serve_fixtures() {
-  rm -f "$TMP/serve/"*.apk "$TMP/serve/sha256sums.txt"
-  echo "FAKE_APK_AARCH64_A53" > "$TMP/serve/luci-singbox-ui-aarch64_cortex-a53.apk"
-  if [ "${1:-}" != "noi18n" ]; then
-    echo "FAKE_I18N_RU" > "$TMP/serve/luci-i18n-singbox-ui-ru.apk"
-  fi
-  # bare basenames in the second column (matches build.yml's `sha256sum *.apk`,
-  # which install.sh's awk expects: $2==name or $2=="*"name).
-  ( cd "$TMP/serve" && for f in *.apk; do sha256sum "$f"; done ) > "$TMP/serve/sha256sums.txt"
+run_install() {
+  SINGBOX_INSTALL_TEST=1 \
+  PAGES_URL="$PAGES_URL" \
+  SINGBOX_FEED_MINOR="25.12" \
+  APK_KEYS_DIR="$KEYS_DIR" \
+  APK_REPO_DIR="$REPO_DIR" \
+  sh "$ROOT/install.sh"
 }
-serve_fixtures
 
-# --- TEST 1: happy path — per-arch asset AND the ru i18n package are installed ---
+# --- TEST 1: happy path (x86_64) — key fetched, repo list written, no apk add ---
+echo "x86_64" > "$ARCHFILE"
+: > "$TMP/wget.log"; : > "$TMP/apk.log"
+rm -rf "$KEYS_DIR" "$REPO_DIR"
+run_install || fail "install.sh exited nonzero (happy path)"
+
+# (a) signing key was fetched (URL asked + file written into APK_KEYS_DIR)
+grep -qx "$PAGES_URL/luci-singbox.pem" "$TMP/wget.log" \
+  || fail "wget not asked for $PAGES_URL/luci-singbox.pem; got: $(cat "$TMP/wget.log")"
+[ -s "$KEYS_DIR/luci-singbox.pem" ] \
+  || fail "signing key not written to APK_KEYS_DIR ($KEYS_DIR/luci-singbox.pem)"
+
+# (b) repo-list line equals <PAGES_URL>/<minor>/x86_64/luci-singbox/packages.adb
+[ -f "$LIST" ] || fail "repo list not written to $LIST"
+want="$PAGES_URL/25.12/x86_64/luci-singbox/packages.adb"
+got=$(cat "$LIST")
+[ "$got" = "$want" ] || fail "repo list mismatch: want '$want' got '$got'"
+
+# SINGBOX_INSTALL_TEST=1 must NOT run apk add
+[ -s "$TMP/apk.log" ] && fail "apk add ran under SINGBOX_INSTALL_TEST=1"
+
+# --- TEST 2: unsupported arch aborts non-zero, no repo list, no apk add ---
+echo "ppc64" > "$ARCHFILE"
 : > "$TMP/apk.log"
-echo "aarch64_cortex-a53" > "$ARCHFILE"
-SINGBOX_INSTALL_TEST=1 \
-APK_BASE="http://x/" \
-sh "$ROOT/install.sh" || fail "install.sh exited nonzero (happy path)"
-
-grep -q "luci-singbox-ui-aarch64_cortex-a53.apk" "$TMP/apk.log" \
-  || fail "apk add not called with the per-arch asset luci-singbox-ui-aarch64_cortex-a53.apk"
-grep -q "luci-i18n-singbox-ui-ru.apk" "$TMP/apk.log" \
-  || fail "apk add not called with the ru i18n package luci-i18n-singbox-ui-ru.apk"
-
-# --- TEST 2: apk sha256 mismatch aborts BEFORE apk add ---
-echo "TAMPERED_APK" > "$TMP/serve/luci-singbox-ui-aarch64_cortex-a53.apk"
-: > "$TMP/apk.log"
-if SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" \
-   sh "$ROOT/install.sh" 2>/dev/null; then
-  fail "install.sh accepted a tampered apk (apk sha256 not enforced)"
+rm -rf "$KEYS_DIR" "$REPO_DIR"
+if out=$(run_install 2>&1); then
+  fail "install.sh accepted unsupported arch ppc64 (got: $out)"
 fi
-grep -q "luci-singbox-ui-aarch64_cortex-a53.apk" "$TMP/apk.log" 2>/dev/null && \
-  fail "apk add ran despite a tampered apk (verified after install, not before)"
-
-# Restore good fixtures for subsequent tests
-serve_fixtures
-
-# --- TEST 3: unsupported arch aborts with clear message, apk add not called ---
-echo "riscv64_generic" > "$ARCHFILE"
-: > "$TMP/apk.log"
-out=$(SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" \
-  sh "$ROOT/install.sh" 2>&1 || true)
 echo "$out" | grep -qi "unsupported" \
-  || fail "no 'unsupported' message for uncovered arch riscv64_generic; got: $out"
-grep -q "." "$TMP/apk.log" 2>/dev/null && \
-  fail "apk add was called for unsupported arch riscv64_generic"
+  || fail "no 'unsupported' message for arch ppc64; got: $out"
+[ -f "$LIST" ] && fail "repo list written for unsupported arch ppc64"
+[ -s "$TMP/apk.log" ] && fail "apk add ran for unsupported arch ppc64"
 
-# --- TEST 4: ru i18n absent from release — main apk still installs, no i18n add ---
-serve_fixtures noi18n
-echo "aarch64_cortex-a53" > "$ARCHFILE"
-: > "$TMP/apk.log"
-SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" \
-  sh "$ROOT/install.sh" || fail "install.sh exited nonzero when ru i18n is absent"
-grep -q "luci-singbox-ui-aarch64_cortex-a53.apk" "$TMP/apk.log" \
-  || fail "main apk not installed when i18n absent"
-grep -q "luci-i18n-singbox-ui-ru.apk" "$TMP/apk.log" && \
-  fail "i18n apk add attempted despite the package being absent from the release"
+# --- TEST 3: minor derivation default (no SINGBOX_FEED_MINOR, no os-release) ---
+echo "aarch64_generic" > "$ARCHFILE"
+: > "$TMP/wget.log"
+rm -rf "$KEYS_DIR" "$REPO_DIR"
+SINGBOX_INSTALL_TEST=1 PAGES_URL="$PAGES_URL" \
+  APK_KEYS_DIR="$KEYS_DIR" APK_REPO_DIR="$REPO_DIR" \
+  sh "$ROOT/install.sh" || fail "install.sh exited nonzero (default-minor path)"
+got=$(cat "$LIST")
+case "$got" in
+  "$PAGES_URL/"*"/aarch64_generic/luci-singbox/packages.adb") : ;;
+  *) fail "default-minor repo list malformed: $got" ;;
+esac
 
-# --- TEST 5: tampered i18n apk (sha256 mismatch) aborts before ANY apk add ---
-serve_fixtures
-echo "TAMPERED_I18N" > "$TMP/serve/luci-i18n-singbox-ui-ru.apk"   # hash no longer matches
-echo "aarch64_cortex-a53" > "$ARCHFILE"
+# --- TEST 4: real apk add target (drop SINGBOX_INSTALL_TEST so apk add runs) ---
+echo "x86_64" > "$ARCHFILE"
 : > "$TMP/apk.log"
-if SINGBOX_INSTALL_TEST=1 APK_BASE="http://x/" \
-   sh "$ROOT/install.sh" 2>/dev/null; then
-  fail "install.sh accepted a tampered i18n apk (sha256 not enforced)"
-fi
-grep -q "." "$TMP/apk.log" 2>/dev/null && \
-  fail "apk add ran despite a tampered i18n apk (verify-before-install violated)"
+rm -rf "$KEYS_DIR" "$REPO_DIR"
+PAGES_URL="$PAGES_URL" SINGBOX_FEED_MINOR="25.12" \
+  APK_KEYS_DIR="$KEYS_DIR" APK_REPO_DIR="$REPO_DIR" \
+  sh "$ROOT/install.sh" || fail "install.sh exited nonzero (apk add path)"
+grep -qx "apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru" "$TMP/apk.log" \
+  || fail "apk add target wrong; got: $(cat "$TMP/apk.log")"
 
 echo "ALL CHECKS PASSED (install.sh)"
