@@ -257,4 +257,13 @@ return [
                  group_url: "https://www.gstatic.com/generate_204",
                  group_interval: "3m", group_tolerance: "50",
                  group_idle_timeout: "30m", interrupt_exist_connections: "1" } },
+    { name: "json_out_raw", kind: "outbound", type: "json",
+      section: { ".name": "rawob",
+                 raw_json: "{\"type\":\"vmess\",\"server\":\"ex.com\",\"server_port\":443,\"uuid\":\"bf000d23-0752-40b4-affe-68f7707a9661\"}" } },
+    { name: "json_in_raw", kind: "inbound", type: "json",
+      section: { ".name": "rawin", protocol: "json",
+                 raw_json: "{\"type\":\"mixed\",\"listen\":\"::\",\"listen_port\":2080}" } },
+    { name: "sharelink_out", kind: "outbound", type: "sharelink",
+      section: { ".name": "shlink",
+                 raw_link: "vless://11111111-1111-1111-1111-111111111111@ex.com:443?security=tls&sni=ex.com#node" } },
 ];
