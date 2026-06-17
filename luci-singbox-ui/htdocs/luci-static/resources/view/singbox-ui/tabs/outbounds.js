@@ -160,7 +160,7 @@ function buildOutboundsMap() {
 	o.rmempty = false;
 	SbCommon.applyVersionGate(o,
 		(SbViewState.getSchema() || {}).outbound || {},
-		SbViewState.getCoreVersion());
+		SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
 
 	// E2: descriptor-driven UI for all stored outbound types.
 	// subscription has its own UCI shape and is handled by the fields below.

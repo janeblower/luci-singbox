@@ -157,7 +157,7 @@ function buildInboundsMap() {
 	o.default = 'tproxy'; o.rmempty = false;
 	SbCommon.applyVersionGate(o,
 		(SbViewState.getSchema() || {}).inbound || {},
-		SbViewState.getCoreVersion());
+		SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
 
 	o = s.taboption('basic', form.DummyValue, '_address', _('Address'));
 	o.modalonly = false;
