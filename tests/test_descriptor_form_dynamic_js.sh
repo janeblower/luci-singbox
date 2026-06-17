@@ -92,8 +92,10 @@ const uci = {
 // these inject the real APIs into the sandbox so the version-gate code works).
 const SbViewState = {
 	_ver: '',
+	_compatOnly: false,
 	getCoreVersion: function () { return SbViewState._ver; },
 	setCoreVersion: function (v) { SbViewState._ver = v || ''; },
+	getCompatOnly: function () { return SbViewState._compatOnly; },
 };
 const SbCommon = {
 	compareVersions: function (a, b) {
@@ -357,7 +359,7 @@ function test3() {
 	if (of7a) pass('min_version gate: old_field without min_version always rendered');
 	else fail('min_version gate old_field', 'old_field missing');
 
-	// 7b. core 1.12.0, field requires 1.14.0 → field skipped.
+	// 7b. core 1.12.0, field requires 1.14.0 → field created but disabled+note (compatOnly=false).
 	SbViewState._ver = '1.12.0';
 	const { s: s7b, opts: opts7b } = makeSection();
 	applyMaterialized(s7b, 'outbound', 'vless', {
@@ -369,10 +371,23 @@ function test3() {
 	});
 	const ff7b = findOpt(opts7b, 'future_field');
 	const cf7b = findOpt(opts7b, 'compat_field');
-	if (!ff7b) pass('min_version gate: 1.12 core, min_version 1.14 → field skipped');
-	else fail('min_version gate skip', 'future_field should be skipped on 1.12 core');
-	if (cf7b) pass('min_version gate: 1.12 core, min_version 1.12 → field rendered');
-	else fail('min_version gate compat', 'compat_field with matching version should render');
+	if (ff7b && ff7b.readonly === true) pass('min_version gate: 1.12 core, min_version 1.14 → field disabled+note');
+	else fail('min_version gate disable', 'future_field should be disabled (readonly) on 1.12 core');
+	if (cf7b && !cf7b.readonly) pass('min_version gate: 1.12 core, min_version 1.12 → field rendered normally');
+	else fail('min_version gate compat', 'compat_field with matching version should render normally');
+	// 7c. compatOnly=true → field hidden (skipped entirely).
+	SbViewState._compatOnly = true;
+	const { s: s7c, opts: opts7c } = makeSection();
+	applyMaterialized(s7c, 'outbound', 'vless', {
+		tabs: ['basic'],
+		fields: [
+			{ name: 'future_field', type: 'string', tab: 'basic', min_version: '1.14.0' },
+		],
+	});
+	SbViewState._compatOnly = false;
+	const ff7c = findOpt(opts7c, 'future_field');
+	if (!ff7c) pass('min_version gate: compatOnly=true → field hidden');
+	else fail('min_version gate compatOnly', 'future_field should be hidden when compatOnly=true');
 }
 
 // ---------------------------------------------------------------------------
