@@ -85,6 +85,7 @@ root/usr/share/singbox-ui/lib/builder/route/registry.uc	usr/share/singbox-ui/lib
 root/usr/share/singbox-ui/lib/builder/route/ruleset_inline.uc	usr/share/singbox-ui/lib/builder/route/ruleset_inline.uc	data
 root/usr/share/singbox-ui/lib/builder/route/ruleset_local.uc	usr/share/singbox-ui/lib/builder/route/ruleset_local.uc	data
 root/usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc	usr/share/singbox-ui/lib/builder/route/ruleset_remote.uc	data
+root/usr/share/singbox-ui/lib/builder/settings/cache.uc	usr/share/singbox-ui/lib/builder/settings/cache.uc	data
 root/usr/share/singbox-ui/lib/builder/settings/clash_api.uc	usr/share/singbox-ui/lib/builder/settings/clash_api.uc	data
 root/usr/share/singbox-ui/lib/builder/settings/registry.uc	usr/share/singbox-ui/lib/builder/settings/registry.uc	data
 root/usr/share/singbox-ui/lib/cache.uc	usr/share/singbox-ui/lib/cache.uc	data
