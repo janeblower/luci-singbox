@@ -62,7 +62,14 @@ fi
 
 CNAME="singbox-ui-test-$$"
 
-cleanup() { docker rm -f "$CNAME" >/dev/null 2>&1 || true; }
+# 4-package split: the real etc/init.d/singbox-ui runs `sing-box run` via procd
+# (absent in this container). Mount a no-op stub by the SAME name the rpcd
+# handler shells (SINGBOX_INIT=/etc/init.d/singbox-ui), so restart/generate RPCs
+# return 0 without procd hanging.
+STUB_INIT="$(mktemp)"
+printf '#!/bin/sh\nexit 0\n' > "$STUB_INIT"; chmod +x "$STUB_INIT"
+
+cleanup() { docker rm -f "$CNAME" >/dev/null 2>&1 || true; rm -f "$STUB_INIT"; }
 trap cleanup EXIT INT TERM
 
 echo "==> launching container $CNAME"
@@ -77,7 +84,7 @@ docker run -d --name "$CNAME" \
     -v "$PWD/${SB_MENU}:/usr/share/luci/menu.d/luci-singbox-ui.json:ro" \
     -v "$PWD/${SB_ACL}:/usr/share/rpcd/acl.d/luci-singbox-ui.json:ro" \
     -v "$PWD/${SB_RPCD}:/usr/libexec/rpcd/singbox-ui:ro" \
-    -v "$PWD/${SB_BACKEND_ROOT}/etc/init.d/singbox-ui:/etc/init.d/singbox-ui:ro" \
+    -v "$STUB_INIT:/etc/init.d/singbox-ui:ro" \
     -v "$PWD/${SB_BACKEND_ROOT}/etc/capabilities/singbox-ui.json:/etc/capabilities/singbox-ui.json:ro" \
     -v "$PWD/tests/browser/fixtures:/seed:ro" \
     "$IMG" >/dev/null

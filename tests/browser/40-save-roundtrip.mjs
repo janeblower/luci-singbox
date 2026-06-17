@@ -24,6 +24,15 @@ console.log('generate:', generateOut.trim().slice(0, 200));
 const restartOut = containerExec(`ubus call singbox-ui restart 2>&1; sleep 2`);
 console.log('restart:', restartOut.trim().slice(0, 200));
 
+// 4-package-split guard: the rpcd handler shells /etc/init.d/singbox-ui
+// (SINGBOX_INIT), so the container must provide a no-op stub by THAT name (not
+// /etc/init.d/sing-box). The real procd init script runs `sing-box run`, which
+// hangs without procd; mounting/stubbing the wrong name made restart fall
+// through to that. Assert the stub is in place and contains no `sing-box run`.
+const initSrc = containerExec(`cat /etc/init.d/singbox-ui 2>/dev/null || echo MISSING`);
+assert('init.d/singbox-ui present and contains no `sing-box run` (stub)',
+    initSrc.includes('exit 0') && !initSrc.includes('sing-box run'), initSrc);
+
 // 1. preview_config returns our outbound.
 const preview = JSON.parse(containerExec(`ubus call singbox-ui preview_config 2>/dev/null`));
 assert('preview_config has status ok',
