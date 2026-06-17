@@ -34,7 +34,7 @@ const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
 // live UCI / network state (see descriptor_form.js attachDynamic), not from a
 // static `values` array.
 const KNOWN_DYNAMIC = { outbounds: 1, dns_servers: 1, interfaces: 1, devices: 1,
-                        rulesets: 1, route_rules: 1 };
+                        rulesets: 1, route_rules: 1, dns_rules: 1 };
 const KNOWN_COERCE  = { str: 1, num: 1, bool: 1, array: 1, num_array: 1 };
 const KNOWN_OMIT    = { empty: 1, never: 1 };
 
