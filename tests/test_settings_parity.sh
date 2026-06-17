@@ -1,6 +1,6 @@
 #!/bin/sh
 # tests/test_settings_parity.sh — parity test for singleton settings descriptors
-# (clash_api; cache fixtures added by a later task).
+# (clash_api + cache).
 # Uses filler.build(reg.get(kind, type), section) directly — no UCI cursor needed.
 # Mirrors tests/test_dns_parity.sh but iterates settings_corpus (kind+type per fixture).
 set -eu

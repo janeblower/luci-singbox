@@ -44,9 +44,12 @@ reg.register({
     post: function(out, s) {
         let listen = (s.listen != null && length(s.listen)) ? s.listen : "127.0.0.1";
         let port   = (s.port   != null && length(s.port))   ? s.port   : "9090";
-        out.external_controller = (index(listen, ":") >= 0)
-            ? sprintf("[%s]:%s", listen, port)
-            : `${listen}:${port}`;
+        // Strip any brackets the user already typed ("[::1]" -> "::1") so we
+        // never double-bracket, then re-bracket IPv6 literals (any ':' in host).
+        let host = replace(replace(listen, /^\[/, ""), /\]$/, "");
+        out.external_controller = (index(host, ":") >= 0)
+            ? sprintf("[%s]:%s", host, port)
+            : `${host}:${port}`;
     },
 });
 return {};

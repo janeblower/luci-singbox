@@ -24,6 +24,9 @@ if ("listen" in out || "port" in out) { print("FAIL: listen/port leaked to JSON\
 // IPv4 listen → no brackets.
 let out2 = filler.build(d, { [".name"]: "clash_api", enabled: "1", listen: "127.0.0.1", port: "9090" });
 if (out2.external_controller != "127.0.0.1:9090") { print(sprintf("FAIL ec4=%s\n", out2.external_controller)); exit(1); }
+// Pre-bracketed IPv6 listen → must NOT double-bracket.
+let out3 = filler.build(d, { [".name"]: "clash_api", enabled: "1", listen: "[::1]", port: "9090" });
+if (out3.external_controller != "[::1]:9090") { print(sprintf("FAIL ec_bracketed=%s\n", out3.external_controller)); exit(1); }
 print("OK\n");
 UC
 out="$("$UCODE" -L "$LIB" "$WORK/t.uc" 2>&1)"
