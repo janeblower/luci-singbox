@@ -13,8 +13,8 @@ fi
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
 
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
-HANDLER="$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
+HANDLER="$PWD/${SB_RPCD}"
 
 # Minimal: list method shows status_detail
 out=$("$UCODE_BIN" -L "$UCODE_APP_LIB_DIR" "$HANDLER" list 2>/dev/null)
@@ -88,7 +88,7 @@ echo "PASS: status_detail caches package_version (1 apk fork)"
 # CLAUDE.md flags these as a coupling that MUST yield identical format. Extract
 # the live sed expression from the init.d (so the test can't drift from it) and
 # feed the same fixture apk line through BOTH paths; assert byte-identical out.
-INITD="$PWD/luci-singbox-ui/root/etc/init.d/singbox-ui"
+INITD="$PWD/${SB_BACKEND_ROOT}/etc/init.d/singbox-ui"
 [ -f "$INITD" ] || { echo "FAIL(13.2): init.d not found at $INITD"; exit 1; }
 
 # Pull the exact `sed -n '...'` script used by start_service. We grep the line

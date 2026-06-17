@@ -2,9 +2,10 @@
 # tests/test_common_version_gate_js.sh — node tests for applyVersionGate in common.js.
 # Exercises min_version gating (requires X.Y+) and max_version gating (removed in X.Y).
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 command -v node >/dev/null 2>&1 || { echo "SKIP: no node"; exit 0; }
 WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
-CM="luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js"
+CM="${SB_VIEW}/lib/common.js"
 cat > "$WORK/t.js" <<'JS'
 const fs=require('fs');
 global._=(s)=>s; global.E=()=>({});

@@ -1,8 +1,9 @@
 #!/bin/sh
 # tests/test_uci_defaults_fwmark.sh
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
-SCRIPT=luci-singbox-ui/root/etc/uci-defaults/90-singbox-ui-fwmark
+SCRIPT=${SB_BACKEND_ROOT}/etc/uci-defaults/90-singbox-ui-fwmark
 [ -x "$SCRIPT" ] || { echo "FAIL: $SCRIPT missing or not executable"; exit 1; }
 
 # The script uses real `uci` — skip when not on a UCI host.

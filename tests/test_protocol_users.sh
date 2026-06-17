@@ -1,9 +1,10 @@
 #!/bin/sh
 # tests/test_protocol_users.sh — universal declarative users builder.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-LIB="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+LIB="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_protocol_users (ucode missing)"; exit 0; }
 je() { "$UCODE_BIN" -L "$LIB" -e "$1"; }
 ok() { echo "  PASS: $1"; }

@@ -2,7 +2,8 @@
 # tests/test_shared_multiplex.sh — declarative emit_spec path via filler for
 # the shared multiplex block.
 set -eu; cd "$(dirname "$0")/.."
-UCODE_BIN="${UCODE_BIN:-ucode}"; UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+. "$(dirname "$0")/lib/sb_helpers.sh"
+UCODE_BIN="${UCODE_BIN:-ucode}"; UCODE_LIB_DIR="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_shared_multiplex"; exit 0; }
 je() { "$UCODE_BIN" -L "$UCODE_LIB_DIR" -e "$1"; }
 

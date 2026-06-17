@@ -2,10 +2,11 @@
 # tests/test_common_notify_js.sh — notify() must not TypeError when the
 # rejection reason is null/undefined (spec S2-7).
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js
+JS=${SB_VIEW}/lib/common.js
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 cat >"$TMP/run.js" <<'NODE'

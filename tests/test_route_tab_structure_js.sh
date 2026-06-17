@@ -3,7 +3,8 @@
 # matching the working inbounds/outbounds pattern (untabbed s.option breaks the
 # GridSection modal once applyMaterialized injects match/action tabs).
 set -eu
-F="luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/route.js"
+. "$(dirname "$0")/lib/sb_helpers.sh"
+F="${SB_VIEW}/tabs/route.js"
 [ -f "$F" ] || { echo "FAIL: $F missing"; exit 1; }
 
 # Route-rule section must pre-declare the match tab.

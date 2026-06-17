@@ -15,13 +15,14 @@
 #
 # POSIX-portable: sh + grep + sed only. Host-runnable (no ucode/VM needed).
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 DESC="$ROOT/docs/protocol-descriptors.md"
 SCHEMA="$ROOT/docs/uci-schema.md"
 CHANGELOG="$ROOT/CHANGELOG.md"
 README="$ROOT/README.md"
-PROTODIR="$ROOT/luci-singbox-ui/root/usr/share/singbox-ui/lib/builder/protocols"
+PROTODIR="$ROOT/${SB_LIB}/builder/protocols"
 
 fail() { echo "FAIL: $1"; exit 1; }
 

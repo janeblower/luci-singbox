@@ -3,9 +3,10 @@
 # Validates singbox-ui::protocol_schema RPC: status ok, all expected protocols
 # present, no emit/function leak, secret flag preserved.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
-H=luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui
+H=${SB_RPCD}
 
 if [ ! -x "$H" ]; then
 	echo "FAIL: $H not present or not executable"; exit 1
@@ -16,9 +17,9 @@ fi
 # box, so we invoke it explicitly through $UCODE_BIN.
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=$(command -v ucode)
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
 else
 	echo "SKIP test_protocol_schema_rpc (ucode missing)"

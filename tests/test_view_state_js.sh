@@ -2,10 +2,11 @@
 # tests/test_view_state_js.sh — the schema cache must live in a module
 # singleton (lib/view_state.js), not on window (spec S2-5).
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-ROOT=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui
+ROOT=${SB_VIEW}
 JS="$ROOT/lib/view_state.js"
 
 [ -f "$JS" ] || { echo "FAIL: $JS missing"; exit 1; }

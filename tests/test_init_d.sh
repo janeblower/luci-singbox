@@ -3,8 +3,9 @@
 # Drives /etc/init.d/singbox-ui start_service via stubbed ucode/uci and
 # verifies parallel fetch, boot-mode env, and fail-fast on missing config.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
-INIT=luci-singbox-ui/root/etc/init.d/singbox-ui
+INIT=${SB_BACKEND_ROOT}/etc/init.d/singbox-ui
 if [ ! -x "$INIT" ]; then
     echo "FAIL: $INIT not executable"; exit 1
 fi

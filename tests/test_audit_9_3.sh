@@ -8,12 +8,13 @@
 #   - plugin / plugin_opts are decomposed using the SAME field names and the
 #     same first-';' split as the backend parse_ss() in sharelink.uc.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 NODE_BIN="${NODE_BIN:-node}"
 command -v "$NODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_audit_9_3 (node missing)"; exit 0; }
 
-JS_FILE=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js
+JS_FILE=${SB_VIEW}/importers/outbound.js
 
 "$NODE_BIN" -e "
 const fs = require('fs');

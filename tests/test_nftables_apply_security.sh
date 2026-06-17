@@ -5,17 +5,18 @@
 # applies (S1-1), and (b) an invalid tproxy listen_port makes apply FAIL loudly
 # instead of silently dropping the tproxy block (S1-2).
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR -L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 else
 	echo "SKIP: ucode not available"; exit 0
 fi
 
-SCRIPT=$PWD/luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc
+SCRIPT=$PWD/${SB_SHARE}/nftables.uc
 RS_DIR=/tmp/singbox-ui
 TMPDIR=$(mktemp -d)
 # Register cleanup IMMEDIATELY after mktemp, before any command that could fail

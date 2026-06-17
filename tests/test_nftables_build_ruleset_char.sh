@@ -20,16 +20,17 @@
 # script and uses the same lib/ as the current file, so the same -L flags drive
 # both. If build_ruleset output ever legitimately changes, regenerate the
 # fixture:
-#   git show 849e2b9:luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc \
+#   git show 849e2b9:${SB_SHARE}/nftables.uc \
 #     > tests/fixtures/build_ruleset/nftables.baseline.uc
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 # Pre-refactor baseline: a committed copy of the nftables.uc that still has the
 # monolithic build_ruleset (from commit 849e2b9). The golden ruleset is emitted
 # from THIS file. It is invoked directly — no git history is consulted, so the
 # test works inside the .git-less VM.
 BASELINE_UC=$PWD/tests/fixtures/build_ruleset/nftables.baseline.uc
-SCRIPT_REL=luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc
+SCRIPT_REL=${SB_SHARE}/nftables.uc
 CUR_SCRIPT=$PWD/$SCRIPT_REL
 
 if [ ! -x "$CUR_SCRIPT" ]; then
@@ -46,11 +47,11 @@ fi
 # test_nftables_emit.sh / test_generate.sh / test_nftables_uc.sh).
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
 	UCODE_LIB_FLAGS="-L $UCODE_STUB_DIR"
 	[ -n "${UCODE_LIB_DIR:-}" ] && UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L $UCODE_LIB_DIR"
-	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="$UCODE_LIB_FLAGS -L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 else
 	echo "SKIP: ucode not available"
 	exit 0

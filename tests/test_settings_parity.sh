@@ -4,9 +4,10 @@
 # Uses filler.build(reg.get(kind, type), section) directly — no UCI cursor needed.
 # Mirrors tests/test_dns_parity.sh but iterates settings_corpus (kind+type per fixture).
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 UCODE_BIN="${UCODE_BIN:-ucode}"
-LIB="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+LIB="${UCODE_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_settings_parity (ucode missing)"; exit 0; }
 
 out=$("$UCODE_BIN" -L tests/parity -L "$LIB" -e '

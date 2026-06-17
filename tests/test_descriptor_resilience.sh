@@ -6,8 +6,9 @@
 # protocol. Before the fix, requiring outbound.uc with a broken trojan.uc threw
 # and no outbound could be built at all.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 UCODE_BIN="${UCODE_BIN:-ucode}"
-APP_LIB="${UCODE_APP_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+APP_LIB="${UCODE_APP_LIB_DIR:-${SB_LIB}}"
 command -v "$UCODE_BIN" >/dev/null 2>&1 || { echo "SKIP test_descriptor_resilience (ucode missing)"; exit 0; }
 
 TMPDIR=$(mktemp -d); trap 'rm -rf "$TMPDIR"' EXIT

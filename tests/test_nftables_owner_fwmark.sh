@@ -5,9 +5,10 @@
 #  - fakeip nft_rules=0 contributes no ranges
 #  - no tproxy owner → transparent=0 (apply becomes a no-op)
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
-SCRIPT=luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc
-LIB=${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}
+SCRIPT=${SB_SHARE}/nftables.uc
+LIB=${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}
 
 if ! command -v ucode >/dev/null 2>&1; then echo "SKIP: ucode not available"; exit 0; fi
 

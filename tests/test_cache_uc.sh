@@ -3,12 +3,13 @@
 # tiny ucode wrapper that hand-feeds singbox-ui sections. Mirrors the
 # harness pattern in test_dns_uc.sh.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 if command -v ucode >/dev/null 2>&1; then
 	UCODE_BIN=ucode
-	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 elif [ -x "${UCODE_BIN:-}" ] && [ -d "${UCODE_STUB_DIR:-}" ]; then
-	UCODE_LIB_FLAGS="-L ${UCODE_STUB_DIR} -L ${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+	UCODE_LIB_FLAGS="-L ${UCODE_STUB_DIR} -L ${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
 else
 	echo "ucode not found — skipping" >&2
 	exit 0

@@ -15,13 +15,14 @@
 # with a curl stub on PATH that records its argv AND (for 6.2) the content +
 # mode of the `-H @file` header file.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 : "${UCODE_BIN:=$(command -v ucode)}"
 [ -z "$UCODE_BIN" ] && { echo "SKIP: no ucode on host"; exit 0; }
 
-UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib}"
-H="$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui"
+UCODE_APP_LIB_DIR="${UCODE_APP_LIB_DIR:-$PWD/${SB_LIB}}"
+H="$PWD/${SB_RPCD}"
 [ -x "$H" ] || { echo "FAIL: $H not present/executable"; exit 1; }
 
 tmpdir=$(mktemp -d)

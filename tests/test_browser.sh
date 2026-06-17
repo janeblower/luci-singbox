@@ -4,6 +4,7 @@
 # one container per run, snapshots /etc/config/singbox-ui inside it, then
 # restores before each test file. Puppeteer/Chrome run on the host via bun.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 set -o pipefail
 cd "$(dirname "$0")/.."
 
@@ -59,13 +60,13 @@ echo "==> launching container $CNAME"
 # the asset subdirs into LuCI's existing /www tree.
 docker run -d --name "$CNAME" \
     -p "127.0.0.1::80" \
-    -v "$PWD/luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui:/www/luci-static/resources/view/singbox-ui:ro" \
-    -v "$PWD/luci-singbox-ui/root/usr/share/singbox-ui:/usr/share/singbox-ui:ro" \
-    -v "$PWD/luci-singbox-ui/root/usr/share/luci/menu.d/luci-singbox-ui.json:/usr/share/luci/menu.d/luci-singbox-ui.json:ro" \
-    -v "$PWD/luci-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json:/usr/share/rpcd/acl.d/luci-singbox-ui.json:ro" \
-    -v "$PWD/luci-singbox-ui/root/usr/libexec/rpcd/singbox-ui:/usr/libexec/rpcd/singbox-ui:ro" \
-    -v "$PWD/luci-singbox-ui/root/etc/init.d/singbox-ui:/etc/init.d/singbox-ui:ro" \
-    -v "$PWD/luci-singbox-ui/root/etc/capabilities/singbox-ui.json:/etc/capabilities/singbox-ui.json:ro" \
+    -v "$PWD/${SB_VIEW}:/www/luci-static/resources/view/singbox-ui:ro" \
+    -v "$PWD/${SB_SHARE}:/usr/share/singbox-ui:ro" \
+    -v "$PWD/${SB_MENU}:/usr/share/luci/menu.d/luci-singbox-ui.json:ro" \
+    -v "$PWD/${SB_ACL}:/usr/share/rpcd/acl.d/luci-singbox-ui.json:ro" \
+    -v "$PWD/${SB_RPCD}:/usr/libexec/rpcd/singbox-ui:ro" \
+    -v "$PWD/${SB_BACKEND_ROOT}/etc/init.d/singbox-ui:/etc/init.d/singbox-ui:ro" \
+    -v "$PWD/${SB_BACKEND_ROOT}/etc/capabilities/singbox-ui.json:/etc/capabilities/singbox-ui.json:ro" \
     -v "$PWD/tests/browser/fixtures:/seed:ro" \
     "$IMG" >/dev/null
 PORT=$(docker port "$CNAME" 80/tcp | head -1 | awk -F: '{print $NF}')

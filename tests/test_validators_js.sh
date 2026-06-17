@@ -1,15 +1,16 @@
 #!/bin/sh
 # tests/test_validators_js.sh — node-based unit tests for the form
-# validators in luci-singbox-ui/htdocs/.../lib/validators.js (Phase 8 / B6).
+# validators in ${SB_UI_HTDOCS}/.../lib/validators.js (Phase 8 / B6).
 # Skips when node is unavailable, mirroring tests/test_json_import.sh.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 if ! command -v node >/dev/null 2>&1; then
 	echo "SKIP: node not available" >&2
 	exit 0
 fi
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/validators.js
+JS=${SB_VIEW}/lib/validators.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

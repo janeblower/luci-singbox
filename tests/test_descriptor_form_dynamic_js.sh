@@ -16,13 +16,14 @@
 #
 # Skips when node is unavailable, mirroring tests/test_descriptor_form_js.sh.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 if ! command -v node >/dev/null 2>&1; then
 	echo "SKIP: node not available" >&2
 	exit 0
 fi
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js
+JS=${SB_VIEW}/lib/descriptor_form.js
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 

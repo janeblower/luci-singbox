@@ -4,10 +4,11 @@
 # with minimal DOM/LuCI/SbRpc stubs and assert rendering + behavior without any
 # test-only hooks in the production source.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js
+JS=${SB_VIEW}/tabs/dashboard.js
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 cat >"$TMP/run.js" <<'NODE'

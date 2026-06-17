@@ -3,10 +3,11 @@
 # shared TLS block. Covers: disabled (null), minimal enabled, Reality client,
 # ECH, TLS fragment, uTLS, hysteria2 force-enabled.
 set -eu
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 UCODE_BIN="${UCODE_BIN:-ucode}"
-UCODE_LIB_DIR="${UCODE_LIB_DIR:-luci-singbox-ui/root/usr/share/singbox-ui/lib}"
+UCODE_LIB_DIR="${UCODE_LIB_DIR:-${SB_LIB}}"
 
 if ! command -v "$UCODE_BIN" >/dev/null 2>&1; then
     echo "SKIP test_shared_tls (ucode missing)"; exit 0

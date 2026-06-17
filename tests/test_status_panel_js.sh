@@ -2,10 +2,11 @@
 # tests/test_status_panel_js.sh — asserts renderStatusPanel handles RPC failure
 # (S2-1): a rejected callStatus() must not reject the returned promise.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 if ! command -v node >/dev/null 2>&1; then echo "SKIP: node not available" >&2; exit 0; fi
 
-JS=luci-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js
+JS=${SB_VIEW}/widgets/status-panel.js
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 cat >"$TMP/run.js" <<'NODE'

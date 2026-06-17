@@ -14,6 +14,7 @@
 # handler via its shebang exactly as production does, so a regressed
 # shebang makes status/list error out and this test goes red.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 # Only meaningful inside the OpenWrt qemu VM, where a live rpcd + ubus
@@ -27,7 +28,7 @@ fi
 command -v ubus >/dev/null 2>&1 || { echo "SKIP: no ubus in this env"; exit 0; }
 command -v rpcd >/dev/null 2>&1 || { echo "SKIP: no rpcd in this env"; exit 0; }
 
-SRC=luci-singbox-ui/root
+SRC=${SB_BACKEND_ROOT}
 HANDLER_SRC="$SRC/usr/libexec/rpcd/singbox-ui"
 LIB_SRC="$SRC/usr/share/singbox-ui/lib"
 ACL_SRC="$SRC/usr/share/rpcd/acl.d/luci-singbox-ui.json"

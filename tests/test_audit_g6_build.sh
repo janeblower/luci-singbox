@@ -21,13 +21,14 @@
 #
 # Host-runnable: pure shell + gettext tools + git, no VM/rpcd needed.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 cd "$(dirname "$0")/.."
 
 REGEN=scripts/regen-po.sh
 BUILDSH=scripts/build-apk.sh
 MAKEFILE=luci-singbox-ui/Makefile
-POT=luci-singbox-ui/po/templates/luci-singbox-ui.pot
-PO=luci-singbox-ui/po/ru/luci-singbox-ui.po
+POT=${SB_PO_DIR}/templates/luci-singbox-ui.pot
+PO=${SB_PO_DIR}/ru/luci-singbox-ui.po
 
 for f in "$REGEN" "$BUILDSH" "$MAKEFILE" "$POT" "$PO"; do
     [ -f "$f" ] || { echo "FAIL: $f missing"; exit 1; }

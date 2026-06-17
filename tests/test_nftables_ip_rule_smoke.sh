@@ -4,13 +4,14 @@
 # nftables.uc, then assert the smoke check logs a warning when no
 # matching fwmark is present and stays quiet when one is.
 set -e
+. "$(dirname "$0")/lib/sb_helpers.sh"
 
 if ! command -v ucode >/dev/null 2>&1; then
 	echo "SKIP: ucode not available"; exit 0
 fi
 
-SCRIPT=$PWD/luci-singbox-ui/root/usr/share/singbox-ui/nftables.uc
-LIB="-L $PWD/luci-singbox-ui/root/usr/share/singbox-ui/lib"
+SCRIPT=$PWD/${SB_SHARE}/nftables.uc
+LIB="-L $PWD/${SB_LIB}"
 
 # Mock UCI config dir with all the sections cmd_apply needs.
 UCI=$(mktemp -d)
