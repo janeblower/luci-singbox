@@ -1,0 +1,1 @@
+{ "action": "route", "invert": true, "mode": "and", "server": "dns1" }
