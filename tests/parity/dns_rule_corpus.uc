@@ -28,4 +28,35 @@ return [
                  answer: [ "nx.example. 60 IN A 0.0.0.0" ],
                  ns: [ "nx.example. 60 IN NS ns.example." ],
                  extra: [ "nx.example. 60 IN TXT \"x\"" ] } },
+    // Exhaustive matcher coverage: every match.uc matcher emittable in the
+    // dns top-level ("dns") context — FULL/NO_HL/DNS scalars + DNS-only
+    // interface_address/response_* matchers. The filler-direct path (used by
+    // test_dns_rule_parity) preserves source_port + source_port_range together
+    // (the route_rule pipeline drops one; irrelevant here since the guard is
+    // leaf-keyed and the dns_rule path emits both).
+    { name: "dnr_matchers_full", type: "default",
+      section: { [".name"]: "dm1", action: "route", server: "dns1",
+                 domain_regex: [ "^ad\\." ], source_ip_cidr: [ "192.168.0.0/16" ],
+                 port_range: [ "1000:2000" ], ip_version: "4",
+                 source_port: [ "53" ], source_port_range: [ "1000:2000" ],
+                 process_name: [ "curl" ], process_path: [ "/usr/bin/curl" ],
+                 process_path_regex: [ "^/usr/bin/" ],
+                 package_name: [ "com.example" ], package_name_regex: [ "^com\\." ],
+                 user_id: [ "1000" ], network_type: [ "wifi" ],
+                 network_is_expensive: "1", network_is_constrained: "1",
+                 wifi_ssid: [ "MyNet" ], wifi_bssid: [ "00:11:22:33:44:55" ],
+                 source_mac_address: [ "00:11:22:33:44:66" ],
+                 source_hostname: [ "host.lan" ],
+                 ip_is_private: "1", source_ip_is_private: "1",
+                 inbound: [ "tproxy-in" ], auth_user: [ "alice" ],
+                 rule_set_ip_cidr_match_source: "1", rule_set_ip_cidr_accept_empty: "1",
+                 ip_accept_any: "1",
+                 interface_address: [ "192.168.0.0/16" ],
+                 network_interface_address: [ "10.0.0.0/8" ],
+                 default_interface_address: [ "172.16.0.0/12" ],
+                 preferred_by: [ "ts1" ], match_response: "1",
+                 response_rcode: [ "NXDOMAIN" ],
+                 response_answer: [ "a.example. 60 IN A 1.2.3.4" ],
+                 response_ns: [ "a.example. 60 IN NS ns.example." ],
+                 response_extra: [ "a.example. 60 IN TXT x" ] } },
 ];
