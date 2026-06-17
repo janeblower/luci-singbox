@@ -1,0 +1,1 @@
+{ "multiplex": { "enabled": true, "max_streams": 16, "min_streams": 4, "protocol": "yamux" }, "password": "p", "server": "ex.com", "server_port": 443, "tag": "tms", "type": "trojan" }

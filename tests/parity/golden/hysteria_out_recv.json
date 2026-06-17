@@ -1,0 +1,1 @@
+{ "auth_str": "secret", "disable_path_mtu_discovery": true, "down_mbps": 100, "recv_window": 8388608, "recv_window_conn": 4194304, "server": "ex.com", "server_port": 443, "tag": "hyr", "tls": { "enabled": true, "server_name": "ex.com" }, "type": "hysteria", "up_mbps": 100 }
