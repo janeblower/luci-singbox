@@ -33,6 +33,7 @@ root/usr/share/singbox-ui/export_section.uc	usr/share/singbox-ui/export_section.
 root/usr/share/singbox-ui/generate.uc	usr/share/singbox-ui/generate.uc	data
 root/usr/share/singbox-ui/lib/builder/_filler.uc	usr/share/singbox-ui/lib/builder/_filler.uc	data
 root/usr/share/singbox-ui/lib/builder/_shared/dial.uc	usr/share/singbox-ui/lib/builder/_shared/dial.uc	data
+root/usr/share/singbox-ui/lib/builder/_shared/dns_action.uc	usr/share/singbox-ui/lib/builder/_shared/dns_action.uc	data
 root/usr/share/singbox-ui/lib/builder/_shared/match.uc	usr/share/singbox-ui/lib/builder/_shared/match.uc	data
 root/usr/share/singbox-ui/lib/builder/_shared/multiplex.uc	usr/share/singbox-ui/lib/builder/_shared/multiplex.uc	data
 root/usr/share/singbox-ui/lib/builder/_shared/quic.uc	usr/share/singbox-ui/lib/builder/_shared/quic.uc	data
