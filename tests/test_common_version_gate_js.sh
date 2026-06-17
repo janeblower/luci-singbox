@@ -17,17 +17,22 @@ const mod=new Function('form','uci','ui',body)(form,uci,ui);
 // a: min_version 1.14 — gated when core=1.12 (core < 1.14)
 // b: max_version 1.11 — gated when core=1.12 (core > 1.11, type was removed)
 // c: no gate
-const schema={ a:{min_version:'1.14'}, b:{max_version:'1.11'}, c:{} };
+// d: max_version 1.12 — BOUNDARY: gated when core=1.12 (max_version is the
+//    removal version, exclusive upper bound → removed AT 1.12). This case
+//    distinguishes the correct >= comparison from a buggy strict > .
+const schema={ a:{min_version:'1.14'}, b:{max_version:'1.11'}, c:{}, d:{max_version:'1.12'} };
 function mkSelect(){ const opts=[{value:'a',disabled:false,textContent:'a'},
-  {value:'b',disabled:false,textContent:'b'},{value:'c',disabled:false,textContent:'c'}];
+  {value:'b',disabled:false,textContent:'b'},{value:'c',disabled:false,textContent:'c'},
+  {value:'d',disabled:false,textContent:'d'}];
   return {tagName:'SELECT',options:opts,querySelector:()=>null}; }
 const o={ renderWidget:function(){ return mkSelect(); }, value:function(){}, validate:null };
 mod.applyVersionGate(o, schema, '1.12', false);  // compatOnly OFF
 let node=o.renderWidget();
-const a=node.options.find(x=>x.value==='a'), b=node.options.find(x=>x.value==='b'), c=node.options.find(x=>x.value==='c');
+const a=node.options.find(x=>x.value==='a'), b=node.options.find(x=>x.value==='b'), c=node.options.find(x=>x.value==='c'), d=node.options.find(x=>x.value==='d');
 if(!a.disabled || !/requires 1\.14/.test(a.textContent)){console.log('FAIL min: '+a.textContent);process.exit(1);}
 if(!b.disabled || !/removed in 1\.11/.test(b.textContent)){console.log('FAIL max: '+b.textContent);process.exit(1);}
 if(c.disabled){console.log('FAIL: in-window option disabled');process.exit(1);}
+if(!d.disabled || !/removed in 1\.12/.test(d.textContent)){console.log('FAIL max boundary (core==max must be gated): '+d.textContent);process.exit(1);}
 
 // compatOnly=true: gated options are removed entirely
 const o2={ renderWidget:function(){ return mkSelect(); }, value:function(){}, validate:null };

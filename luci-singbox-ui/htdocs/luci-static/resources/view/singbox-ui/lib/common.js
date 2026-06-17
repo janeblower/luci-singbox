@@ -205,7 +205,7 @@ function applyVersionGate(o, schemaByType, coreVersion, compatOnly) {
 		var e = schemaByType[k] || {};
 		if (e.min_version && compareVersions(coreVersion, e.min_version) < 0)
 			gated[k] = '(' + _('requires') + ' ' + e.min_version.split('.').slice(0, 2).join('.') + '+)';
-		else if (e.max_version && compareVersions(coreVersion, e.max_version) > 0)
+		else if (e.max_version && compareVersions(coreVersion, e.max_version) >= 0)
 			gated[k] = '(' + _('removed in') + ' ' + e.max_version.split('.').slice(0, 2).join('.') + ')';
 	});
 	var origRender = o.renderWidget;
