@@ -139,7 +139,15 @@ tar -czf - \
 
 echo "==> run suite inside guest"
 set +e
-$SSH 'cd /tmp/work && SINGBOX_TESTS_IN_VM=1 sh tests/run.sh'
+# Node/JS tests belong to the `ui` domain and run in the CI js-unit node
+# container, NOT the VM (no node in the OpenWrt guest). Restrict the guest run
+# to the non-UI domains so the 14 node-gated tests/ui/*_js files never enter the
+# VM loop — this drops the in-VM SKIP count well under SINGBOX_MAX_SKIPS and
+# removes the moving-ceiling pressure documented in run.sh. The two node-gated
+# tests/cross/* files (json_import, main_js_syntax) are in the packaging domain
+# by directory; they still appear but SKIP cleanly (benign), and their real
+# assertions run in js-unit on the host.
+$SSH 'cd /tmp/work && SINGBOX_TESTS_IN_VM=1 SB_DOMAIN="backend packaging bbolt" sh tests/run.sh'
 RC=$?
 set -e
 
