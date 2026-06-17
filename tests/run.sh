@@ -54,7 +54,7 @@ echo "==> Shell tests"
 # test_audit_9_3 — one SKIP line each in the VM, since the guest HAS ucode so
 # json_import's 2nd ucode-gated SKIP does not fire). The count grew from 11 to
 # 14 as parallel audit work added node-gated units (test_audit_2_4 / _8_3 /
-# _9_3); recount with `grep -lE 'NODE_BIN|node ' tests/test_*.sh` and drop the
+# _9_3); recount with `grep -lE 'NODE_BIN|node ' tests/*/test_*.sh` and drop the
 # ucode-gated false positive test_sharelink_parsers (matches "node1" test data,
 # not a node gate). test_browser also SKIPs in the VM. The real built bbolt
 # binary is absent in a stock guest, so test_audit_10_5_bbolt_golden SKIPs too.
@@ -88,7 +88,12 @@ residual_skips=0
 ucode_skips=0
 failed=""
 fail_count=0
-for t in tests/test_*.sh; do
+# Tests are split across area dirs (three-package layout). SB_SUITE selects which
+# areas run (space-separated); default = all. CI sets it to run a subset, e.g.
+# "backend cross" in the VM job and "ui" in the host node job.
+SB_SUITE="${SB_SUITE:-backend ui cross}"
+# shellcheck disable=SC2046  # intentional: expand the per-area test globs and split
+for t in $(for _a in $SB_SUITE; do echo tests/"$_a"/test_*.sh; done); do
   [ -e "$t" ] || continue
   echo "-- $t"
   # Capture output so we can both show it and count SKIP lines.
