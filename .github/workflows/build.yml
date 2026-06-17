@@ -49,13 +49,13 @@ jobs:
       - uses: actions/checkout@v6
 
       - name: main.js syntax check (host node)
-        run: sh tests/test_main_js_syntax.sh
+        run: sh tests/cross/test_main_js_syntax.sh
 
       # build-apk.sh is a host bash build script; its per-arch packaging test
       # needs bash (absent in the OpenWrt qemu guest, where it SKIPs). Run it
       # here on the bash-equipped host so its assertions actually execute in CI.
       - name: build-apk per-arch packaging test (host bash)
-        run: sh tests/test_build_apk_per_arch.sh
+        run: sh tests/cross/test_build_apk_per_arch.sh
 
       # Lint via the official shellcheck image instead of apt-installing the
       # binary on every run (saves the apt-get update/install round-trip and
@@ -111,7 +111,7 @@ jobs:
         run: |
           set -eu
           found=0
-          for t in $(grep -lE 'command -v node|NODE_BIN' tests/test_*.sh | sort); do
+          for t in $(grep -lE 'command -v node|NODE_BIN' tests/*/test_*.sh | sort); do
             echo "==> $t"
             sh "$t"
             found=$((found + 1))
@@ -123,7 +123,7 @@ jobs:
       # node-less VM, so the msgid-coverage / untranslated-threshold assertions
       # actually execute pre-merge in CI.
       - name: PO coverage (i18n threshold)
-        run: sh tests/test_po_coverage.sh
+        run: sh tests/cross/test_po_coverage.sh
 
       # Catch a forgotten `scripts/regen-po.sh` run: if a developer added a new
       # _('...') UI string without regenerating the template, the .pot here will
@@ -242,7 +242,7 @@ jobs:
           # actions/cache step above restores/saves, so the build feeds and
           # populates the cache.
           BUILDX_CACHE: /tmp/.buildx-cache
-        run: bash tests/test_browser.sh
+        run: bash tests/cross/test_browser.sh
 
       - name: Upload diagnostics on failure
         if: failure()
