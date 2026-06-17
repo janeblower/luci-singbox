@@ -68,10 +68,11 @@ jobs:
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Version already on gh-pages — embedded in the apk filenames
-          # (luci-singbox-ui-<version>.apk). Absent branch / no apk -> empty.
+          # Version already on gh-pages — embedded in the apk filenames. After the
+          # three-package split the UI package (luci-app-singbox-ui-<version>.apk)
+          # is always present in every arch dir. Absent branch / no apk -> empty.
           CUR="$(gh api "repos/$GITHUB_REPOSITORY/git/trees/gh-pages?recursive=1" -q '.tree[].path' 2>/dev/null \
-                  | grep -oE 'luci-singbox-ui-[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+\.apk' \
+                  | grep -oE 'luci-app-singbox-ui-[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+\.apk' \
                   | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+' | head -n1 || true)"
           echo "latest-release: $NEW ; gh-pages: ${CUR:-<none>}"
           if [ "$NEW" = "$CUR" ]; then

@@ -40,6 +40,41 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
+  # Path-filtered CI: on a pull_request, run only the area(s) whose source paths
+  # changed (backend = VM suite, ui = host node + browser). On push/main/tags and
+  # workflow_dispatch the filter returns true for everything, so the release path
+  # is NEVER path-gated. Shell + git diff (no third-party action), mirroring the
+  # version-compare gate in pages.yml.
+  changes:
+    name: Detect changed areas
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      backend: ${{ steps.f.outputs.backend }}
+      ui: ${{ steps.f.outputs.ui }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: f
+        run: |
+          set -eu
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "non-PR event -> run all areas"
+            echo "backend=true" >> "$GITHUB_OUTPUT"
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base="${{ github.event.pull_request.base.sha }}"
+          changed="$(git diff --name-only "$base"...HEAD)"
+          printf 'changed files:\n%s\n' "$changed"
+          be=false; ui=false
+          printf '%s\n' "$changed" | grep -qE '^(singbox-ui/|bbolt-client/|scripts/|install\.sh|tests/(backend|cross|lib|docker|parity|ucode-stubs)/|tests/run|\.github/)' && be=true
+          printf '%s\n' "$changed" | grep -qE '^(luci-app-singbox-ui/|tests/(ui|cross|lib|browser|browser-container)/|scripts/|\.github/)' && ui=true
+          echo "backend=$be" >> "$GITHUB_OUTPUT"
+          echo "ui=$ui" >> "$GITHUB_OUTPUT"
+          echo "resolved: backend=$be ui=$ui"
+
   lint:
     name: Lint (host)
     runs-on: ubuntu-24.04
@@ -69,8 +104,8 @@ jobs:
         # lint behaviour (and the image we execute) could change without a commit.
         run: |
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 \
-            tests/*.sh scripts/*.sh \
-            luci-singbox-ui/root/etc/init.d/singbox-ui
+            tests/*.sh tests/*/*.sh scripts/*.sh install.sh \
+            singbox-ui/root/etc/init.d/singbox-ui
           # uci-defaults runs under busybox ash on OpenWrt, not bash. Lint the
           # WHOLE directory with --shell=ash so bashisms (arrays, [[ ]], $'...')
           # fail at CI rather than silently at first-boot on the router. Globbing
@@ -78,12 +113,14 @@ jobs:
           # is linted automatically and this lint-coverage can't drift again
           # (90-singbox-ui-fwmark was previously unlinted by anything).
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 --shell=ash \
-            luci-singbox-ui/root/etc/uci-defaults/*
+            singbox-ui/root/etc/uci-defaults/*
 
   js-unit:
     name: JS unit tests (host node)
     runs-on: ubuntu-24.04
-    needs: lint
+    needs: [lint, changes]
+    # UI gate: run on UI/cross/lib changes, and always on push/main/tags.
+    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request' }}
     timeout-minutes: 12
     # The node-gated *_js.sh / json_import tests carry real assertions for the
     # XSS-relevant descriptor_form.js logic, the validators, and the share-link/
@@ -148,7 +185,10 @@ jobs:
   test:
     name: Test suite (OpenWrt VM)
     runs-on: ubuntu-24.04
-    needs: lint
+    needs: [lint, changes]
+    # Backend gate: run the VM suite on backend/cross/lib/scripts changes, and
+    # always on push/main/tags.
+    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request' }}
     # The QEMU-OpenWrt VM job is the one most likely to wedge (bad boot/loadvm).
     # Bound it so a hung guest fails fast instead of idling the runner ~6h.
     timeout-minutes: 25
@@ -179,12 +219,13 @@ jobs:
   browser-test:
     name: Browser integration tests
     runs-on: ubuntu-24.04
-    # Only `needs: lint` — browser-test consumes no artifact or output from the
-    # `test` (VM) job; they run on separate runners with no shared state. Gating
-    # it behind `test` serialized it after the pipeline's long pole for nothing.
-    # `build` below still gates on BOTH test and browser-test, so correctness is
-    # unchanged while browser-test now runs in parallel with the VM suite.
-    needs: lint
+    # browser-test consumes no artifact or output from the `test` (VM) job; they
+    # run on separate runners with no shared state, so it only needs lint (+ the
+    # changes filter). `build` below still gates on BOTH test and browser-test, so
+    # correctness is unchanged while browser-test runs in parallel with the VM suite.
+    needs: [lint, changes]
+    # UI gate: run on UI/cross/lib changes, and always on push/main/tags.
+    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request' }}
     timeout-minutes: 15
 
     steps:
@@ -383,6 +424,18 @@ jobs:
     # run now BLOCKS the rolling `latest` release instead of shipping a broken
     # apk to install.sh consumers.
     needs: [lint, js-unit, test, browser-test, bbolt]
+    # On a path-filtered PR some test jobs may be SKIPPED (not their area). Run
+    # build whenever nothing FAILED: lint + bbolt always run (bbolt provides the
+    # binaries this job embeds), so require them success; the area-gated jobs may
+    # be skipped, so accept anything that is not 'failure'. On push/main/tags no
+    # job is gated, so all are 'success' and the publish path is unaffected.
+    if: >-
+      ${{ !cancelled()
+          && needs.lint.result == 'success'
+          && needs.bbolt.result == 'success'
+          && needs.test.result != 'failure'
+          && needs.js-unit.result != 'failure'
+          && needs.browser-test.result != 'failure' }}
     # Only this job publishes releases, so it is the only one that needs write.
     # Top-level permissions are read-only (see header) — this override is the
     # single place contents: write is granted.
@@ -527,38 +580,43 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${{ steps.version.outputs.version }}"
-          ls dist/luci-singbox-ui_*.apk >/dev/null 2>&1 || { echo "no per-arch apks found in dist/"; exit 1; }
           # dist/ is root-owned (build-apk.sh runs under sudo).
-          # Per-arch apks: luci-singbox-ui_<version>_<exact-arch>.apk
+          # bbolt-client is the ONLY per-arch package now:
+          #   bbolt-client_<version>_<exact-arch>.apk
           # <exact-arch> may contain underscores (e.g. mipsel_24kc,
-          # arm_cortex-a7_neon-vfpv4), so strip the known prefix+version
-          # rather than splitting on the last underscore.
-          for f in dist/luci-singbox-ui_*.apk; do
+          # arm_cortex-a7_neon-vfpv4), so strip the known prefix+version rather
+          # than splitting on the last underscore.
+          ls dist/bbolt-client_*.apk >/dev/null 2>&1 || { echo "no per-arch bbolt-client apks in dist/"; exit 1; }
+          for f in dist/bbolt-client_*.apk; do
             base="${f##*/}"
-            arch="${base#luci-singbox-ui_${VERSION}_}"
+            arch="${base#bbolt-client_${VERSION}_}"
             arch="${arch%.apk}"
-            sudo cp "$f" "dist/luci-singbox-ui-${arch}.apk"
+            sudo cp "$f" "dist/bbolt-client-${arch}.apk"
           done
-          sudo cp dist/luci-i18n-singbox-ui-ru_*.apk dist/luci-i18n-singbox-ui-ru.apk
-          sudo chown "$(id -u):$(id -g)" dist/luci-singbox-ui-*.apk dist/luci-i18n-singbox-ui-ru.apk
+          # The three noarch packages -> fixed, version-less asset names.
+          sudo cp "dist/singbox-ui_${VERSION}.apk"             dist/singbox-ui.apk
+          sudo cp "dist/luci-app-singbox-ui_${VERSION}.apk"    dist/luci-app-singbox-ui.apk
+          sudo cp "dist/luci-i18n-singbox-ui-ru_${VERSION}.apk" dist/luci-i18n-singbox-ui-ru.apk
+          sudo chown "$(id -u):$(id -g)" \
+            dist/bbolt-client-*.apk dist/singbox-ui.apk \
+            dist/luci-app-singbox-ui.apk dist/luci-i18n-singbox-ui-ru.apk
           ls -1 dist/*.apk
 
-      # Checksums for every published apk (mirrors bbolt-client.yml). install.sh
-      # fetches this file and verifies the apk sha256 before `apk add`, closing
-      # the gap where the main package — unlike the bbolt helper — was installed
-      # --allow-untrusted with no integrity check. Runs AFTER the stable-named
-      # apk is staged so `luci-singbox-ui.apk` (the asset install.sh downloads)
-      # is covered. Names are basename-only (no dist/ prefix) so the file the
-      # release serves matches install.sh's lookup. dist/ is root-owned.
+      # Checksums for every published apk. Consumed by the Pages workflow, which
+      # downloads the rolling-release assets and runs `sha256sum -c sha256sums.txt`
+      # before assembling the signed apk feed (install.sh itself is feed-based now
+      # and verifies via the signed index, not this file). Runs AFTER the stable-
+      # named assets are staged so the names match what the release serves. Names
+      # are basename-only (no dist/ prefix). dist/ is root-owned.
       - name: Generate sha256sums.txt
         if: (github.event_name == 'push' && github.ref == 'refs/heads/main') || startsWith(github.ref, 'refs/tags/')
         run: |
           set -euo pipefail
           cd dist
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            sha256sum luci-singbox-ui-*.apk luci-i18n-singbox-ui-ru.apk | sudo tee sha256sums.txt
+            sha256sum bbolt-client-*.apk singbox-ui.apk luci-app-singbox-ui.apk luci-i18n-singbox-ui-ru.apk | sudo tee sha256sums.txt
           else
-            sha256sum luci-singbox-ui_*.apk luci-i18n-singbox-ui-ru_*.apk | sudo tee sha256sums.txt
+            sha256sum bbolt-client_*.apk singbox-ui_*.apk luci-app-singbox-ui_*.apk luci-i18n-singbox-ui-ru_*.apk | sudo tee sha256sums.txt
           fi
           sudo chown "$(id -u):$(id -g)" sha256sums.txt
           cat sha256sums.txt
@@ -577,7 +635,7 @@ jobs:
           # `create` it the first time (guarded by `release view`), and retarget
           # the tag to the current SHA via `release edit` so the asset reflects
           # the tip of main.
-          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. This pre-release is replaced on every push to main. \`luci-singbox-ui-<arch>.apk\` is the per-arch asset install.sh downloads (e.g. \`luci-singbox-ui-x86_64.apk\`); \`luci-i18n-singbox-ui-ru.apk\` is the Russian translation package; \`sha256sums.txt\` is verified by install.sh before \`apk add\`."
+          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. Replaced on every push to main. Three-package split: \`bbolt-client-<arch>.apk\` (per-arch, e.g. \`bbolt-client-x86_64.apk\`), \`singbox-ui.apk\` (noarch backend), \`luci-app-singbox-ui.apk\` (noarch LuCI UI), \`luci-i18n-singbox-ui-ru.apk\` (noarch RU translation). These feed the signed apk feed (GitHub Pages); end users install via that feed — see install.sh / the Pages landing. \`sha256sums.txt\` covers every published asset."
           if ! gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create latest \
               --repo "$GITHUB_REPOSITORY" \
@@ -594,7 +652,8 @@ jobs:
               --prerelease
           fi
           gh release upload latest \
-            dist/luci-singbox-ui-*.apk dist/luci-i18n-singbox-ui-ru.apk dist/sha256sums.txt \
+            dist/bbolt-client-*.apk dist/singbox-ui.apk dist/luci-app-singbox-ui.apk \
+            dist/luci-i18n-singbox-ui-ru.apk dist/sha256sums.txt \
             --repo "$GITHUB_REPOSITORY" --clobber
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.
