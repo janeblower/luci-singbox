@@ -96,9 +96,11 @@ out=$(je '
 [ "$out" = "enum" ] || die "S4-6 proxy_protocol field must be type=enum" "$out"
 ok "S4-6 proxy_protocol declared enum"
 
-# ---- S4-9: dns rewrite_ttl NaN guard ----
-# build_rules(cur) iterates cur.foreach(pkg, kind, cb). Feed a mock cursor that
-# yields one ruleset (enabled) and one dns_rule with a non-numeric rewrite_ttl.
+# ---- S4-9: dns rewrite_ttl field handling ----
+# build_rules(cur) uses the descriptor-driven filler. Feed a mock cursor with
+# the new dns_rule schema (type/rule_set/action/server). With the declarative
+# filler, rewrite_ttl is a num field with omit_when:empty — a non-numeric value
+# ("abc") is dropped (field absent), NOT substituted with a synthetic default.
 out=$(je '
     let dns = require("dns");
     let cur = {
@@ -106,15 +108,15 @@ out=$(je '
             if (kind == "ruleset") cb({ ".name":"rs", "enabled":"1" });
             if (kind == "dns_server") cb({ ".name":"fakeip", "enabled":"1", "type":"fakeip" });
             if (kind == "dns_rule")
-                cb({ ".name":"r", "enabled":"1", "ruleset":["rs"],
-                     "server":"fakeip", "rewrite_ttl":"abc" });
+                cb({ ".name":"r", "enabled":"1", "type":"default", "rule_set":["rs"],
+                     "action":"route", "server":"fakeip", "rewrite_ttl":"abc" });
         },
     };
     let rules = dns.build_rules(cur);
     print(rules[0].rewrite_ttl);
 ')
-[ "$out" = "60" ] || die "S4-9 non-numeric rewrite_ttl must fall back to 60" "$out"
-ok "S4-9 NaN rewrite_ttl -> 60"
+[ "$out" = "(null)" ] || [ "$out" = "" ] || die "S4-9 non-numeric rewrite_ttl must be omitted (null)" "$out"
+ok "S4-9 NaN rewrite_ttl -> omitted (no synthetic default)"
 
 # "0" must still mean explicit disable (regression guard).
 out=$(je '
@@ -124,8 +126,8 @@ out=$(je '
             if (kind == "ruleset") cb({ ".name":"rs", "enabled":"1" });
             if (kind == "dns_server") cb({ ".name":"fakeip", "enabled":"1", "type":"fakeip" });
             if (kind == "dns_rule")
-                cb({ ".name":"r", "enabled":"1", "ruleset":["rs"],
-                     "server":"fakeip", "rewrite_ttl":"0" });
+                cb({ ".name":"r", "enabled":"1", "type":"default", "rule_set":["rs"],
+                     "action":"route", "server":"fakeip", "rewrite_ttl":"0" });
         },
     };
     let rules = dns.build_rules(cur);
@@ -133,6 +135,24 @@ out=$(je '
 ')
 [ "$out" = "0" ] || die "S4-9 rewrite_ttl=0 must stay 0" "$out"
 ok "S4-9 rewrite_ttl=0 stays 0"
+
+# Explicit numeric value is emitted as-is.
+out=$(je '
+    let dns = require("dns");
+    let cur = {
+        foreach: function(pkg, kind, cb) {
+            if (kind == "ruleset") cb({ ".name":"rs", "enabled":"1" });
+            if (kind == "dns_server") cb({ ".name":"fakeip", "enabled":"1", "type":"fakeip" });
+            if (kind == "dns_rule")
+                cb({ ".name":"r", "enabled":"1", "type":"default", "rule_set":["rs"],
+                     "action":"route", "server":"fakeip", "rewrite_ttl":"300" });
+        },
+    };
+    let rules = dns.build_rules(cur);
+    print(rules[0].rewrite_ttl);
+')
+[ "$out" = "300" ] || die "S4-9 explicit rewrite_ttl=300 must emit 300" "$out"
+ok "S4-9 explicit rewrite_ttl=300 emitted"
 
 # ---- S4-7: IPv6-literal hosts parse in share-links ----
 # S4.2: the host is stored WITHOUT the [...] brackets — sing-box's `server`

@@ -29,6 +29,16 @@ const body = src
 
 const form = { Flag: 'Flag', ListValue: 'ListValue', DynamicList: 'DynamicList', Value: 'Value' };
 const validators = { host: () => true, port: () => true, uuid: () => true, alpn: () => true };
+// SbViewState + SbCommon stubs: descriptor_form.js calls versionGate(f) for
+// every field; without these the module throws ReferenceError at load time.
+// getCoreVersion returns '' → compareVersions fails-open → no gating applied.
+const SbViewState = {
+	getCoreVersion: function () { return ''; },
+	getCompatOnly:  function () { return false; },
+};
+const SbCommon = {
+	compareVersions: function () { return 0; },
+};
 const sandbox = {
 	__moduleExports: null,
 	_:          (s) => s,
@@ -36,6 +46,8 @@ const sandbox = {
 	form:       form,
 	ui:         {},
 	validators: validators,
+	SbViewState: SbViewState,
+	SbCommon:    SbCommon,
 	console:    console,
 };
 const ctx = vm.createContext(sandbox);
