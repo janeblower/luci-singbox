@@ -30,7 +30,7 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:118
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:344
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:368
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:426
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:432
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr ""
