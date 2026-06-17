@@ -1,13 +1,14 @@
 // lib/dns.uc — sing-box typed DNS (1.12+): servers, rules, settings.
 // Built from dns_server / dns_rule / dns UCI sections. Pure: no I/O.
 
-let helpers  = require("helpers");
-let dns_reg  = require("builder.dns.registry");   // eager-loads all 14 DNS descriptors
-let filler   = require("builder._filler");
+let helpers       = require("helpers");
+let dns_reg       = require("builder.dns.registry");        // eager-loads all 14 DNS descriptors
+let dns_rule_reg  = require("builder.dns_rule.registry");   // eager-loads default/logical dns_rule descriptors
+let dr_headless   = require("builder.dns_rule.headless");
+let filler        = require("builder._filler");
 
-const s_opt    = helpers.s_opt;
-const s_num    = helpers.s_num;
-const csv_list = helpers.csv_list;
+const s_opt = helpers.s_opt;
+const s_num = helpers.s_num;
 
 // enabled_server_tags(cur) -> { tag: true } for every enabled dns_server.
 // Used to drop dns_rule.server / dns.final references that don't resolve to an
@@ -45,51 +46,79 @@ function ruleset_enabled_map(cur) {
 	return rs_enabled;
 }
 
-// build_rules(cur, srv_tags?, rs_enabled?) — the two maps are optional so the
-// function stays standalone-callable (tests/parity); when build_dns drives it
-// it threads the maps it already computed instead of re-walking the sections
-// (GEN-4).
+// build_rules(cur, srv_tags?, rs_enabled?) — descriptor-driven, mirrors
+// route.uc build_route_rules: filler-built per-rule JSON + cross-cutting logic
+// (logical inlining, rule_set ref resolution, dangling-server drop).
+// The two maps are optional so the function stays standalone-callable
+// (tests/parity); when build_dns drives it it threads the maps it already
+// computed instead of re-walking the sections (GEN-4).
 function build_rules(cur, srv_tags, rs_enabled) {
 	if (rs_enabled == null) rs_enabled = ruleset_enabled_map(cur);
 	if (srv_tags == null)   srv_tags   = enabled_server_tags(cur);
 
 	let rules = [];
+	let dr_by_name = {};
+	cur.foreach("singbox-ui", "dns_rule", function(s) { dr_by_name[s[".name"]] = s; });
+
+	function ref_list(s) {
+		let refs = s.rules ?? [];
+		if (type(refs) === "string") refs = [ refs ];
+		return refs;
+	}
+	let consumed = {};
 	cur.foreach("singbox-ui", "dns_rule", function(s) {
 		if (s.enabled === "0") return;
-		let rule = { action: "route" };
+		if ((s.type ?? "default") !== "logical") return;
+		for (let n in ref_list(s)) consumed[n] = true;
+	});
 
-		let refs = s.ruleset ?? [];
-		if (type(refs) === "string") refs = [ refs ];
+	function resolve_rulesets(rule) {
+		if (rule.rule_set == null) return;
 		let resolved = [];
-		for (let n in refs) if (rs_enabled[n]) push(resolved, n);
-		if (length(resolved)) rule.rule_set = resolved;
+		for (let n in rule.rule_set) if (rs_enabled[n]) push(resolved, n);
+		if (length(resolved)) rule.rule_set = resolved; else delete rule.rule_set;
+	}
 
-		let dsuf = csv_list(s_opt(s, "domain_suffix"));
-		if (length(dsuf)) rule.domain_suffix = dsuf;
-		let dkw = csv_list(s_opt(s, "domain_keyword"));
-		if (length(dkw)) rule.domain_keyword = dkw;
-		if (length(s_opt(s, "clash_mode"))) rule.clash_mode = s.clash_mode;
+	cur.foreach("singbox-ui", "dns_rule", function(s) {
+		if (s.enabled === "0") return;
+		let t = s.type ?? "default";
+		let name = s[".name"];
+		if (t === "default" && consumed[name]) return;   // consumed → nested only
 
-		let server = s_opt(s, "server");
-		// Drop rules with no matcher or no target.
-		let has_match = rule.rule_set || rule.domain_suffix || rule.domain_keyword || rule.clash_mode;
-		if (!has_match || !length(server)) return;
-		// S3.2: drop the rule if its server tag doesn't resolve to an enabled
-		// dns_server — a dangling server reference makes sing-box refuse to start.
-		if (!srv_tags[server]) {
-			warn(sprintf("dns.uc: dns_rule '%s' server '%s' is not an enabled dns_server; dropping rule\n", s[".name"], server));
+		let d = dns_rule_reg.get("dns_rule", t);
+		if (d == null) {
+			warn(sprintf("dns.uc: unknown dns_rule type '%s' for '%s'; skipping\n", t, name));
 			return;
 		}
-		rule.server = server;
-		// rewrite_ttl default = 60. Empty/absent → 60. "0" → 0 (explicit
-		// disable). A non-numeric value (+"abc" → NaN) also falls back to 60
-		// rather than serializing to null and breaking sing-box (S4-9).
-		let rtt_raw = s_opt(s, "rewrite_ttl");
-		if (rtt_raw === "") {
-			rule.rewrite_ttl = 60;
-		} else {
-			let n = +rtt_raw;
-			rule.rewrite_ttl = (n == n) ? n : 60;
+		let rule = filler.build(d, s);
+
+		if (t === "logical") {
+			rule.type = "logical";
+			let sub = [];
+			for (let n in ref_list(s)) {
+				let rs = dr_by_name[n];
+				if (rs == null) continue;
+				if ((rs.type ?? "default") === "logical") continue;   // only default refs
+				if (rs.enabled === "0") continue;
+				let h = dr_headless.build(rs);
+				if (length(keys(h))) push(sub, h);
+			}
+			if (!length(sub)) return;   // empty logical → skip
+			rule.rules = sub;
+		}
+
+		resolve_rulesets(rule);
+
+		// S3.2: Drop a rule whose route-action server is dangling (sing-box hard-fails).
+		if (rule.action === "route") {
+			if (!length(rule.server ?? "")) {
+				warn(sprintf("dns.uc: dns_rule '%s' action=route without server; dropping\n", name));
+				return;
+			}
+			if (!srv_tags[rule.server]) {
+				warn(sprintf("dns.uc: dns_rule '%s' server '%s' is not an enabled dns_server; dropping\n", name, rule.server));
+				return;
+			}
 		}
 		push(rules, rule);
 	});
@@ -97,7 +126,8 @@ function build_rules(cur, srv_tags, rs_enabled) {
 }
 
 // referenced_rulesets(cur, rs_enabled?) -> [name, ...]
-// The deduped set of enabled rulesets referenced by enabled dns_rule sections.
+// The deduped set of enabled rulesets referenced by enabled dns_rule sections
+// (reads the rule_set matcher; skips logical rules which carry no rule_set).
 // rs_enabled is optional (computed if absent) so the function stays callable
 // standalone from generate.uc (GEN-4).
 // Mirrors the ref-resolution in build_rules (same enabled/existence filter), so
@@ -108,12 +138,12 @@ function build_rules(cur, srv_tags, rs_enabled) {
 // found"). Pure: no I/O. See S3.1.
 function referenced_rulesets(cur, rs_enabled) {
 	if (rs_enabled == null) rs_enabled = ruleset_enabled_map(cur);
-
 	let out = [];
 	let seen = {};
 	cur.foreach("singbox-ui", "dns_rule", function(s) {
 		if (s.enabled === "0") return;
-		let refs = s.ruleset ?? [];
+		if ((s.type ?? "default") === "logical") return;
+		let refs = s.rule_set ?? [];
 		if (type(refs) === "string") refs = [ refs ];
 		for (let n in refs)
 			if (rs_enabled[n] && !seen[n]) { push(out, n); seen[n] = true; }

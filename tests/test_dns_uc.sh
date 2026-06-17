@@ -75,9 +75,11 @@ config dns_server 'fakeip'
 
 config dns_rule 'r1'
 	option enabled '1'
-	list ruleset 'ru'
-	option domain_suffix 'example.com, test.org'
+	list rule_set 'ru'
+	list domain_suffix 'example.com'
+	list domain_suffix 'test.org'
 	option clash_mode 'global'
+	option action 'route'
 	option server 'fakeip'
 
 config dns 'dns'
@@ -89,7 +91,7 @@ check "rule server"        '"server": "fakeip"'
 check "rule rule_set"      '"rule_set":'
 check "rule domain_suffix" '"example.com"'
 check "rule clash_mode"    '"clash_mode": "global"'
-check "default rewrite_ttl 60" '"rewrite_ttl": 60'
+nocheck "no synthetic rewrite_ttl 60" '"rewrite_ttl": 60'
 
 echo "-- empty dns_rule (no matchers, no server) is dropped"
 write_cfg "
@@ -142,7 +144,8 @@ config ruleset 'rs'
 
 config dns_rule 'rttl'
 	option enabled '1'
-	list   ruleset 'rs'
+	list   rule_set 'rs'
+	option action 'route'
 	option server 'fakeip'
 	option rewrite_ttl '300'
 
@@ -162,7 +165,8 @@ config ruleset 'rs'
 
 config dns_rule 'rttl0'
 	option enabled '1'
-	list   ruleset 'rs'
+	list   rule_set 'rs'
+	option action 'route'
 	option server 'fakeip'
 	option rewrite_ttl '0'
 
@@ -214,7 +218,8 @@ config dns_server 'dead'
 
 config dns_rule 'dangling'
 	option enabled '1'
-	list   ruleset 'rs'
+	list   rule_set 'rs'
+	option action 'route'
 	option server 'dead'
 "
 run_gen
@@ -249,7 +254,8 @@ config dns_server 'fakeip'
 
 config dns_rule 'r1'
 	option enabled '1'
-	list   ruleset 'rs'
+	list   rule_set 'rs'
+	option action 'route'
 	option server 'fakeip'
 "
 # shellcheck disable=SC2086
