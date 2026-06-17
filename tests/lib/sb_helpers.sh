@@ -1,13 +1,13 @@
 # tests/lib/sb_helpers.sh — single source of truth for source-tree paths used by
 # the shell test suite. Sourced by tests that locate package source. All paths
 # are relative to the repo root (tests run with CWD=repo root) and overridable
-# via env so the tree can move without touching test bodies. The four defaults
-# below are flipped to the post-move package dirs in a later phase; nothing else
-# changes.
-: "${SB_BACKEND_ROOT:=luci-singbox-ui/root}"
-: "${SB_UI_ROOT:=luci-singbox-ui/root}"
-: "${SB_UI_HTDOCS:=luci-singbox-ui/htdocs}"
-: "${SB_PO_DIR:=luci-singbox-ui/po}"
+# via env so the tree can move without touching test bodies. Backend lives in
+# singbox-ui/; UI (htdocs + menu.d + acl.d) and i18n (po) live in
+# luci-app-singbox-ui/ — the three-package split.
+: "${SB_BACKEND_ROOT:=singbox-ui/root}"
+: "${SB_UI_ROOT:=luci-app-singbox-ui/root}"
+: "${SB_UI_HTDOCS:=luci-app-singbox-ui/htdocs}"
+: "${SB_PO_DIR:=luci-app-singbox-ui/po}"
 SB_SHARE="$SB_BACKEND_ROOT/usr/share/singbox-ui"
 SB_LIB="$SB_SHARE/lib"
 SB_RPCD="$SB_BACKEND_ROOT/usr/libexec/rpcd/singbox-ui"
