@@ -1,0 +1,136 @@
+name: sing-box-extended
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'   # daily; resolves latest stable upstream tag
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages           # serialize with the main feed publisher on gh-pages
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: shtorm-7/sing-box-extended
+  SDK_VERSION: 25.12.3
+  SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+  PAGES_URL: https://janeblower.github.io/luci-singbox
+
+jobs:
+  build-publish:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6   # this orphan branch (build.sh, feed.sh)
+
+      - name: Resolve latest stable upstream tag
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          TAG="$(gh api "repos/$UPSTREAM/releases/latest" -q .tag_name)"
+          [ -n "$TAG" ] || { echo "no latest release"; exit 1; }
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Latest stable: $TAG"
+
+      - name: Compute apk version + idempotency gate
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -eu
+          TAG="${{ steps.tag.outputs.tag }}"; v="${TAG#v}"
+          case "$v" in *-extended-*)
+            base="${v%-extended-*}"; ext="${v##*-extended-}"; packed=""
+            OLDIFS="$IFS"; IFS='.'; for c in $ext; do packed="$packed$(printf '%03d' "$c")"; done; IFS="$OLDIFS"
+            VER="${base}_p${packed}" ;; *) VER="$v" ;;
+          esac
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "dispatch -> build"; echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          CUR="$(gh api "repos/$GITHUB_REPOSITORY/git/trees/gh-pages?recursive=1" -q '.tree[].path' 2>/dev/null \
+                 | grep -oE "sing-box-extended/[^/]+/" | grep -oE '[^/]+/$' | tr -d / | head -n1 || true)"
+          echo "gh-pages ver: ${CUR:-<none>} ; new: $VER"
+          if [ "$CUR" = "$VER" ]; then echo "build=false" >> "$GITHUB_OUTPUT"; else echo "build=true" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-go@v5
+        if: steps.gate.outputs.build == 'true'
+        with:
+          go-version: 'stable'
+
+      - name: Checkout upstream fork at tag
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/checkout@v6
+        with:
+          repository: ${{ env.UPSTREAM }}
+          ref: ${{ steps.tag.outputs.tag }}
+          path: src
+
+      - name: Install zstd + upx + qemu-user
+        if: steps.gate.outputs.build == 'true'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zstd upx-ucl qemu-user
+
+      - name: Obtain apk-tools 3.0.5+ from OpenWrt SDK
+        if: steps.gate.outputs.build == 'true'
+        id: sdk
+        run: |
+          set -eu
+          wget -qO sdk.tar.zst "$SDK_URL"
+          mkdir -p sdk && tar --zstd -xf sdk.tar.zst -C sdk
+          root="$(find sdk -mindepth 1 -maxdepth 1 -type d | head -n1)"
+          apk="$root/staging_dir/host/bin/apk"
+          [ -x "$apk" ] || { echo "apk not found"; exit 1; }
+          "$apk" mkpkg --help 2>&1 | grep -q -- '--info' || echo "warn: apk lacks --info"
+          echo "apk=$apk" >> "$GITHUB_OUTPUT"
+
+      - name: Build 40 apk
+        if: steps.gate.outputs.build == 'true'
+        env:
+          APK_BIN: ${{ steps.sdk.outputs.apk }}
+          UPX_BIN: upx
+        run: sh build.sh "${{ steps.tag.outputs.tag }}" src dist
+
+      - name: Smoke test
+        if: steps.gate.outputs.build == 'true'
+        run: |
+          set -eu
+          # x86_64 native (normal): extract + run version + check
+          tmp="$(mktemp -d)"; tar -xf dist/sing-box-extended_${{ steps.gate.outputs.ver }}_x86_64.apk -C "$tmp" 2>/dev/null || \
+            "${{ steps.sdk.outputs.apk }}" adbdump dist/sing-box-extended_${{ steps.gate.outputs.ver }}_x86_64.apk >/dev/null
+          # Prefer the freshly built binary directly for the smoke:
+          env CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go -C src build -tags "with_gvisor,with_dhcp,with_wireguard,with_reality_server,with_clash_api,with_quic,with_utls,with_ech" -ldflags "-s -w" -o /tmp/sb ./cmd/sing-box
+          /tmp/sb version | head -n1 | grep -q "sing-box version"
+          echo '{"log":{"level":"error"}}' > /tmp/c.json && /tmp/sb check -c /tmp/c.json
+
+      - name: Write signing key
+        if: steps.gate.outputs.build == 'true'
+        env:
+          APK_SIGN_KEY: ${{ secrets.APK_SIGN_KEY }}
+        run: |
+          install -d -m700 "$RUNNER_TEMP/keys"
+          printf '%s\n' "$APK_SIGN_KEY" > "$RUNNER_TEMP/keys/luci-singbox.pem"
+          chmod 600 "$RUNNER_TEMP/keys/luci-singbox.pem"
+
+      - name: Build feed subtree
+        if: steps.gate.outputs.build == 'true'
+        env:
+          APK_BIN: ${{ steps.sdk.outputs.apk }}
+          FEED_SIGN_KEY: ${{ runner.temp }}/keys/luci-singbox.pem
+          PAGES_URL: ${{ env.PAGES_URL }}
+        run: sh feed.sh "${{ steps.gate.outputs.ver }}" dist public
+
+      - name: Publish to gh-pages/sing-box-extended
+        if: steps.gate.outputs.build == 'true'
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: public
+          publish_branch: gh-pages
+          destination_dir: sing-box-extended
+          keep_files: true
+          enable_jekyll: true
+          commit_message: "deploy sing-box-extended feed: ${{ steps.tag.outputs.tag }}"
