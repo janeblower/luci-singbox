@@ -189,6 +189,19 @@ jobs:
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 --shell=ash \
             singbox-ui/root/etc/uci-defaults/*
 
+  typecheck:
+    name: typecheck + biome
+    runs-on: ubuntu-24.04
+    needs: [changes]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: '1.2.21'
+      - run: cd tests && bun install --frozen-lockfile
+      - run: bunx tsc --noEmit
+      - run: bunx @biomejs/biome ci tests/
+
   js-unit:
     name: JS unit tests (host node)
     runs-on: ubuntu-24.04
@@ -255,6 +268,12 @@ jobs:
             exit 1
           fi
           echo "POT is up to date."
+
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: '1.2.21'
+      - run: cd tests && bun install --frozen-lockfile
+      - run: bun test tests/ui
 
   test:
     name: Test suite (OpenWrt VM)
@@ -565,6 +584,12 @@ jobs:
           SINGBOX_UCODE_ABSENT_OK: '1'
         run: sh tests/run.sh
 
+      - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
+        with:
+          bun-version: '1.2.21'
+      - run: cd tests && bun install --frozen-lockfile
+      - run: bun test tests/cross
+
   build:
     name: Build OpenWrt packages (apk)
     # Pinned (not floating ubuntu-latest): this job installs apt build-deps and
@@ -578,7 +603,7 @@ jobs:
     # the package without publishing — but a red lint/js-unit/test/browser-test
     # run now BLOCKS the rolling `latest` release instead of shipping a broken
     # apk to install.sh consumers.
-    needs: [lint, js-unit, test, browser-test, bbolt, changes]
+    needs: [lint, typecheck, js-unit, test, browser-test, bbolt, changes]
     # On a path-filtered PR some heavy jobs may be SKIPPED (not their domain).
     # Run build whenever nothing FAILED: lint always runs; the domain-gated jobs
     # (including bbolt now) may be skipped, so accept anything that is not
@@ -592,6 +617,7 @@ jobs:
       ${{ !cancelled()
           && needs.changes.result == 'success'
           && needs.lint.result == 'success'
+          && needs.typecheck.result != 'failure'
           && needs.bbolt.result != 'failure'
           && needs.test.result != 'failure'
           && needs.js-unit.result != 'failure'
