@@ -1,0 +1,6 @@
+[test]
+# Default per-test timeout (ms). ucode-over-ssh calls are sub-second but the
+# guest can be slow on a loaded CI runner.
+timeout = 30000
+# NO global preload: ui/cross tests run host-only (no guest). Backend/parity
+# tests opt into the guest connection via tests/helpers/guest.ts (useGuest()).

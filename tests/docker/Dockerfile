@@ -30,6 +30,7 @@ RUN apt-get update \
         gzip \
         git \
         netcat-openbsd \
+        unzip \
  && rm -rf /var/lib/apt/lists/*
 
 # Helper scripts — kept in /opt for entrypoint.sh / build-snapshot.sh
@@ -39,6 +40,16 @@ COPY build-snapshot.expect    /opt/build-snapshot.expect
 COPY build-snapshot.sh        /opt/build-snapshot.sh
 COPY entrypoint.sh            /opt/entrypoint.sh
 RUN chmod +x /opt/wait-ssh.sh /opt/build-snapshot.sh /opt/entrypoint.sh
+
+# bun — test runner (host side of the QEMU rig, NOT the OpenWrt guest).
+# Pinned to match the CI setup-bun version (browser-test + typecheck/js-unit/
+# packaging all use 1.2.21) so the in-container `test` lane runs the same bun
+# as the host lanes.
+ENV BUN_VERSION=1.2.21
+ENV BUN_INSTALL=/opt/bun
+RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" \
+ && ln -s /opt/bun/bin/bun /usr/local/bin/bun \
+ && bun --version
 
 # OpenWrt rootfs — version comes from tests/docker/openwrt-version.txt, passed
 # in by the test-image workflow as --build-arg OPENWRT_VERSION=... (single
