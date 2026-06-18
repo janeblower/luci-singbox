@@ -65,6 +65,29 @@ for f in "tests/lib/sb_helpers.sh" "tests/run.sh" "tests/run-vm.sh" \
 	expect "$f" packaging true
 done
 
+# 8b) the standalone sing-box-extended workflow is EXCLUDED from the .github
+#     shared fan-out: changing ONLY it must trigger no domain.
+SBX=.github/workflows/sing-box-extended.yml
+expect "$SBX" bbolt     false
+expect "$SBX" backend   false
+expect "$SBX" ui        false
+expect "$SBX" packaging false
+# but it does NOT mask a real shared github change alongside it.
+SBX_PLUS=".github/workflows/sing-box-extended.yml
+.github/workflows/build.yml"
+expect "$SBX_PLUS" bbolt     true
+expect "$SBX_PLUS" backend   true
+expect "$SBX_PLUS" ui        true
+expect "$SBX_PLUS" packaging true
+# realistic combo (this very feed change): the sbx workflow + a packaging file
+# => packaging ONLY, not a full fan-out.
+SBX_PKG=".github/workflows/sing-box-extended.yml
+scripts/build-feed.sh"
+expect "$SBX_PKG" packaging true
+expect "$SBX_PKG" bbolt     false
+expect "$SBX_PKG" backend   false
+expect "$SBX_PKG" ui        false
+
 # 9) multi-file change unions domains: a bbolt file + a ui file => both true,
 #    backend/packaging false.
 MULTI="bbolt-client/build.sh
