@@ -42,7 +42,8 @@ for apk in "$DIST"/sing-box-extended_"${VERSION}"_*.apk; do
   d="$OUT/$VERSION/$arch"; mkdir -p "$d"
   copy_pkg "$apk" "$d"
   upx="$DIST/sing-box-extended-upx_${VERSION}_${arch}.apk"
-  [ -f "$upx" ] && copy_pkg "$upx" "$d"
+  [ -f "$upx" ] || { echo "missing UPX apk for $arch: $upx" >&2; exit 1; }
+  copy_pkg "$upx" "$d"
   if [ -n "${FEED_SIGN_KEY:-}" ]; then
     ( cd "$d" && "$APK_BIN" mkndx --allow-untrusted --sign-key "$FEED_SIGN_KEY" -o packages.adb ./*.apk )
   else

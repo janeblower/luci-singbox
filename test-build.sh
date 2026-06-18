@@ -16,6 +16,9 @@ check "already valid -r"     "$(to_apk_version v1.2.3-r4)"             "1.2.3-r4
 check "abi count"            "$(abi_list | wc -w | tr -d ' ')"        "5"
 check "amd64 arches"         "$(arches_for amd64)"                    "x86_64"
 check "armv7 arch count"     "$(arches_for armv7 | wc -w | tr -d ' ')" "9"
+check "arm64 arch count"     "$(arches_for arm64 | wc -w | tr -d ' ')"  "4"
+check "mipsel arch count"    "$(arches_for mipsel | wc -w | tr -d ' ')" "4"
+check "mips arch count"      "$(arches_for mips | wc -w | tr -d ' ')"   "2"
 
 [ "$fail" = 0 ] && echo "ALL PASS" || { echo "FAILURES"; exit 1; }
 

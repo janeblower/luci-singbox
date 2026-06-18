@@ -139,11 +139,11 @@ mkpkg_one() {
     -I "depends:$PKG_DEPENDS" -I "provides:sing-box=$_ver"
   [ -f "$_prerm" ] && set -- "$@" -s "pre-deinstall:$_prerm"
   if "$APK_BIN" mkpkg --help 2>&1 | grep -q 'conflicts'; then
-    "$APK_BIN" mkpkg "$@" \
-      -I "conflicts:sing-box" -I "conflicts:$_sib" && return 0
-    echo ">>> apk mkpkg rejected conflicts: — retrying without" >&2
+    "$APK_BIN" mkpkg "$@" -I "conflicts:sing-box" -I "conflicts:$_sib"
+  else
+    echo "FATAL: apk mkpkg lacks 'conflicts:' support; mutual exclusion is mandatory" >&2
+    exit 1
   fi
-  "$APK_BIN" mkpkg "$@"
 }
 
 # compress_upx <in_binary> <out_binary>
