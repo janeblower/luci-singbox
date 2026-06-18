@@ -9,21 +9,23 @@ only schedules/dispatches workflows from the default branch; that workflow check
 THIS branch (`ref: cores/sing-box-extended`) and runs these scripts. It resolves the
 latest stable upstream tag, cross-compiles the fork for our 20 OpenWrt arches (normal +
 UPX), packs drop-in `sing-box` apks (`sing-box-extended` / `sing-box-extended-upx`, both
-`provides sing-box`), and publishes a signed apk-feed to `gh-pages:/sing-box-extended/`.
+`provides sing-box`), and publishes a signed apk-feed as a sibling of the
+luci-singbox feed at `gh-pages:/25.12/<arch>/sing-box/` (so it shows in the same
+landing/browse tree).
 
 ## Install on the router
 
 ```sh
 ARCH=$(apk --print-arch)
 wget -O /etc/apk/keys/luci-singbox.pem https://janeblower.github.io/luci-singbox/luci-singbox.pem
-echo "https://janeblower.github.io/luci-singbox/sing-box-extended/<ver>/$ARCH/packages.adb" \
+echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/sing-box/packages.adb" \
   > /etc/apk/repositories.d/sing-box-extended.list
 apk update && apk add sing-box-extended      # or sing-box-extended-upx
 ```
 
 ## Files
 - `build.sh` — Go cross-compile + `apk mkpkg` (40 apk into a dist dir)
-- `feed.sh` — signed feed tree under `sing-box-extended/`
+- `feed.sh` — signed feed under `25.12/<arch>/sing-box/` (sibling of luci-singbox/)
 - `test-build.sh` — local validation harness (pure-unit + apk/feed cases)
 
 The trigger workflow `.github/workflows/sing-box-extended.yml` lives on `main`

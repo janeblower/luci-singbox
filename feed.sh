@@ -1,14 +1,28 @@
 #!/bin/sh
-# Build a signed, browsable apk feed subtree for sing-box-extended.
-# Output is the CONTENT of the gh-pages 'sing-box-extended/' subtree (peaceiris
-# destination_dir adds the prefix). Mirrors scripts/build-feed.sh conventions.
+# Build a signed, browsable apk feed for sing-box-extended, laid out as a SIBLING
+# of the luci-singbox feed under the SAME OpenWrt-minor tree:
 #
-# Usage: feed.sh <version> <dist_dir> <out_dir>
+#   <out>/<owrt_minor>/<arch>/sing-box/{<name>-<ver>.apk, packages.adb, index.md}
+#
+# The output is published to the gh-pages ROOT with keep_files:true, so it merges
+# into 25.12/<arch>/ right next to luci-singbox/ WITHOUT touching the shared
+# browse pages (25.12/<arch>/index.md, 25.12/index.md, root index.md, pubkey) —
+# those are owned by scripts/build-feed.sh on main, which links to sing-box/ so
+# it shows on the landing.
+#
+# Usage: feed.sh <owrt_minor> <apk_version> <dist_dir> <out_dir>
+#   owrt_minor   OpenWrt release line for the top path segment, e.g. 25.12
+#                (same segment the luci-singbox feed uses — NOT the apk version)
+#   apk_version  package version embedded in the dist filenames, e.g.
+#                1.13.12_p002004001 (used to parse the arch off each filename)
+#   dist_dir     dir with sing-box-extended_<ver>_<arch>.apk + the -upx variants
+#   out_dir      output dir (wiped); its CONTENTS are published to the gh-pages root
+#
 # Env: APK_BIN (required), FEED_SIGN_KEY (optional; unsigned if empty),
 #      PAGES_URL (default https://janeblower.github.io/luci-singbox)
 set -eu
-VERSION="${1:?usage: feed.sh <version> <dist_dir> <out_dir>}"
-DIST="${2:?}"; OUT="${3:?}"
+MINOR="${1:?usage: feed.sh <owrt_minor> <apk_version> <dist_dir> <out_dir>}"
+VERSION="${2:?}"; DIST="${3:?}"; OUT="${4:?}"
 : "${APK_BIN:?APK_BIN required}"
 # Absolutize APK_BIN: the signing loop runs `apk mkndx` inside `( cd "$d" && ... )`,
 # so a relative APK_BIN (e.g. CI's sdk/.../bin/apk) would not resolve after the cd.
@@ -18,6 +32,7 @@ case "$APK_BIN" in
   *) ;;                                                               # bare name -> PATH
 esac
 PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
+REPO="sing-box"   # leaf dir name, sibling of luci-singbox/
 
 # <name>-<version>.apk filename apk reconstructs from the index (top-level fields).
 feed_pkg_filename() {
@@ -31,22 +46,13 @@ copy_pkg() {
   _n="$(feed_pkg_filename "$1")" || { echo "no metadata in $1" >&2; exit 1; }
   cp "$1" "$2/$_n"
 }
-gen_dir_index() { # gen_dir_index <dir> <title>
-  { printf -- '---\nlayout: default\ntitle: %s\n---\n\n# %s\n\n' "$2" "$2"
-    for e in "$1"/*; do
-      [ -e "$e" ] || continue; b="$(basename "$e")"
-      [ "$b" = index.md ] && continue
-      [ -d "$e" ] && b="$b/"
-      printf -- '- [%s](%s)\n' "$b" "$b"
-    done; } > "$1/index.md"
-}
 
-rm -rf "$OUT"; mkdir -p "$OUT/$VERSION"
+rm -rf "$OUT"
 found=0
 for apk in "$DIST"/sing-box-extended_"${VERSION}"_*.apk; do
   [ -e "$apk" ] || continue
   base="$(basename "$apk")"; arch="${base#sing-box-extended_${VERSION}_}"; arch="${arch%.apk}"
-  d="$OUT/$VERSION/$arch"; mkdir -p "$d"
+  d="$OUT/$MINOR/$arch/$REPO"; mkdir -p "$d"
   copy_pkg "$apk" "$d"
   upx="$DIST/sing-box-extended-upx_${VERSION}_${arch}.apk"
   [ -f "$upx" ] || { echo "missing UPX apk for $arch: $upx" >&2; exit 1; }
@@ -56,36 +62,21 @@ for apk in "$DIST"/sing-box-extended_"${VERSION}"_*.apk; do
   else
     ( cd "$d" && "$APK_BIN" mkndx --allow-untrusted -o packages.adb ./*.apk )
   fi
-  gen_dir_index "$d" "sing-box-extended - $arch - $VERSION"
+  # Own leaf-dir index (install snippet + package list). The SHARED parent browse
+  # pages belong to main's build-feed.sh — do not emit them here.
+  {
+    printf -- '---\nlayout: default\ntitle: %s\n---\n\n' "sing-box ($arch, OpenWrt $MINOR)"
+    printf -- '# sing-box (extended) — %s\n\n' "$arch"
+    printf -- 'Drop-in `sing-box` ([extended fork](https://github.com/shtorm-7/sing-box-extended)) for OpenWrt %s.\n\n' "$MINOR"
+    printf -- '## Install\n\n```sh\n'
+    printf -- 'wget -O /etc/apk/keys/luci-singbox.pem %s/luci-singbox.pem\n' "$PAGES_URL"
+    printf -- 'echo "%s/%s/%s/sing-box/packages.adb" \\\n' "$PAGES_URL" "$MINOR" "$arch"
+    printf -- '  > /etc/apk/repositories.d/sing-box-extended.list\n'
+    printf -- 'apk update && apk add sing-box-extended      # or sing-box-extended-upx\n'
+    printf -- '```\n\n## Packages\n\n'
+    for f in "$d"/*.apk; do printf -- '- [%s](%s)\n' "$(basename "$f")" "$(basename "$f")"; done
+  } > "$d/index.md"
   found=1
 done
 [ "$found" = 1 ] || { echo "no sing-box-extended_${VERSION}_*.apk in $DIST" >&2; exit 1; }
-
-gen_dir_index "$OUT/$VERSION" "sing-box-extended $VERSION - architectures"
-
-cat > "$OUT/index.md" <<EOF
----
-layout: default
-title: sing-box-extended apk feed
----
-
-# sing-box-extended apk feed
-
-Signed feed of the [sing-box-extended](https://github.com/shtorm-7/sing-box-extended)
-fork, packed as drop-in \`sing-box\` for OpenWrt (apk).
-
-## Install
-
-\`\`\`sh
-ARCH=\$(apk --print-arch)
-wget -O /etc/apk/keys/luci-singbox.pem ${PAGES_URL}/luci-singbox.pem
-echo "${PAGES_URL}/sing-box-extended/${VERSION}/\$ARCH/packages.adb" \\
-  > /etc/apk/repositories.d/sing-box-extended.list
-apk update && apk add sing-box-extended      # or sing-box-extended-upx
-\`\`\`
-
-## Browse
-
-- [${VERSION}](${VERSION}/) — packages by architecture
-EOF
-echo "feed built at $OUT"
+echo "feed built at $OUT ($MINOR/<arch>/$REPO)"
