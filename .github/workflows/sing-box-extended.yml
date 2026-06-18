@@ -41,6 +41,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -eu
           TAG="${{ steps.tag.outputs.tag }}"
           VER="$(SB_BUILD_LIB=1 . ./build.sh; to_apk_version "$TAG")"
           echo "ver=$VER" >> "$GITHUB_OUTPUT"
