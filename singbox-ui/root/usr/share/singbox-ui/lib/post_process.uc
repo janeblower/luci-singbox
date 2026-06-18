@@ -47,8 +47,32 @@ function scrub_implicit_refs(config, opts) {
 	return config;
 }
 
+// FINDING B: a plain outbound's `detour` field pointing at an outbound tag that
+// does NOT exist in the emitted config.outbounds (either never defined, or a
+// section that was disabled and thus excluded by outbound.uc) is dangling —
+// sing-box fatally rejects "detour: <undefined outbound>" at load. Mirror the
+// route/dns dangling-drop idiom: delete the key (not null) so the absent-key
+// contract holds. Selector/urltest groups use `group_outbounds` (→ `outbounds`),
+// a DIFFERENT field already validated in outbound.uc — untouched here. A detour
+// to a valid enabled outbound (including a forward reference to a later section,
+// since config.outbounds is fully assembled by now) is preserved.
+function scrub_dangling_detours(config) {
+	if (config == null || type(config.outbounds) !== "array") return config;
+	let real_ob = {};
+	for (let o in config.outbounds) if (length(o.tag)) real_ob[o.tag] = true;
+	for (let o in config.outbounds) {
+		if (o.detour != null && length(o.detour) && !real_ob[o.detour]) {
+			warn(sprintf("post_process.uc: outbound '%s' detour '%s' is not a defined outbound; scrubbing (would break sing-box load)\n",
+			             o.tag ?? "?", o.detour));
+			delete o.detour;
+		}
+	}
+	return config;
+}
+
 function run_pipeline(config, opts) {
 	config = scrub_implicit_refs(config, opts);
+	config = scrub_dangling_detours(config);
 	// D4: invoke any registered plugin hooks. Failures inside plugins are
 	// logged but never propagated (plugin registry guarantees this).
 	try {
@@ -58,4 +82,4 @@ function run_pipeline(config, opts) {
 	return config;
 }
 
-return { scrub_implicit_refs, run_pipeline };
+return { scrub_implicit_refs, scrub_dangling_detours, run_pipeline };

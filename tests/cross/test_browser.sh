@@ -4,21 +4,33 @@
 # one container per run, snapshots /etc/config/singbox-ui inside it, then
 # restores before each test file. Puppeteer/Chrome run on the host via bun.
 set -eu
-. "$(dirname "$0")/../lib/sb_helpers.sh"
-set -o pipefail
 cd "$(dirname "$0")/../.."
 
-# tests/run.sh globs tests/test_*.sh and runs each one inside whichever
-# environment is active — including the OpenWrt qemu VM, where this suite
-# has no business running (no bun, no nested docker). Skip gracefully when
-# the sentinel set by run-vm.sh is present.
+# tests/run.sh globs the test files and runs each one inside whichever
+# environment is active. This suite runs for real ONLY in the dedicated
+# browser-test CI lane (a host with bun + docker). It must skip gracefully
+# everywhere else it gets swept up by run.sh: the OpenWrt qemu VM (sentinel
+# below) and the packaging lane (ubuntu, apk-tools but no bun → skip below).
 if [ "${SINGBOX_TESTS_IN_VM:-0}" = "1" ]; then
     echo "SKIP test_browser: not runnable inside the OpenWrt qemu VM"
     exit 0
 fi
 
-command -v bun    >/dev/null 2>&1 || { echo "ERROR: bun missing (curl -fsSL https://bun.sh/install | bash)"; exit 2; }
-command -v docker >/dev/null 2>&1 || { echo "ERROR: docker missing"; exit 2; }
+# Missing bun/docker => this is not the browser lane (e.g. the packaging lane).
+# Skip gracefully rather than erroring; the browser-test job provides bun+docker
+# and runs the suite for real there.
+command -v bun    >/dev/null 2>&1 || { echo "SKIP test_browser: bun not available (browser-test lane only)"; exit 0; }
+command -v docker >/dev/null 2>&1 || { echo "SKIP test_browser: docker not available (browser-test lane only)"; exit 0; }
+
+# Past the guards => this IS the browser lane. run.sh invokes every test via
+# `sh "$t"` (dash on the GitHub ubuntu runner / packaging lane), but the harness
+# below needs bash (set -o pipefail + the puppeteer driver). dash would die on
+# `set -o pipefail`; the POSIX-safe guards above already ran, so re-exec under
+# bash now for the real run. (Kept after the guards so non-browser lanes skip
+# cleanly under dash without even needing bash present.)
+[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
+. "$(dirname "$0")/../lib/sb_helpers.sh"
+set -o pipefail
 
 # Build/cache image keyed on the container source files.
 IMG_HASH=$(cat tests/browser-container/Dockerfile \
@@ -50,7 +62,14 @@ fi
 
 CNAME="singbox-ui-test-$$"
 
-cleanup() { docker rm -f "$CNAME" >/dev/null 2>&1 || true; }
+# 4-package split: the real etc/init.d/singbox-ui runs `sing-box run` via procd
+# (absent in this container). Mount a no-op stub by the SAME name the rpcd
+# handler shells (SINGBOX_INIT=/etc/init.d/singbox-ui), so restart/generate RPCs
+# return 0 without procd hanging.
+STUB_INIT="$(mktemp)"
+printf '#!/bin/sh\nexit 0\n' > "$STUB_INIT"; chmod +x "$STUB_INIT"
+
+cleanup() { docker rm -f "$CNAME" >/dev/null 2>&1 || true; rm -f "$STUB_INIT"; }
 trap cleanup EXIT INT TERM
 
 echo "==> launching container $CNAME"
@@ -65,7 +84,7 @@ docker run -d --name "$CNAME" \
     -v "$PWD/${SB_MENU}:/usr/share/luci/menu.d/luci-singbox-ui.json:ro" \
     -v "$PWD/${SB_ACL}:/usr/share/rpcd/acl.d/luci-singbox-ui.json:ro" \
     -v "$PWD/${SB_RPCD}:/usr/libexec/rpcd/singbox-ui:ro" \
-    -v "$PWD/${SB_BACKEND_ROOT}/etc/init.d/singbox-ui:/etc/init.d/singbox-ui:ro" \
+    -v "$STUB_INIT:/etc/init.d/singbox-ui:ro" \
     -v "$PWD/${SB_BACKEND_ROOT}/etc/capabilities/singbox-ui.json:/etc/capabilities/singbox-ui.json:ro" \
     -v "$PWD/tests/browser/fixtures:/seed:ro" \
     "$IMG" >/dev/null

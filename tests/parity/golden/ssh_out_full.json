@@ -1,0 +1,1 @@
+{ "cipher": [ "aes256-gcm@openssh.com" ], "host_key_algorithms": [ "ssh-ed25519" ], "kex_algorithm": [ "curve25519-sha256" ], "mac": [ "hmac-sha2-256" ], "password": "admin", "private_key_passphrase": "phrase", "private_key_path": "/etc/ssh/id_ed25519", "server": "ex.com", "server_port": 22, "tag": "ssh2", "type": "ssh", "user": "root" }

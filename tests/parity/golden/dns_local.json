@@ -1,1 +1,1 @@
-{ "tag": "loc1", "type": "local" }
+{ "prefer_go": true, "tag": "loc1", "type": "local" }

@@ -1,0 +1,1 @@
+{ "action": "route-options", "domain_suffix": [ "example.com" ], "fallback_delay": "300ms", "network_strategy": "fallback", "override_address": "10.0.0.1", "override_port": 5353, "tls_fragment": true, "tls_fragment_fallback_delay": "500ms", "tls_record_fragment": true, "udp_connect": true, "udp_disable_domain_unmapping": true, "udp_timeout": "5m" }

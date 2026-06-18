@@ -1,7 +1,12 @@
 // 60-outbound-direct.mjs — advanced surface + emit smoke.
+// This is the canonical outbound Add flow: open the outbound grid's Add modal,
+// pick a Type, Save, and assert the section emits into preview_config — i.e. it
+// genuinely exercises grid.outbound.add.
 import { runTest, openAddModal, setProtocolInModal, toggleAdvanced,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
          assert, wait } from './_setup.mjs';
+
+export const COVERS = ["grid.outbound.add"];
 
 await runTest('outbound:direct — advanced surface + emit', async ({ page }) => {
     await openAddModal(page, 'outbound', 'direct_out');

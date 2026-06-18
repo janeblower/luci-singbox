@@ -45,35 +45,59 @@ jobs:
   # workflow_dispatch the filter returns true for everything, so the release path
   # is NEVER path-gated. Shell + git diff (no third-party action), mirroring the
   # version-compare gate in pages.yml.
+  # Path-filtered CI: directory-based 4-domain model. On pull_request diff
+  # against the PR base; on push (incl. main) diff against the push before-SHA;
+  # on tag/release/workflow_dispatch run EVERYTHING (release path is never
+  # path-gated). The classifier lives in tests/lib/domain_classify.sh so this
+  # job and tests/cross/test_changes_domains.sh share one source of truth.
   changes:
-    name: Detect changed areas
+    name: Detect changed domains
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
+      bbolt: ${{ steps.f.outputs.bbolt }}
       backend: ${{ steps.f.outputs.backend }}
       ui: ${{ steps.f.outputs.ui }}
+      packaging: ${{ steps.f.outputs.packaging }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
       - id: f
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
         run: |
           set -eu
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "non-PR event -> run all areas"
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-            echo "ui=true" >> "$GITHUB_OUTPUT"
+          . tests/lib/domain_classify.sh
+          if [ "$EVENT" = "tag" ] || [ "$EVENT" = "release" ] || [ "$EVENT" = "workflow_dispatch" ]; then
+            echo "safety-valve event ($EVENT) -> run all domains"
+            { echo "bbolt=true"; echo "backend=true"; echo "ui=true"; echo "packaging=true"; } >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          base="${{ github.event.pull_request.base.sha }}"
+          # Tag pushes arrive as event_name=push with refs/tags/* — also full-run.
+          case "$GITHUB_REF" in
+            refs/tags/*) echo "tag push -> run all domains"
+              { echo "bbolt=true"; echo "backend=true"; echo "ui=true"; echo "packaging=true"; } >> "$GITHUB_OUTPUT"
+              exit 0 ;;
+          esac
+          if [ "$EVENT" = "pull_request" ]; then
+            base="$PR_BASE"
+          else
+            base="$PUSH_BEFORE"
+          fi
+          # A brand-new branch push reports an all-zero before-SHA; treat an
+          # absent/zero/unknown base as "run everything" (cannot diff safely).
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
+             || ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
+            echo "no usable diff base ($base) -> run all domains"
+            { echo "bbolt=true"; echo "backend=true"; echo "ui=true"; echo "packaging=true"; } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           changed="$(git diff --name-only "$base"...HEAD)"
           printf 'changed files:\n%s\n' "$changed"
-          be=false; ui=false
-          printf '%s\n' "$changed" | grep -qE '^(singbox-ui/|bbolt-client/|scripts/|install\.sh|tests/(backend|cross|lib|docker|parity|ucode-stubs)/|tests/run|\.github/)' && be=true
-          printf '%s\n' "$changed" | grep -qE '^(luci-app-singbox-ui/|tests/(ui|cross|lib|browser|browser-container)/|scripts/|\.github/)' && ui=true
-          echo "backend=$be" >> "$GITHUB_OUTPUT"
-          echo "ui=$ui" >> "$GITHUB_OUTPUT"
-          echo "resolved: backend=$be ui=$ui"
+          printf '%s\n' "$changed" | sb_classify_domains | tee -a "$GITHUB_OUTPUT"
 
   lint:
     name: Lint (host)
@@ -303,6 +327,8 @@ jobs:
   # bbolt-client.yml workflow and the bbolt-latest rolling-release dependency.
   bbolt:
     name: Build bbolt-client (5 arches)
+    needs: [changes]
+    if: ${{ needs.changes.outputs.bbolt == 'true' || github.event_name != 'pull_request' }}
     # Pinned (not floating ubuntu-latest) for reproducibility, matching the
     # rest of the workflow's pinning philosophy (SHA-pinned actions, pinned
     # shellcheck/bun). A cold build cross-compiles 5 arches + runs 5 qemu-user
@@ -410,6 +436,85 @@ jobs:
             bbolt-client/bbolt-client-rs-mips
           if-no-files-found: error
 
+  # Packaging/cross suite host-mode lane. The cross tests (feed index, i18n
+  # .lmo, install.sh, manifest, ACL) need REAL apk-tools 3.0.5+: test_build_feed
+  # builds fixtures with `apk mkpkg --info`, which the OpenWrt qemu VM's older
+  # apk-tools lacks (it SKIPs there). So this domain runs on the host, NOT in the
+  # VM (SB_DOMAIN=packaging is excluded from entrypoint.sh's VM domain set), and
+  # acquires apk from the same OpenWrt SDK the `build` job uses — the SDK ships a
+  # host `apk` (staging_dir/host/bin/apk) at apk-tools 3.0.5+ with `mkpkg --info`.
+  # Exported as SINGBOX_APK_BIN, which the cross tests honour (falling back to
+  # `command -v apk`). Gated on the packaging domain; never delegates to qemu.
+  packaging:
+    name: Packaging suite (host, apk-tools 3.0.5+)
+    runs-on: ubuntu-24.04
+    needs: [lint, changes]
+    if: ${{ needs.changes.outputs.packaging == 'true' || github.event_name != 'pull_request' }}
+    timeout-minutes: 20
+    env:
+      # Single source of the SDK version within this job (mirrors the `build`
+      # job): interpolated into both SDK_URL and the cache key so a bump can't
+      # leave the key matching a stale extract.
+      SDK_VERSION: 25.12.3
+      SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends zstd wget
+
+      # Cache the extracted SDK so the host apk is available without a cold
+      # download every run. Shares no state with the `build` job's cache key
+      # (different path), but the same SDK tarball — restore-keys warm-starts.
+      - name: Cache OpenWrt SDK (host apk)
+        uses: actions/cache@v5
+        with:
+          path: .pkg-sdk
+          key: pkg-sdk-${{ env.SDK_VERSION }}-x86-64-v1
+          restore-keys: |
+            pkg-sdk-${{ env.SDK_VERSION }}-x86-64-
+
+      # Extract the SDK's host `apk` (apk-tools 3.0.5+, has `mkpkg --info`) and
+      # export its path. This is the SAME apk binary the `build` job uses via
+      # scripts/build-apk.sh ($SDK_DIR/staging_dir/host/bin/apk).
+      - name: Obtain apk-tools 3.0.5+ from the OpenWrt SDK
+        run: |
+          set -eu
+          SDK_DIR="$PWD/.pkg-sdk"
+          APK_BIN="$SDK_DIR/staging_dir/host/bin/apk"
+          if [ ! -x "$APK_BIN" ]; then
+            echo ">>> Downloading SDK: $SDK_URL"
+            wget -q -O sdk.tar.zst "$SDK_URL"
+            echo ">>> Extracting SDK"
+            rm -rf "$SDK_DIR"
+            mkdir -p "$SDK_DIR.tmp"
+            tar --zstd -xf sdk.tar.zst -C "$SDK_DIR.tmp"
+            root_dir="$(find "$SDK_DIR.tmp" -maxdepth 1 -mindepth 1 -type d | head -1)"
+            mv "$root_dir" "$SDK_DIR"
+            rm -rf "$SDK_DIR.tmp" sdk.tar.zst
+          fi
+          [ -x "$APK_BIN" ] || { echo "apk host tool missing at $APK_BIN" >&2; exit 1; }
+          "$APK_BIN" mkpkg --help 2>&1 | grep -q -- '--info' \
+            || { echo "SDK apk lacks 'mkpkg --info' (apk-tools too old)" >&2; exit 1; }
+          echo "SINGBOX_APK_BIN=$APK_BIN" >> "$GITHUB_ENV"
+
+      - name: Run packaging suite (host-mode, no VM)
+        env:
+          SB_SUITE: cross
+          SB_DOMAIN: packaging
+          # This lane runs the cross suite directly on the host for the
+          # apk-tools-3.0.5+ feed/i18n/manifest tests. ucode/uci are absent here,
+          # so the ucode/uci-gated cross tests (rpcd/json_import/migration/...)
+          # SKIP — their REAL coverage is the VM/backend lane. SINGBOX_UCODE_ABSENT_OK
+          # tells run.sh that is expected: it bypasses VM auto-delegation AND treats
+          # ucode/uci SKIPs as benign (guard A does not hard-fail). Unlike the old
+          # SINGBOX_TESTS_IN_VM=1 hack it does not make tests think they run inside
+          # a real OpenWrt guest (e.g. test_browser now takes its no-bun skip path).
+          SINGBOX_UCODE_ABSENT_OK: '1'
+        run: sh tests/run.sh
+
   build:
     name: Build OpenWrt packages (apk)
     # Pinned (not floating ubuntu-latest): this job installs apt build-deps and
@@ -423,19 +528,25 @@ jobs:
     # the package without publishing — but a red lint/js-unit/test/browser-test
     # run now BLOCKS the rolling `latest` release instead of shipping a broken
     # apk to install.sh consumers.
-    needs: [lint, js-unit, test, browser-test, bbolt]
-    # On a path-filtered PR some test jobs may be SKIPPED (not their area). Run
-    # build whenever nothing FAILED: lint + bbolt always run (bbolt provides the
-    # binaries this job embeds), so require them success; the area-gated jobs may
-    # be skipped, so accept anything that is not 'failure'. On push/main/tags no
-    # job is gated, so all are 'success' and the publish path is unaffected.
+    needs: [lint, js-unit, test, browser-test, bbolt, changes]
+    # On a path-filtered PR some heavy jobs may be SKIPPED (not their domain).
+    # Run build whenever nothing FAILED: lint always runs; the domain-gated jobs
+    # (including bbolt now) may be skipped, so accept anything that is not
+    # 'failure'. The build job embeds the bbolt binaries via download-artifact,
+    # which would error if bbolt was skipped — so additionally require bbolt to
+    # have actually run on PRs. On push/main/tags the safety-valve forces all
+    # domains true, so bbolt always runs and the publish path is unaffected; on a
+    # bbolt-skipped PR the build job is simply skipped (its package-validation is
+    # redundant with the domain that did change).
     if: >-
       ${{ !cancelled()
+          && needs.changes.result == 'success'
           && needs.lint.result == 'success'
-          && needs.bbolt.result == 'success'
+          && needs.bbolt.result != 'failure'
           && needs.test.result != 'failure'
           && needs.js-unit.result != 'failure'
-          && needs.browser-test.result != 'failure' }}
+          && needs.browser-test.result != 'failure'
+          && (needs.bbolt.result == 'success' || github.event_name != 'pull_request') }}
     # Only this job publishes releases, so it is the only one that needs write.
     # Top-level permissions are read-only (see header) — this override is the
     # single place contents: write is granted.

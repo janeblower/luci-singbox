@@ -139,7 +139,15 @@ tar -czf - \
 
 echo "==> run suite inside guest"
 set +e
-$SSH 'cd /tmp/work && SINGBOX_TESTS_IN_VM=1 sh tests/run.sh'
+# The VM lane runs the `backend` domain ONLY. Node/JS (`ui` domain) run in the
+# CI js-unit node container (no node in the OpenWrt guest). Packaging (`cross`)
+# tests run in the dedicated apk-tools 3.0.5+ lane on the host — NOT the VM —
+# because the guest apk lacks `mkpkg --info` (the feed test would otherwise
+# hard-fail here once Phase 4 lands). Restricting to `backend` keeps the VM-only
+# prod-path tests (rpcd, init.d, nftables — now under tests/backend/) running
+# while dropping every node-gated file, holding the in-VM SKIP count well under
+# SINGBOX_MAX_SKIPS. See Cross-Phase Coordination §4.
+$SSH 'cd /tmp/work && SINGBOX_TESTS_IN_VM=1 SB_DOMAIN=backend sh tests/run.sh'
 RC=$?
 set -e
 

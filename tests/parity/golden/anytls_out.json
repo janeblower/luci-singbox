@@ -1,1 +1,1 @@
-{ "idle_session_timeout": "30s", "min_idle_session": 5, "password": "pw", "server": "ex.com", "server_port": 443, "tag": "at1", "tls": { "enabled": true, "server_name": "ex.com" }, "type": "anytls" }
+{ "idle_session_check_interval": "30s", "idle_session_timeout": "30s", "min_idle_session": 5, "password": "pw", "server": "ex.com", "server_port": 443, "tag": "at1", "tls": { "enabled": true, "server_name": "ex.com" }, "type": "anytls" }

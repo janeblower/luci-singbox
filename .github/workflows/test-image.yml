@@ -38,11 +38,31 @@ jobs:
         with:
           buildkitd-flags: --allow-insecure-entitlement security.insecure
 
+      # Cache the image's build layers across runs so a re-dispatch with an
+      # unchanged Dockerfile/rootfs reuses layers instead of re-downloading the
+      # ~50MB OpenWrt rootfs and re-baking the snapshot. type=local feeds the
+      # build-push-action cache-from/cache-to below. Keyed on the Docker context
+      # so a Dockerfile/script change busts the cache; restore-keys warm-starts.
+      - name: Cache buildx layers
+        uses: actions/cache@v5
+        with:
+          path: /tmp/.buildx-cache
+          key: openwrt-test-img-${{ hashFiles('tests/docker/**') }}
+          restore-keys: openwrt-test-img-
+
       - uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Read OpenWrt version
+        id: ver
+        run: |
+          V=$(tr -d '[:space:]' < tests/docker/openwrt-version.txt)
+          [ -n "$V" ] || { echo "openwrt-version.txt empty"; exit 1; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "OpenWrt version: $V"
 
       - name: Compute tags
         id: tags
@@ -50,14 +70,15 @@ jobs:
           OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
           REPO="ghcr.io/${OWNER}/luci-singbox/openwrt-test"
           SHA="${GITHUB_SHA::12}"
+          VER="${{ steps.ver.outputs.version }}"
           {
             echo "tags<<EOF"
-            echo "${REPO}:openwrt-25.12.3-${SHA}"
-            echo "${REPO}:openwrt-25.12.3"
+            echo "${REPO}:openwrt-${VER}-${SHA}"
+            echo "${REPO}:openwrt-${VER}"
             echo "${REPO}:latest"
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
-          echo "primary=${REPO}:openwrt-25.12.3-${SHA}" >> "$GITHUB_OUTPUT"
+          echo "primary=${REPO}:openwrt-${VER}-${SHA}" >> "$GITHUB_OUTPUT"
 
       - name: Build + push
         uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
@@ -67,6 +88,20 @@ jobs:
           tags: ${{ steps.tags.outputs.tags }}
           allow: security.insecure
           provenance: false
+          cache-from: type=local,src=/tmp/.buildx-cache
+          # mode=max caches intermediate layers too (the rootfs download +
+          # snapshot bake), not just the final image — the expensive bits.
+          cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+          build-args: |
+            OPENWRT_VERSION=${{ steps.ver.outputs.version }}
+
+      # actions/cache can't atomically overwrite; the build writes to a new dir
+      # and we swap it in (standard buildx-cache GHA dance) so the cache never
+      # grows unbounded across runs.
+      - name: Rotate buildx cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       - name: Smoke-run the published image
         run: |

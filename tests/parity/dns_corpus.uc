@@ -69,7 +69,8 @@ return [
     },
     {
         name: "dns_local",
-        section: { [".name"]: "loc1", enabled: "1", type: "local" },
+        section: { [".name"]: "loc1", enabled: "1", type: "local",
+                   prefer_go: "1" },
     },
     {
         name: "dns_hosts",
@@ -88,11 +89,13 @@ return [
     {
         name: "dns_tailscale",
         section: { [".name"]: "ts1", enabled: "1", type: "tailscale",
-                   endpoint: "ts-endpoint" },
+                   endpoint: "ts-endpoint",
+                   accept_default_resolvers: "1", accept_search_domain: "1" },
     },
     {
         name: "dns_resolved",
         section: { [".name"]: "res1", enabled: "1", type: "resolved",
-                   service: "systemd-resolved" },
+                   service: "systemd-resolved",
+                   accept_default_resolvers: "1" },
     },
 ];

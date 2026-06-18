@@ -1,0 +1,1 @@
+{ "action": "route", "client": [ "chrome" ], "outbound": "proxy" }

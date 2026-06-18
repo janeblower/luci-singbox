@@ -1,1 +1,1 @@
-{ "service": "systemd-resolved", "tag": "res1", "type": "resolved" }
+{ "accept_default_resolvers": true, "service": "systemd-resolved", "tag": "res1", "type": "resolved" }
