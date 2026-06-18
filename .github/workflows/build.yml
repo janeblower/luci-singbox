@@ -40,64 +40,114 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  # Path-filtered CI: on a pull_request, run only the area(s) whose source paths
-  # changed (backend = VM suite, ui = host node + browser). On push/main/tags and
-  # workflow_dispatch the filter returns true for everything, so the release path
-  # is NEVER path-gated. Shell + git diff (no third-party action), mirroring the
-  # version-compare gate in pages.yml.
-  # Path-filtered CI: directory-based 4-domain model. On pull_request diff
-  # against the PR base; on push (incl. main) diff against the push before-SHA;
-  # on tag/release/workflow_dispatch run EVERYTHING (release path is never
-  # path-gated). The classifier lives in tests/lib/domain_classify.sh so this
-  # job and tests/cross/test_changes_domains.sh share one source of truth.
+  # Path-filtered CI via dorny/paths-filter: on a pull_request, only the area(s)
+  # whose source paths changed run. The downstream jobs keep their
+  # `|| github.event_name != 'pull_request'` escape hatch, so on push/main, tags,
+  # release and workflow_dispatch EVERY job runs — the release path is NEVER
+  # path-gated and these outputs are only consulted on pull_request. That is why
+  # the paths-filter step runs only on pull_request; elsewhere its outputs are
+  # ignored. Directory-based 4-domain model (bbolt/backend/ui/packaging) with a
+  # `shared` fan-out (test harness / CI infra -> all four). The same domain
+  # *names* back tests/run.sh's SB_DOMAIN filter via tests/lib/domain_classify.sh
+  # (kept as the local classifier + its unit test tests/cross/test_changes_domains.sh).
   changes:
     name: Detect changed domains
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      bbolt: ${{ steps.f.outputs.bbolt }}
-      backend: ${{ steps.f.outputs.backend }}
-      ui: ${{ steps.f.outputs.ui }}
-      packaging: ${{ steps.f.outputs.packaging }}
+      bbolt: ${{ steps.agg.outputs.bbolt }}
+      backend: ${{ steps.agg.outputs.backend }}
+      ui: ${{ steps.agg.outputs.ui }}
+      packaging: ${{ steps.agg.outputs.packaging }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - id: f
+
+      # Pinned to a full commit SHA (v3.0.3) per this repo's SHA-pin policy for
+      # third-party actions. paths-filter resolves the diff base itself (PR base
+      # on pull_request); we only run it there since non-PR events run-all anyway.
+      # list-files: shell exposes steps.f.outputs.github_files for the
+      # sing-box-extended carve-out below.
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        id: f
+        if: github.event_name == 'pull_request'
+        with:
+          list-files: shell
+          filters: |
+            bbolt:
+              - 'bbolt-client/**'
+            backend:
+              - 'singbox-ui/**'
+              - 'tests/backend/**'
+              - 'tests/parity/**'
+            ui:
+              - 'luci-app-singbox-ui/**'
+              - 'tests/ui/**'
+              - 'tests/browser/**'
+            packaging:
+              - 'scripts/**'
+              - 'install.sh'
+              - 'feed/**'
+              - '**/Makefile'
+              - 'tests/cross/**'
+            shared_core:
+              - 'tests/lib/**'
+              - 'tests/run*'
+              - 'tests/docker/**'
+              - 'tests/browser-container/**'
+            github:
+              - '.github/**'
+
+      # Fold the cross-cutting `shared` domain into the four directory domains.
+      # `shared` (test harness / CI infra) fans out to ALL four, EXCEPT a change
+      # to ONLY .github/workflows/sing-box-extended.yml — a standalone workflow
+      # with its own dispatch/schedule trigger, not part of the luci package
+      # build/test, so it must fan out to nothing. We can't express that exclusion
+      # as a paths-filter pattern (the default `some` quantifier makes a `!`-negated
+      # glob a no-op), so we carve it out here from list-files output. On non-PR
+      # events the paths-filter step is skipped (empty outputs) and these values
+      # are ignored — every downstream job runs via its own event escape hatch.
+      - name: Aggregate domains
+        id: agg
         env:
-          EVENT: ${{ github.event_name }}
-          PR_BASE: ${{ github.event.pull_request.base.sha }}
-          PUSH_BEFORE: ${{ github.event.before }}
+          F_BBOLT:       ${{ steps.f.outputs.bbolt }}
+          F_BACKEND:     ${{ steps.f.outputs.backend }}
+          F_UI:          ${{ steps.f.outputs.ui }}
+          F_PKG:         ${{ steps.f.outputs.packaging }}
+          F_SHARED_CORE: ${{ steps.f.outputs.shared_core }}
+          F_GITHUB:      ${{ steps.f.outputs.github }}
+          GH_FILES:      ${{ steps.f.outputs.github_files }}
         run: |
           set -eu
-          . tests/lib/domain_classify.sh
-          if [ "$EVENT" = "tag" ] || [ "$EVENT" = "release" ] || [ "$EVENT" = "workflow_dispatch" ]; then
-            echo "safety-valve event ($EVENT) -> run all domains"
-            { echo "bbolt=true"; echo "backend=true"; echo "ui=true"; echo "packaging=true"; } >> "$GITHUB_OUTPUT"
-            exit 0
+          on() { [ "${1:-}" = "true" ]; }
+          bbolt=false; backend=false; ui=false; packaging=false
+
+          # .github is shared UNLESS the only changed github file is the
+          # standalone sing-box-extended workflow.
+          gh_shared=false
+          if on "$F_GITHUB"; then
+            for x in $GH_FILES; do
+              if [ "$x" != ".github/workflows/sing-box-extended.yml" ]; then
+                gh_shared=true
+                break
+              fi
+            done
           fi
-          # Tag pushes arrive as event_name=push with refs/tags/* — also full-run.
-          case "$GITHUB_REF" in
-            refs/tags/*) echo "tag push -> run all domains"
-              { echo "bbolt=true"; echo "backend=true"; echo "ui=true"; echo "packaging=true"; } >> "$GITHUB_OUTPUT"
-              exit 0 ;;
-          esac
-          if [ "$EVENT" = "pull_request" ]; then
-            base="$PR_BASE"
+
+          if on "$F_SHARED_CORE" || [ "$gh_shared" = true ]; then
+            bbolt=true; backend=true; ui=true; packaging=true
           else
-            base="$PUSH_BEFORE"
+            on "$F_BBOLT"   && bbolt=true     || true
+            on "$F_BACKEND" && backend=true   || true
+            on "$F_UI"      && ui=true        || true
+            on "$F_PKG"     && packaging=true || true
           fi
-          # A brand-new branch push reports an all-zero before-SHA; treat an
-          # absent/zero/unknown base as "run everything" (cannot diff safely).
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ] \
-             || ! git rev-parse --verify --quiet "$base^{commit}" >/dev/null; then
-            echo "no usable diff base ($base) -> run all domains"
-            { echo "bbolt=true"; echo "backend=true"; echo "ui=true"; echo "packaging=true"; } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          changed="$(git diff --name-only "$base"...HEAD)"
-          printf 'changed files:\n%s\n' "$changed"
-          printf '%s\n' "$changed" | sb_classify_domains | tee -a "$GITHUB_OUTPUT"
+          for k in bbolt backend ui packaging; do
+            eval "v=\$$k"
+            echo "$k=$v" >> "$GITHUB_OUTPUT"
+          done
+          echo "resolved: bbolt=$bbolt backend=$backend ui=$ui packaging=$packaging (gh_shared=$gh_shared)"
 
   lint:
     name: Lint (host)

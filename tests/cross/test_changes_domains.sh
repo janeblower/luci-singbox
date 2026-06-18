@@ -1,7 +1,9 @@
 #!/bin/sh
 # tests/cross/test_changes_domains.sh
 # Exercises the pure path->domain classifier (tests/lib/domain_classify.sh)
-# used by build.yml's `changes` job. Directory-based 4-domain model:
+# used by tests/run.sh's SB_DOMAIN filter (the CI `changes` job now derives
+# domains via dorny/paths-filter — see the static wiring guard below).
+# Directory-based 4-domain model:
 #   bbolt / backend / ui / packaging, plus a shared fan-out that sets all four.
 # This is a HOST test (pure sh + grep) — no ucode/node/docker needed.
 set -eu
@@ -103,20 +105,23 @@ expect "" backend   false
 expect "" ui        false
 expect "" packaging false
 
-# --- static wiring guard: build.yml must consume each domain output ---
+# --- static wiring guard: build.yml `changes` job (dorny/paths-filter) ---
+# The CI changes job derives domains via dorny/paths-filter (not this classifier);
+# domain_classify.sh remains the source of truth for tests/run.sh's SB_DOMAIN
+# filter, exercised by the behavioural cases above.
 BY=.github/workflows/build.yml
-grep -qE 'echo "bbolt=' "$BY"     || fail "build.yml changes job does not emit bbolt output"
-grep -qE 'echo "backend=' "$BY"   || fail "build.yml changes job does not emit backend output"
-grep -qE 'echo "ui=' "$BY"        || fail "build.yml changes job does not emit ui output"
-grep -qE 'echo "packaging=' "$BY" || fail "build.yml changes job does not emit packaging output"
+grep -qE 'dorny/paths-filter@' "$BY" || fail "changes job no longer uses dorny/paths-filter"
+# Each directory domain is a declared paths-filter AND a job output.
+for _d in bbolt backend ui packaging; do
+	grep -qE "steps\.agg\.outputs\.${_d}" "$BY" || fail "changes job does not export ${_d} output"
+done
 # Heavy jobs gate on their domain output (bbolt no longer always-runs).
 grep -qE "needs\.changes\.outputs\.bbolt == 'true'"     "$BY" || fail "bbolt job not gated on bbolt domain"
 grep -qE "needs\.changes\.outputs\.backend == 'true'"   "$BY" || fail "test job not gated on backend domain"
 grep -qE "needs\.changes\.outputs\.ui == 'true'"        "$BY" || fail "ui jobs not gated on ui domain"
-# changes job sources the shared classifier (single source of truth).
-grep -qE 'tests/lib/domain_classify\.sh' "$BY" || fail "changes job does not source domain_classify.sh"
-# push gating uses the before-SHA (not only PR base).
-grep -qE 'github\.event\.before' "$BY" || fail "changes job does not diff against the push before-SHA"
+grep -qE "needs\.changes\.outputs\.packaging == 'true'" "$BY" || fail "packaging job not gated on packaging domain"
+# The standalone sing-box-extended workflow must not fan out to luci domains.
+grep -qE 'sing-box-extended\.yml' "$BY" || fail "changes job lost the sing-box-extended carve-out"
 
 # --- goal-e isolation matrix (documented) ---
 # | changed path                          | bbolt | backend | ui  | pkg |
