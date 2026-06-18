@@ -54,14 +54,17 @@ SHIM
     chmod +x /usr/libexec/rpcd/system
 }
 
-# Stub /etc/init.d/sing-box if missing — the singbox-ui rpcd handler calls
-# it on Save & Apply paths.
-[ -x /etc/init.d/sing-box ] || {
-    cat > /etc/init.d/sing-box <<'STUB'
+# Stub /etc/init.d/singbox-ui — the singbox-ui rpcd handler shells this on
+# restart/reload/generate paths (SINGBOX_INIT=/etc/init.d/singbox-ui). The real
+# init script runs `sing-box run` via procd, which is absent in this container,
+# so a no-op stub is mounted instead by test_browser.sh; if that mount is missing
+# (local ad-hoc run) seed one here so `ubus call singbox-ui restart` returns 0.
+[ -x /etc/init.d/singbox-ui ] || {
+    cat > /etc/init.d/singbox-ui <<'STUB'
 #!/bin/sh
 exit 0
 STUB
-    chmod +x /etc/init.d/sing-box
+    chmod +x /etc/init.d/singbox-ui
 }
 
 # Launch the stack — must be ONE shell session. `docker exec -d` style

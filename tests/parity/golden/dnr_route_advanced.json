@@ -1,0 +1,1 @@
+{ "action": "route-options", "client_subnet": "1.2.3.0/24", "disable_cache": true, "disable_optimistic_cache": true, "domain_suffix": [ ".cn" ], "rewrite_ttl": 300, "strategy": "prefer_ipv4" }

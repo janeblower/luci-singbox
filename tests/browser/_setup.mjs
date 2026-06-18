@@ -246,9 +246,16 @@ export async function openAddModal(page, kind, name) {
         const tbl = document.getElementById(`cbi-singbox-ui-${kind}`);
         if (!tbl) return { ok: false, reason: `no #cbi-singbox-ui-${kind}` };
 
-        // LuCI renders a .cbi-section-create row above the table when
-        // s.addremove is true. The name input has class .cbi-section-create-name.
-        const nameInp = tbl.parentElement.querySelector('.cbi-section-create-name')
+        // LuCI renders a .cbi-section-create row INSIDE the GridSection div
+        // (#cbi-singbox-ui-<kind> is the .cbi-section element itself). Query
+        // WITHIN that element first — when several grids share one Map (DNS:
+        // dns_server + dns_rule + settings under one cbi-map), a parentElement
+        // query would grab the first grid's create-name and open the WRONG
+        // modal. Scoped-within is correct for every grid (verified inbound/
+        // outbound/dns_server/dns_rule). Fall back to the looser lookups only
+        // if the section-scoped one is somehow absent.
+        const nameInp = tbl.querySelector('.cbi-section-create-name')
+                       || tbl.parentElement.querySelector('.cbi-section-create-name')
                        || document.querySelector(`#cbi-singbox-ui-${kind} ~ .cbi-section-create .cbi-section-create-name`)
                        || document.querySelector('.cbi-section-create-name');
         if (!nameInp) return { ok: false, reason: 'no .cbi-section-create-name input' };
@@ -271,6 +278,43 @@ export async function openAddModal(page, kind, name) {
 
     if (!opened.ok) throw new Error(`openAddModal: ${opened.reason}`);
     await wait(3500);
+}
+
+// Click a TOP-LEVEL view tab (data-tab on .sb-tab-header > li). Unlike
+// clickTab(), this is NOT inside #modal_overlay — it switches the whole-page
+// tab wired by main.js render(). Returns true on success.
+export async function clickTopTab(page, dataTab) {
+    const ok = await page.evaluate((dataTab) => {
+        const li = document.querySelector(`.sb-tab-header > li[data-tab="${dataTab}"]`);
+        if (!li) return false;
+        const a = li.querySelector('a') || li;
+        a.click();
+        return true;
+    }, dataTab);
+    await wait(800);  // let the dashboard/monitoring start()/stop() hooks settle
+    return ok;
+}
+
+// Click a Route sub-tab (.sb-subtab-header > li[data-tab=routerules|rulesets|routedef]).
+export async function clickSubTab(page, dataTab) {
+    const ok = await page.evaluate((dataTab) => {
+        const li = document.querySelector(`.sb-subtab-header > li[data-tab="${dataTab}"]`);
+        if (!li) return false;
+        const a = li.querySelector('a') || li;
+        a.click();
+        return true;
+    }, dataTab);
+    await wait(400);
+    return ok;
+}
+
+// Node-side: parse one .mjs source string for `export const COVERS = [ ... ]`
+// and return the array of string ids (or [] if none). Tolerant of single/double
+// quotes and newlines. Shared by the ui-surface guard and run-all bookkeeping.
+export function extractCovers(src) {
+    const m = src.match(/export\s+const\s+COVERS\s*=\s*\[([\s\S]*?)\]/);
+    if (!m) return [];
+    return Array.from(m[1].matchAll(/['"]([^'"]+)['"]/g)).map(x => x[1]);
 }
 
 // Fill a labeled field in the currently-open modal. opts.kind selects

@@ -15,25 +15,37 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
-# Locate a real apk-tools 3: VM has it on PATH; host may have the SDK copy.
+# This is a PACKAGING-LANE test: it needs a real apk-tools 3.0.5+ (mkpkg --info),
+# which the CI packaging job provides on the host. It must NOT run inside the
+# OpenWrt qemu VM — that guest's apk-tools lacks `mkpkg --info`, so the hard-fail
+# below would (correctly) fire there. run.sh under the new entrypoint excludes
+# packaging from the VM (SB_DOMAIN=backend); but the currently-published VM image
+# bakes an older entrypoint that runs the full suite, so guard explicitly. The
+# "apk" keyword keeps this a benign SKIP for run.sh's residual-ceiling accounting.
+[ "${SINGBOX_TESTS_IN_VM:-0}" = "1" ] && { echo "SKIP test_build_feed: packaging-lane test, needs apk-tools 3 (not the OpenWrt VM)"; exit 0; }
+
+# Locate a real apk-tools 3: packaging-domain container / CI provides apk-tools
+# 3.0.5+ on PATH; a host with the SDK apk also works; SINGBOX_APK_BIN overrides.
 APK="${SINGBOX_APK_BIN:-}"
 [ -z "$APK" ] && APK="$(command -v apk 2>/dev/null || true)"
 [ -z "$APK" ] && [ -x "$ROOT/.build/sdk/staging_dir/host/bin/apk" ] && APK="$ROOT/.build/sdk/staging_dir/host/bin/apk"
-if [ -z "$APK" ] || ! "$APK" --version 2>/dev/null | grep -q "apk-tools 3"; then
-  echo "SKIP: apk-tools 3 not available (need apk on PATH or SDK build)"
-  exit 0
-fi
 
-# Fixtures below are built with `apk mkpkg --info KEY:VALUE` (apk-tools 3.0.5+).
-# Some OpenWrt apk-tools 3 builds — including the CI qemu image — predate the
-# --info long option and abort fixture creation with "unrecognized option
-# 'info'", which would fail the whole suite. Probe once and SKIP gracefully when
-# the running apk can't build fixtures; real coverage still runs wherever a
-# capable apk exists (host SDK copy, dev boxes).
-if ! "$APK" mkpkg --help 2>&1 | grep -q -- '--info'; then
-  echo "SKIP test_build_feed: apk mkpkg lacks --info (apk-tools build too old)"
-  exit 0
-fi
+# Hard-fail (not SKIP) on a missing capability: the packaging domain MUST run in
+# an environment with a capable apk so the feed contract is really exercised. A
+# silent SKIP previously let an on-device-broken feed pass CI. The only escape is
+# SINGBOX_FEED_TEST_ALLOW_SKIP=1, reserved for environments that genuinely cannot
+# supply apk-tools 3.0.5+ (set explicitly, never the default).
+skip_or_fail() {
+  if [ "${SINGBOX_FEED_TEST_ALLOW_SKIP:-0}" = "1" ]; then
+    echo "SKIP test_build_feed: $1 (SINGBOX_FEED_TEST_ALLOW_SKIP=1)"
+    exit 0
+  fi
+  fail "missing capability: $1 (need apk-tools 3.0.5+; set SINGBOX_FEED_TEST_ALLOW_SKIP=1 only if truly unavailable)"
+}
+
+[ -n "$APK" ] || skip_or_fail "no apk binary on PATH or SDK build"
+"$APK" --version 2>/dev/null | grep -q "apk-tools 3" || skip_or_fail "apk-tools 3 not found ($("$APK" --version 2>/dev/null | head -1))"
+"$APK" mkpkg --help 2>&1 | grep -q -- '--info' || skip_or_fail "apk mkpkg lacks --info (apk-tools build too old)"
 
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
@@ -41,12 +53,24 @@ TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 # per-arch one (arch in the filename); the noarch trio carries real metadata.
 mkdir -p "$TMP/dist"
 
-# Per-arch: bbolt-client (one sample arch is enough for the layout contract).
+# Per-arch: build a bbolt-client-<arch>.apk fixture for ALL 20 covered arches
+# (the same set scripts/build-apk.sh's bbolt_arches_* and install.sh's COVERED
+# enumerate). build-feed.sh derives the arch dirs from these filenames, so the
+# feed must emit one arch dir per fixture and resolve all four packages in each.
+COVERED_ARCHES="x86_64 \
+aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic \
+arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 \
+arm_cortex-a8_vfpv3 arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 \
+arm_cortex-a15_neon-vfpv4 \
+mipsel_24kc mipsel_24kc_24kf mipsel_74kc mipsel_mips32 \
+mips_24kc mips_mips32"
 mkdir -p "$TMP/b/x"; echo a > "$TMP/b/x/a"
-( cd "$TMP/b" && "$APK" mkpkg \
-    --info name:bbolt-client --info version:9.9.9-r1 --info arch:x86_64 \
-    --info description:t --info license:GPL-2.0-or-later \
-    --files x -o "$TMP/dist/bbolt-client-x86_64.apk" >/dev/null )
+for arch in $COVERED_ARCHES; do
+  ( cd "$TMP/b" && "$APK" mkpkg \
+      --info name:bbolt-client --info version:9.9.9-r1 --info arch:"$arch" \
+      --info description:t --info license:GPL-2.0-or-later \
+      --files x -o "$TMP/dist/bbolt-client-$arch.apk" >/dev/null )
+done
 
 # Noarch core.
 mkdir -p "$TMP/c/x"; echo b > "$TMP/c/x/b"
@@ -78,31 +102,6 @@ RELEASE_REPO="acme/luci-singbox" \
 APK_BIN="$APK" \
   sh "$ROOT/scripts/build-feed.sh" 25.12 "$TMP/dist" "$TMP/out"
 
-d="$TMP/out/25.12/x86_64/luci-singbox"
-
-# All FOUR packages stored under apk's <name>-<version>.apk convention (per-arch
-# bbolt-client + the noarch trio), NOT the release-asset name.
-[ -f "$d/bbolt-client-9.9.9-r1.apk" ] || fail "bbolt-client pkg not named <name>-<version>.apk"
-[ -f "$d/singbox-ui-9.9.9-r1.apk" ] || fail "core pkg not named <name>-<version>.apk"
-[ -f "$d/luci-app-singbox-ui-9.9.9-r1.apk" ] || fail "app pkg not named <name>-<version>.apk"
-[ -f "$d/luci-i18n-singbox-ui-ru-9.9.9-r1.apk" ] || fail "i18n pkg not named <name>-<version>.apk"
-[ -f "$d/bbolt-client-x86_64.apk" ] && fail "release-asset name was not renamed"
-[ -f "$d/packages.adb" ] || fail "packages.adb missing"
-
-# Exactly four <name>-<version>.apk files in the arch dir (the four-package stack).
-napk=$(find "$d" -maxdepth 1 -name '*.apk' | wc -l)
-[ "$napk" -eq 4 ] || fail "arch dir must hold FOUR apks, found $napk"
-
-# REGRESSION GUARD: every package the index references must exist on disk as the
-# exact <name>-<version>.apk file apk will try to download. The index lists
-# packages as repeated top-level "name:"/"version:" pairs; print one file name
-# per package on the version line (the index's per-entry indent differs from a
-# single package's adbdump, so this stays index-shaped rather than anchored).
-"$APK" adbdump "$d/packages.adb" 2>/dev/null | awk '
-  /name:/    {n=$NF}
-  /version:/ {v=$NF; print n"-"v".apk"}' | sort -u > "$TMP/want"
-[ -s "$TMP/want" ] || fail "index has no packages"
-
 # REGRESSION GUARD (FEED-1): build-feed.sh feed_pkg_filename must anchor on the
 # TOP-LEVEL `  name: `/`  version: ` fields (2-space indent) and take the FIRST
 # match, so a nested name:/version: in a recursive adbdump can't hijack the
@@ -110,6 +109,7 @@ napk=$(find "$d" -maxdepth 1 -name '*.apk' | wc -l)
 # a normal package emits no nested name:/version:, so feed against a crafted dump
 # fixture (a decoy nested pair, deeper-indented, AFTER the real fields) and assert
 # the SAME awk program build-feed uses still yields the top-level name-version.
+# Arch-independent — run ONCE before the per-arch loop.
 # shellcheck disable=SC2016  # awk program — $2 is awk's field, not a shell var
 PARSER='
     /^  name: /    && n=="" { n=$2 }
@@ -133,9 +133,36 @@ DUMP
 got="$(awk "$PARSER" "$TMP/dump")" || fail "FEED-1: parser exited nonzero on a valid dump"
 [ "$got" = "bbolt-client-9.9.9-r1.apk" ] \
   || fail "FEED-1: nested name:/version: hijacked the filename; got '$got'"
-while read -r want; do
-  [ -f "$d/$want" ] || fail "index references missing file: $want"
-done < "$TMP/want"
+
+# Per-arch contract: EVERY covered arch dir holds the four-package stack named
+# <name>-<version>.apk, a signed/unsigned packages.adb, and the index resolves
+# every referenced package to an on-disk file under apk's naming convention.
+for arch in $COVERED_ARCHES; do
+  d="$TMP/out/25.12/$arch/luci-singbox"
+  [ -d "$d" ] || fail "missing arch dir for $arch"
+
+  [ -f "$d/bbolt-client-9.9.9-r1.apk" ]        || fail "$arch: bbolt-client pkg not named <name>-<version>.apk"
+  [ -f "$d/singbox-ui-9.9.9-r1.apk" ]          || fail "$arch: core pkg not named <name>-<version>.apk"
+  [ -f "$d/luci-app-singbox-ui-9.9.9-r1.apk" ] || fail "$arch: app pkg not named <name>-<version>.apk"
+  [ -f "$d/luci-i18n-singbox-ui-ru-9.9.9-r1.apk" ] || fail "$arch: i18n pkg not named <name>-<version>.apk"
+  [ -f "$d/bbolt-client-$arch.apk" ]           && fail "$arch: release-asset name was not renamed"
+  [ -f "$d/packages.adb" ]                     || fail "$arch: packages.adb missing"
+
+  napk=$(find "$d" -maxdepth 1 -name '*.apk' | wc -l)
+  [ "$napk" -eq 4 ] || fail "$arch: arch dir must hold FOUR apks, found $napk"
+
+  "$APK" adbdump "$d/packages.adb" 2>/dev/null | awk '
+    /name:/    {n=$NF}
+    /version:/ {v=$NF; print n"-"v".apk"}' | sort -u > "$TMP/want"
+  [ -s "$TMP/want" ] || fail "$arch: index has no packages"
+  while read -r want; do
+    [ -f "$d/$want" ] || fail "$arch: index references missing file: $want"
+  done < "$TMP/want"
+done
+
+# Exactly 20 arch dirs were produced (no stray, none missing).
+ndirs=$(find "$TMP/out/25.12" -mindepth 1 -maxdepth 1 -type d | wc -l)
+[ "$ndirs" -eq 20 ] || fail "expected 20 arch dirs, found $ndirs"
 
 # Public key published at feed root.
 [ -f "$TMP/out/luci-singbox.pem" ] || fail "public key not published at feed root"
@@ -166,7 +193,7 @@ grep -q "releases/download/latest" "$TMP/out/index.md" && fail "latest-release b
 [ -f "$TMP/out/25.12/x86_64/index.md" ] || fail "arch-level index.md missing"
 grep -q "layout: default" "$TMP/out/25.12/index.md" || fail "browse page lacks Jekyll front matter"
 
-# Arch list derived from filenames: no stray arch dir.
-[ -d "$TMP/out/25.12/mips_24kc" ] && fail "unexpected arch dir (not in fixture dist)"
+# Arch list derived from filenames: a never-built arch must not appear.
+[ -d "$TMP/out/25.12/riscv64" ] && fail "unexpected arch dir (not in fixture dist)"
 
 echo "PASS test_build_feed"

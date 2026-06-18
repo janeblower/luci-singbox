@@ -17,6 +17,23 @@ set -e
 . "$(dirname "$0")/../lib/sb_helpers.sh"
 cd "$(dirname "$0")/../.."
 
+# Self-guard (de-flake invariant): this test must not reintroduce a fixed
+# `sleep` for rpcd settling — it polls readiness instead. The guard greps its
+# own source; a stray `sleep N` (other than inside this guard's own grep
+# pattern) fails fast.
+if grep -nE '^[[:space:]]*sleep[[:space:]]+[0-9]' "$0" | grep -qv 'self-guard'; then
+	echo "FAIL: fixed sleep reintroduced in $0 — use condition polling"; exit 1
+fi
+
+# Idempotency self-guard: the test must snapshot+restore /etc/config/singbox-ui
+# via an EXIT trap so a mid-test failure cannot leak the seeded section or a
+# config file it created. Assert the trap + restore wiring exists in source.
+# Exclude this guard's own grep line (marked idem-self-guard) so it does not
+# self-match — the literal must appear on the REAL trap line below.
+if ! grep "trap '_sb_restore_uci' EXIT" "$0" | grep -qv 'idem-self-guard'; then  # idem-self-guard
+	echo "FAIL: $0 does not install a UCI snapshot/restore EXIT trap"; exit 1
+fi
+
 # Only meaningful inside the OpenWrt qemu VM, where a live rpcd + ubus
 # exist. On a plain host (and in the host-only subset) there is no ubus to
 # talk to, so SKIP — the string-form shebang assert in test_rpcd_handler.sh
@@ -27,6 +44,29 @@ if [ "${SINGBOX_TESTS_IN_VM:-0}" != "1" ]; then
 fi
 command -v ubus >/dev/null 2>&1 || { echo "SKIP: no ubus in this env"; exit 0; }
 command -v rpcd >/dev/null 2>&1 || { echo "SKIP: no rpcd in this env"; exit 0; }
+
+# --- idempotency: snapshot /etc/config/singbox-ui, restore on EXIT ---
+# This test mutates the live UCI (seeds a probe inbound, may create the config
+# file). Snapshot the exact prior state and restore it unconditionally on EXIT
+# so a mid-test failure can't leak state into downstream tests
+# (e.g. test_uci_defaults_migration refuses to run on a dirtied "real install").
+_SB_UCI_SNAP="$(mktemp)"
+_SB_UCI_EXISTED=0
+if [ -f /etc/config/singbox-ui ]; then
+	cp -f /etc/config/singbox-ui "$_SB_UCI_SNAP"
+	_SB_UCI_EXISTED=1
+fi
+_sb_restore_uci() {
+	if [ "$_SB_UCI_EXISTED" = 1 ]; then
+		cp -f "$_SB_UCI_SNAP" /etc/config/singbox-ui
+	else
+		rm -f /etc/config/singbox-ui
+	fi
+	# Re-read so uci's in-memory view matches the restored file.
+	uci -q revert singbox-ui 2>/dev/null || true
+	rm -f "$_SB_UCI_SNAP"
+}
+trap '_sb_restore_uci' EXIT
 
 SRC=${SB_BACKEND_ROOT}
 HANDLER_SRC="$SRC/usr/libexec/rpcd/singbox-ui"
@@ -51,14 +91,22 @@ cp -f "$ACL_SRC" /usr/share/rpcd/acl.d/luci-singbox-ui.json
 # Restart rpcd so it re-scans /usr/libexec/rpcd and registers the object,
 # launching the handler via its shebang the next time a method is called.
 /etc/init.d/rpcd restart
-# Give rpcd a moment to settle before the first call (mirrors
-# test_browser.sh:99 which sleeps after an rpcd reload).
-i=0; while [ $i -lt 10 ]; do
-	ubus list 2>/dev/null | grep -q '^singbox-ui$' && break
-	i=$((i + 1)); sleep 1
-done
+# Poll for readiness instead of a fixed sleep. `ubus wait_for <obj>` blocks
+# until the object registers (or its internal timeout), so on a fast box it
+# returns immediately and on a loaded runner it waits exactly as long as needed
+# — no fixed-grid flake. Fall back to a busy-poll bounded by a deadline if
+# wait_for is unavailable on this build (still no fixed per-iteration sleep:
+# we spin on `ubus list` until a monotonic deadline using `date +%s`).
+if ubus -t 30 wait_for singbox-ui 2>/dev/null; then
+	:
+else
+	_deadline=$(( $(date +%s) + 30 ))
+	while ! ubus list 2>/dev/null | grep -q '^singbox-ui$'; do
+		[ "$(date +%s)" -ge "$_deadline" ] && break
+	done
+fi
 ubus list 2>/dev/null | grep -q '^singbox-ui$' \
-	|| { echo "FAIL: rpcd did not register the 'singbox-ui' ubus object"; exit 1; }
+	|| { echo "FAIL: rpcd did not register the 'singbox-ui' ubus object after 30s poll"; exit 1; }
 echo "  PASS: singbox-ui ubus object registered via rpcd"
 
 # 1) `status` must succeed through the shebang path. is_singbox_running()
@@ -159,13 +207,8 @@ SEED_NAME="prodpath_probe_in"
 # ("Entry not found"). Seed the package's default config (falling back to an
 # empty file) so the section can be created and committed for the rpcd child
 # to read.
-_seeded_cfg=0
 if [ ! -f /etc/config/singbox-ui ]; then
 	cp -f "$SRC/etc/config/singbox-ui" /etc/config/singbox-ui 2>/dev/null || : > /etc/config/singbox-ui
-	# Remember we created it so we can remove it afterwards — otherwise a
-	# later test (test_uci_defaults_migration) refuses to run on a "real
-	# install" and silently SKIPs, losing coverage.
-	_seeded_cfg=1
 fi
 # Idempotent: drop any leftover from a prior run, then create + commit.
 uci -q delete "singbox-ui.${SEED_NAME}" 2>/dev/null || true
@@ -191,9 +234,5 @@ echo "$out" | grep -q '"status": *"ok"' \
 echo "$out" | grep -q '"type": *"shadowsocks"' \
 	|| { echo "FAIL: export_section returned no resolved section.type=shadowsocks; out=$out"; exit 1; }
 echo "  PASS: ubus call singbox-ui export_section returns a RESOLVED section (proves -L require chain)"
-
-# Restore the pristine env: if WE created /etc/config/singbox-ui, remove it so
-# downstream tests (e.g. test_uci_defaults_migration) still run.
-if [ "$_seeded_cfg" = 1 ]; then rm -f /etc/config/singbox-ui; fi
 
 echo "OK"
