@@ -42,8 +42,10 @@ COPY entrypoint.sh            /opt/entrypoint.sh
 RUN chmod +x /opt/wait-ssh.sh /opt/build-snapshot.sh /opt/entrypoint.sh
 
 # bun — test runner (host side of the QEMU rig, NOT the OpenWrt guest).
-# Pinned: matches the CI browser-lane setup-bun version for reproducibility.
-ENV BUN_VERSION=1.2.2
+# Pinned to match the CI setup-bun version (browser-test + typecheck/js-unit/
+# packaging all use 1.2.21) so the in-container `test` lane runs the same bun
+# as the host lanes.
+ENV BUN_VERSION=1.2.21
 ENV BUN_INSTALL=/opt/bun
 RUN curl -fsSL https://bun.sh/install | bash -s "bun-v${BUN_VERSION}" \
  && ln -s /opt/bun/bin/bun /usr/local/bin/bun \
