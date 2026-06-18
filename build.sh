@@ -13,7 +13,18 @@ set -eu
 GO="${GO:-go}"
 UPX_BIN="${UPX_BIN:-upx}"
 
-GO_TAGS="with_gvisor,with_dhcp,with_wireguard,with_reality_server,with_clash_api,with_quic,with_utls,with_ech"
+# Build tags mirror the fork's .goreleaser.yaml at the built tag — the config
+# that produces the published OpenWrt apks. Two sets: the `mips` build drops
+# with_manager/with_admin_panel (small devices). `badlinkname,tfogo_checklinkname0`
+# + `-checklinkname=0` are mandatory (the fork's linkname hacks). Do NOT add the
+# deprecated with_ech / with_reality_server tags — newer fork sources reject them
+# at compile time. If a future tag changes these, the build fails loudly (the
+# fork ships compile-time deprecation stubs), signalling an update is needed.
+GO_TAGS_MAIN="with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_masque,with_mtproxy,with_openvpn,with_trusttunnel,with_sudoku,with_manager,with_admin_panel,with_profiler,badlinkname,tfogo_checklinkname0"
+GO_TAGS_MIPS="with_gvisor,with_quic,with_dhcp,with_wireguard,with_utls,with_acme,with_clash_api,with_tailscale,with_masque,with_mtproxy,with_openvpn,with_trusttunnel,with_sudoku,with_profiler,badlinkname,tfogo_checklinkname0"
+
+# tags_for <abi> -> the goreleaser tag set for that ABI's build id.
+tags_for() { case "$1" in mips|mipsel) echo "$GO_TAGS_MIPS" ;; *) echo "$GO_TAGS_MAIN" ;; esac; }
 
 PKG_NAME="sing-box-extended"
 PKG_NAME_UPX="sing-box-extended-upx"
@@ -76,14 +87,17 @@ to_apk_version() {
 # compile_abi <abi> <src_dir> <tag> <dest_binary>
 compile_abi() {
   _abi="$1"; _src="$2"; _tag="$3"; _dst="$4"
-  _ver="$(to_apk_version "$_tag")"   # not used for ldflags; upstream uses raw tag
   _rawver="${_tag#v}"
   mkdir -p "$(dirname "$_dst")"
+  # CGO off + GOTOOLCHAIN=local (don't auto-fetch a toolchain for go.mod's go
+  # directive). -checklinkname=0 + the badlinkname tags are mandatory for the
+  # fork. -s -w strips symbols+DWARF for minimal size (the UPX variant shrinks
+  # further). Tags are the goreleaser set for this ABI's build id.
   # shellcheck disable=SC2046  # intentional word-split of goenv pairs
-  env CGO_ENABLED=0 GOOS=linux $(goenv_for "$_abi") \
+  env CGO_ENABLED=0 GOOS=linux GOTOOLCHAIN=local $(goenv_for "$_abi") \
     "$GO" -C "$_src" build -trimpath \
-      -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=${_rawver}' -s -w -buildid=" \
-      -tags "$GO_TAGS" \
+      -ldflags "-X 'github.com/sagernet/sing-box/constant.Version=${_rawver}' -s -w -buildid= -checklinkname=0" \
+      -tags "$(tags_for "$_abi")" \
       -o "$_dst" ./cmd/sing-box
 }
 
