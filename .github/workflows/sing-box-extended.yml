@@ -93,20 +93,22 @@ jobs:
         env:
           APK_BIN: ${{ steps.sdk.outputs.apk }}
           UPX_BIN: upx
-        run: sh build.sh "${{ steps.tag.outputs.tag }}" src dist
+        run: sudo -E env "PATH=$PATH" sh build.sh "${{ steps.tag.outputs.tag }}" src dist
 
       - name: Smoke test
         if: steps.gate.outputs.build == 'true'
         run: |
           set -eu
           RAW="${{ steps.tag.outputs.tag }}"; RAW="${RAW#v}"
-          tmp="$(mktemp -d)"
-          tar -xf dist/sing-box-extended_${{ steps.gate.outputs.ver }}_x86_64.apk -C "$tmp"
-          "$tmp/usr/bin/sing-box" version | head -n1 | grep -q "sing-box version"
-          "$tmp/usr/bin/sing-box" version | grep -qF "$RAW" \
-            || { echo "version mismatch (want $RAW)"; "$tmp/usr/bin/sing-box" version; exit 1; }
+          # (a) run the exact packaged x86_64 normal binary (stashed by build.sh phase 3)
+          dist/.smoke/sing-box version | head -n1 | grep -q "sing-box version"
+          dist/.smoke/sing-box version | grep -qF "$RAW" \
+            || { echo "version mismatch (want $RAW)"; dist/.smoke/sing-box version; exit 1; }
           echo '{"log":{"level":"error"}}' > /tmp/c.json
-          "$tmp/usr/bin/sing-box" check -c /tmp/c.json
+          dist/.smoke/sing-box check -c /tmp/c.json
+          # (b) confirm the apk packages /usr/bin/sing-box (root-owned)
+          "${{ steps.sdk.outputs.apk }}" adbdump dist/sing-box-extended_${{ steps.gate.outputs.ver }}_x86_64.apk \
+            | grep -q "usr/bin/sing-box"
 
       - name: Write signing key
         if: steps.gate.outputs.build == 'true'
