@@ -109,6 +109,11 @@ build_arch_dir() {
   fi
   gen_dir_index "$ba_d" "$REPO_NAME - $ba_arch - OpenWrt $VERSION"
   gen_dir_index "$OUT/$VERSION/$ba_arch" "OpenWrt $VERSION - $ba_arch"
+  # The sing-box (extended) core feed is published as a SIBLING here
+  # (25.12/<arch>/sing-box/) by a separate workflow (cores/sing-box-extended);
+  # it is not part of THIS build tree, so link it explicitly into the arch
+  # browse index. keep_files:true on both publishers keeps the two side by side.
+  printf -- '- [sing-box/](sing-box/) — sing-box (extended) core\n' >> "$OUT/$VERSION/$ba_arch/index.md"
 }
 
 rm -rf "$OUT"
@@ -162,9 +167,22 @@ echo "${PAGES_URL}/${VERSION}/\$ARCH/luci-singbox/packages.adb" > /etc/apk/repos
 apk update && apk add luci-app-singbox-ui
 \`\`\`
 
+## sing-box (extended) core
+
+An extended [sing-box](https://github.com/shtorm-7/sing-box-extended) build is
+published as a sibling feed at \`${VERSION}/<arch>/sing-box/\` (a drop-in
+\`sing-box\` replacement; \`-upx\` variant available). Optional — install it to
+use the extended core:
+
+\`\`\`sh
+ARCH=\$(apk --print-arch)
+echo "${PAGES_URL}/${VERSION}/\$ARCH/sing-box/packages.adb" > /etc/apk/repositories.d/sing-box-extended.list
+apk update && apk add sing-box-extended      # or sing-box-extended-upx
+\`\`\`
+
 ## Browse
 
-- [OpenWrt ${VERSION}](${VERSION}/) — packages by architecture
+- [OpenWrt ${VERSION}](${VERSION}/) — packages by architecture (incl. \`sing-box/\`)
 
 Public signing key: [luci-singbox.pem](luci-singbox.pem)
 

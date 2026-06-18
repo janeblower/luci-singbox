@@ -17,6 +17,10 @@ env:
   SDK_VERSION: 25.12.3
   SDK_URL: https://downloads.openwrt.org/releases/25.12.3/targets/x86/64/openwrt-sdk-25.12.3-x86-64_gcc-14.3.0_musl.Linux-x86_64.tar.zst
   PAGES_URL: https://janeblower.github.io/luci-singbox
+  # OpenWrt minor used as the feed's top path segment — MUST match the
+  # luci-singbox feed (scripts/build-feed.sh / pages.yml) so sing-box lands as
+  # a sibling at 25.12/<arch>/sing-box/.
+  OWRT_MINOR: "25.12"
 
 jobs:
   build-publish:
@@ -129,16 +133,18 @@ jobs:
           APK_BIN: ${{ steps.sdk.outputs.apk }}
           FEED_SIGN_KEY: ${{ runner.temp }}/keys/luci-singbox.pem
           PAGES_URL: ${{ env.PAGES_URL }}
-        run: sh feed.sh "${{ steps.gate.outputs.ver }}" dist public
+        run: sh feed.sh "$OWRT_MINOR" "${{ steps.gate.outputs.ver }}" dist public
 
-      - name: Publish to gh-pages/sing-box-extended
+      - name: Publish to gh-pages (25.12/<arch>/sing-box)
         if: steps.gate.outputs.build == 'true'
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
+          # public/ contains the 25.12/<arch>/sing-box/ tree; publish it to the
+          # gh-pages ROOT with keep_files so it merges next to luci-singbox/
+          # without touching the main feed's shared browse pages / pubkey.
           publish_dir: public
           publish_branch: gh-pages
-          destination_dir: sing-box-extended
           keep_files: true
           enable_jekyll: true
           commit_message: "deploy sing-box-extended feed: ${{ steps.tag.outputs.tag }}"
