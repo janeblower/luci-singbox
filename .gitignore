@@ -8,4 +8,5 @@ dist
 CLAUDE.md
 ruvector.db
 docs/superpowers
+node_modules/
 tests/browser/node_modules
