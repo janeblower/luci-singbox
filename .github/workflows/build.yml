@@ -40,44 +40,111 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  # Path-filtered CI: on a pull_request, run only the area(s) whose source paths
-  # changed (backend = VM suite, ui = host node + browser). On push/main/tags and
-  # workflow_dispatch the filter returns true for everything, so the release path
-  # is NEVER path-gated. Shell + git diff (no third-party action), mirroring the
-  # version-compare gate in pages.yml.
+  # Domain-based path filtering via dorny/paths-filter. A change exercises only
+  # the area(s) it touches. Routine pushes to main AND pull_requests are filtered
+  # (paths-filter diffs PR-vs-base and push-vs-previous-tip respectively); tag
+  # pushes (v*, an explicit release) and workflow_dispatch (the manual recovery
+  # button) always run the FULL pipeline. The version-compare gate in pages.yml is
+  # self-healing, so a docs-only push that skips `build` causes no feed drift.
+  #
+  # Five source domains -> four downstream gates (see the Aggregate step):
+  #   code   = any code/test change       -> lint, bbolt, build
+  #   vm     = whole ucode suite relevant  -> test (QEMU VM)
+  #   ui     = UI assets / browser harness -> browser-test
+  #   jsunit = node unit + i18n/PO regen   -> js-unit
   changes:
     name: Detect changed areas
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      backend: ${{ steps.f.outputs.backend }}
-      ui: ${{ steps.f.outputs.ui }}
+      code:   ${{ steps.agg.outputs.code }}
+      vm:     ${{ steps.agg.outputs.vm }}
+      ui:     ${{ steps.agg.outputs.ui }}
+      jsunit: ${{ steps.agg.outputs.jsunit }}
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - id: f
+
+      # Tag pushes and manual dispatch short-circuit the filter -> full pipeline.
+      - name: Decide run-all (tag / manual dispatch => full pipeline)
+        id: decide
         run: |
           set -eu
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "non-PR event -> run all areas"
-            echo "backend=true" >> "$GITHUB_OUTPUT"
-            echo "ui=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          base="${{ github.event.pull_request.base.sha }}"
-          changed="$(git diff --name-only "$base"...HEAD)"
-          printf 'changed files:\n%s\n' "$changed"
-          be=false; ui=false
-          printf '%s\n' "$changed" | grep -qE '^(singbox-ui/|bbolt-client/|scripts/|install\.sh|tests/(backend|cross|lib|docker|parity|ucode-stubs)/|tests/run|\.github/)' && be=true
-          printf '%s\n' "$changed" | grep -qE '^(luci-app-singbox-ui/|tests/(ui|cross|lib|browser|browser-container)/|scripts/|\.github/)' && ui=true
-          echo "backend=$be" >> "$GITHUB_OUTPUT"
-          echo "ui=$ui" >> "$GITHUB_OUTPUT"
-          echo "resolved: backend=$be ui=$ui"
+          run_all=false
+          case "${GITHUB_REF}" in refs/tags/*) run_all=true ;; esac
+          [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ] && run_all=true
+          echo "run_all=${run_all}" >> "$GITHUB_OUTPUT"
+          echo "run_all=${run_all}"
+
+      # Pinned to a full commit SHA (v3.0.3) per this repo's SHA-pin policy for
+      # third-party actions. Skipped on tag/dispatch (run_all forces all gates on).
+      - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
+        id: filter
+        if: steps.decide.outputs.run_all != 'true'
+        with:
+          filters: |
+            backend:
+              - 'singbox-ui/**'
+              - 'tests/backend/**'
+              - 'tests/parity/**'
+              - 'tests/ucode-stubs/**'
+              - 'tests/fixtures/**'
+            ui:
+              - 'luci-app-singbox-ui/**'
+              - 'tests/ui/**'
+              - 'tests/browser/**'
+              - 'tests/browser-container/**'
+            bbolt:
+              - 'bbolt-client/**'
+            packaging:
+              - 'scripts/**'
+              - 'install.sh'
+              - 'feed/**'
+              - '**/Makefile'
+              - 'tests/cross/**'
+            shared:
+              - 'tests/lib/**'
+              - 'tests/run*'
+              - 'tests/docker/**'
+              - '.github/**'
+
+      # Fold run_all + the cross-cutting `shared` domain into the four job gates.
+      # The VM runs the WHOLE suite (backend+ui+cross), so everything EXCEPT a
+      # pure-bbolt or pure-docs change is relevant to it (UI-source changes are
+      # validated by cross ACL/manifest tests that run in the VM). bbolt+build are
+      # coupled: build embeds the bbolt artifact, so bbolt must run whenever build
+      # does (=`code`); the binaries are source-hash cached, so a hit is seconds.
+      - name: Aggregate gates
+        id: agg
+        env:
+          RUN_ALL:   ${{ steps.decide.outputs.run_all }}
+          F_BACKEND: ${{ steps.filter.outputs.backend }}
+          F_UI:      ${{ steps.filter.outputs.ui }}
+          F_BBOLT:   ${{ steps.filter.outputs.bbolt }}
+          F_PKG:     ${{ steps.filter.outputs.packaging }}
+          F_SHARED:  ${{ steps.filter.outputs.shared }}
+        run: |
+          set -eu
+          on() { [ "$1" = "true" ]; }
+          base_on() { on "$RUN_ALL" || on "$F_SHARED"; }
+          code=false; vm=false; ui=false; jsunit=false
+          if base_on || on "$F_BACKEND" || on "$F_UI" || on "$F_BBOLT" || on "$F_PKG"; then code=true; fi
+          if base_on || on "$F_BACKEND" || on "$F_UI" || on "$F_PKG"; then vm=true; fi
+          if base_on || on "$F_UI"; then ui=true; fi
+          if base_on || on "$F_UI" || on "$F_PKG"; then jsunit=true; fi
+          for k in code vm ui jsunit; do
+            eval "v=\$$k"
+            echo "$k=$v" >> "$GITHUB_OUTPUT"
+          done
+          echo "resolved: code=$code vm=$vm ui=$ui jsunit=$jsunit (run_all=$RUN_ALL shared=$F_SHARED)"
 
   lint:
     name: Lint (host)
     runs-on: ubuntu-24.04
+    needs: [changes]
+    # Any code/test change. Pure-docs pushes/PRs skip the whole pipeline.
+    if: ${{ needs.changes.outputs.code == 'true' }}
     timeout-minutes: 10
 
     steps:
@@ -119,8 +186,9 @@ jobs:
     name: JS unit tests (host node)
     runs-on: ubuntu-24.04
     needs: [lint, changes]
-    # UI gate: run on UI/cross/lib changes, and always on push/main/tags.
-    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request' }}
+    # UI assets OR packaging (scripts/regen-po.sh, po templates) -> node unit
+    # tests + i18n/PO coverage + POT freshness.
+    if: ${{ needs.changes.outputs.jsunit == 'true' }}
     timeout-minutes: 12
     # The node-gated *_js.sh / json_import tests carry real assertions for the
     # XSS-relevant descriptor_form.js logic, the validators, and the share-link/
@@ -186,9 +254,9 @@ jobs:
     name: Test suite (OpenWrt VM)
     runs-on: ubuntu-24.04
     needs: [lint, changes]
-    # Backend gate: run the VM suite on backend/cross/lib/scripts changes, and
-    # always on push/main/tags.
-    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request' }}
+    # The VM entrypoint runs the WHOLE suite (backend+ui+cross), so it is relevant
+    # to every change except a pure-bbolt or pure-docs one (see the changes job).
+    if: ${{ needs.changes.outputs.vm == 'true' }}
     # The QEMU-OpenWrt VM job is the one most likely to wedge (bad boot/loadvm).
     # Bound it so a hung guest fails fast instead of idling the runner ~6h.
     timeout-minutes: 25
@@ -224,8 +292,8 @@ jobs:
     # changes filter). `build` below still gates on BOTH test and browser-test, so
     # correctness is unchanged while browser-test runs in parallel with the VM suite.
     needs: [lint, changes]
-    # UI gate: run on UI/cross/lib changes, and always on push/main/tags.
-    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request' }}
+    # UI assets / browser harness only.
+    if: ${{ needs.changes.outputs.ui == 'true' }}
     timeout-minutes: 15
 
     steps:
@@ -308,6 +376,11 @@ jobs:
     # shellcheck/bun). A cold build cross-compiles 5 arches + runs 5 qemu-user
     # suites, so allow generous headroom; a warm bbolt-bin cache hit is seconds.
     runs-on: ubuntu-24.04
+    needs: [changes]
+    # Any code/test change. `build` embeds the bbolt artifact, so bbolt must run
+    # whenever build does (both gate on `code`). Source-hash cached -> seconds on
+    # a hit; only a pure-docs change skips it.
+    if: ${{ needs.changes.outputs.code == 'true' }}
     timeout-minutes: 40
     defaults:
       run:
@@ -423,14 +496,16 @@ jobs:
     # the package without publishing — but a red lint/js-unit/test/browser-test
     # run now BLOCKS the rolling `latest` release instead of shipping a broken
     # apk to install.sh consumers.
-    needs: [lint, js-unit, test, browser-test, bbolt]
-    # On a path-filtered PR some test jobs may be SKIPPED (not their area). Run
-    # build whenever nothing FAILED: lint + bbolt always run (bbolt provides the
-    # binaries this job embeds), so require them success; the area-gated jobs may
-    # be skipped, so accept anything that is not 'failure'. On push/main/tags no
-    # job is gated, so all are 'success' and the publish path is unaffected.
+    needs: [changes, lint, js-unit, test, browser-test, bbolt]
+    # Runs on any code/test change (`code`); a pure-docs change skips it together
+    # with lint+bbolt. When `code` is true, lint AND bbolt also run (both gate on
+    # `code`) and provide the binaries this job embeds, so require them success;
+    # the area-gated test jobs (test/js-unit/browser-test) may be SKIPPED, so
+    # accept anything that is not 'failure'. The publish steps below are further
+    # event-gated to push-main / tags, so PR builds validate without publishing.
     if: >-
       ${{ !cancelled()
+          && needs.changes.outputs.code == 'true'
           && needs.lint.result == 'success'
           && needs.bbolt.result == 'success'
           && needs.test.result != 'failure'
