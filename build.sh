@@ -154,19 +154,30 @@ mkpkg_one() {
   _name="$1"; _sib="$2"; _ver="$3"; _arch="$4"; _root="$5"; _src="$6"; _out="$7"
   : "${APK_BIN:?APK_BIN required}"
   _prerm="$_src/release/config/openwrt.prerm"
+  # provides:sing-box -> satisfies the +sing-box dep. replaces:sing-box (+ the
+  # sibling variant) -> clean takeover of the stock sing-box's files and clean
+  # switching between the normal/upx variants (apk accepts replaces:). conflicts:
+  # would be the ideal mutual-exclusion marker, but OpenWrt 25.12.3 apk-tools
+  # rejects the conflicts: install-info field (same as build-apk.sh's
+  # conflicts:firewall) — so we TRY it and fall back without it. Single-core
+  # exclusivity still holds via file overlap (/usr/bin/sing-box et al.) + replaces.
   set -- \
     --files "$_root" --output "$_out" \
     -I "name:$_name" -I "version:$_ver" -I "description:$PKG_DESC" \
     -I "arch:$_arch" -I "license:$PKG_LICENSE" -I "origin:$_name" \
     -I "maintainer:$PKG_MAINTAINER" -I "url:$PKG_URL" \
-    -I "depends:$PKG_DEPENDS" -I "provides:sing-box=$_ver"
+    -I "depends:$PKG_DEPENDS" -I "provides:sing-box=$_ver" \
+    -I "replaces:sing-box $_sib"
   [ -f "$_prerm" ] && set -- "$@" -s "pre-deinstall:$_prerm"
-  if "$APK_BIN" mkpkg --help 2>&1 | grep -q 'conflicts'; then
-    "$APK_BIN" mkpkg "$@" -I "conflicts:sing-box" -I "conflicts:$_sib"
-  else
-    echo "FATAL: apk mkpkg lacks 'conflicts:' support; mutual exclusion is mandatory" >&2
-    exit 1
+  # Try with conflicts: (mutual exclusion); fall back without it if this
+  # apk-tools rejects the field. A failure in the `if` test doesn't trip set -e;
+  # a failure of the fallback mkpkg does (real error -> abort).
+  if "$APK_BIN" mkpkg "$@" -I "conflicts:sing-box" -I "conflicts:$_sib" 2>/dev/null; then
+    return 0
   fi
+  echo ">>> apk mkpkg rejected conflicts: field — packaging $_name without it" \
+       "(file overlap + replaces still enforce a single installed core)" >&2
+  "$APK_BIN" mkpkg "$@"
 }
 
 # compress_upx <in_binary> <out_binary>
@@ -205,47 +216,47 @@ verify_root_owner() {
 # Phase 2: populate roots, chown 0:0, package (both variants) for every arch.
 # Phase 3: verify root ownership of all produced apks; stash x86_64 normal binary.
 build_all() {
+  # NOTE: POSIX sh has NO function-local variables — every assignment is global.
+  # build_all's callees (populate_root/mkpkg_one/...) assign plain `_root`/`_out`/
+  # `_src`/etc., which would CLOBBER same-named vars here mid-loop (a real bug we
+  # hit: mkpkg_one's `_out=$7` overwrote the output DIR, corrupting later paths).
+  # So build_all namespaces ALL its own variables with a `b_` prefix that no
+  # callee uses. Keep it that way when editing.
   [ "$(id -u)" = 0 ] || { echo "FATAL: build_all must run as root so apk mkpkg records root:root ownership" >&2; exit 1; }
-  _tag="$1"; _src="$2"; _out="$3"; _ver="$(to_apk_version "$_tag")"
-  mkdir -p "$_out"; _tmp="$(mktemp -d)"
+  b_tag="$1"; b_src="$2"; b_outdir="$3"; b_ver="$(to_apk_version "$b_tag")"
+  mkdir -p "$b_outdir"; b_tmp="$(mktemp -d)"
 
   # --- Phase 1: compile + upx all ABIs (fail fast before expensive packaging) ---
-  for _abi in $(abi_list); do
-    _bin="$_tmp/$_abi/sing-box"
-    _ubin="$_tmp/$_abi/sing-box.upx"
-    compile_abi "$_abi" "$_src" "$_tag" "$_bin"
-    compress_upx "$_bin" "$_ubin"
+  for b_abi in $(abi_list); do
+    compile_abi "$b_abi" "$b_src" "$b_tag" "$b_tmp/$b_abi/sing-box"
+    compress_upx "$b_tmp/$b_abi/sing-box" "$b_tmp/$b_abi/sing-box.upx"
   done
 
   # --- Phase 2: populate roots, chown 0:0, package ---
-  for _abi in $(abi_list); do
-    _bin="$_tmp/$_abi/sing-box"
-    _ubin="$_tmp/$_abi/sing-box.upx"
-    for _arch in $(arches_for "$_abi"); do
+  for b_abi in $(abi_list); do
+    for b_arch in $(arches_for "$b_abi"); do
       # normal
-      _root="$_tmp/root-$_arch"
-      populate_root "$_src" "$_bin" "$_root"
-      chmod -R a+rX "$_root"
-      chown -R 0:0 "$_root"
-      mkpkg_one "$PKG_NAME" "$PKG_NAME_UPX" "$_ver" "$_arch" "$_root" "$_src" \
-        "$_out/${PKG_NAME}_${_ver}_${_arch}.apk"
+      populate_root "$b_src" "$b_tmp/$b_abi/sing-box" "$b_tmp/root-$b_arch"
+      chmod -R a+rX "$b_tmp/root-$b_arch"
+      chown -R 0:0 "$b_tmp/root-$b_arch"
+      mkpkg_one "$PKG_NAME" "$PKG_NAME_UPX" "$b_ver" "$b_arch" "$b_tmp/root-$b_arch" "$b_src" \
+        "$b_outdir/${PKG_NAME}_${b_ver}_${b_arch}.apk"
       # upx
-      _uroot="$_tmp/uroot-$_arch"
-      populate_root "$_src" "$_ubin" "$_uroot"
-      chmod -R a+rX "$_uroot"
-      chown -R 0:0 "$_uroot"
-      mkpkg_one "$PKG_NAME_UPX" "$PKG_NAME" "$_ver" "$_arch" "$_uroot" "$_src" \
-        "$_out/${PKG_NAME_UPX}_${_ver}_${_arch}.apk"
+      populate_root "$b_src" "$b_tmp/$b_abi/sing-box.upx" "$b_tmp/uroot-$b_arch"
+      chmod -R a+rX "$b_tmp/uroot-$b_arch"
+      chown -R 0:0 "$b_tmp/uroot-$b_arch"
+      mkpkg_one "$PKG_NAME_UPX" "$PKG_NAME" "$b_ver" "$b_arch" "$b_tmp/uroot-$b_arch" "$b_src" \
+        "$b_outdir/${PKG_NAME_UPX}_${b_ver}_${b_arch}.apk"
     done
   done
 
   # --- Phase 3: verify ownership + stash smoke binary ---
-  for _apk in "$_out"/*.apk; do
-    verify_root_owner "$_apk"
+  for b_apk in "$b_outdir"/*.apk; do
+    verify_root_owner "$b_apk"
   done
-  install -D -m0755 "$_tmp/amd64/sing-box" "$_out/.smoke/sing-box"
+  install -D -m0755 "$b_tmp/amd64/sing-box" "$b_outdir/.smoke/sing-box"
 
-  echo ">>> built $(ls "$_out"/*.apk | wc -l) apk into $_out"
+  echo ">>> built $(ls "$b_outdir"/*.apk | wc -l) apk into $b_outdir"
 }
 
 # --- entrypoint ---
