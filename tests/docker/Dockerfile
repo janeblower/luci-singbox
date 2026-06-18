@@ -30,6 +30,7 @@ RUN apt-get update \
         gzip \
         git \
         netcat-openbsd \
+        unzip \
  && rm -rf /var/lib/apt/lists/*
 
 # Helper scripts — kept in /opt for entrypoint.sh / build-snapshot.sh
