@@ -15,6 +15,15 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
+# This is a PACKAGING-LANE test: it needs a real apk-tools 3.0.5+ (mkpkg --info),
+# which the CI packaging job provides on the host. It must NOT run inside the
+# OpenWrt qemu VM — that guest's apk-tools lacks `mkpkg --info`, so the hard-fail
+# below would (correctly) fire there. run.sh under the new entrypoint excludes
+# packaging from the VM (SB_DOMAIN=backend); but the currently-published VM image
+# bakes an older entrypoint that runs the full suite, so guard explicitly. The
+# "apk" keyword keeps this a benign SKIP for run.sh's residual-ceiling accounting.
+[ "${SINGBOX_TESTS_IN_VM:-0}" = "1" ] && { echo "SKIP test_build_feed: packaging-lane test, needs apk-tools 3 (not the OpenWrt VM)"; exit 0; }
+
 # Locate a real apk-tools 3: packaging-domain container / CI provides apk-tools
 # 3.0.5+ on PATH; a host with the SDK apk also works; SINGBOX_APK_BIN overrides.
 APK="${SINGBOX_APK_BIN:-}"

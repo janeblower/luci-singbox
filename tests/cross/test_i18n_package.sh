@@ -17,6 +17,12 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$HERE/../.." && pwd)
 fail() { echo "FAIL: $1" >&2; exit 1; }
 
+# build-apk.sh needs bash; the OpenWrt qemu guest has only BusyBox ash, so this
+# packaging test SKIPs there (it runs for real in the packaging lane / host,
+# which have bash). Mirrors test_build_apk_per_arch.sh's guard. "bash" keeps it
+# a benign SKIP for run.sh's residual-ceiling accounting.
+command -v bash >/dev/null 2>&1 || { echo "SKIP test_i18n_package: bash not available (build-apk.sh needs bash)"; exit 0; }
+
 PO="$ROOT/luci-app-singbox-ui/po/ru/luci-singbox-ui.po"
 DOMAIN="luci-singbox-ui"
 I18N_NAME="luci-i18n-singbox-ui-ru"
