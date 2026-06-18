@@ -50,7 +50,9 @@ arches_for() { # arches_for <abi> -> space-separated exact OpenWrt arches
 
 # to_apk_version <tag> -> apk-valid version string.
 # Strips leading 'v'. Maps '<base>-extended-<ext>' to '<base>_p<packed>' where
-# each dot-component of <ext> is zero-padded to 3 digits and concatenated.
+# each dot-component of <ext> is zero-padded to 3 digits and concatenated to
+# a FIXED 3-component width (zero-padded count), so 2- vs 3-component tags
+# order correctly. e.g. 2.10 -> _p002010000, 2.4.1 -> _p002004001.
 # A tag without '-extended-' is returned as-is (already apk-valid by assumption).
 to_apk_version() {
   v="${1#v}"
@@ -59,9 +61,12 @@ to_apk_version() {
       base="${v%-extended-*}"
       ext="${v##*-extended-}"
       packed=""
+      n=0
       oldifs="$IFS"; IFS='.'
-      for c in $ext; do packed="${packed}$(printf '%03d' "$c")"; done
+      for c in $ext; do packed="${packed}$(printf '%03d' "$c")"; n=$((n+1)); done
       IFS="$oldifs"
+      # Pad to exactly 3 components (9 digits total)
+      while [ "$n" -lt 3 ]; do packed="${packed}000"; n=$((n+1)); done
       echo "${base}_p${packed}"
       ;;
     *) echo "$v" ;;
@@ -152,27 +157,76 @@ compress_upx() {
   "$UPX_BIN" --best --lzma "$2" >/dev/null
 }
 
+# verify_root_owner <apk>
+#   Runs adbdump and fails if any packaged path is owned by a non-root uid/gid.
+#   Mirrors scripts/build-apk.sh verify_root_owner exactly.
+verify_root_owner() {
+  _apk="$1"
+  _dump="$("$APK_BIN" adbdump "$_apk" 2>/dev/null)" \
+    || { echo "ERROR: adbdump failed for $_apk — cannot verify ownership" >&2; exit 1; }
+  _owners=$(printf '%s\n' "$_dump" | grep -E '^[[:space:]]*(user|group):' || true)
+  _count=$(printf '%s\n' "$_owners" | grep -c . || true)
+  if [ "$_count" -eq 0 ]; then
+    echo "ERROR: $_apk has no user:/group: lines in adbdump — owner-field" >&2
+    echo "       format may have changed; refusing to vacuously pass the" >&2
+    echo "       root-ownership check (verify_root_owner)." >&2
+    exit 1
+  fi
+  _bad=$(printf '%s\n' "$_owners" \
+    | grep -vE '^[[:space:]]*(user|group): (root|0)$' || true)
+  if [ -n "$_bad" ]; then
+    echo "ERROR: $_apk contains non-root owner/group entries:" >&2
+    printf '%s\n' "$_bad" | sort -u >&2
+    exit 1
+  fi
+}
+
 # build_all <tag> <src_dir> <out_dir>
+#
+# Phase 1: compile normal + upx binaries for every ABI (fast-fail on any error).
+# Phase 2: populate roots, chown 0:0, package (both variants) for every arch.
+# Phase 3: verify root ownership of all produced apks; stash x86_64 normal binary.
 build_all() {
+  [ "$(id -u)" = 0 ] || { echo "FATAL: build_all must run as root so apk mkpkg records root:root ownership" >&2; exit 1; }
   _tag="$1"; _src="$2"; _out="$3"; _ver="$(to_apk_version "$_tag")"
   mkdir -p "$_out"; _tmp="$(mktemp -d)"
+
+  # --- Phase 1: compile + upx all ABIs (fail fast before expensive packaging) ---
   for _abi in $(abi_list); do
-    _bin="$_tmp/$_abi/sing-box";  _ubin="$_tmp/$_abi/sing-box.upx"
+    _bin="$_tmp/$_abi/sing-box"
+    _ubin="$_tmp/$_abi/sing-box.upx"
     compile_abi "$_abi" "$_src" "$_tag" "$_bin"
     compress_upx "$_bin" "$_ubin"
+  done
+
+  # --- Phase 2: populate roots, chown 0:0, package ---
+  for _abi in $(abi_list); do
+    _bin="$_tmp/$_abi/sing-box"
+    _ubin="$_tmp/$_abi/sing-box.upx"
     for _arch in $(arches_for "$_abi"); do
       # normal
-      _root="$_tmp/root-$_arch"; populate_root "$_src" "$_bin" "$_root"
+      _root="$_tmp/root-$_arch"
+      populate_root "$_src" "$_bin" "$_root"
       chmod -R a+rX "$_root"
+      chown -R 0:0 "$_root"
       mkpkg_one "$PKG_NAME" "$PKG_NAME_UPX" "$_ver" "$_arch" "$_root" "$_src" \
         "$_out/${PKG_NAME}_${_ver}_${_arch}.apk"
       # upx
-      _uroot="$_tmp/uroot-$_arch"; populate_root "$_src" "$_ubin" "$_uroot"
+      _uroot="$_tmp/uroot-$_arch"
+      populate_root "$_src" "$_ubin" "$_uroot"
       chmod -R a+rX "$_uroot"
+      chown -R 0:0 "$_uroot"
       mkpkg_one "$PKG_NAME_UPX" "$PKG_NAME" "$_ver" "$_arch" "$_uroot" "$_src" \
         "$_out/${PKG_NAME_UPX}_${_ver}_${_arch}.apk"
     done
   done
+
+  # --- Phase 3: verify ownership + stash smoke binary ---
+  for _apk in "$_out"/*.apk; do
+    verify_root_owner "$_apk"
+  done
+  install -D -m0755 "$_tmp/amd64/sing-box" "$_out/.smoke/sing-box"
+
   echo ">>> built $(ls "$_out"/*.apk | wc -l) apk into $_out"
 }
 

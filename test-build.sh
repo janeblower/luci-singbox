@@ -11,7 +11,7 @@ check() { # check <desc> <actual> <expected>
 
 check "strip-v plain"        "$(to_apk_version v1.2.3)"                 "1.2.3"
 check "extended mapping"     "$(to_apk_version v1.13.12-extended-2.4.1)" "1.13.12_p002004001"
-check "extended two-comp"    "$(to_apk_version v1.13.12-extended-2.10)"  "1.13.12_p002010"
+check "extended two-comp"    "$(to_apk_version v1.13.12-extended-2.10)"  "1.13.12_p002010000"
 check "already valid -r"     "$(to_apk_version v1.2.3-r4)"             "1.2.3-r4"
 check "abi count"            "$(abi_list | wc -w | tr -d ' ')"        "5"
 check "amd64 arches"         "$(arches_for amd64)"                    "x86_64"
