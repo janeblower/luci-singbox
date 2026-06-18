@@ -155,6 +155,10 @@ jobs:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: public
           publish_branch: gh-pages
+          # Coexist with the cores/sing-box-extended publisher, which writes the
+          # gh-pages:/sing-box-extended/ subtree from a separate workflow. Without
+          # keep_files the default full-replace wipes that subtree on every deploy.
+          keep_files: true
           # Keep Jekyll ON: the midnight theme renders our _config.yml + index.md.
           # Without this peaceiris drops a .nojekyll file and Pages serves raw .md.
           enable_jekyll: true
