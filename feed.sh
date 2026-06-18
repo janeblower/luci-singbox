@@ -10,6 +10,13 @@ set -eu
 VERSION="${1:?usage: feed.sh <version> <dist_dir> <out_dir>}"
 DIST="${2:?}"; OUT="${3:?}"
 : "${APK_BIN:?APK_BIN required}"
+# Absolutize APK_BIN: the signing loop runs `apk mkndx` inside `( cd "$d" && ... )`,
+# so a relative APK_BIN (e.g. CI's sdk/.../bin/apk) would not resolve after the cd.
+case "$APK_BIN" in
+  /*) ;;                                                              # already absolute
+  */*) APK_BIN="$(cd "$(dirname "$APK_BIN")" && pwd)/$(basename "$APK_BIN")" ;;
+  *) ;;                                                               # bare name -> PATH
+esac
 PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
 
 # <name>-<version>.apk filename apk reconstructs from the index (top-level fields).
