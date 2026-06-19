@@ -199,8 +199,11 @@ jobs:
         with:
           bun-version: '1.2.21'
       - run: cd tests && bun install --frozen-lockfile
-      - run: bunx tsc --noEmit
-      - run: bunx @biomejs/biome ci tests/
+      # Use the LOCKED-pinned tsc/biome from tests/node_modules — NOT `bunx
+      # <tool>` which floats to the latest published version and made CI
+      # non-deterministic (a new biome release silently broke the build).
+      - run: cd tests && bun run typecheck
+      - run: cd tests && bun run lint
 
   js-unit:
     name: JS unit tests (host node)
