@@ -6,17 +6,9 @@
  * every removed type plus one survivor.  Requires `uci` — SKIPs on hosts
  * without it (runs for real inside the OpenWrt qemu VM).
  */
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  unlinkSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
 const REPO = resolve(import.meta.dir, "../..");
@@ -31,39 +23,11 @@ const uciAvailable =
   spawnSync("uci", ["--version"], { encoding: "utf8" }).status === 0 ||
   spawnSync("sh", ["-c", "command -v uci"], { encoding: "utf8" }).status === 0;
 
-// Helper: run a uci command against a specific config dir (-c flag).
-function _uci(
-  configDir: string,
-  ...args: string[]
-): { stdout: string; status: number | null } {
-  const r = spawnSync("uci", ["-c", configDir, ...args], { encoding: "utf8" });
-  return { stdout: (r.stdout ?? "").trim(), status: r.status };
-}
-
-// Helper: run the migration script against /etc/config/singbox-ui.
-// The script uses bare `uci` so we must stage the config at the real path.
+// The migration script uses bare `uci` so we must stage the config at the real path.
 // Guard: the test refuses to run if /etc/config/singbox-ui already exists.
 const REAL_CONFIG = "/etc/config/singbox-ui";
 
-let TMP: string;
-
 describe("test_migration_drop_removed", () => {
-  beforeAll(() => {
-    TMP = mkdtempSync(join(tmpdir(), "mig-drop-"));
-  });
-
-  afterAll(() => {
-    rmSync(TMP, { recursive: true, force: true });
-    // Clean up real config if we created it.
-    if (existsSync(REAL_CONFIG)) {
-      try {
-        unlinkSync(REAL_CONFIG);
-      } catch {
-        /* ignore */
-      }
-    }
-  });
-
   it.skipIf(!uciAvailable)("migration script exists and is executable", () => {
     expect(existsSync(MIGRATION_SCRIPT)).toBe(true);
   });

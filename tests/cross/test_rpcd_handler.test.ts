@@ -47,36 +47,53 @@ describe("test_rpcd_handler", () => {
   });
 
   // Ucode-gated: the runtime `list` method test — skip when ucode is absent.
-  // The .sh reproduces this via `ucode -L lib handler list` and checks JSON.
-  // We reproduce the skip-guard faithfully.
+  // The .sh runs `ucode -L lib handler list` (no ubus needed) and asserts:
+  //   - critical methods present: generate, nftables, refresh, clash_get, …
+  //   - clash_request ABSENT (removed from the dispatcher)
   it.skipIf(!ucodeAvailable)(
-    "ucode-gated: handler list method returns JSON with method names",
+    "ucode-gated: handler list method returns JSON with expected methods",
     () => {
       const SB_LIB = join(SB_BACKEND_ROOT, "usr/share/singbox-ui/lib");
-      let output: string;
-      try {
-        output = execSync(`echo '{}' | ucode -L "${SB_LIB}" "${H}" list`, {
-          encoding: "utf8",
-          // Provide a minimal environment so ubus is absent (expected in host env)
-          // The handler list method should not need ubus.
-          timeout: 10000,
-        });
-      } catch (e: any) {
-        // On host without full OpenWrt environment, list may fail — that is acceptable.
-        // The critical assertion (shebang format) is already above.
-        // Only fail here if output was produced but was unexpected.
-        if (e.stdout) {
-          output = e.stdout;
-        } else {
-          // No output means the runtime path failed entirely — skip gracefully.
-          return;
-        }
+      // `list` does not need ubus — invoke the handler directly via ucode.
+      const output = execSync(`echo '{}' | ucode -L "${SB_LIB}" "${H}" list`, {
+        encoding: "utf8",
+        timeout: 10000,
+      });
+      // Must parse as valid JSON.
+      const parsed = JSON.parse(output.trim());
+
+      // Methods that MUST be present (from the shell's `je 'd.X != null'` checks).
+      for (const m of [
+        "generate",
+        "nftables",
+        "restart",
+        "refresh",
+        "status",
+        "status_detail",
+        "read_config",
+        "clash_get",
+        "clash_mutate",
+        "export_section",
+        "preview_config",
+      ]) {
+        expect(parsed, `missing method: ${m}`).toHaveProperty(m);
       }
-      // If we got output, it should look like JSON (starts with '{')
-      const trimmed = output.trim();
-      if (trimmed.length > 0) {
-        expect(trimmed[0]).toBe("{");
-      }
+      // Spot-check a few argument shapes the shell also asserted.
+      expect(parsed.nftables, "nftables.action missing").toHaveProperty(
+        "action",
+      );
+      expect(parsed.refresh, "refresh.what missing").toHaveProperty("what");
+      expect(
+        parsed.export_section,
+        "export_section.kind missing",
+      ).toHaveProperty("kind");
+      expect(
+        parsed.export_section,
+        "export_section.name missing",
+      ).toHaveProperty("name");
+
+      // clash_request MUST be absent (shell: `je 'd.clash_request == null'`).
+      expect(parsed).not.toHaveProperty("clash_request");
     },
   );
 });

@@ -56,22 +56,29 @@ const apkBin = IN_VM ? null : findApk();
 const capable = apkBin !== null && hasApk3WithInfo(apkBin);
 
 // skip_or_fail semantics (mirrors the shell exactly):
-//   - IN_VM=1         → always SKIP (benign)
-//   - !capable + ALLOW_SKIP=1  → SKIP (explicit escape)
-//   - !capable + ALLOW_SKIP=0  → hard-FAIL (the packaging lane MUST have apk)
-//
-// The task brief additionally says: "if apk-tools 3.0.5+ is absent on this
-// host, the test SKIPs — that is the correct green outcome." That matches
-// ALLOW_SKIP semantics on a dev/host environment, so we honour it.
-const skipAll = IN_VM || !capable;
+//   - IN_VM=1                    → always SKIP (benign; qemu guest lacks mkpkg --info)
+//   - !capable + ALLOW_SKIP=1   → SKIP (explicit escape for environments without apk)
+//   - !capable + ALLOW_SKIP=0   → hard-FAIL (packaging lane MUST have apk-tools 3.0.5+)
+//   - capable                   → RUN
+const skipAll = IN_VM || (!capable && ALLOW_SKIP);
 
-/** Called at the top of each non-skipped test body to hard-fail (not skip)
- *  when apk is absent but SINGBOX_FEED_TEST_ALLOW_SKIP was not set — exactly
- *  like skip_or_fail in the shell. On this dev host capable=false so
- *  skipAll=true already gates all tests before they reach here. */
+// Module-level hard-fail: mirrors skip_or_fail() in the shell — throws immediately
+// (not inside an it()) when apk is absent and ALLOW_SKIP was not set.
+if (!IN_VM && !capable && !ALLOW_SKIP) {
+  const reason = apkBin
+    ? `apk-tools 3 with --info not found (${apkBin})`
+    : "no apk binary on PATH or SDK build";
+  throw new Error(
+    `missing capability: ${reason} (need apk-tools 3.0.5+; ` +
+      `set SINGBOX_FEED_TEST_ALLOW_SKIP=1 only if truly unavailable)`,
+  );
+}
+
+/** Guard inside each test body: redundant safety net; the module-level throw
+ *  above already fires first, but this preserves the per-test message context. */
 function requireCapable(): void {
-  if (capable) return;
-  if (ALLOW_SKIP || IN_VM) return;
+  if (capable || IN_VM) return;
+  if (ALLOW_SKIP) return;
   const reason = apkBin
     ? `apk-tools 3 with --info not found (${apkBin})`
     : "no apk binary on PATH or SDK build";
