@@ -622,14 +622,10 @@ config log 'log'
     );
     const { raw } = await runGen(base);
     expect(raw).toContain('"level": "info"');
-    // Extract just the log block and check no output key
-    const logMatch = raw.match(/"log":\s*\{[^}]*\}/);
-    if (logMatch) {
-      expect(logMatch[0]).not.toContain('"output"');
-    } else {
-      // log key exists somewhere - just verify output not present
-      expect(raw).not.toContain('"output":');
-    }
+    // Parse the JSON directly and assert structurally: log exists, output absent
+    const d = JSON.parse(raw);
+    expect(d.log).toBeDefined();
+    expect(d.log.output).toBeUndefined();
   });
 
   it("cache.enabled=0 → no experimental block", async () => {

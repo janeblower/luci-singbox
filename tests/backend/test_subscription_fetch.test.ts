@@ -2,7 +2,8 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-const LIB = "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
+const LIB =
+  process.env.SB_VM_LIB ?? "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
 const SHARE = "/tmp/work/singbox-ui/root/usr/share/singbox-ui";
 
 // Run a probe .uc file with both -L dirs and the given env vars.
@@ -74,9 +75,12 @@ print(sprintf("%J", captured));
     expect(job1?.ua).toContain("v2rayNG");
     expect(job1?.has_cfg).toBe(false);
 
-    // mysub2 also picked up
+    // mysub2: also picked up, ua is empty (DEFAULT_UA applied at fetch time, not here), no cfg
     const job2 = cap.find((j) => j.url.includes("sub.example.com/y"));
     expect(job2).toBeDefined();
+    // Empty sub_user_agent -> raw ua stored as "" (DEFAULT_UA substituted inside _fetcher, not here)
+    expect(job2?.ua).toBe("");
+    expect(job2?.has_cfg).toBe(false);
   });
 
   it("Test B: _build_fetch_config_for_test seam is removed", async () => {

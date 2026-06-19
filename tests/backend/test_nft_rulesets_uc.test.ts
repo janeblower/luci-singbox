@@ -66,8 +66,10 @@ describe("nft_rulesets_uc", () => {
       `config ruleset 'rS'\n\toption type 'local'\n\toption path '${TMP}/safe/s.json'\n\toption nft_rules '1'\n`,
     );
     await runUc("fetch");
-    const check = await exec(`test -s ${RUNTIME}/rs_rS.json`);
-    expect(check.exitCode, "rs_rS.json must exist").toBe(0);
+    const check = await exec(
+      `test -s ${RUNTIME}/rs_rS.json && grep -q '"rules"' ${RUNTIME}/rs_rS.json`,
+    );
+    expect(check.exitCode, "rs_rS.json must exist and contain rules").toBe(0);
   });
 
   it("C2.1.16: nft-rulesets.uc has raw_path cleanup in local cp-failure branch", async () => {

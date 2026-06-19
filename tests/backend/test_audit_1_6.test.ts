@@ -53,8 +53,7 @@ printf("%J", inb.build_one(s));
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain('"name": "good"');
     expect(r.stdout).not.toContain('"name": "bad user"');
-    // A warn should appear on stderr for the malformed entry
-    expect(r.stderr).toBeTruthy();
+    expect(r.stderr).toContain("malformed uuid 'has space'");
   });
 
   it("inbound_user (vless): non-UUID-class chars dropped (warn), valid kept", async () => {
@@ -65,7 +64,7 @@ printf("%J", inb.build_one(s));
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain('"name": "good"');
     expect(r.stdout).not.toContain('"name": "bad"');
-    expect(r.stderr).toBeTruthy();
+    expect(r.stderr).toContain("malformed uuid");
   });
 
   it("inbound_user (vless): non-canonical but clean hex-hyphens token NOT dropped", async () => {
@@ -76,5 +75,7 @@ printf("%J", inb.build_one(s));
 }`);
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain('"name": "ok"');
+    // Clean token must NOT trigger a malformed-uuid warning
+    expect(r.stderr).not.toContain("malformed uuid");
   });
 });
