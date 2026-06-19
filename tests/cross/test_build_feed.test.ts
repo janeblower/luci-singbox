@@ -88,16 +88,16 @@ function requireCapable(): void {
   );
 }
 
-// Arch list from the shell script (18 real entries)
-const ARCHES_FROM_SH =
-  `x86_64 aarch64_cortex-a53 aarch64_cortex-a72 aarch64_generic \
-arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a8_vfpv3 \
-arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 \
+// Arch list from the shell script (20 covered arches, matches COVERED_ARCHES)
+const ARCHES_FROM_SH = `x86_64 \
+aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic \
+arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 \
+arm_cortex-a8_vfpv3 arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 \
 arm_cortex-a15_neon-vfpv4 \
 mipsel_24kc mipsel_24kc_24kf mipsel_74kc mipsel_mips32 \
 mips_24kc mips_mips32`
-    .split(/\s+/)
-    .filter(Boolean);
+  .split(/\s+/)
+  .filter(Boolean);
 
 // ---------------------------------------------------------------------------
 // Build the feed once (lazy, only when capable)
