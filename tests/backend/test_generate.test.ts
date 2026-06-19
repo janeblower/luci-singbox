@@ -74,7 +74,7 @@ config inbound 'tproxy_in'
     const orphanR = await exec(
       `find ${sandboxDir} -maxdepth 1 -name 'singbox-ui.json.tmp.*' 2>/dev/null | wc -l`,
     );
-    expect(parseInt(orphanR.stdout.trim())).toBe(0);
+    expect(parseInt(orphanR.stdout.trim(), 10)).toBe(0);
 
     // generate.uc uses fs.rename + atomic publish pattern (check on guest)
     const renameR = await exec(
@@ -107,7 +107,7 @@ config dns_server 'fakeip'
     const leaked = await exec(
       `find /tmp -name 'config.json.tmp.*' 2>/dev/null | wc -l`,
     );
-    expect(parseInt(leaked.stdout.trim())).toBe(0);
+    expect(parseInt(leaked.stdout.trim(), 10)).toBe(0);
   });
 
   it("proxy via interface", async () => {
@@ -290,7 +290,7 @@ config route_rule 'rule_auto'
     const countR = await exec(
       `echo ${JSON.stringify(raw)} | grep -o '"update_interval"' | wc -l`,
     );
-    expect(parseInt(countR.stdout.trim())).toBe(1);
+    expect(parseInt(countR.stdout.trim(), 10)).toBe(1);
   });
 
   it("disabled ruleset skipped", async () => {
@@ -350,7 +350,7 @@ config route_rule 'rule_b'
     const countR = await exec(
       `echo ${JSON.stringify(raw)} | grep -o '"tag": "dup_rs"' | wc -l`,
     );
-    expect(parseInt(countR.stdout.trim())).toBe(1);
+    expect(parseInt(countR.stdout.trim(), 10)).toBe(1);
     expect(raw).toContain('"outbound": "direct"');
     expect(raw).toContain('"action": "route"');
     expect(raw).toContain('"action": "reject"');
@@ -985,7 +985,7 @@ config clash_api 'clash_api'
     const orphans = await exec(
       `find ${sandboxDir} -name 'singbox-ui.json.tmp.*' 2>/dev/null | wc -l`,
     );
-    expect(parseInt(orphans.stdout.trim())).toBe(0);
+    expect(parseInt(orphans.stdout.trim(), 10)).toBe(0);
   });
 
   it("sing-box check end-to-end on complete config", async () => {
