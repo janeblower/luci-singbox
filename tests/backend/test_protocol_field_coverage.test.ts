@@ -29,10 +29,11 @@ function getSharedTlsFields(doc: string): Set<string> {
       break;
     }
     if (inShared) {
-      // Extract UCI field names from table rows: `| ... | uci_field_name | ...`
-      // The UCI column is the second column in the Shared TLS block table.
-      const m = line.match(/^\|[^|]+\|\s*`([^`]+)`/);
-      if (m) {
+      // Match the shell guard's `grep -qF "\`field\`"` semantics: a field counts
+      // as documented if it appears as a backtick-token ANYWHERE in the Shared
+      // TLS section (table column, prose, etc.) — not only the table's UCI
+      // column. Collect every `token` on the line.
+      for (const m of line.matchAll(/`([^`]+)`/g)) {
         sharedFields.add(m[1]);
       }
     }

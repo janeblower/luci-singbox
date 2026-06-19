@@ -5,7 +5,8 @@ import { runUcode, runUcodeJSON } from "../helpers/ucode.ts";
 // Port of tests/backend/test_protocol_descriptors_fixes.sh
 // Regression tests for protocol-descriptor correctness bugs:
 //   S4-1  hysteria2 obfs with empty password must NOT emit obfs{}
-//   S4-6  direct proxy_protocol enum: "0" must not emit proxy_protocol:0
+//   S4-6  direct proxy_protocol enum at build time: "0" coerces to 0 (the
+//         enum `values` are UI-only metadata, NOT enforced by _filler.uc)
 //   S4-7  IPv6-literal hosts parse in share-links
 //   S4-8  colon-bearing secrets survive name:secret splitting
 //   S4-9  dns rewrite_ttl NaN guard
