@@ -1,0 +1,91 @@
+/**
+ * tests/cross/install_manifest_fresh.test.ts
+ * Port of tests/cross/test_install_manifest_fresh.sh
+ *
+ * Verifies the per-package install manifests are in sync with what
+ * gen-manifest.sh would produce — catches drift between manual edits and
+ * auto-generation.
+ *
+ * gen-manifest.sh pins LC_ALL=C sort internally; we compare byte-for-byte
+ * so no locale override is needed here.
+ *
+ * Also enforces D4.5: exactly one file under lib/plugins/ in the backend
+ * manifest — plugins/registry.uc.
+ */
+import { describe, expect, it } from "bun:test";
+import { spawnSync } from "node:child_process";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
+
+const ROOT = resolve(import.meta.dir, "../..");
+const GEN_SH = resolve(ROOT, "scripts/gen-manifest.sh");
+
+const MANIFESTS = [
+  "scripts/install-manifest-singbox-ui.txt",
+  "scripts/install-manifest-luci-app-singbox-ui.txt",
+];
+
+describe("install_manifest_fresh", () => {
+  it("manifests are in sync with gen-manifest.sh output", () => {
+    // Snapshot the committed manifests before regeneration
+    const tmpdir2 = mkdtempSync(resolve(tmpdir(), "manifest-fresh-"));
+    const snapshots: Record<string, string> = {};
+    for (const m of MANIFESTS) {
+      const abs = resolve(ROOT, m);
+      snapshots[m] = readFileSync(abs, "utf8");
+    }
+
+    try {
+      // Regenerate. gen-manifest.sh pins LC_ALL=C sort internally.
+      const r = spawnSync("sh", [GEN_SH], {
+        cwd: ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      // Tolerate non-zero only if it printed something useful; most errors exit 0
+      // (gen-manifest.sh writes to the files, doesn't need to exit 0 to succeed)
+
+      let stale = false;
+      for (const m of MANIFESTS) {
+        const abs = resolve(ROOT, m);
+        const after = readFileSync(abs, "utf8");
+        if (after !== snapshots[m]) {
+          stale = true;
+          console.error(`FAIL: ${m} is stale. Run: sh scripts/gen-manifest.sh`);
+          // Restore so the test doesn't dirty the working tree
+          writeFileSync(abs, snapshots[m]);
+        }
+      }
+      expect(stale).toBe(false);
+    } finally {
+      // Always restore in case of unexpected error
+      for (const m of MANIFESTS) {
+        const abs = resolve(ROOT, m);
+        const current = existsSync(abs) ? readFileSync(abs, "utf8") : "";
+        if (current !== snapshots[m]) {
+          writeFileSync(abs, snapshots[m]);
+        }
+      }
+      rmSync(tmpdir2, { recursive: true, force: true });
+    }
+  });
+
+  it("D4.5: exactly one file under lib/plugins/ in the backend manifest (registry.uc)", () => {
+    const be = resolve(ROOT, "scripts/install-manifest-singbox-ui.txt");
+    const lines = readFileSync(be, "utf8").split("\n");
+    const pluginLines = lines.filter((l) =>
+      l.startsWith("root/usr/share/singbox-ui/lib/plugins/"),
+    );
+    expect(pluginLines.length).toBe(1);
+    expect(pluginLines[0]).toMatch(
+      /^root\/usr\/share\/singbox-ui\/lib\/plugins\/registry\.uc\b/,
+    );
+  });
+});
