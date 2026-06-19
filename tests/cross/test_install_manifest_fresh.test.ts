@@ -44,7 +44,7 @@ describe("install_manifest_fresh", () => {
 
     try {
       // Regenerate. gen-manifest.sh pins LC_ALL=C sort internally.
-      const r = spawnSync("sh", [GEN_SH], {
+      const _r = spawnSync("sh", [GEN_SH], {
         cwd: ROOT,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"],

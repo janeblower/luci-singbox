@@ -63,7 +63,7 @@ const uci: any = {
     }
     return [];
   },
-  get(config: string, sid: string, opt: string) {
+  get(_config: string, sid: string, opt: string) {
     const rows: any[] = uci.sections("singbox-ui", "inbound");
     const row = rows.filter((r: any) => r[".name"] === sid)[0];
     return row ? row[opt] : undefined;

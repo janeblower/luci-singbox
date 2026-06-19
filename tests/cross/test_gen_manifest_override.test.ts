@@ -41,7 +41,7 @@ describe("gen_manifest_override", () => {
       writeFileSync(ovr, "root/etc/config/a.b\tHIT_AB\tdata\n");
 
       const out = resolve(td, "manifest.txt");
-      const r = spawnSync("sh", [GEN_SH], {
+      const _r = spawnSync("sh", [GEN_SH], {
         cwd: ROOT,
         encoding: "utf8",
         env: {
