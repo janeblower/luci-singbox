@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { exec } from "../helpers/ssh.ts";
 import { useGuest } from "../helpers/guest.ts";
+import { exec } from "../helpers/ssh.ts";
 
 // Port of tests/backend/test_rpcd_prod_path.sh
 //
@@ -22,7 +22,7 @@ const IN_VM = process.env.SINGBOX_TESTS_IN_VM === "1";
 // Helper: assert a method returned a clean JSON envelope (no require() failure)
 async function assertClean(method: string, out: string): Promise<void> {
   // A require() failure surfaces as a message containing "require(" + "error"
-  if (out.includes('require(') && out.includes('"error"')) {
+  if (out.includes("require(") && out.includes('"error"')) {
     throw new Error(
       `${method} hit a require() failure via prod path; out=${out}`,
     );
@@ -37,9 +37,17 @@ describe("test_rpcd_prod_path", () => {
 
   beforeAll(async () => {
     // Skip entirely when not in a VM (no live rpcd/ubus)
-    const ubusCheck = await exec("command -v ubus 2>/dev/null && echo YES || echo NO");
-    const rpdCheck = await exec("command -v rpcd 2>/dev/null && echo YES || echo NO");
-    if (!IN_VM || ubusCheck.stdout.trim() !== "YES" || rpdCheck.stdout.trim() !== "YES") {
+    const ubusCheck = await exec(
+      "command -v ubus 2>/dev/null && echo YES || echo NO",
+    );
+    const rpdCheck = await exec(
+      "command -v rpcd 2>/dev/null && echo YES || echo NO",
+    );
+    if (
+      !IN_VM ||
+      ubusCheck.stdout.trim() !== "YES" ||
+      rpdCheck.stdout.trim() !== "YES"
+    ) {
       return; // tests will be skipped below via skipIf
     }
 
@@ -95,24 +103,18 @@ describe("test_rpcd_prod_path", () => {
     `);
   });
 
-  it.skipIf(!IN_VM)(
-    "singbox-ui ubus object registered via rpcd",
-    async () => {
-      const r = await exec("ubus list 2>/dev/null");
-      expect(r.stdout.split("\n")).toContain("singbox-ui");
-    },
-  );
+  it.skipIf(!IN_VM)("singbox-ui ubus object registered via rpcd", async () => {
+    const r = await exec("ubus list 2>/dev/null");
+    expect(r.stdout.split("\n")).toContain("singbox-ui");
+  });
 
-  it.skipIf(!IN_VM)(
-    "1) status via shebang path returns ok",
-    async () => {
-      const r = await exec("ubus call singbox-ui status 2>/dev/null");
-      expect(r.exitCode).toBe(0);
-      expect(r.stdout).toContain('"status"');
-      expect(r.stdout).toMatch(/"status":\s*"ok"/);
-      await assertClean("status", r.stdout);
-    },
-  );
+  it.skipIf(!IN_VM)("1) status via shebang path returns ok", async () => {
+    const r = await exec("ubus call singbox-ui status 2>/dev/null");
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain('"status"');
+    expect(r.stdout).toMatch(/"status":\s*"ok"/);
+    await assertClean("status", r.stdout);
+  });
 
   it.skipIf(!IN_VM)(
     "2) protocol_schema loads lib modules via -L shebang",

@@ -1,18 +1,15 @@
-import { describe, it, expect } from "bun:test";
-import { exec } from "../helpers/ssh.ts";
+import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
+import { exec } from "../helpers/ssh.ts";
 
 // Port of tests/backend/test_rpcd_acl_sync.sh
 // Single-source guard: handler `list` keys MUST equal ACL read∪write.
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
-  process.env.SB_VM_LIB ??
-  "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
-const HANDLER =
-  `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
-const ACL =
-  `${WORK}/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json`;
+  process.env.SB_VM_LIB ?? "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
+const HANDLER = `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
+const ACL = `${WORK}/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json`;
 
 describe("test_rpcd_acl_sync", () => {
   useGuest();

@@ -1,14 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { exec, putFile } from "../helpers/ssh.ts";
 import { useGuest } from "../helpers/guest.ts";
+import { exec, putFile } from "../helpers/ssh.ts";
 
 // Port of tests/backend/test_status_detail.sh
 // status_detail key presence, apk-stub cache perf, and parser parity (audit 13.2).
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
-  process.env.SB_VM_LIB ??
-  `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
+  process.env.SB_VM_LIB ?? `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
 const HANDLER = `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
 const INITD = `${WORK}/singbox-ui/root/etc/init.d/singbox-ui`;
 
@@ -62,7 +61,7 @@ describe("test_status_detail", () => {
       "now",
     ]) {
       expect(
-        Object.prototype.hasOwnProperty.call(out, k),
+        Object.hasOwn(out, k),
         `key '${k}' missing from status_detail`,
       ).toBe(true);
     }
@@ -134,10 +133,7 @@ STUBEOF
       const sedVal = sedOut.stdout.trim();
 
       // rpcd ucode path: stub apk to emit exactly `line` (use putFile to avoid quoting hell)
-      await putFile(
-        `#!/bin/sh\nprintf '%s\\n' '${line}'\n`,
-        `${binDir2}/apk`,
-      );
+      await putFile(`#!/bin/sh\nprintf '%s\\n' '${line}'\n`, `${binDir2}/apk`);
       await exec(`chmod +x '${binDir2}/apk'`);
       const rpcdOut = await exec(
         `echo '{}' | PATH="${binDir2}:$PATH" SINGBOX_VARLIB="${varlib2}" ` +

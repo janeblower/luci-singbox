@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { exec } from "../helpers/ssh.ts";
 import { useGuest } from "../helpers/guest.ts";
+import { exec } from "../helpers/ssh.ts";
 
 // Port of tests/backend/test_nftables_apply_lock.sh
 // S1-4: concurrent applies serialize on the mkdir-based lock; stale/SEC-3 guards.
@@ -8,8 +8,7 @@ import { useGuest } from "../helpers/guest.ts";
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
-  process.env.SB_VM_LIB ??
-  `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
+  process.env.SB_VM_LIB ?? `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
 const SCRIPT = `${WORK}/singbox-ui/root/usr/share/singbox-ui/nftables.uc`;
 
 const UCI_CONFIG = `config dns_server fakeip
@@ -124,8 +123,8 @@ EOF
     `);
     expect(r.exitCode).toBe(0);
     const lines = r.stdout.trim().split("\n");
-    expect(parseInt(lines[0], 10)).toBe(0);   // apply succeeded (reclaimed)
-    expect(lines[1]).toBe("LOCK_GONE");        // released after use
+    expect(parseInt(lines[0], 10)).toBe(0); // apply succeeded (reclaimed)
+    expect(lines[1]).toBe("LOCK_GONE"); // released after use
   });
 
   it("SEC-3: fresh owner-less lock (inside grace) must NOT be stolen", async () => {
@@ -161,7 +160,7 @@ EOF
     `);
     expect(r.exitCode).toBe(0);
     const lines = r.stdout.trim().split("\n");
-    expect(parseInt(lines[0], 10)).toBe(0);  // apply succeeded
-    expect(lines[1]).toBe("LOCK_GONE");      // lock released
+    expect(parseInt(lines[0], 10)).toBe(0); // apply succeeded
+    expect(lines[1]).toBe("LOCK_GONE"); // lock released
   });
 });

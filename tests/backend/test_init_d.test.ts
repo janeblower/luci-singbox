@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { exec, putFile } from "../helpers/ssh.ts";
 import { useGuest } from "../helpers/guest.ts";
+import { exec, putFile } from "../helpers/ssh.ts";
 
 // Port of tests/backend/test_init_d.sh
 // Drives /etc/init.d/singbox-ui start_service/stop_service via stubbed
@@ -206,9 +206,7 @@ exit 0
     await clearLogs();
 
     // Redirect stdout to /dev/null and capture stderr
-    const r = await exec(
-      `${runInit("stop_service")} 2>&1 >/dev/null || true`,
-    );
+    const r = await exec(`${runInit("stop_service")} 2>&1 >/dev/null || true`);
     expect(r.stdout).not.toContain("noisy ucode stderr");
 
     const ucode = (await exec(`cat '${TD}/ucode.log'`)).stdout;
@@ -226,7 +224,9 @@ exit 0
     await exec(`chmod +x '${TD}/bin/ucode'`);
     await clearLogs();
 
-    const r = await exec(`${runInit("start_service")} 2>/dev/null; echo "RC=$?"`);
+    const r = await exec(
+      `${runInit("start_service")} 2>/dev/null; echo "RC=$?"`,
+    );
     const rc = parseInt((r.stdout.match(/RC=(\d+)/) ?? ["", "0"])[1], 10);
     expect(rc).toBeGreaterThan(0);
 
@@ -266,7 +266,9 @@ exit 0
     await exec(`chmod +x '${TD}/bin/sing-box'`);
     await clearLogs();
 
-    const r = await exec(`${runInit("start_service")} 2>/dev/null; echo "RC=$?"`);
+    const r = await exec(
+      `${runInit("start_service")} 2>/dev/null; echo "RC=$?"`,
+    );
     const rc = parseInt((r.stdout.match(/RC=(\d+)/) ?? ["", "0"])[1], 10);
     expect(rc).toBeGreaterThan(0);
 

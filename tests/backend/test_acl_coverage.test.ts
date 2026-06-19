@@ -1,6 +1,6 @@
-import { describe, it, expect } from "bun:test";
-import { exec } from "../helpers/ssh.ts";
+import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
+import { exec } from "../helpers/ssh.ts";
 
 // Port of tests/backend/test_acl_coverage.sh
 // Every method in read.ubus must be on the SAFE_READ_METHODS whitelist.
@@ -8,8 +8,7 @@ import { useGuest } from "../helpers/guest.ts";
 // No method may appear in both lists.
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
-const ACL =
-  `${WORK}/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json`;
+const ACL = `${WORK}/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json`;
 
 // Hardcoded invariant — MUST stay hand-maintained. See CLAUDE.md.
 const SAFE_READ_METHODS = [

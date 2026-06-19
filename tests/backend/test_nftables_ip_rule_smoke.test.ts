@@ -1,6 +1,6 @@
-import { describe, it, expect } from "bun:test";
-import { exec } from "../helpers/ssh.ts";
+import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
+import { exec } from "../helpers/ssh.ts";
 
 // Port of tests/backend/test_nftables_ip_rule_smoke.sh
 // PATH-stub `ip` to feed canned `ip rule show` output to nftables.uc,
@@ -8,7 +8,8 @@ import { useGuest } from "../helpers/guest.ts";
 // silent when one is.
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
-const LIB = process.env.SB_VM_LIB ?? `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
+const LIB =
+  process.env.SB_VM_LIB ?? `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
 const SCRIPT = `${WORK}/singbox-ui/root/usr/share/singbox-ui/nftables.uc`;
 
 // Shared UCI config fixture that cmd_apply needs
