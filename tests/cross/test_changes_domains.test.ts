@@ -121,7 +121,6 @@ describe("domain classifier: path -> domain mapping", () => {
   describe("8) shared fan-out (all four domains)", () => {
     const sharedFiles = [
       "tests/lib/sb_helpers.sh",
-      "tests/run.sh",
       "tests/run-vm.sh",
       "tests/docker/Dockerfile",
       "tests/browser-container/Dockerfile",

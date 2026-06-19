@@ -47,9 +47,9 @@ jobs:
   # path-gated and these outputs are only consulted on pull_request. That is why
   # the paths-filter step runs only on pull_request; elsewhere its outputs are
   # ignored. Directory-based 4-domain model (bbolt/backend/ui/packaging) with a
-  # `shared` fan-out (test harness / CI infra -> all four). The same domain
-  # *names* back tests/run.sh's SB_DOMAIN filter via tests/lib/domain_classify.sh
-  # (kept as the local classifier + its unit test tests/cross/test_changes_domains.sh).
+  # `shared` fan-out (test harness / CI infra -> all four). The domain names
+  # mirror tests/lib/domain_classify.sh (kept as the local classifier + its
+  # unit test tests/cross/test_changes_domains.test.ts).
   changes:
     name: Detect changed domains
     runs-on: ubuntu-24.04
@@ -157,15 +157,6 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: main.js syntax check (host node)
-        run: sh tests/cross/test_main_js_syntax.sh
-
-      # build-apk.sh is a host bash build script; its per-arch packaging test
-      # needs bash (absent in the OpenWrt qemu guest, where it SKIPs). Run it
-      # here on the bash-equipped host so its assertions actually execute in CI.
-      - name: build-apk per-arch packaging test (host bash)
-        run: sh tests/cross/test_build_apk_per_arch.sh
-
       # Lint via the official shellcheck image instead of apt-installing the
       # binary on every run (saves the apt-get update/install round-trip and
       # pins a known shellcheck version). The repo is mounted at /mnt — the
@@ -212,45 +203,12 @@ jobs:
     # UI gate: run on UI/cross/lib changes, and always on push/main/tags.
     if: ${{ needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request' }}
     timeout-minutes: 12
-    # The node-gated *_js.sh / json_import tests carry real assertions for the
-    # XSS-relevant descriptor_form.js logic, the validators, and the share-link/
-    # JSON importer parsers. They SKIP inside the OpenWrt qemu VM (no node in the
-    # guest), so without a node-equipped host job their assertions never run in
-    # CI. Run them here, pre-merge, on a clean host with node only — ucode is
-    # absent, so json_import's ucode-half roundtrip gracefully SKIPs while its
-    # node-side import assertions still execute.
+    # All UI/JS tests now live in tests/ui/*.test.ts and run via `bun test
+    # tests/ui`. ucode is absent on this host; json_import's ucode-half
+    # gracefully SKIPs while its node-side assertions still execute.
+    # PO coverage and main.js syntax are now covered by bun test tests/cross.
     steps:
       - uses: actions/checkout@v6
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      # Derive the node-gated set PROGRAMMATICALLY instead of hardcoding it —
-      # a hardcoded list silently drifts (it once omitted 5 real test files:
-      # test_dashboard_js, test_version_gate_js, test_audit_2_4/_8_3/_9_3, which
-      # then SKIPped in the VM and never ran anywhere). Any test that gates on
-      # `command -v node` or `NODE_BIN` is selected here. test_main_js_syntax.sh
-      # also matches but already runs in the lint job; running it twice is
-      # harmless. ucode is absent on this host, so the ucode-half of
-      # json_import gracefully SKIPs while node-side assertions still execute.
-      - name: Run node-gated JS unit tests
-        run: |
-          set -eu
-          found=0
-          for t in $(grep -lE 'command -v node|NODE_BIN' tests/*/test_*.sh | sort); do
-            echo "==> $t"
-            sh "$t"
-            found=$((found + 1))
-          done
-          [ "$found" -gt 0 ] || { echo "FAIL: no node-gated tests matched the glob"; exit 1; }
-          echo "Ran $found node-gated test file(s)."
-
-      # i18n guard (pure shell+grep+awk) — runs here on the host, not only in the
-      # node-less VM, so the msgid-coverage / untranslated-threshold assertions
-      # actually execute pre-merge in CI.
-      - name: PO coverage (i18n threshold)
-        run: sh tests/cross/test_po_coverage.sh
 
       # Catch a forgotten `scripts/regen-po.sh` run: if a developer added a new
       # _('...') UI string without regenerating the template, the .pot here will
@@ -571,21 +529,6 @@ jobs:
           "$APK_BIN" mkpkg --help 2>&1 | grep -q -- '--info' \
             || { echo "SDK apk lacks 'mkpkg --info' (apk-tools too old)" >&2; exit 1; }
           echo "SINGBOX_APK_BIN=$APK_BIN" >> "$GITHUB_ENV"
-
-      - name: Run packaging suite (host-mode, no VM)
-        env:
-          SB_SUITE: cross
-          SB_DOMAIN: packaging
-          # This lane runs the cross suite directly on the host for the
-          # apk-tools-3.0.5+ feed/i18n/manifest tests. ucode/uci are absent here,
-          # so the ucode/uci-gated cross tests (rpcd/json_import/migration/...)
-          # SKIP — their REAL coverage is the VM/backend lane. SINGBOX_UCODE_ABSENT_OK
-          # tells run.sh that is expected: it bypasses VM auto-delegation AND treats
-          # ucode/uci SKIPs as benign (guard A does not hard-fail). Unlike the old
-          # SINGBOX_TESTS_IN_VM=1 hack it does not make tests think they run inside
-          # a real OpenWrt guest (e.g. test_browser now takes its no-bun skip path).
-          SINGBOX_UCODE_ABSENT_OK: '1'
-        run: sh tests/run.sh
 
       - uses: oven-sh/setup-bun@735343b667d3e6f658f44d0eca948eb6282f2b76 # v2.0.2
         with:

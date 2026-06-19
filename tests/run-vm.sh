@@ -1,23 +1,10 @@
 #!/bin/sh
-# tests/run-vm.sh — local + CI entry that boots the published
-# openwrt-test image and runs the suite inside the OpenWrt guest.
-#
-# This is the long-form sibling of tests/run.sh, called automatically
-# when run.sh detects it's not already inside the VM.
+# tests/run-vm.sh — local entry point that boots the published
+# openwrt-test image and runs the bun test suite inside the OpenWrt guest.
+# CI uses the same Docker image directly via the container ENTRYPOINT.
 #
 # Image override: set SINGBOX_TEST_IMAGE to use a local tag (e.g. for
-# Phase 1 development before the image is published).
-#
-# FOLLOW-UP (CI-tests/PERF-2, deferred): the in-guest suite (tests/run.sh) runs
-# strictly serially and is the CI long-pole. Most ucode tests are independent
-# and sandbox to their own mktemp dir, so a bounded `xargs -P $(nproc)` pool
-# could roughly halve wall-time — BUT a few are stateful and MUST stay serial
-# (test_nftables_apply_lock uses a fixed lock dir; test_rpcd_prod_path does
-# rpcd restart; init.d tests). Parallelizing safely needs an explicit serial
-# allowlist, a guest -smp bump in tests/docker/entrypoint.sh, and per-test
-# mktemp/SINGBOX_TMPDIR isolation validation. Deferred as not-low-risk; the
-# failure-COLLECTION change in run.sh already removes the multi-failure re-run
-# pain that made serial slowness most painful.
+# development before the image is published).
 set -eu
 cd "$(dirname "$0")/.."
 
@@ -26,7 +13,7 @@ IMAGE="${SINGBOX_TEST_IMAGE:-ghcr.io/janeblower/luci-singbox/openwrt-test:latest
 if ! command -v docker >/dev/null 2>&1; then
 	echo "ERROR: docker not found in PATH." >&2
 	echo "       Install Docker, or run tests directly on an OpenWrt host" >&2
-	echo "       with SINGBOX_TESTS_IN_VM=1 sh tests/run.sh" >&2
+	echo "       with SINGBOX_TESTS_IN_VM=1 bun test tests/backend tests/parity" >&2
 	exit 1
 fi
 
