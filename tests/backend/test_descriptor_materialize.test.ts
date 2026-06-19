@@ -17,6 +17,7 @@ describe("descriptor materialize", () => {
   useGuest();
 
   // Test 1: register + materialize on a minimal descriptor with one shared block.
+  // Real API: mat.tabs = array of tab-name strings, mat.fields = flat array of all fields.
   it("Test 1: materialize merges protocol fields + shared block fields", async () => {
     const src = `
       let reg = require("builder.protocols.registry");
@@ -35,27 +36,30 @@ describe("descriptor materialize", () => {
     `;
     const mat = await runUcodeJSON<Record<string, unknown>>(src);
 
-    // Tabs object must exist
+    // mat.tabs is an array of tab name strings; mat.fields is a flat array of all fields.
     expect(mat.tabs).toBeDefined();
-    const tabs = mat.tabs as Record<string, unknown[]>;
+    expect(Array.isArray(mat.tabs)).toBe(true);
+    const tabNames = mat.tabs as string[];
+    expect(tabNames).toContain("basic");
+    expect(tabNames).toContain("advanced");
 
-    // basic tab must contain server and server_port
-    const basicFields = tabs.basic as Array<{ name: string }>;
-    expect(basicFields).toBeDefined();
+    expect(mat.fields).toBeDefined();
+    expect(Array.isArray(mat.fields)).toBe(true);
+    const fields = mat.fields as Array<{ name: string; tab: string }>;
+
+    // basic tab fields must include server and server_port
+    const basicFields = fields.filter((f) => f.tab === "basic");
     const basicNames = basicFields.map((f) => f.name);
     expect(basicNames).toContain("server");
     expect(basicNames).toContain("server_port");
 
-    // advanced tab must contain myfield
-    const advFields = tabs.advanced as Array<{ name: string }>;
-    expect(advFields).toBeDefined();
+    // advanced tab fields must include myfield
+    const advFields = fields.filter((f) => f.tab === "advanced");
     const advNames = advFields.map((f) => f.name);
     expect(advNames).toContain("myfield");
 
-    // dial shared block contributes fields (e.g. detour, bind_interface, routing_mark)
-    // at least detour must appear in some tab
-    const allFields = Object.values(tabs).flat() as Array<{ name: string }>;
-    const allNames = allFields.map((f) => f.name);
+    // dial shared block contributes fields (e.g. detour)
+    const allNames = fields.map((f) => f.name);
     expect(allNames).toContain("detour");
   });
 
@@ -101,6 +105,7 @@ describe("descriptor materialize", () => {
   });
 
   // Test 4: _show_advanced_<tab> auto-injected and prepended first (dns kind only).
+  // mat.tabs is array of strings; mat.fields is flat array — filter by f.tab.
   it("Test 4: _show_advanced_<tab> auto-injected for dns kind", async () => {
     const src = `
       let reg = require("builder.protocols.registry");
@@ -115,17 +120,19 @@ describe("descriptor materialize", () => {
       print(sprintf("%J", mat));
     `;
     const mat = await runUcodeJSON<Record<string, unknown>>(src);
-    const tabs = mat.tabs as Record<string, Array<{ name: string }>>;
 
-    // advanced tab must start with _show_advanced_advanced toggle
-    const advFields = tabs.advanced;
-    expect(advFields).toBeDefined();
+    // mat.fields is a flat array of all fields with a .tab property
+    expect(mat.fields).toBeDefined();
+    expect(Array.isArray(mat.fields)).toBe(true);
+    const fields = mat.fields as Array<{ name: string; tab: string }>;
+
+    // advanced tab fields must include adv_opt and _show_advanced toggle
+    const advFields = fields.filter((f) => f.tab === "advanced");
     expect(advFields.length).toBeGreaterThan(0);
-    // The _show_advanced toggle must be present in the advanced tab
     const toggleNames = advFields.map((f) => f.name);
     const hasToggle = toggleNames.some((n) => n.startsWith("_show_advanced_"));
     expect(hasToggle).toBe(true);
-    // Toggle must be FIRST
+    // Toggle must be FIRST among advanced-tab fields
     expect(advFields[0].name).toMatch(/^_show_advanced_/);
   });
 
@@ -141,14 +148,11 @@ describe("descriptor materialize", () => {
         ],
       });
       let mat = reg.materialize("outbound", "mat_out_noadv");
-      let tabs = mat.tabs;
+      // mat.fields is a flat array of all fields
       let found_toggle = false;
-      for (let tab, fields in tabs) {
-        if (type(fields) !== "array") continue;
-        for (let f in fields) {
-          if (f.name && index(f.name, "_show_advanced_") === 0) {
-            found_toggle = true;
-          }
+      for (let f in mat.fields) {
+        if (f.name && index(f.name, "_show_advanced_") === 0) {
+          found_toggle = true;
         }
       }
       print(found_toggle ? "HAS_TOGGLE" : "NO_TOGGLE");

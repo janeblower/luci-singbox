@@ -40,22 +40,24 @@ describe("descriptor resilience (S2.1)", () => {
     const put = await putFile(BROKEN_TROJAN_UC, `${overlayDir}/trojan.uc`);
     expect(put.exitCode).toBe(0);
 
-    // Run outbound builder with overlay dir FIRST on -L path (shadows real trojan)
-    const src = `
-      // outbound.uc eager-loads descriptors with try/catch — broken trojan must be skipped.
-      let ob = require("outbound");
-      let s = {
-        ".name": "vless_test", type: "vless",
-        server: "1.2.3.4", server_port: "443",
-        server_uuid: "11111111-2222-3333-4444-555555555555",
-      };
-      let got = ob.build_constructor_for(s, "vless");
-      print(got != null && got.type === "vless" ? "PASS" : sprintf("FAIL:%J", got));
-    `;
+    // Run outbound builder with overlay dir FIRST on -L path (shadows real trojan).
+    // Use putFile() to write the ucode script to avoid shell quoting issues.
+    const src = [
+      "let ob = require('outbound');",
+      "let s = {",
+      "  '.name': 'vless_test', type: 'vless',",
+      "  server: '1.2.3.4', server_port: '443',",
+      "  server_uuid: '11111111-2222-3333-4444-555555555555',",
+      "};",
+      "let got = ob.build_constructor_for(s, 'vless');",
+      "print(got != null && got.type === 'vless' ? 'PASS' : sprintf('FAIL:%J', got));",
+    ].join("\n");
 
     const overlayBase = `/tmp/sb-resilience-${process.pid}`;
+    const scriptPath = `${overlayBase}/test_script.uc`;
+    await putFile(src, scriptPath);
     const r = await exec(
-      `cd ${WORK} && ucode -L ${overlayBase} -L ${LIB} -e ${JSON.stringify(src)} 2>/dev/null`,
+      `cd ${WORK} && ucode -L ${overlayBase} -L ${LIB} ${scriptPath} 2>/dev/null`,
     );
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("PASS");
@@ -72,21 +74,23 @@ describe("descriptor resilience (S2.1)", () => {
     );
     expect(put.exitCode).toBe(0);
 
-    const src = `
-      let inb = require("inbound");
-      let s = {
-        ".name": "vless_in", ".type": "inbound",
-        enabled: "1", protocol: "vless",
-        listen: "::", listen_port: "443",
-        server_uuid: "99999999-aaaa-bbbb-cccc-dddddddddddd",
-      };
-      let got = inb.build_one(s);
-      print(got != null && got.type === "vless" ? "PASS" : sprintf("FAIL:%J", got));
-    `;
+    const src = [
+      "let inb = require('inbound');",
+      "let s = {",
+      "  '.name': 'vless_in', '.type': 'inbound',",
+      "  enabled: '1', protocol: 'vless',",
+      "  listen: '::', listen_port: '443',",
+      "  server_uuid: '99999999-aaaa-bbbb-cccc-dddddddddddd',",
+      "};",
+      "let got = inb.build_one(s);",
+      "print(got != null && got.type === 'vless' ? 'PASS' : sprintf('FAIL:%J', got));",
+    ].join("\n");
 
     const overlayBase = `/tmp/sb-resilience-in-${process.pid}`;
+    const scriptPath = `${overlayBase}/test_script.uc`;
+    await putFile(src, scriptPath);
     const r = await exec(
-      `cd ${WORK} && ucode -L ${overlayBase} -L ${LIB} -e ${JSON.stringify(src)} 2>/dev/null`,
+      `cd ${WORK} && ucode -L ${overlayBase} -L ${LIB} ${scriptPath} 2>/dev/null`,
     );
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("PASS");
@@ -100,21 +104,23 @@ describe("descriptor resilience (S2.1)", () => {
     const put = await putFile(BROKEN_TROJAN_UC, `${overlayDir}/trojan.uc`);
     expect(put.exitCode).toBe(0);
 
-    const src = `
-      let ob = require("outbound");
-      let s = {
-        ".name": "tj", type: "trojan",
-        server: "1.2.3.4", server_port: "443",
-        server_password: "pw",
-      };
-      let got = ob.build_constructor_for(s, "trojan");
-      // broken descriptor → no descriptor registered → build_constructor_for returns null
-      print(got == null ? "PASS_NULL" : sprintf("GOT:%J", got));
-    `;
+    const src = [
+      "let ob = require('outbound');",
+      "let s = {",
+      "  '.name': 'tj', type: 'trojan',",
+      "  server: '1.2.3.4', server_port: '443',",
+      "  server_password: 'pw',",
+      "};",
+      "let got = ob.build_constructor_for(s, 'trojan');",
+      "// broken descriptor → no descriptor registered → build_constructor_for returns null",
+      "print(got == null ? 'PASS_NULL' : sprintf('GOT:%J', got));",
+    ].join("\n");
 
     const overlayBase = `/tmp/sb-resilience-trojan-${process.pid}`;
+    const scriptPath = `${overlayBase}/test_script.uc`;
+    await putFile(src, scriptPath);
     const r = await exec(
-      `cd ${WORK} && ucode -L ${overlayBase} -L ${LIB} -e ${JSON.stringify(src)} 2>/dev/null`,
+      `cd ${WORK} && ucode -L ${overlayBase} -L ${LIB} ${scriptPath} 2>/dev/null`,
     );
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("PASS_NULL");

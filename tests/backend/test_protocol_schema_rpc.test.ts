@@ -9,16 +9,19 @@ import { runUcode } from "../helpers/ucode.ts";
 //   2. version:1 + schema key
 //   3. All expected outbound protocols present
 //   4. Inbound protocols present within schema.inbound
-//   4b. Every protocol entry has tabs[] array
+//   4b. Every protocol entry has tabs[] array and fields[] array
 //   5. No literal "function" in response
 //   6. At least one "secret":true preserved
 //   7. No "emit" key in response
 //   8. Dynamic selector sources survive whitelist projection
 //   9. tproxy.interface is a persisted dynamic device selector (NOT virtual)
-//   9b. BLD-3: per-field min_version reaches the frontend
+//   9b. BLD-3: per-field min_version reaches the frontend (ssh_cipher)
 //  10. No backend-only props leak (json_key, coerce, omit_when, skip_value, requires, default_when_empty)
 //  11. tproxy.nft_rules has exclusive:true
 //  12. tproxy has a fwmark field
+//
+// NOTE: mat.tabs = array of tab-name strings; mat.fields = flat array of all fields.
+// Ucode drivers must iterate entry.fields (flat array), NOT entry.tabs as object.
 
 const HANDLER = "singbox-ui/root/usr/libexec/rpcd/singbox-ui";
 const LIB =
@@ -103,7 +106,7 @@ describe("protocol_schema RPC", () => {
     }
   });
 
-  it("4b. every protocol entry in schema has tabs[] array", async () => {
+  it("4b. every protocol entry in schema has tabs[] array and fields[] array", async () => {
     if (!rawResponse) rawResponse = await callSchema();
     const r = await runUcode(`
       let j;
@@ -118,6 +121,9 @@ describe("protocol_schema RPC", () => {
           if (type(entry) !== "object") { push(failures, sprintf("%s.%s not object", kind, proto)); continue; }
           if (type(entry.tabs) !== "array") {
             push(failures, sprintf("%s.%s missing tabs[]", kind, proto));
+          }
+          if (type(entry.fields) !== "array") {
+            push(failures, sprintf("%s.%s missing fields[]", kind, proto));
           }
         }
       }
@@ -134,7 +140,8 @@ describe("protocol_schema RPC", () => {
 
   it("6. at least one 'secret':true preserved in response", async () => {
     if (!rawResponse) rawResponse = await callSchema();
-    expect(rawResponse).toContain('"secret":true');
+    // ucode %J outputs pretty-printed JSON with spaces after colons: "secret": true
+    expect(rawResponse).toContain('"secret": true');
   });
 
   it("7. no 'emit' key in response", async () => {
@@ -144,21 +151,18 @@ describe("protocol_schema RPC", () => {
 
   it("8. dynamic selector sources survive whitelist projection (detour/bind_interface)", async () => {
     if (!rawResponse) rawResponse = await callSchema();
+    // mat.fields is a flat array; iterate entry.fields directly (not entry.tabs as object)
     const r = await runUcode(`
       let j;
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
       let schema = j && j.schema;
-      // Walk all outbound field arrays looking for dynamic:"outbounds" (detour)
-      // and dynamic:"interfaces" (bind_interface).
       let found_outbounds = false;
       let found_interfaces = false;
       for (let proto, entry in (schema && schema.outbound)) {
-        for (let tab, fields in (entry && entry.tabs)) {
-          if (type(fields) !== "array") continue;
-          for (let f in fields) {
-            if (f.dynamic === "outbounds") found_outbounds = true;
-            if (f.dynamic === "interfaces") found_interfaces = true;
-          }
+        if (type(entry.fields) !== "array") continue;
+        for (let f in entry.fields) {
+          if (f.dynamic === "outbounds") found_outbounds = true;
+          if (f.dynamic === "interfaces") found_interfaces = true;
         }
       }
       print(found_outbounds && found_interfaces ? "OK" : sprintf("FAIL outbounds:%s interfaces:%s", found_outbounds, found_interfaces));
@@ -169,23 +173,20 @@ describe("protocol_schema RPC", () => {
 
   it("9. tproxy.interface is a persisted dynamic device selector, NOT virtual (de-virtualization fix)", async () => {
     if (!rawResponse) rawResponse = await callSchema();
+    // mat.fields is a flat array; look for "interface" field in entry.fields directly
     const r = await runUcode(`
       let j;
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
       let schema = j && j.schema;
       let tproxy = schema && schema.inbound && schema.inbound.tproxy;
       if (tproxy == null) { print("FAIL_NO_TPROXY"); exit(0); }
-      // Walk tproxy tabs looking for "interface" field
       let iface_field = null;
-      for (let tab, fields in (tproxy.tabs)) {
-        if (type(fields) !== "array") continue;
-        for (let f in fields) {
+      if (type(tproxy.fields) === "array") {
+        for (let f in tproxy.fields) {
           if (f.name === "interface") { iface_field = f; break; }
         }
-        if (iface_field != null) break;
       }
       if (iface_field == null) { print("FAIL_NO_IFACE_FIELD"); exit(0); }
-      // Must be dynamic:"devices" and NOT virtual:true
       if (iface_field.dynamic !== "devices") {
         print(sprintf("FAIL_DYNAMIC:%s", iface_field.dynamic)); exit(0);
       }
@@ -198,8 +199,10 @@ describe("protocol_schema RPC", () => {
     expect(r.stdout.trim()).toBe("OK");
   });
 
-  it("9b. BLD-3: per-field min_version reaches frontend (ssh.cipher annotated min_version '1.14')", async () => {
+  it("9b. BLD-3: per-field min_version reaches frontend (ssh_cipher field min_version '1.14')", async () => {
     if (!rawResponse) rawResponse = await callSchema();
+    // Field is named "ssh_cipher" (not "cipher") in the schema projection.
+    // mat.fields is a flat array; iterate entry.fields directly.
     const r = await runUcode(`
       let j;
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
@@ -207,17 +210,14 @@ describe("protocol_schema RPC", () => {
       let ssh = schema && schema.outbound && schema.outbound.ssh;
       if (ssh == null) { print("FAIL_NO_SSH"); exit(0); }
       let cipher_field = null;
-      for (let tab, fields in (ssh.tabs)) {
-        if (type(fields) !== "array") continue;
-        for (let f in fields) {
-          if (f.name === "cipher") { cipher_field = f; break; }
+      if (type(ssh.fields) === "array") {
+        for (let f in ssh.fields) {
+          if (f.name === "ssh_cipher") { cipher_field = f; break; }
         }
-        if (cipher_field != null) break;
       }
       if (cipher_field == null) { print("FAIL_NO_CIPHER_FIELD"); exit(0); }
       let mv = cipher_field.min_version;
       if (mv == null) { print("FAIL_NO_MIN_VERSION"); exit(0); }
-      // Must be 2-part form (BLD-4 convention)
       let parts = split(mv, ".");
       if (length(parts) !== 2) { print(sprintf("FAIL_NOT_2PART:%s", mv)); exit(0); }
       if (mv !== "1.14") { print(sprintf("FAIL_WRONG:%s", mv)); exit(0); }
@@ -237,6 +237,7 @@ describe("protocol_schema RPC", () => {
       "requires",
       "default_when_empty",
     ];
+    // mat.fields is a flat array; iterate entry.fields directly (not entry.tabs as object)
     const r = await runUcode(`
       let j;
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
@@ -247,13 +248,11 @@ describe("protocol_schema RPC", () => {
         let group = schema && schema[kind];
         if (type(group) !== "object") continue;
         for (let proto, entry in group) {
-          for (let tab, fields in (entry && entry.tabs)) {
-            if (type(fields) !== "array") continue;
-            for (let f in fields) {
-              for (let bk in backend_keys) {
-                if (f[bk] != null) {
-                  push(failures, sprintf("%s.%s field '%s' has backend-only key '%s'", kind, proto, f.name, bk));
-                }
+          if (type(entry.fields) !== "array") continue;
+          for (let f in entry.fields) {
+            for (let bk in backend_keys) {
+              if (f[bk] != null) {
+                push(failures, sprintf("%s.%s field '%s' has backend-only key '%s'", kind, proto, f.name, bk));
               }
             }
           }
@@ -267,6 +266,7 @@ describe("protocol_schema RPC", () => {
 
   it("11. tproxy.nft_rules has exclusive:true", async () => {
     if (!rawResponse) rawResponse = await callSchema();
+    // mat.fields is a flat array; look for "nft_rules" in entry.fields directly
     const r = await runUcode(`
       let j;
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
@@ -274,12 +274,10 @@ describe("protocol_schema RPC", () => {
       let tproxy = schema && schema.inbound && schema.inbound.tproxy;
       if (tproxy == null) { print("FAIL_NO_TPROXY"); exit(0); }
       let nft_field = null;
-      for (let tab, fields in (tproxy.tabs)) {
-        if (type(fields) !== "array") continue;
-        for (let f in fields) {
+      if (type(tproxy.fields) === "array") {
+        for (let f in tproxy.fields) {
           if (f.name === "nft_rules") { nft_field = f; break; }
         }
-        if (nft_field != null) break;
       }
       if (nft_field == null) { print("FAIL_NO_NFT_RULES"); exit(0); }
       print(nft_field.exclusive === true ? "OK" : sprintf("FAIL_exclusive:%J", nft_field.exclusive));
@@ -290,6 +288,7 @@ describe("protocol_schema RPC", () => {
 
   it("12. tproxy has a fwmark field", async () => {
     if (!rawResponse) rawResponse = await callSchema();
+    // mat.fields is a flat array; look for "fwmark" in entry.fields directly
     const r = await runUcode(`
       let j;
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
@@ -297,12 +296,10 @@ describe("protocol_schema RPC", () => {
       let tproxy = schema && schema.inbound && schema.inbound.tproxy;
       if (tproxy == null) { print("FAIL_NO_TPROXY"); exit(0); }
       let fwmark_field = null;
-      for (let tab, fields in (tproxy.tabs)) {
-        if (type(fields) !== "array") continue;
-        for (let f in fields) {
+      if (type(tproxy.fields) === "array") {
+        for (let f in tproxy.fields) {
           if (f.name === "fwmark") { fwmark_field = f; break; }
         }
-        if (fwmark_field != null) break;
       }
       print(fwmark_field != null ? "OK" : "FAIL_NO_FWMARK");
     `);

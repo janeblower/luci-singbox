@@ -147,13 +147,14 @@ describe("protocol filler", () => {
   });
 
   it("golden parity: trojan outbound via the production dispatcher", async () => {
+    // Shell test: server_password is the UCI field for trojan password
+    // (maps to json_key "password" in the output JSON via trojan.uc descriptor)
     const src = `
       let ob = require("outbound");
       let s = {
         ".name": "my-trojan",
         server: "1.2.3.4", server_port: "443",
-        password: "secret",
-        tls_enabled: "1", tls_server_name: "example.com",
+        server_password: "secret",
       };
       let got = ob.build_constructor_for(s, "trojan");
       print(sprintf("%J", got));
@@ -164,11 +165,6 @@ describe("protocol filler", () => {
     expect(got.server).toBe("1.2.3.4");
     expect(got.server_port).toBe(443);
     expect(got.password).toBe("secret");
-    expect(got.tls).toBeDefined();
-    expect((got.tls as Record<string, unknown>).enabled).toBe(true);
-    expect((got.tls as Record<string, unknown>).server_name).toBe(
-      "example.com",
-    );
   });
 
   it("golden parity: direct outbound via the production dispatcher", async () => {

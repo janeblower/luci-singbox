@@ -28,7 +28,7 @@ describe("shared transport block", () => {
       let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
         { ".name":"t", transport_type:"ws", transport_path:"/ws",
-          transport_host_ws:"ws.example" }
+          transport_host:"ws.example" }
       );
       print(sprintf("%s|%s|%s", got.transport.type, got.transport.path, got.transport.headers["Host"]));
     `;
@@ -42,7 +42,7 @@ describe("shared transport block", () => {
       let f = require("builder._filler");
       let got = f.build(
         { kind:"outbound", sing_box_type:"x", fields:[], shared:{ transport:true } },
-        { ".name":"t", transport_type:"grpc", transport_grpc_service_name:"myservice" }
+        { ".name":"t", transport_type:"grpc", transport_service_name:"myservice" }
       );
       print(sprintf("%s|%s", got.transport.type, got.transport.service_name));
     `;

@@ -64,19 +64,20 @@ describe("protocol emit (fixture-driven generate.uc)", () => {
       const rc = genResult.stdout.trim();
       expect(rc).toBe("0");
 
-      // Evaluate .expect expression against generated JSON (c = parsed config)
+      // Evaluate .expect expression against generated JSON (c = parsed config).
+      // Write the ucode eval script to a guest file to avoid shell quoting issues
+      // with double-quoted strings and path literals in the .expect expressions.
+      const evalScript = `/tmp/sb-emit-${process.pid}-${name}-eval.uc`;
+      const evalUc = `let fs = require('fs');\nlet c = json(fs.readfile('${outFile}'));\nprint((${expr}) ? 'OK' : 'BAD');\n`;
+      await putFile(evalUc, evalScript);
       const evalResult = await exec(
-        `cd ${WORK} && ucode -L ${LIB} -e "
-          let fs = require('fs');
-          let c = json(fs.readfile('${outFile}'));
-          print((${expr}) ? 'OK' : 'BAD');
-        " 2>&1`,
+        `cd ${WORK} && ucode -L ${LIB} ${evalScript} 2>&1`,
       );
       expect(evalResult.stdout.trim()).toBe("OK");
 
       // Cleanup
       await exec(
-        `rm -f ${uciRemote} ${outFile}; rm -rf $(dirname ${uciRemote}) ${subsDir}`,
+        `rm -f ${uciRemote} ${outFile} ${evalScript}; rm -rf $(dirname ${uciRemote}) ${subsDir}`,
       );
     });
   }

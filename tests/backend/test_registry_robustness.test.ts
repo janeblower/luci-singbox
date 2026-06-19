@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
-import { exec } from "../helpers/ssh.ts";
+import { exec, putFile } from "../helpers/ssh.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
 // Port of tests/backend/test_registry_robustness.sh
@@ -68,21 +68,23 @@ describe("registry robustness", () => {
     const setupR = await exec(`cd ${WORK} && ${setup}`);
     expect(setupR.exitCode).toBe(0);
 
-    const ucodeCmd = [
-      `cd ${WORK}`,
-      `ucode -L ${s44dir} -e '`,
-      `  let reg = require("builder.protocols.registry");`,
-      `  reg.register({`,
-      `    kind: "outbound", type: "s44", sing_box_type: "x",`,
-      `    shared: { multiplex: {} },`,
-      `    fields: [ { name: "f", type: "string", tab: "basic" } ],`,
-      `    emit: function(s) { return {}; },`,
-      `  });`,
-      `  reg.materialize("outbound", "s44");`,
-      `  print("DONE");`,
-      `' 2>&1`,
-    ].join(" ");
-    const r = await exec(`${ucodeCmd}; rm -rf ${s44dir}`);
+    // Write the ucode script to a file to avoid shell quoting issues with single quotes.
+    const scriptPath = `${s44dir}/test_s44.uc`;
+    const ucodeScript = [
+      `let reg = require("builder.protocols.registry");`,
+      `reg.register({`,
+      `  kind: "outbound", type: "s44", sing_box_type: "x",`,
+      `  shared: { multiplex: {} },`,
+      `  fields: [ { name: "f", type: "string", tab: "basic" } ],`,
+      `  emit: function(s) { return {}; },`,
+      `});`,
+      `reg.materialize("outbound", "s44");`,
+      `print("DONE");`,
+    ].join("\n");
+    await putFile(ucodeScript, scriptPath);
+    const r = await exec(
+      `cd ${WORK} && ucode -L ${s44dir} ${scriptPath} 2>&1; rm -rf ${s44dir}`,
+    );
     // materialize must still complete (returns null module -> skip block)
     expect(r.stdout).toContain("DONE");
     // Must surface a warning mentioning registry/shared/multiplex

@@ -4,14 +4,9 @@ import { runUcodeJSON } from "../helpers/ucode.ts";
 
 // Port of tests/backend/test_protocol_users.sh
 // Universal declarative users builder (_shared/users.uc):
-//   - mixed: username:password, colon-in-password preserved, empty list → no users
-//   - vless multi + bad rows skipped (malformed uuid, missing uuid)
-//   - vless single fallback when list empty
-//   - shadowsocks: name:method:password, method validated+discarded, empty/unknown skipped
-//   - trojan single (no list)
-//   - BLD-5: single_fallback with ALL source fields empty must NOT emit a credential-less user
-//   - colon-less single token is dropped — all families
-//   - hysteria2 colon-less → dropped → single fallback fires
+//   API: U.build(s, spec) → { users: [...], from_list: bool }
+//   spec = { from, columns, single_fallback? }
+//   single_fallback = { fields: [ { key, from } ] }
 
 describe("protocol users builder", () => {
   useGuest();
@@ -19,20 +14,14 @@ describe("protocol users builder", () => {
   // ---- mixed: username:password ----
   it("mixed multi-user: alice:wonderland, bob:builder", async () => {
     const src = `
-      let reg = require("builder.protocols.registry");
-      let filler = require("builder._filler");
-      let users_mod = require("builder._shared.users");
-      let d = {
-        kind: "inbound", type: "mixed", sing_box_type: "mixed",
-        shared: null, fields: [],
-        users: { columns: [
-          { key: "username" },
-          { key: "password", tail: true },
-        ] },
-      };
+      let U = require("builder._shared.users");
+      let spec = { from: "mixed_user", columns: [
+        { key: "username", required: true },
+        { key: "password", tail: true, always: true },
+      ] };
       let s = { ".name": "m", mixed_user: ["alice:wonderland", "bob:builder"] };
-      let got = users_mod.build_users(d.users, s, "mixed_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got =
       await runUcodeJSON<Array<{ username: string; password: string }>>(src);
@@ -45,14 +34,14 @@ describe("protocol users builder", () => {
 
   it("mixed: colon-in-password preserved (tail captures rest)", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = { columns: [
-        { key: "username" },
-        { key: "password", tail: true },
+      let U = require("builder._shared.users");
+      let spec = { from: "mixed_user", columns: [
+        { key: "username", required: true },
+        { key: "password", tail: true, always: true },
       ] };
       let s = { ".name": "m", mixed_user: ["alice:pass:with:colons"] };
-      let got = users_mod.build_users(d_users, s, "mixed_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got =
       await runUcodeJSON<Array<{ username: string; password: string }>>(src);
@@ -63,62 +52,62 @@ describe("protocol users builder", () => {
 
   it("mixed: empty list → no users key", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = { columns: [
-        { key: "username" },
-        { key: "password", tail: true },
+      let U = require("builder._shared.users");
+      let spec = { from: "mixed_user", columns: [
+        { key: "username", required: true },
+        { key: "password", tail: true, always: true },
       ] };
       let s = { ".name": "m" };
-      let got = users_mod.build_users(d_users, s, "mixed_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got = await runUcodeJSON<unknown>(src);
-    // empty list or null: no users
     const arr = Array.isArray(got) ? got : [];
     expect(arr).toHaveLength(0);
   });
 
   // ---- vless multi ----
   it("vless multi-user: valid rows included, bad rows (malformed uuid, missing uuid) skipped", async () => {
+    // Shell test uses "bad: " (space in uuid) and "carol:uuid c" (space) to trigger guard.
+    // The guard rejects UUIDs containing characters outside [0-9A-Za-z-].
     const src = `
-      let users_mod = require("builder._shared.users");
-      // vless columns: name, uuid (with uuid guard), optional flow (tail)
-      let d_users = { columns: [
-        { key: "name" },
-        { key: "uuid", guard: "uuid" },
-        { key: "flow", tail: true, always: false },
+      let U = require("builder._shared.users");
+      let spec = { from: "inbound_user", columns: [
+        { key: "name", required: true },
+        { key: "uuid", required: true, guard: "uuid" },
+        { key: "flow", tail: true },
       ] };
       let s = { ".name": "v", inbound_user: [
-        "user1:11111111-2222-3333-4444-555555555555",
-        "badrow:not-a-uuid",
-        "noconn",
-        "user2:aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "alice:uuid-a:xtls-rprx-vision",
+        "bob:uuid-b",
+        "bad: ",
+        "carol:uuid c",
       ] };
-      let got = users_mod.build_users(d_users, s, "inbound_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got = await runUcodeJSON<Array<{ name: string; uuid: string }>>(src);
-    // Only the two rows with valid UUIDs survive
+    // alice and bob survive; bad (space in uuid) and carol (space in uuid) are skipped
     expect(got.length).toBe(2);
-    expect(got[0].name).toBe("user1");
-    expect(got[0].uuid).toBe("11111111-2222-3333-4444-555555555555");
-    expect(got[1].name).toBe("user2");
-    expect(got[1].uuid).toBe("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+    expect(got[0].name).toBe("alice");
+    expect(got[0].uuid).toBe("uuid-a");
+    expect(got[1].name).toBe("bob");
+    expect(got[1].uuid).toBe("uuid-b");
   });
 
   it("vless single fallback when list empty", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = {
+      let U = require("builder._shared.users");
+      let spec = { from: "inbound_user",
         columns: [
-          { key: "name" },
-          { key: "uuid", guard: "uuid" },
+          { key: "name", required: true },
+          { key: "uuid", required: true, guard: "uuid" },
         ],
-        single_fallback: { name: "user", uuid: "server_uuid" },
+        single_fallback: { fields: [ { key: "uuid", from: "server_uuid" } ] },
       };
-      let s = { ".name": "v", server_uuid: "11111111-2222-3333-4444-555555555555" };
-      let got = users_mod.build_users(d_users, s, "inbound_user");
-      print(sprintf("%J", got));
+      let s = { ".name": "v1", server_uuid: "11111111-2222-3333-4444-555555555555" };
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got = await runUcodeJSON<Array<{ name: string; uuid: string }>>(src);
     expect(got).toHaveLength(1);
@@ -128,20 +117,19 @@ describe("protocol users builder", () => {
   // ---- shadowsocks: name:method:password ----
   it("shadowsocks multi-user: method validated and discarded, invalid method skipped", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      // ss format: name:method:password (method is discarded after validation)
-      let d_users = { columns: [
-        { key: "name" },
-        { key: "_method", discard: true, validate: ["2022-blake3-aes-128-gcm","2022-blake3-aes-256-gcm","2022-blake3-chacha20-poly1305","aes-256-gcm","chacha20-ietf-poly1305"] },
-        { key: "password", tail: true },
+      let U = require("builder._shared.users");
+      let spec = { from: "ss_user", columns: [
+        { key: "name", required: true },
+        { key: "method", validate: ["2022-blake3-aes-128-gcm","2022-blake3-aes-256-gcm","2022-blake3-chacha20-poly1305","aes-256-gcm","chacha20-ietf-poly1305"], discard: true },
+        { key: "password", tail: true, warn_if_empty: true },
       ] };
       let s = { ".name": "ss", ss_user: [
         "alice:2022-blake3-aes-128-gcm:p@ssw0rd",
         "bob:invalid-method:pw",
         "carol:chacha20-ietf-poly1305:mypass",
       ] };
-      let got = users_mod.build_users(d_users, s, "ss_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got =
       await runUcodeJSON<Array<{ name: string; password: string }>>(src);
@@ -152,23 +140,20 @@ describe("protocol users builder", () => {
     expect(got[1].name).toBe("carol");
     expect(got[1].password).toBe("mypass");
     // method must NOT appear in output (discarded)
-    expect((got[0] as Record<string, unknown>)._method).toBeUndefined();
+    expect((got[0] as Record<string, unknown>).method).toBeUndefined();
   });
 
   // ---- trojan single ----
   it("trojan single (no list): single user from server_password", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = {
-        columns: [
-          { key: "name" },
-          { key: "password" },
-        ],
-        single_fallback: { name: "user", password: "server_password" },
+      let U = require("builder._shared.users");
+      let spec = { from: "inbound_user",
+        columns: [ { key: "name", required: true }, { key: "password", tail: true } ],
+        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
       };
       let s = { ".name": "tj", server_password: "secret-pw" };
-      let got = users_mod.build_users(d_users, s, "inbound_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got =
       await runUcodeJSON<Array<{ name: string; password: string }>>(src);
@@ -179,18 +164,15 @@ describe("protocol users builder", () => {
   // ---- BLD-5: single_fallback with ALL source fields empty must NOT emit user ----
   it("BLD-5: single_fallback with all source fields empty emits no user", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = {
-        columns: [
-          { key: "name" },
-          { key: "password" },
-        ],
-        single_fallback: { name: "user", password: "server_password" },
+      let U = require("builder._shared.users");
+      let spec = { from: "inbound_user",
+        columns: [ { key: "name", required: true }, { key: "password", tail: true } ],
+        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
       };
       // server_password absent
       let s = { ".name": "tj" };
-      let got = users_mod.build_users(d_users, s, "inbound_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got = await runUcodeJSON<unknown>(src);
     const arr = Array.isArray(got) ? got : [];
@@ -200,14 +182,14 @@ describe("protocol users builder", () => {
   // ---- colon-less single token dropped — all families ----
   it("colon-less single token is dropped (mixed)", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = { columns: [
-        { key: "username" },
-        { key: "password", tail: true },
+      let U = require("builder._shared.users");
+      let spec = { from: "mixed_user", columns: [
+        { key: "username", required: true },
+        { key: "password", tail: true, always: true },
       ] };
       let s = { ".name": "m", mixed_user: ["justtoken"] };
-      let got = users_mod.build_users(d_users, s, "mixed_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got = await runUcodeJSON<unknown>(src);
     const arr = Array.isArray(got) ? got : [];
@@ -216,14 +198,14 @@ describe("protocol users builder", () => {
 
   it("colon-less single token is dropped (vless)", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = { columns: [
-        { key: "name" },
-        { key: "uuid", guard: "uuid" },
+      let U = require("builder._shared.users");
+      let spec = { from: "inbound_user", columns: [
+        { key: "name", required: true },
+        { key: "uuid", required: true, guard: "uuid" },
       ] };
       let s = { ".name": "v", inbound_user: ["justtoken"] };
-      let got = users_mod.build_users(d_users, s, "inbound_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got = await runUcodeJSON<unknown>(src);
     const arr = Array.isArray(got) ? got : [];
@@ -233,18 +215,15 @@ describe("protocol users builder", () => {
   // ---- hysteria2 colon-less → dropped → single fallback fires ----
   it("hysteria2: colon-less entry dropped → single fallback fires with real server_password", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = {
-        columns: [
-          { key: "name" },
-          { key: "password", tail: true },
-        ],
-        single_fallback: { name: "user", password: "server_password" },
+      let U = require("builder._shared.users");
+      let spec = { from: "inbound_user",
+        columns: [ { key: "name", required: true }, { key: "password", tail: true } ],
+        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
       };
       // colon-less row is dropped; fallback provides the real password
       let s = { ".name": "h2", inbound_user: ["tokenonly"], server_password: "real-secret" };
-      let got = users_mod.build_users(d_users, s, "inbound_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got =
       await runUcodeJSON<Array<{ name: string; password: string }>>(src);
@@ -255,15 +234,15 @@ describe("protocol users builder", () => {
   // ---- shadowsocks inbound: password (tail) contains a colon ----
   it("shadowsocks inbound: password (tail) contains a colon", async () => {
     const src = `
-      let users_mod = require("builder._shared.users");
-      let d_users = { columns: [
-        { key: "name" },
-        { key: "_method", discard: true, validate: ["2022-blake3-aes-128-gcm","2022-blake3-aes-256-gcm","2022-blake3-chacha20-poly1305","aes-256-gcm","chacha20-ietf-poly1305"] },
-        { key: "password", tail: true },
+      let U = require("builder._shared.users");
+      let spec = { from: "ss_user", columns: [
+        { key: "name", required: true },
+        { key: "method", validate: ["2022-blake3-aes-128-gcm","2022-blake3-aes-256-gcm","2022-blake3-chacha20-poly1305","aes-256-gcm","chacha20-ietf-poly1305"], discard: true },
+        { key: "password", tail: true, warn_if_empty: true },
       ] };
       let s = { ".name": "ss", ss_user: ["alice:2022-blake3-aes-128-gcm:pass:with:colons"] };
-      let got = users_mod.build_users(d_users, s, "ss_user");
-      print(sprintf("%J", got));
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
     `;
     const got =
       await runUcodeJSON<Array<{ name: string; password: string }>>(src);
