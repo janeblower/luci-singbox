@@ -4,7 +4,7 @@ import { runUcode } from "../helpers/ucode.ts";
 
 // Helper: build a vmess:// URL from a JSON object (base64-encoded)
 function vmessUrl(obj: Record<string, string>): string {
-  return "vmess://" + Buffer.from(JSON.stringify(obj)).toString("base64");
+  return `vmess://${Buffer.from(JSON.stringify(obj)).toString("base64")}`;
 }
 
 // Helper: base64-encode a string (mimics `printf '%s' ... | base64 -w0`)
@@ -62,7 +62,9 @@ print(sprintf("%s|%s|%s", r.method, r.plugin, r.plugin_opts));
 `;
     const r = await runUcode(src);
     expect(r.exitCode).toBe(0);
-    expect(r.stdout.trim()).toBe("aes-256-gcm|obfs-local|obfs=http;obfs-host=x.com");
+    expect(r.stdout.trim()).toBe(
+      "aes-256-gcm|obfs-local|obfs=http;obfs-host=x.com",
+    );
   });
 
   // 9.3: ss without a plugin must NOT emit plugin keys

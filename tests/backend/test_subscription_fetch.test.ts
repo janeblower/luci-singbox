@@ -71,8 +71,8 @@ print(sprintf("%J", captured));
 
     const job1 = cap.find((j) => j.url.includes("sub.example.com/x"));
     expect(job1).toBeDefined();
-    expect(job1!.ua).toContain("v2rayNG");
-    expect(job1!.has_cfg).toBe(false);
+    expect(job1?.ua).toContain("v2rayNG");
+    expect(job1?.has_cfg).toBe(false);
 
     // mysub2 also picked up
     const job2 = cap.find((j) => j.url.includes("sub.example.com/y"));
@@ -146,8 +146,8 @@ sub._fetcher_real_for_test([
     expect(lines).toContain("Custom UA/1.0");
 
     // empty UA must fall back to the DEFAULT_UA (Chrome string)
-    const hasDefaultUA = lines.some((l) =>
-      l.includes("Mozilla/5.0") && l.includes("Chrome"),
+    const hasDefaultUA = lines.some(
+      (l) => l.includes("Mozilla/5.0") && l.includes("Chrome"),
     );
     expect(hasDefaultUA).toBe(true);
 

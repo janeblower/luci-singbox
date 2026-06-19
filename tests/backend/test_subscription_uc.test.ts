@@ -1,8 +1,8 @@
-import { describe, it, expect } from "bun:test";
-import { useGuest } from "../helpers/guest.ts";
-import { exec, putFile } from "../helpers/ssh.ts";
+import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { useGuest } from "../helpers/guest.ts";
+import { exec, putFile } from "../helpers/ssh.ts";
 
 const LIB = "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
 const SHARE = "/tmp/work/singbox-ui/root/usr/share/singbox-ui";
@@ -16,7 +16,7 @@ const SUB_UC = `${SHARE}/subscription.uc`;
 
 // Run subscription.uc CLI with given args and env overrides.
 // Returns exec result.
-async function runSub(
+async function _runSub(
   args: string[],
   env: Record<string, string>,
   stdinData?: string,
@@ -42,14 +42,11 @@ function tmpDir() {
 }
 
 // UCI config for a single subscription outbound
-function uciSub(
-  name: string,
-  opts: Record<string, string> = {},
-): string {
+function uciSub(name: string, opts: Record<string, string> = {}): string {
   const extra = Object.entries(opts)
     .map(([k, v]) => `\toption ${k} '${v}'`)
     .join("\n");
-  return `config outbound '${name}'\n\toption type 'subscription'\n${extra ? extra + "\n" : ""}`;
+  return `config outbound '${name}'\n\toption type 'subscription'\n${extra ? `${extra}\n` : ""}`;
 }
 
 // Curl stub that reads FAKE_BODY_FILE and writes to -o arg, writes headers to -D arg
@@ -102,11 +99,16 @@ print(n);
       "dmxlc3M6Ly91dWlkQGhvc3Q6NDQzP3NlY3VyaXR5PXRscyNBCg==",
       `${dir}/body`,
     );
-    await putFile(uciSub("subA", { sub_url: "https://example.test/sub" }), `${dir}/singbox-ui`);
-    const r = await exec(
+    await putFile(
+      uciSub("subA", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
+    const _r = await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
-    const check = await exec(`cat ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`);
+    const check = await exec(
+      `cat ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`,
+    );
     expect(check.stdout).toMatch(/^vless:\/\/uuid@host:443/);
     await exec(`rm -rf ${dir}`);
   });
@@ -117,11 +119,16 @@ print(n);
     await putFile(CURL_STUB, `${dir}/bin/curl`);
     await exec(`chmod +x ${dir}/bin/curl`);
     await putFile("trojan://pwd@host:443#B\n", `${dir}/body`);
-    await putFile(uciSub("subA", { sub_url: "https://example.test/sub" }), `${dir}/singbox-ui`);
+    await putFile(
+      uciSub("subA", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
-    const check = await exec(`grep '^trojan://' ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`);
+    const check = await exec(
+      `grep '^trojan://' ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`,
+    );
     expect(check.stdout).toContain("trojan://");
     await exec(`rm -rf ${dir}`);
   });
@@ -133,11 +140,16 @@ print(n);
     await exec(`chmod +x ${dir}/bin/curl`);
     // b64("vless://uuid@host:443\n")
     await putFile("dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==", `${dir}/body`);
-    await putFile(uciSub("subA", { sub_url: "https://example.test/sub" }), `${dir}/singbox-ui`);
-    const r = await exec(
+    await putFile(
+      uciSub("subA", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
+    const _r = await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log SINGBOX_BOOT_FETCH=1 CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
-    const check = await exec(`test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`);
+    const check = await exec(
+      `test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`,
+    );
     expect(check.stdout.trim()).toBe("ok");
     const curlLog = await exec(`cat ${dir}/curl.log 2>/dev/null || echo ""`);
     expect(curlLog.stdout).toContain("-A ");
@@ -157,8 +169,12 @@ print(n);
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
-    const a = await exec(`test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`);
-    const b = await exec(`test -s ${dir}/runtime/sub_subB.txt && echo ok || echo MISSING`);
+    const a = await exec(
+      `test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`,
+    );
+    const b = await exec(
+      `test -s ${dir}/runtime/sub_subB.txt && echo ok || echo MISSING`,
+    );
     expect(a.stdout.trim()).toBe("ok");
     expect(b.stdout.trim()).toBe("ok");
     await exec(`rm -rf ${dir}`);
@@ -170,11 +186,16 @@ print(n);
     await putFile(CURL_STUB, `${dir}/bin/curl`);
     await exec(`chmod +x ${dir}/bin/curl`);
     await putFile("vless://kept@host:1\n", `${dir}/runtime/sub_subA.txt`);
-    await putFile(uciSub("subA", { sub_url: "https://example.test/sub" }), `${dir}/singbox-ui`);
+    await putFile(
+      uciSub("subA", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_CURL_RC=1 FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
-    const check = await exec(`grep '^vless://kept@host:1' ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`);
+    const check = await exec(
+      `grep '^vless://kept@host:1' ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`,
+    );
     expect(check.stdout).toContain("vless://kept@host:1");
     await exec(`rm -rf ${dir}`);
   });
@@ -191,7 +212,9 @@ print(n);
     );
     const baseEnv = `UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`;
     // warm cache
-    await exec(`cd /tmp/work && env ${baseEnv} ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`);
+    await exec(
+      `cd /tmp/work && env ${baseEnv} ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+    );
     // read mtime
     const mt1 = await exec(`stat -c %Y ${dir}/runtime/sub_subA.txt`);
     // sleep 1 second
@@ -224,7 +247,10 @@ print(n);
     await exec(`chmod +x ${dir}/bin/curl`);
     await putFile("dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==", `${dir}/body`);
     await putFile(
-      uciSub("subA", { sub_url: "https://example.test/sub", sub_user_agent: "v2raytun/1.0" }),
+      uciSub("subA", {
+        sub_url: "https://example.test/sub",
+        sub_user_agent: "v2raytun/1.0",
+      }),
       `${dir}/singbox-ui`,
     );
     await exec(
@@ -417,16 +443,17 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
       tmpUc,
     );
     // VMESS_BAD_TAG is undefined in the shell test → empty string → "vmess://" is a bad URL
-    const r1 = await exec(`cd /tmp/work && ucode -L ${LIB} ${tmpUc} 'vmess://'`);
-    const r2 = await exec(`cd /tmp/work && ucode -L ${LIB} ${tmpUc} 'vmess://'; rm -f ${tmpUc}`);
+    const r1 = await exec(
+      `cd /tmp/work && ucode -L ${LIB} ${tmpUc} 'vmess://'`,
+    );
+    const r2 = await exec(
+      `cd /tmp/work && ucode -L ${LIB} ${tmpUc} 'vmess://'; rm -f ${tmpUc}`,
+    );
     expect(r1.stdout.trim()).toBe(r2.stdout.trim());
   });
 
   it("C2.1.10: PROXY_SCHEME_RE shared scheme constant present in subscription.uc", async () => {
-    const content = readFileSync(
-      `${HOST_SHARE}/subscription.uc`,
-      "utf8",
-    );
+    const content = readFileSync(`${HOST_SHARE}/subscription.uc`, "utf8");
     expect(content).toMatch(
       /PROXY_SCHEME_RE\s*=\s*\/\^\(vmess\|vless\|ss\|trojan\|hy2\|hysteria2\)/,
     );
@@ -441,20 +468,22 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
     await exec(`chmod +x ${dir}/bin/curl`);
     // b64("visit https://example.com/path") = "dmlzaXQgaHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo"
     await putFile("dmlzaXQgaHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo", `${dir}/body`);
-    await putFile(uciSub("subC", { sub_url: "https://example.test/sub" }), `${dir}/singbox-ui`);
+    await putFile(
+      uciSub("subC", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
-    const check = await exec(`test -f ${dir}/runtime/sub_subC.txt && echo EXISTS || echo MISSING`);
+    const check = await exec(
+      `test -f ${dir}/runtime/sub_subC.txt && echo EXISTS || echo MISSING`,
+    );
     expect(check.stdout.trim()).toBe("MISSING");
     await exec(`rm -rf ${dir}`);
   });
 
   it("C2.1.11: subscription URL match is case-insensitive (structural)", () => {
-    const content = readFileSync(
-      `${HOST_SHARE}/subscription.uc`,
-      "utf8",
-    );
+    const content = readFileSync(`${HOST_SHARE}/subscription.uc`, "utf8");
     expect(content).toMatch(/match\(lc\(t\)/);
   });
 
@@ -464,13 +493,20 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
     await putFile(CURL_STUB, `${dir}/bin/curl`);
     await exec(`chmod +x ${dir}/bin/curl`);
     await putFile("HTTPS://example.test/upstream\n", `${dir}/body`);
-    await putFile(uciSub("subD", { sub_url: "https://example.test/sub" }), `${dir}/singbox-ui`);
+    await putFile(
+      uciSub("subD", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
-    const check = await exec(`test -s ${dir}/runtime/sub_subD.txt && echo ok || echo MISSING`);
+    const check = await exec(
+      `test -s ${dir}/runtime/sub_subD.txt && echo ok || echo MISSING`,
+    );
     expect(check.stdout.trim()).toBe("ok");
-    const urlCheck = await exec(`grep -qi '^HTTPS://' ${dir}/runtime/sub_subD.txt && echo found || echo NOTFOUND`);
+    const urlCheck = await exec(
+      `grep -qi '^HTTPS://' ${dir}/runtime/sub_subD.txt && echo found || echo NOTFOUND`,
+    );
     expect(urlCheck.stdout.trim()).toBe("found");
     await exec(`rm -rf ${dir}`);
   });
@@ -521,11 +557,16 @@ printf("%s\\n", ok ? "all-covered" : "missing");
     await exec(`chmod +x ${dir}/bin/curl`);
     // b64("vless://uuid@host:443\n")
     await putFile("dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==", `${dir}/body`);
-    await putFile(uciSub("subA", { sub_url: "https://example.test/sub" }), `${dir}/singbox-ui`);
+    await putFile(
+      uciSub("subA", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
-    const check = await exec(`test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`);
+    const check = await exec(
+      `test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`,
+    );
     expect(check.stdout.trim()).toBe("ok");
     // No .tmp.* leftovers
     const leftovers = await exec(
@@ -533,10 +574,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
     );
     expect(leftovers.stdout.trim()).toBe("0");
     // Structural: fs.rename must appear in subscription.uc
-    const content = readFileSync(
-      `${HOST_SHARE}/subscription.uc`,
-      "utf8",
-    );
+    const content = readFileSync(`${HOST_SHARE}/subscription.uc`, "utf8");
     expect(content).toMatch(/fs\.rename\(/);
     await exec(`rm -rf ${dir}`);
   });
@@ -547,13 +585,20 @@ printf("%s\\n", ok ? "all-covered" : "missing");
     await putFile(CURL_STUB, `${dir}/bin/curl`);
     await exec(`chmod +x ${dir}/bin/curl`);
     await putFile("vless://uuid@host:443\n", `${dir}/body`);
-    await putFile(uciSub("subBig", { sub_url: "https://example.test/big" }), `${dir}/singbox-ui`);
+    await putFile(
+      uciSub("subBig", { sub_url: "https://example.test/big" }),
+      `${dir}/singbox-ui`,
+    );
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
-    const check = await exec(`test -s ${dir}/runtime/sub_subBig.txt && echo ok || echo MISSING`);
+    const check = await exec(
+      `test -s ${dir}/runtime/sub_subBig.txt && echo ok || echo MISSING`,
+    );
     expect(check.stdout.trim()).toBe("ok");
-    const content = await exec(`grep '^vless://uuid@host:443' ${dir}/runtime/sub_subBig.txt || echo MISSING`);
+    const content = await exec(
+      `grep '^vless://uuid@host:443' ${dir}/runtime/sub_subBig.txt || echo MISSING`,
+    );
     expect(content.stdout).toContain("vless://uuid@host:443");
     await exec(`rm -rf ${dir}`);
   });
@@ -567,11 +612,16 @@ printf("%s\\n", ok ? "all-covered" : "missing");
     await exec(
       `{ printf 'vless://uuid@host:443\\n'; head -c 9000000 /dev/zero | tr '\\0' 'a'; printf '\\n'; } >${dir}/body`,
     );
-    await putFile(uciSub("subBig", { sub_url: "https://example.test/big" }), `${dir}/singbox-ui`);
+    await putFile(
+      uciSub("subBig", { sub_url: "https://example.test/big" }),
+      `${dir}/singbox-ui`,
+    );
     await exec(
       `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
-    const check = await exec(`test -f ${dir}/runtime/sub_subBig.txt && echo EXISTS || echo MISSING`);
+    const check = await exec(
+      `test -f ${dir}/runtime/sub_subBig.txt && echo EXISTS || echo MISSING`,
+    );
     expect(check.stdout.trim()).toBe("MISSING");
     await exec(`rm -rf ${dir}`);
   });

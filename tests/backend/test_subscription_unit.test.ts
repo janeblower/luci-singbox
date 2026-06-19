@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 

@@ -9,8 +9,7 @@ import { exec, putFile } from "../helpers/ssh.ts";
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
-  process.env.SB_VM_LIB ??
-  "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
+  process.env.SB_VM_LIB ?? "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
 const SUB = `${WORK}/singbox-ui/root/usr/share/singbox-ui/subscription.uc`;
 
 const UCI_DIR = `/tmp/sub_status_${process.pid}/uci`;
@@ -62,32 +61,32 @@ describe("test_sub_status", () => {
   it("mysub: node_count is 2", () => {
     const e = findEntry("mysub");
     expect(e).toBeDefined();
-    expect(e!.node_count).toBe(2);
+    expect(e?.node_count).toBe(2);
   });
 
   it("mysub: enabled is '1'", () => {
     const e = findEntry("mysub");
     expect(e).toBeDefined();
     // ucode reads UCI string "1" and emits it as string "1" (uci_get_or_empty returns string)
-    expect(String(e!.enabled)).toBe("1");
+    expect(String(e?.enabled)).toBe("1");
   });
 
   it("mysub: last_update is present (not null)", () => {
     const e = findEntry("mysub");
     expect(e).toBeDefined();
-    expect(e!.last_update).not.toBeNull();
-    expect(e!.last_update).not.toBeUndefined();
+    expect(e?.last_update).not.toBeNull();
+    expect(e?.last_update).not.toBeUndefined();
   });
 
   it("offsub: node_count is 0 (never fetched)", () => {
     const e = findEntry("offsub");
     expect(e).toBeDefined();
-    expect(e!.node_count).toBe(0);
+    expect(e?.node_count).toBe(0);
   });
 
   it("offsub: enabled is '0'", () => {
     const e = findEntry("offsub");
     expect(e).toBeDefined();
-    expect(String(e!.enabled)).toBe("0");
+    expect(String(e?.enabled)).toBe("0");
   });
 });

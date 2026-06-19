@@ -8,8 +8,7 @@ import { exec, putFile } from "../helpers/ssh.ts";
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
-  process.env.SB_VM_LIB ??
-  "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
+  process.env.SB_VM_LIB ?? "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
 const HANDLER = `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
 
 const STUB_DIR = `/tmp/refresh_name_${process.pid}`;
@@ -53,9 +52,7 @@ describe("test_refresh_name", () => {
   });
 
   it("invalid name with shell metacharacter is NOT forwarded", async () => {
-    const got = await callRefresh(
-      '{"what":"subscriptions","name":"a;b rm"}',
-    );
+    const got = await callRefresh('{"what":"subscriptions","name":"a;b rm"}');
     expect(got).not.toContain(";");
   });
 });

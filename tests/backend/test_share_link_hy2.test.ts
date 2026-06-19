@@ -13,7 +13,9 @@ print(sprintf("%s|%s|%d|%s|%s|%s", r.type, r.server, r.server_port, r.password, 
 `;
     const r = await runUcode(src);
     expect(r.exitCode).toBe(0);
-    expect(r.stdout.trim()).toBe("hysteria2|example.com|443|hy2pass|salamander|opass");
+    expect(r.stdout.trim()).toBe(
+      "hysteria2|example.com|443|hy2pass|salamander|opass",
+    );
   });
 
   it("hy2:// short scheme alias parses correctly", async () => {
