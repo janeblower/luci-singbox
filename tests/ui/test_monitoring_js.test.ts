@@ -396,7 +396,9 @@ describe("monitoring.js", () => {
         return Promise.resolve({ status: "ok" });
       });
       const closeBtns = ctx.__test.findAll(m6.node, isCloseBtn);
-      closeBtns.forEach((b: any) => b.attrs.click());
+      closeBtns.forEach((b: any) => {
+        b.attrs.click();
+      });
       expect(deletes.indexOf("/connections/b")).toBeGreaterThanOrEqual(0);
       expect(deletes.indexOf("/connections/a")).toBe(-1);
     });
