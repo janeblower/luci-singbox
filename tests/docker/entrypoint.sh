@@ -8,7 +8,8 @@
 # 2. Boot qemu with -loadvm boot-state (~3-5s).
 # 3. Re-trigger SLIRP DHCP inside the guest (known loadvm quirk).
 # 4. tar-stream the host's /work into the guest's /tmp/work.
-# 5. ssh-exec `sh tests/run.sh` with SINGBOX_TESTS_IN_VM=1.
+# 5. Run `bun test tests/backend tests/parity` on the host side via SSH
+#    into the guest (SB_VM_HOST/PORT/USER/PASS wired by entrypoint).
 # 6. Propagate exit code; on failure with KEEP_VM=1, sleep instead of
 #    exiting so the operator can socat into the consoles.
 
@@ -143,22 +144,7 @@ set +e
 ( cd "$WORK_DIR" && SB_VM_HOST=127.0.0.1 SB_VM_PORT="$SSH_PORT" SB_VM_USER="$SSH_USER" \
     SB_VM_PASS="$SSH_PASS" bun test tests/backend tests/parity )
 BUN_RC=$?
-
-echo "==> legacy shell suite inside guest (un-ported tests)"
-# The VM lane runs the `backend` domain ONLY. Node/JS (`ui` domain) run in the
-# CI js-unit node container (no node in the OpenWrt guest). Packaging (`cross`)
-# tests run in the dedicated apk-tools 3.0.5+ lane on the host — NOT the VM —
-# because the guest apk lacks `mkpkg --info` (the feed test would otherwise
-# hard-fail here once Phase 4 lands). Restricting to `backend` keeps the VM-only
-# prod-path tests (rpcd, init.d, nftables — now under tests/backend/) running
-# while dropping every node-gated file, holding the in-VM SKIP count well under
-# SINGBOX_MAX_SKIPS. See Cross-Phase Coordination §4.
-$SSH 'cd /tmp/work && SINGBOX_TESTS_IN_VM=1 SB_DOMAIN=backend sh tests/run.sh'
-SH_RC=$?
 set -e
 
-RC=0
-[ "$BUN_RC" -ne 0 ] && RC=1
-[ "$SH_RC" -ne 0 ] && RC=1
-echo "==> bun=$BUN_RC shell=$SH_RC -> exit $RC"
-exit "$RC"
+echo "==> bun=$BUN_RC -> exit $BUN_RC"
+exit "$BUN_RC"
