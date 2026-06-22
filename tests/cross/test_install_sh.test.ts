@@ -6,7 +6,7 @@
  * stubs `apk` (--print-arch / update / add / list) and `wget` via PATH + temp dir;
  * redirects /etc/apk/... root paths via APK_KEYS_DIR / APK_REPO_DIR env hooks.
  *
- * Seven tests:
+ * Eight tests:
  *   TEST 1: happy path (x86_64) — key fetched, repo list written, no apk add
  *   TEST 2: unsupported arch aborts non-zero, no repo list, no apk add
  *   TEST 3: minor derivation default (no SINGBOX_FEED_MINOR, no os-release)
@@ -14,6 +14,7 @@
  *   TEST 5: official core → core feed removed (feed on demand)
  *   TEST 6: invalid SINGBOX_CORE aborts non-zero, no apk add
  *   TEST 7: no-tty without SINGBOX_CORE falls back to default core
+ *   TEST 8: pkg_version digit-anchoring — sing-box query does not match siblings
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
@@ -253,5 +254,59 @@ describe("install_sh", () => {
     );
     // extended core → core feed list kept
     expect(existsSync(resolve(REPO_DIR, "singbox-core.list"))).toBe(true);
+  });
+
+  it("TEST 8: pkg_version digit-anchoring — sing-box query does not match siblings", () => {
+    // Extract the pkg_version function from install.sh and run it under sh with
+    // a custom apk stub so we can prove the digit-anchor case "$tok" in "$1"-[0-9]*)
+    // rejects sibling packages like sing-box-extended-* when querying sing-box.
+    const src = readFileSync(INSTALL_SH, "utf8");
+    const pkgVersionFn = src.match(/^pkg_version\(\)\s*\{[\s\S]*?^\}/m)?.[0];
+    expect(pkgVersionFn).toBeTruthy();
+
+    // Fresh temp dir so we don't touch the shared BIN/stubEnv used by TESTs 1-7.
+    const t8tmp = mkdtempSync(resolve(tmpdir(), "install-sh-t8-"));
+    const t8bin = resolve(t8tmp, "bin");
+    mkdirSync(t8bin, { recursive: true });
+
+    // apk stub: for `apk list sing-box` emit ONLY sibling lines (no bare sing-box-<digit>);
+    // for any other name emit a normal <name>-<ver> line.
+    writeFileSync(
+      resolve(t8bin, "apk"),
+      `#!/bin/sh
+case "$1" in
+  list) shift
+    case "$1" in
+      sing-box) printf '%s\\n' "sing-box-extended-1.13.0_p2.4.1 x86_64 {sing-box-extended} (GPL-3.0) [available]" "sing-box-extended-upx-1.13.0_p2.4.1 x86_64 {sing-box-extended-upx} (GPL-3.0) [available]" ;;
+      *) echo "$1-1.13.0_p2.4.1 x86_64 {$1} (GPL-3.0) [available]" ;;
+    esac ;;
+  *) : ;;
+esac
+`,
+      { mode: 0o755 },
+    );
+
+    function pkgVersion(pkg: string, binDir: string): string {
+      const r = spawnSync(
+        "sh",
+        ["-c", `${pkgVersionFn}\npkg_version "$1"`, "sh", pkg],
+        {
+          encoding: "utf8",
+          env: { ...process.env, PATH: `${binDir}:${process.env.PATH ?? ""}` },
+        },
+      );
+      return (r.stdout ?? "").trim();
+    }
+
+    try {
+      // sing-box query must NOT match sing-box-extended-* lines — anchor rejects them
+      expect(pkgVersion("sing-box", t8bin)).toBe("");
+      // sing-box-extended query must match its own line
+      expect(pkgVersion("sing-box-extended", t8bin)).toBe("1.13.0_p2.4.1");
+      // sing-box-extended-upx query must match its own line
+      expect(pkgVersion("sing-box-extended-upx", t8bin)).toBe("1.13.0_p2.4.1");
+    } finally {
+      rmSync(t8tmp, { recursive: true, force: true });
+    }
   });
 });

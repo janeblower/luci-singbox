@@ -141,7 +141,7 @@ choose_core() {
     read -r choice </dev/tty || { printf '%s\n' "$SINGBOX_CORE_DEFAULT"; return 0; }
     [ -n "$choice" ] || { printf '%s\n' "$SINGBOX_CORE_DEFAULT"; return 0; }
     case "$choice" in
-      *[!0-9]*) echo "invalid choice: $choice" >&2; continue ;;
+      0|*[!0-9]*) echo "invalid choice: $choice" >&2; continue ;;
     esac
     name="$(printf '%s\n' "$SINGBOX_CORES" | sed -n "${choice}p" | cut -d'|' -f1)"
     [ -n "$name" ] || { echo "invalid choice: $choice" >&2; continue; }
