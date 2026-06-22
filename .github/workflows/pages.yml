@@ -144,22 +144,23 @@ jobs:
           RELEASE_REPO: ${{ github.repository }}
         run: sh scripts/build-feed.sh 25.12 dist public
 
-      # Commit the built tree to gh-pages (force-replace; we regenerate the whole
-      # feed every run). GitHub Pages serves from this branch and Jekyll-builds
-      # the .md files with the midnight theme. GITHUB_TOKEN + contents:write is
-      # enough for a same-repo push.
+      # Publish the built tree to gh-pages via scripts/publish-feed.sh (a manual
+      # git merge), NOT peaceiris/actions-gh-pages. peaceiris keep_files:true was
+      # required to coexist with the sibling sing-box-extended core feeds
+      # (<ver>/<arch>/sing-box/, published by sing-box-extended.yml) — but
+      # keep_files NEVER deletes, so every past package version's .apk piled up in
+      # gh-pages forever (packages.adb/index.md overwrite by name, but each
+      # release is a new <name>-0.0.0-r<count>.apk filename). publish-feed.sh
+      # wipes only the <ver>/<arch>/luci-singbox/ dirs this feed owns before
+      # overlaying the new tree, so old versions vanish while the sing-box/
+      # subtree is preserved — same coexistence, no stale-apk accumulation.
+      #
+      # No .nojekyll is written, so GitHub Pages keeps Jekyll on (the midnight
+      # theme renders _config.yml + index.md). GITHUB_TOKEN + contents:write is
+      # enough for the same-repo push.
       - name: Publish feed to gh-pages branch
         if: steps.gate.outputs.relevant == 'true'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: public
-          publish_branch: gh-pages
-          # Coexist with the cores/sing-box-extended publisher, which writes the
-          # gh-pages:/sing-box-extended/ subtree from a separate workflow. Without
-          # keep_files the default full-replace wipes that subtree on every deploy.
-          keep_files: true
-          # Keep Jekyll ON: the midnight theme renders our _config.yml + index.md.
-          # Without this peaceiris drops a .nojekyll file and Pages serves raw .md.
-          enable_jekyll: true
-          commit_message: "deploy feed: ${{ github.event.workflow_run.head_sha || github.sha }}"
+        env:
+          FEED_GIT_REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          FEED_COMMIT_MSG: "deploy feed: ${{ github.event.workflow_run.head_sha || github.sha }}"
+        run: sh scripts/publish-feed.sh public
