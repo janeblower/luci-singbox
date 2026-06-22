@@ -167,6 +167,19 @@ else
     sing-box-extended|sing-box-extended-upx) : ;;
     *) rm -f "$CORE_LIST" ;;
   esac
+  # Remove any conflicting sing-box core before installing the chosen one.
+  REMOVE=""
+  for _candidate in $(printf '%s\n' "$SINGBOX_CORES" | cut -d'|' -f1); do
+    [ "$_candidate" != "$CORE" ] || continue
+    apk info "$_candidate" >/dev/null 2>&1 || continue
+    REMOVE="$REMOVE $_candidate"
+  done
+  if [ -n "$REMOVE" ]; then
+    # shellcheck disable=SC2086
+    info "removing conflicting core(s):$REMOVE"
+    # shellcheck disable=SC2086
+    apk del $REMOVE || die "apk del failed"
+  fi
   info "installing $CORE + luci-app-singbox-ui (+ ru translation)"
   apk add "$CORE" luci-app-singbox-ui luci-i18n-singbox-ui-ru || die "apk add failed"
 fi
