@@ -6,13 +6,14 @@
  * stubs `apk` (--print-arch / update / add / list) and `wget` via PATH + temp dir;
  * redirects /etc/apk/... root paths via APK_KEYS_DIR / APK_REPO_DIR env hooks.
  *
- * Six tests:
+ * Seven tests:
  *   TEST 1: happy path (x86_64) — key fetched, repo list written, no apk add
  *   TEST 2: unsupported arch aborts non-zero, no repo list, no apk add
  *   TEST 3: minor derivation default (no SINGBOX_FEED_MINOR, no os-release)
  *   TEST 4: real apk add target — selected core + UI, extended feed kept
  *   TEST 5: official core → core feed removed (feed on demand)
  *   TEST 6: invalid SINGBOX_CORE aborts non-zero, no apk add
+ *   TEST 7: no-tty without SINGBOX_CORE falls back to default core
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
@@ -234,5 +235,23 @@ describe("install_sh", () => {
     expect(r.status).not.toBe(0);
     expect((r.stdout + r.stderr).toLowerCase()).toMatch(/unknown/);
     expect(apkLog()).toBe("");
+  });
+
+  it("TEST 7: no-tty without SINGBOX_CORE falls back to default core", () => {
+    resetLogs();
+    writeFileSync(ARCHFILE, "x86_64\n");
+    // No SINGBOX_CORE and no SINGBOX_INSTALL_TEST: choose_core must detect the
+    // absence of a controlling terminal (/dev/tty unreadable in a spawned process)
+    // and fall back to SINGBOX_CORE_DEFAULT = sing-box-extended-upx.
+    const r = spawnSync("sh", [INSTALL_SH], {
+      encoding: "utf8",
+      env: { ...stubEnv, SINGBOX_FEED_MINOR: "25.12" },
+    });
+    expect(r.status).toBe(0);
+    expect(apkLog().trim()).toBe(
+      "apk add sing-box-extended-upx luci-app-singbox-ui luci-i18n-singbox-ui-ru",
+    );
+    // extended core → core feed list kept
+    expect(existsSync(resolve(REPO_DIR, "singbox-core.list"))).toBe(true);
   });
 });

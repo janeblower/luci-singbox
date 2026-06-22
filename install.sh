@@ -127,6 +127,7 @@ choose_core() {
   fi
 
   echo "Select sing-box core to install:" >&2
+  # n lives inside the pipe's subshell only; it is not used after the loop.
   n=0
   printf '%s\n' "$SINGBOX_CORES" | while IFS='|' read -r name desc; do
     n=$((n + 1))
