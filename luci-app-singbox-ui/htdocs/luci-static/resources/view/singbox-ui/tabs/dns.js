@@ -83,8 +83,19 @@ function buildDnsMap() {
 	s.anonymous = false; s.addremove = true; s.sortable = true;
 	s.modaltitle = function (id) { return _('DNS Rule') + ': ' + id; };
 	addRenameField(s);
-	o = s.option(form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
-	o = s.option(form.ListValue, 'type', _('Type'));
+	// MODAL-CRASH: the dns_rule descriptor materialises its fields into the
+	// 'match'/'action' tabs (match.uc/dns_action.uc/dns_rule/logical.uc), so the
+	// discriminator fields enabled/type MUST be routed through taboption too.
+	// Adding them with the untabbed s.option() leaves the modal with a mix of
+	// tabbed + untabbed options, which makes LuCI's ui.tabs.initTabGroup walk an
+	// undefined tab pane and throw "Cannot read properties of undefined (reading
+	// 'classList')" on every Add/Edit. route_rule (tabs/route.js) and dns_server
+	// (above) declare their tabs up front for exactly this reason; dns_rule was
+	// the lone holdout. Regression: tests/browser/73-dns.mjs opens the modal.
+	s.tab('match', _('Match'));
+	s.tab('action', _('Action'));
+	o = s.taboption('match', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
+	o = s.taboption('match', form.ListValue, 'type', _('Type'));
 	o.value('default', _('Default')); o.value('logical', _('Logical'));
 	o.default = 'default'; o.modalonly = true;
 	// INFO-1: version-gate the dns_rule type selector for symmetry with

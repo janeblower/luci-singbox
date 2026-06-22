@@ -5,14 +5,16 @@
 //     surfaces in dns.servers (preview_config).
 //  2. Seed a default dns_rule (domain matcher -> route to an existing server)
 //     via UCI, reload, and assert (a) the dns_rule grid renders the row with an
-//     Edit button (the grid.dns_rule.add/edit surface) and (b) it emits in
-//     dns.rules. We DELIBERATELY do NOT open the dns_rule Add/Edit modal: the
-//     dns_rule descriptor currently crashes LuCI's initTabGroup
-//     ("Cannot read properties of undefined (reading 'classList')",
-//     form.js -> ui.js) on BOTH add and edit — a pre-existing modal-render bug
-//     unrelated to this test. Opening it would record a pageerror and fail the
-//     run. The grid+emission path still proves the dns_rule surface end-to-end.
-//     (See the run report's "issues" — the modal crash needs a separate fix.)
+//     Edit button, (b) OPENING the Edit modal AND the Add modal renders the
+//     match/action tabs without a pageerror, and (c) it emits in dns.rules.
+//     Opening the modal is the real regression guard: dns_rule used to route its
+//     enabled/type discriminators through the untabbed s.option() while its
+//     descriptor fields landed in match/action tabs, so LuCI's initTabGroup hit
+//     an undefined tab pane and crashed with "Cannot read properties of
+//     undefined (reading 'classList')" (form.js -> ui.js) on every Add/Edit.
+//     tabs/dns.js now declares the tabs up front and uses taboption (mirroring
+//     route_rule); this test would have caught the original crash had it opened
+//     the modal, which it now does.
 //  3. Set the inline DNS Settings (NamedSection 'dns') Strategy select directly
 //     on the page (it renders inline, not in #modal_overlay) and assert
 //     dns.strategy persists.
@@ -23,7 +25,8 @@
 // config ships dns_server `google`, which the dns_rule routes to (a default
 // dns_rule whose `server` is dangling is dropped by dns.uc).
 import { runTest, assert, wait, clickTopTab,
-         openAddModal, setProtocolInModal, fillField,
+         openAddModal, openEditModalBySid, dismissModal, listTabs,
+         setProtocolInModal, fillField,
          saveAndReload, fetchPreviewConfig, containerExec } from './_setup.mjs';
 
 export const COVERS = ["tab.dns",
@@ -41,6 +44,17 @@ await runTest('dns: add a DoH server and assert dns.servers emit', async ({ page
     const json = await fetchPreviewConfig(page);
     const srv = (json.dns && json.dns.servers) || [];
     assert('dns.servers has doh1', srv.some(s => s.tag === 'doh1'), JSON.stringify(srv));
+
+    // grid.dns_server.edit: now that doh1 is a persisted row, opening its Edit
+    // modal must render the basic tab without a pageerror (runTest asserts no
+    // pageerror). This is the edit-surface guard's required modal-open — without
+    // it the surface would be "claimed" in COVERS but never exercised, exactly
+    // the gap that hid the dns_rule classList crash.
+    await openEditModalBySid(page, 'dns_server', 'doh1');
+    const srvTabs = await listTabs(page);
+    assert('dns_server edit modal renders basic tab',
+        srvTabs.some(t => t.name === 'basic'), JSON.stringify(srvTabs));
+    await dismissModal(page);
 
     // Cleanup so re-runs start clean (test_browser.sh also snapshots config).
     containerExec('uci -q delete singbox-ui.doh1; uci commit singbox-ui');
@@ -78,6 +92,31 @@ await runTest('dns: dns_rule grid renders + emits in dns.rules', async ({ page }
     });
     assert('dns_rule grid row renders for seeded rule', grid.rowExists, JSON.stringify(grid));
     assert('dns_rule grid row exposes an Edit button', grid.hasEdit, JSON.stringify(grid));
+
+    // MODAL-CRASH regression: opening the Edit modal must render the match/action
+    // tabs without a pageerror. runTest() fails the test on any recorded
+    // pageerror, so the classList crash (untabbed enabled/type + tabbed
+    // descriptor fields) would surface here. We assert the tabs are present too,
+    // so a future regression that silently drops the tab structure is caught even
+    // if it stops throwing.
+    await openEditModalBySid(page, 'dns_rule', 'dnr1');
+    const editTabs = await listTabs(page);
+    assert('dns_rule edit modal renders match tab',
+        editTabs.some(t => t.name === 'match'), JSON.stringify(editTabs));
+    assert('dns_rule edit modal renders action tab',
+        editTabs.some(t => t.name === 'action'), JSON.stringify(editTabs));
+    await dismissModal(page);
+
+    // ...and the Add modal (no seeded section) must open cleanly too — the
+    // original crash hit both paths.
+    await openAddModal(page, 'dns_rule', 'dnr_add');
+    const addTabs = await listTabs(page);
+    assert('dns_rule add modal renders match tab',
+        addTabs.some(t => t.name === 'match'), JSON.stringify(addTabs));
+    await dismissModal(page);
+    // openAddModal stages a new section client-side; drop it so the emission
+    // assertion below and re-runs see only the seeded dnr1.
+    containerExec('uci -q delete singbox-ui.dnr_add; uci commit singbox-ui');
 
     // Emission: the default dns_rule surfaces in dns.rules with our matcher +
     // route target.
