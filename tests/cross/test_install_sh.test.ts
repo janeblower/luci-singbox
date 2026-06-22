@@ -3,14 +3,16 @@
  * Port of tests/cross/test_install_sh.sh
  *
  * Unit test for the FEED-based install.sh. Drives the flow WITHOUT network:
- * stubs `apk` (--print-arch / update / add) and `wget` via PATH + temp dir;
+ * stubs `apk` (--print-arch / update / add / list) and `wget` via PATH + temp dir;
  * redirects /etc/apk/... root paths via APK_KEYS_DIR / APK_REPO_DIR env hooks.
  *
- * Four tests:
+ * Six tests:
  *   TEST 1: happy path (x86_64) — key fetched, repo list written, no apk add
  *   TEST 2: unsupported arch aborts non-zero, no repo list, no apk add
  *   TEST 3: minor derivation default (no SINGBOX_FEED_MINOR, no os-release)
- *   TEST 4: real apk add target (drop SINGBOX_INSTALL_TEST so apk add runs)
+ *   TEST 4: real apk add target — selected core + UI, extended feed kept
+ *   TEST 5: official core → core feed removed (feed on demand)
+ *   TEST 6: invalid SINGBOX_CORE aborts non-zero, no apk add
  */
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
@@ -52,13 +54,14 @@ beforeAll(() => {
   mkdirSync(BIN, { recursive: true });
 
   // --- apk stub ---
-  // --print-arch → cat $ARCHFILE; update → no-op; add → record to apk.log
+  // --print-arch → cat $ARCHFILE; update → no-op; list → fake version; add → record to apk.log
   writeFileSync(
     resolve(BIN, "apk"),
     `#!/bin/sh
 case "$1" in
   --print-arch) cat "${ARCHFILE}" ;;
   update) : ;;
+  list) shift; echo "$1-1.99.0-r1 x86_64 {$1} (GPL-3.0) [available]" ;;
   add) shift; echo "apk add $*" >> "${TMP}/apk.log" ;;
   *) : ;;
 esac
@@ -179,7 +182,7 @@ describe("install_sh", () => {
     );
   });
 
-  it("TEST 4: real apk add target (no SINGBOX_INSTALL_TEST → apk add runs)", () => {
+  it("TEST 4: real apk add target — selected core + UI, extended feed kept", () => {
     resetLogs();
     writeFileSync(ARCHFILE, "x86_64\n");
     const r = spawnSync("sh", [INSTALL_SH], {
@@ -187,13 +190,49 @@ describe("install_sh", () => {
       env: {
         ...stubEnv,
         SINGBOX_FEED_MINOR: "25.12",
+        SINGBOX_CORE: "sing-box-extended-upx",
         // No SINGBOX_INSTALL_TEST
       },
     });
     expect(r.status).toBe(0);
-    // apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru
     expect(apkLog().trim()).toBe(
-      "apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru",
+      "apk add sing-box-extended-upx luci-app-singbox-ui luci-i18n-singbox-ui-ru",
     );
+    // extended core → core feed list kept
+    expect(existsSync(resolve(REPO_DIR, "singbox-core.list"))).toBe(true);
+  });
+
+  it("TEST 5: official core → core feed removed (feed on demand)", () => {
+    resetLogs();
+    writeFileSync(ARCHFILE, "x86_64\n");
+    const r = spawnSync("sh", [INSTALL_SH], {
+      encoding: "utf8",
+      env: {
+        ...stubEnv,
+        SINGBOX_FEED_MINOR: "25.12",
+        SINGBOX_CORE: "sing-box",
+      },
+    });
+    expect(r.status).toBe(0);
+    expect(apkLog().trim()).toBe(
+      "apk add sing-box luci-app-singbox-ui luci-i18n-singbox-ui-ru",
+    );
+    expect(existsSync(resolve(REPO_DIR, "singbox-core.list"))).toBe(false);
+  });
+
+  it("TEST 6: invalid SINGBOX_CORE aborts non-zero, no apk add", () => {
+    resetLogs();
+    writeFileSync(ARCHFILE, "x86_64\n");
+    const r = spawnSync("sh", [INSTALL_SH], {
+      encoding: "utf8",
+      env: {
+        ...stubEnv,
+        SINGBOX_FEED_MINOR: "25.12",
+        SINGBOX_CORE: "bogus",
+      },
+    });
+    expect(r.status).not.toBe(0);
+    expect((r.stdout + r.stderr).toLowerCase()).toMatch(/unknown/);
+    expect(apkLog()).toBe("");
   });
 });
