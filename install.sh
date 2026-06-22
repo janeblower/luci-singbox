@@ -80,15 +80,95 @@ REPO_URL="$PAGES_URL/$MINOR/$ARCH/luci-singbox/packages.adb"
 echo "$REPO_URL" > "$APK_REPO_DIR/luci-singbox.list"
 info "added feed repo: $REPO_URL"
 
-# 3. Install by name — apk resolves singbox-ui + bbolt-client + curl from the
-#    signed index. SINGBOX_INSTALL_TEST=1 stops here (dry-run for the test).
+# 2b. Add the extended-core sibling feed (published by the cores/sing-box-extended
+#     workflow, same signing key) so apk can report versions for the extended
+#     cores. Removed again below if an official core is chosen ("feed on demand").
+CORE_LIST="$APK_REPO_DIR/singbox-core.list"
+CORE_REPO_URL="$PAGES_URL/$MINOR/$ARCH/sing-box/packages.adb"
+echo "$CORE_REPO_URL" > "$CORE_LIST"
+info "added core feed repo: $CORE_REPO_URL"
+
+# Candidate sing-box cores: "<pkg>|<description>"; menu order = list order.
+SINGBOX_CORES="sing-box|official OpenWrt build
+sing-box-tiny|official OpenWrt build, reduced feature set
+sing-box-extended|extended fork (shtorm-7) — our feed
+sing-box-extended-upx|extended fork, UPX-compressed — our feed"
+SINGBOX_CORE_DEFAULT="sing-box-extended-upx"
+
+# pkg_version <pkg> — echo the version apk reports for <pkg>, else nothing.
+# `apk list <pkg>` lines start with "<name>-<version>"; anchor on the digit
+# right after the name so querying `sing-box` never matches `sing-box-tiny`.
+pkg_version() {
+  apk list "$1" 2>/dev/null | while read -r tok _; do
+    case "$tok" in
+      "$1"-[0-9]*) printf '%s\n' "${tok#"$1"-}"; break ;;
+    esac
+  done
+}
+
+# core_is_known <pkg> — succeed if <pkg> is one of the candidate cores.
+core_is_known() {
+  printf '%s\n' "$SINGBOX_CORES" | cut -d'|' -f1 | grep -qxF "$1"
+}
+
+# choose_core — echo the selected core package name on stdout. Honors the
+# SINGBOX_CORE override (skips the menu); falls back to the default when there
+# is no /dev/tty. Menu/prompt output goes to stderr so command substitution
+# captures only the chosen name.
+choose_core() {
+  if [ -n "${SINGBOX_CORE:-}" ]; then
+    core_is_known "$SINGBOX_CORE" || die "unknown SINGBOX_CORE: $SINGBOX_CORE"
+    printf '%s\n' "$SINGBOX_CORE"
+    return 0
+  fi
+  if [ ! -r /dev/tty ]; then
+    printf '%s\n' "$SINGBOX_CORE_DEFAULT"
+    return 0
+  fi
+
+  echo "Select sing-box core to install:" >&2
+  # n lives inside the pipe's subshell only; it is not used after the loop.
+  n=0
+  printf '%s\n' "$SINGBOX_CORES" | while IFS='|' read -r name desc; do
+    n=$((n + 1))
+    ver="$(pkg_version "$name")"
+    [ -n "$ver" ] || ver="(unavailable)"
+    printf '  %d) %-22s %-16s %s\n' "$n" "$name" "$ver" "$desc" >&2
+  done
+
+  while :; do
+    printf 'your choice (default: %s) : ' "$SINGBOX_CORE_DEFAULT" >&2
+    read -r choice </dev/tty || { printf '%s\n' "$SINGBOX_CORE_DEFAULT"; return 0; }
+    [ -n "$choice" ] || { printf '%s\n' "$SINGBOX_CORE_DEFAULT"; return 0; }
+    case "$choice" in
+      0|*[!0-9]*) echo "invalid choice: $choice" >&2; continue ;;
+    esac
+    name="$(printf '%s\n' "$SINGBOX_CORES" | sed -n "${choice}p" | cut -d'|' -f1)"
+    [ -n "$name" ] || { echo "invalid choice: $choice" >&2; continue; }
+    if [ -z "$(pkg_version "$name")" ]; then
+      echo "$name is unavailable, pick another" >&2; continue
+    fi
+    printf '%s\n' "$name"
+    return 0
+  done
+}
+
+# 3. Choose the core and install it together with the LuCI app + ru translation
+#    in a single apk add. SINGBOX_INSTALL_TEST=1 stops here (dry-run for tests).
 if [ "${SINGBOX_INSTALL_TEST:-}" = "1" ]; then
   info "SINGBOX_INSTALL_TEST=1 — skipping apk update/add"
 else
   info "updating package index"
   apk update || die "apk update failed"
-  info "installing luci-app-singbox-ui (+ ru translation)"
-  apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru || die "apk add failed"
+  CORE="$(choose_core)"
+  info "selected core: $CORE"
+  # Feed on demand: keep the core feed only for our extended cores.
+  case "$CORE" in
+    sing-box-extended|sing-box-extended-upx) : ;;
+    *) rm -f "$CORE_LIST" ;;
+  esac
+  info "installing $CORE + luci-app-singbox-ui (+ ru translation)"
+  apk add "$CORE" luci-app-singbox-ui luci-i18n-singbox-ui-ru || die "apk add failed"
 fi
 
 cat <<EOF
