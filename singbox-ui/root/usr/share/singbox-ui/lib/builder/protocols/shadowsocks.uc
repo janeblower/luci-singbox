@@ -78,10 +78,14 @@ reg.register({
     // clearing it produced a config sing-box rejects at parse. clear_on_multi
     // can't express this method-dependent rule, so do it here, gated on method.
     post: function(out, s) {
-        let method = out.method ?? "";
-        if (type(out.users) === "array" && length(out.users) &&
-            substr(method, 0, 5) !== "2022-")
-            delete out.password;
+        if (type(out.users) === "array" && length(out.users)) {
+            let method = out.method ?? "";
+            // 2022-blake3 multi-user keeps the (non-empty) server PSK alongside
+            // the per-user PSKs; legacy AEAD multi-user uses per-user passwords
+            // only, and an empty server password is never meaningful here.
+            if (substr(method, 0, 5) !== "2022-" || !length(out.password ?? ""))
+                delete out.password;
+        }
     },
 });
 
