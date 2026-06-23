@@ -70,20 +70,8 @@ function buildRouteRulesMap() {
 	// Validate logical sub-rules: only existing default rules, not self/logical.
 	var reg = s._sbMatRegistry || {};
 	var rulesEntry = reg['match\trules'];
-	if (rulesEntry && rulesEntry.opt) {
-		rulesEntry.opt.validate = function (section_id, value) {
-			var vals = toArray(value);
-			for (var i = 0; i < vals.length; i++) {
-				var n = vals[i];
-				if (!n) continue;
-				if (n === section_id) return _('A logical rule cannot reference itself.');
-				var t = uci.get('singbox-ui', n, 'type') || 'default';
-				if (t !== 'default')
-					return _('Sub-rules must be Default rules: ') + n;
-			}
-			return true;
-		};
-	}
+	if (rulesEntry && rulesEntry.opt)
+		rulesEntry.opt.validate = SbCommon.logicalSubRuleValidate(uci, _);
 
 	return m;
 }
