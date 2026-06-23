@@ -149,6 +149,26 @@ function is_outbound_proxy_kind(t) {
 	return _OUTBOUND_PROXY_SET[t] === true;
 }
 
+// b64_decode(s) — tolerant base64 decoder for share-link / subscription
+// payloads. Accepts the url-safe alphabet, missing padding, and embedded
+// whitespace/newlines; returns the decoded string, or null on invalid input.
+// The raw b64dec() builtin rejects all of those, so both the share-link parser
+// (sharelink.uc) and the subscription body decode (subscription.uc) route
+// through this single source so they can't drift.
+function b64_decode(s) {
+	if (s == null) return null;
+	let t = replace(s, /\s+/g, "");
+	t = replace(t, "-", "+");
+	t = replace(t, "_", "/");
+	let pad = length(t) % 4;
+	if (pad === 2) t += "==";
+	else if (pad === 3) t += "=";
+	else if (pad === 1) return null;  // invalid base64 length
+	let dec = null;
+	try { dec = b64dec(t); } catch (e) { return null; }
+	return dec;
+}
+
 return {
 	uci_get_or_empty,
 	s_opt,
@@ -164,4 +184,5 @@ return {
 	fnv1a32,
 	OUTBOUND_PROXY_KINDS,
 	is_outbound_proxy_kind,
+	b64_decode,
 };

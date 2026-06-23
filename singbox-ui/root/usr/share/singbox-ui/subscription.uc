@@ -116,8 +116,11 @@ function _read_raw_for_test(path) { return _reader(path); }
 // The old "contains '://'" check tripped on plaintext error pages like
 // "visit https://example.com/help" and silently mangled the body.
 function try_b64_decode(s) {
-	let dec = null;
-	try { dec = b64dec(s); } catch (e) { /* invalid base64 */ }
+	// helpers.b64_decode is tolerant (url-safe alphabet, missing padding,
+	// embedded whitespace) where the raw b64dec builtin is not — those bodies
+	// silently failed to import before. Same decoder the share-link parser
+	// uses, so subscription and share-link decoding stay in lockstep.
+	let dec = helpers.b64_decode(s);
 	if (dec == null || !length(dec)) return s;
 	let lines = split(dec, "\n");
 	for (let l in lines) {

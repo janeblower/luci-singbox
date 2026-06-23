@@ -141,6 +141,34 @@ print(n);
     await exec(`rm -rf ${dir}`);
   });
 
+  it("fetch-subs decodes a url-safe, unpadded base64 body (regression: tolerant b64 via helpers.b64_decode)", async () => {
+    // The raw b64dec() builtin rejects the url-safe alphabet (-/_) and missing
+    // padding; subscription used it directly, so url-safe subscriptions silently
+    // failed. try_b64_decode now shares the tolerant helpers.b64_decode with the
+    // share-link parser.
+    const dir = tmpDir();
+    await exec(`mkdir -p ${dir}/bin ${dir}/runtime`);
+    await putFile(CURL_STUB, `${dir}/bin/curl`);
+    await exec(`chmod +x ${dir}/bin/curl`);
+    // base64("vless://uuid@host.test:443?security=tls#A\n"), url-safe + unpadded
+    await putFile(
+      "dmxlc3M6Ly91dWlkQGhvc3QudGVzdDo0NDM_c2VjdXJpdHk9dGxzI0EK",
+      `${dir}/body`,
+    );
+    await putFile(
+      uciSub("subU", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
+    await exec(
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+    );
+    const check = await exec(
+      `cat ${dir}/runtime/sub_subU.txt 2>/dev/null || echo MISSING`,
+    );
+    expect(check.stdout).toMatch(/^vless:\/\/uuid@host\.test:443/);
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("fetch-subs accepts plain-text body when base64 decode produces no scheme", async () => {
     const dir = tmpDir();
     await exec(`mkdir -p ${dir}/bin ${dir}/runtime`);
