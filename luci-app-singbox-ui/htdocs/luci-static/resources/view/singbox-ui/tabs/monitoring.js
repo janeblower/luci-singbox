@@ -190,7 +190,12 @@ function buildMonitoring() {
 	function rebuildDeviceOptions() {
 		if (!state.ui) return;
 		var devices = {};
-		curConns().forEach(function (c) {
+		// Build the device list from the set actually being displayed: the Active
+		// tab shows live connections, the Closed tab shows state.closed. Driving
+		// this off curConns() on both tabs hid devices whose connections had all
+		// closed, so the Closed list couldn't be filtered by them (audit 9.2+).
+		var shown = (state.tab === 'active') ? curConns() : state.closed;
+		shown.forEach(function (c) {
 			var s = c.metadata && c.metadata.sourceIP; if (s) devices[s] = true;
 		});
 		// If the device we are filtering on has vanished from the current set
