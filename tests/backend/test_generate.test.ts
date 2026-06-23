@@ -852,6 +852,37 @@ config route_rule 'r1'
     expect(raw).not.toContain('"download_detour"'); // dangling detour dropped
   });
 
+  it("route_rule whose only matcher is a disabled rule-set is dropped (no catch-all)", async () => {
+    // Disabling the only rule_set matcher must not leave a matcher-less rule,
+    // which in sing-box matches ALL traffic (here: reject everything).
+    const base = await setup();
+    await writeCfg(
+      base,
+      `
+config ruleset 'rs_off'
+\toption enabled '0'
+\toption type 'remote'
+\toption url 'https://example.com/x.srs'
+
+config route_rule 'only_rs'
+\toption enabled '1'
+\tlist rule_set 'rs_off'
+\toption action 'reject'
+
+config route_rule 'scoped'
+\toption enabled '1'
+\tlist domain 'keep.example'
+\toption action 'reject'
+`,
+    );
+    const { raw } = await runGen(base);
+    const tmpF = `/tmp/gen_catchall_${process.pid}.json`;
+    await putFile(raw, tmpF);
+    // only_rs is dropped; the lone surviving rule is the domain-scoped one.
+    expect(await jpath("length(d.route.rules)", tmpF)).toBe("1");
+    expect(await jpath("d.route.rules[0].domain[0]", tmpF)).toBe("keep.example");
+  });
+
   it("dns_server with detour to a named outbound", async () => {
     const base = await setup();
     await writeCfg(

@@ -7,6 +7,13 @@
 let reg      = require("builder.route.registry");   // eager-loads route_rule/rule_set descriptors
 let filler   = require("builder._filler");
 let headless = require("builder.route.headless");
+let match    = require("builder._shared.match");
+
+// Matcher json_keys a route rule can carry (the single match.uc source), minus
+// `invert` which is a modifier, not a matcher. Used to detect a rule left with
+// no matcher after rule-set resolution — which in sing-box matches ALL traffic.
+let MATCHER_KEYS = {};
+for (let f in match.fields("route")) if (f.json_key !== "invert") MATCHER_KEYS[f.json_key] = true;
 
 // build_route_rules(cur, valid_ob) -> { rules, final, referenced }
 function build_route_rules(cur, valid_ob) {
@@ -59,15 +66,16 @@ function build_route_rules(cur, valid_ob) {
 
     // resolve+track rule_set matcher refs on a built rule (drop disabled/missing).
     function resolve_rulesets(rule) {
-        if (rule.rule_set == null) return;
+        if (rule.rule_set == null) return false;
         let resolved = [];
         for (let n in rule.rule_set) {
             if (!rs_enabled[n]) continue;
             if (!seen[n]) { push(referenced, n); seen[n] = true; }
             push(resolved, n);
         }
-        if (length(resolved)) rule.rule_set = resolved;
-        else delete rule.rule_set;
+        if (length(resolved)) { rule.rule_set = resolved; return false; }
+        delete rule.rule_set;
+        return true;   // had a rule_set matcher, all refs disabled/missing -> stripped
     }
 
     // validate action target; return false to drop the rule.
@@ -118,8 +126,23 @@ function build_route_rules(cur, valid_ob) {
             rule.rules = sub;
         }
 
-        resolve_rulesets(rule);
+        let stripped = resolve_rulesets(rule);
         if (!action_ok(rule, name)) return;
+        // If a rule's only matcher was a rule_set that resolve_rulesets fully
+        // stripped (all referenced sets disabled/missing) it is left with just an
+        // action — and a matcher-less rule matches ALL traffic in sing-box,
+        // silently turning a scoped rule into a catch-all (e.g. reject- or
+        // route-everything). Drop it rather than emit the catch-all. A rule
+        // authored WITHOUT any rule_set (e.g. a global sniff) never strips, so it
+        // is left untouched.
+        if (stripped && t !== "logical") {
+            let has_matcher = false;
+            for (let k in MATCHER_KEYS) if (rule[k] != null) { has_matcher = true; break; }
+            if (!has_matcher) {
+                warn(sprintf("route.uc: route_rule '%s' lost its only matcher (rule-set(s) disabled/missing); dropping to avoid a catch-all\n", name));
+                return;
+            }
+        }
         push(rules, rule);
     });
 
