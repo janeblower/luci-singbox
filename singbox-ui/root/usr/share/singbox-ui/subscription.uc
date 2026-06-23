@@ -29,15 +29,18 @@ const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 // SEC-6: single source of truth for the share-link schemes we actually parse.
-// This list is kept aligned with lib/sharelink.uc::parse_proxy_url's dispatch
-// (vless/vmess/ss/trojan/hy2/hysteria2). Two consumers used to carry divergent
-// inline scheme sets — try_b64_decode's decode-trigger whitelist once included
-// `http`/`https`, contradicting the anti-false-positive heuristic it documents
-// (a plaintext error page line `visit https://…/help` would falsely trigger a
-// base64 decode). The line-scan stays deliberately generic (any `scheme://`,
-// with parse_proxy_url rejecting unsupported schemes downstream); only the
-// decode TRIGGER is narrowed to schemes we can actually parse.
-const PROXY_SCHEME_RE = /^(vmess|vless|ss|trojan|hy2|hysteria2):\/\//;
+// MUST mirror EVERY scheme lib/sharelink.uc::parse_proxy_url dispatches:
+// vless/vmess/ss/trojan/hy2/hysteria2/tuic/hysteria/hy/anytls/socks(5). A subset
+// here silently breaks base64 subscriptions composed only of the missing schemes
+// (the body never decodes → "no valid proxy URL"). Guarded by test_subscription_uc
+// ("decode triggers for every dispatched scheme"). Two consumers used to carry
+// divergent inline scheme sets — try_b64_decode's decode-trigger whitelist once
+// included `http`/`https`, contradicting the anti-false-positive heuristic it
+// documents (a plaintext error page line `visit https://…/help` would falsely
+// trigger a base64 decode). The line-scan stays deliberately generic (any
+// `scheme://`, with parse_proxy_url rejecting unsupported schemes downstream);
+// only the decode TRIGGER is narrowed to schemes we can actually parse.
+const PROXY_SCHEME_RE = /^(vmess|vless|ss|trojan|hy2|hysteria2|tuic|hysteria|hy|anytls|socks5?):\/\//;
 
 let fs  = require("fs");
 let uci_mod = require("uci");

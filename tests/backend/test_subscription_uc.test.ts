@@ -113,6 +113,34 @@ print(n);
     await exec(`rm -rf ${dir}`);
   });
 
+  it("fetch-subs decodes base64 body of a tuic-only sub (regression: PROXY_SCHEME_RE must cover every parse_proxy_url scheme)", async () => {
+    // tuic/hysteria/hy/anytls/socks were dispatched by parse_proxy_url but were
+    // missing from the decode-trigger whitelist (PROXY_SCHEME_RE), so a base64
+    // subscription composed only of them never decoded and was rejected with
+    // "no valid proxy URL in response".
+    const dir = tmpDir();
+    await exec(`mkdir -p ${dir}/bin ${dir}/runtime`);
+    await putFile(CURL_STUB, `${dir}/bin/curl`);
+    await exec(`chmod +x ${dir}/bin/curl`);
+    // base64("tuic://11111111-1111-1111-1111-111111111111:pass@host.test:443#NodeT\n")
+    await putFile(
+      "dHVpYzovLzExMTExMTExLTExMTEtMTExMS0xMTExLTExMTExMTExMTExMTpwYXNzQGhvc3QudGVzdDo0NDMjTm9kZVQK",
+      `${dir}/body`,
+    );
+    await putFile(
+      uciSub("subT", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
+    await exec(
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+    );
+    const check = await exec(
+      `cat ${dir}/runtime/sub_subT.txt 2>/dev/null || echo MISSING`,
+    );
+    expect(check.stdout).toMatch(/^tuic:\/\/11111111-/);
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("fetch-subs accepts plain-text body when base64 decode produces no scheme", async () => {
     const dir = tmpDir();
     await exec(`mkdir -p ${dir}/bin ${dir}/runtime`);
