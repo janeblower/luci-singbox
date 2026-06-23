@@ -269,4 +269,37 @@ describe("protocol filler", () => {
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("THREW");
   });
+
+  it("validate_field: unknown coerce on a GROUP field is rejected (code review #14)", async () => {
+    // Group/seq scalar fields flow through _filler._emit_scalar exactly like
+    // top-level fields, but used to bypass coerce/omit validation — a typo'd
+    // coerce silently produced wrong JSON. Now validated at registration.
+    const src = `
+      let reg = require("builder.protocols.registry");
+      let threw = false;
+      try {
+        reg.register({ kind:"outbound", type:"badgroupcoerce_t3", sing_box_type:"x",
+          groups:[ { json_key:"grp", fields:[ { name:"g", json_key:"g", coerce:"bogus" } ] } ] });
+      } catch (e) { threw = true; }
+      print(threw ? "THREW" : "NOTHREW");
+    `;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("THREW");
+  });
+
+  it("validate_field_refs: requires.field on a GROUP field referencing an unknown field is rejected (code review #14)", async () => {
+    const src = `
+      let reg = require("builder.protocols.registry");
+      let threw = false;
+      try {
+        reg.register({ kind:"outbound", type:"badgroupref_t3", sing_box_type:"x",
+          groups:[ { json_key:"grp", fields:[ { name:"g", json_key:"g", requires:{ field:"nope", value:"1" } } ] } ] });
+      } catch (e) { threw = true; }
+      print(threw ? "THREW" : "NOTHREW");
+    `;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("THREW");
+  });
 });
