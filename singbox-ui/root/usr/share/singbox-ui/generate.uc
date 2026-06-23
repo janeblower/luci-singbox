@@ -119,8 +119,17 @@ if (length(rsets) || length(r.rules) || r.final) {
 // warning (1.14 hard failure) this code exists to suppress. When a resolver
 // candidate exists, create a minimal route block to carry it.
 if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
+	let server_tags = {};
+	for (let s in config.dns.servers) if (length(s.tag)) server_tags[s.tag] = true;
 	let dns_section = uci.get_all("singbox-ui", "dns");
 	let resolver_tag = dns_section ? dns_section.default_resolver : null;
+	// An explicit default_resolver must name an enabled dns_server; the UI
+	// ListValue keeps a stale value after that server is disabled/deleted, which
+	// would emit a dangling default_domain_resolver and make sing-box hard-fail.
+	if (length(resolver_tag ?? "") && !server_tags[resolver_tag]) {
+		warn(sprintf("generate.uc: dns.default_resolver '%s' is not an enabled dns_server; auto-picking\n", resolver_tag));
+		resolver_tag = null;
+	}
 	if (resolver_tag == null || resolver_tag === "") {
 		for (let s in config.dns.servers) {
 			if (s.type !== "fakeip" && length(s.tag)) { resolver_tag = s.tag; break; }

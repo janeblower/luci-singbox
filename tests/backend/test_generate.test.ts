@@ -796,6 +796,33 @@ config dns_server 'out_dns'
     expect(raw).toContain('"detour": "direct"');
   });
 
+  it("stale dns.default_resolver auto-picks an enabled server (no dangling default_domain_resolver)", async () => {
+    // An explicit default_resolver pointing at a disabled/deleted server (the UI
+    // ListValue keeps the stale value) must not be emitted verbatim — that is a
+    // dangling tag sing-box hard-fails on. It falls through to the auto-pick.
+    const base = await setup();
+    await writeCfg(
+      base,
+      `
+config dns_server 'g'
+\toption enabled '1'
+\toption type 'https'
+\toption server '8.8.8.8'
+\toption server_port '443'
+\toption path '/dns-query'
+
+config dns 'dns'
+\toption default_resolver 'ghost'
+`,
+    );
+    const { raw } = await runGen(base);
+    const tmpF = `/tmp/gen_resolver_${process.pid}.json`;
+    await putFile(raw, tmpF);
+    expect(await jpath("d.route.default_domain_resolver.server", tmpF)).toBe(
+      "g",
+    );
+  });
+
   it("dns_server with detour to a named outbound", async () => {
     const base = await setup();
     await writeCfg(
