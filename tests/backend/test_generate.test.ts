@@ -823,6 +823,35 @@ config dns 'dns'
     );
   });
 
+  it("remote rule-set download_detour to an unknown outbound is dropped (no dangling)", async () => {
+    // download_detour was the one outbound reference never validated; a stale
+    // tag emitted a dangling reference that sing-box refuses to start on.
+    const base = await setup();
+    await writeCfg(
+      base,
+      `
+config outbound 'p'
+\toption enabled '1'
+\toption type 'direct'
+
+config ruleset 'rs'
+\toption enabled '1'
+\toption type 'remote'
+\toption url 'https://example.com/x.srs'
+\toption download_detour 'ghost'
+
+config route_rule 'r1'
+\toption enabled '1'
+\tlist rule_set 'rs'
+\toption action 'route'
+\toption outbound 'p'
+`,
+    );
+    const { raw } = await runGen(base);
+    expect(raw).toContain('"tag": "rs"'); // the rule-set still builds
+    expect(raw).not.toContain('"download_detour"'); // dangling detour dropped
+  });
+
   it("dns_server with detour to a named outbound", async () => {
     const base = await setup();
     await writeCfg(

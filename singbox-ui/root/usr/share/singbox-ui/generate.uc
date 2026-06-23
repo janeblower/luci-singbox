@@ -101,7 +101,7 @@ uci.foreach("singbox-ui", "ruleset", function(s) {
 	if (!ref_seen[s[".name"]])
 		warn(sprintf("generate.uc: inline rule-set '%s' is enabled but unreferenced; its member rules are not applied\n", s[".name"]));
 });
-let rsets = ruleset_mod.build_rule_sets(uci, referenced);
+let rsets = ruleset_mod.build_rule_sets(uci, referenced, valid_ob);
 if (length(rsets) || length(r.rules) || r.final) {
 	config.route = {};
 	if (length(rsets))   config.route.rule_set = rsets;
