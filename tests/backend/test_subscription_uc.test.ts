@@ -511,7 +511,7 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
   it("C2.1.10: PROXY_SCHEME_RE shared scheme constant present in subscription.uc", async () => {
     const content = readFileSync(`${HOST_SHARE}/subscription.uc`, "utf8");
     expect(content).toMatch(
-      /PROXY_SCHEME_RE\s*=\s*\/\^\(vmess\|vless\|ss\|trojan\|hy2\|hysteria2\)/,
+      /PROXY_SCHEME_RE\s*=\s*\/\^\(vmess\|vless\|ss\|trojan\|hy2\|hysteria2\|tuic\|hysteria\|hy\|anytls\|socks5\?\)/,
     );
     expect(content).toMatch(/match\(t, PROXY_SCHEME_RE\)/);
     expect(content).not.toMatch(/PROXY_SCHEME_RE.*http/);
