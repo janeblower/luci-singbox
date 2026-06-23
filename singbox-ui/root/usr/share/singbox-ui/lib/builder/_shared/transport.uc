@@ -58,6 +58,8 @@ return {
             variants: {
                 ws: [
                     { name: "transport_path", json_key: "path" },
+                    { name: "transport_max_early_data", json_key: "max_early_data", coerce: "num" },
+                    { name: "transport_early_data_header_name", json_key: "early_data_header_name" },
                     { json_key: "headers", gate: { any_present: ["transport_host"] },
                       fields: [ { name: "transport_host", json_key: "Host" } ] },
                 ],
