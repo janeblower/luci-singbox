@@ -46,4 +46,60 @@ print("OK\\n");
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("OK");
   });
+
+  it("dns.referenced_rulesets: skip consumed default rules with rule_set refs", async () => {
+    const src = `
+let dns = require("dns");
+let CFG = {
+  dns_server: [ { [".name"]: "dns1", enabled: "1", type: "udp" } ],
+  ruleset:    [ { [".name"]: "rs_consumed", enabled: "1" }, { [".name"]: "rs_direct", enabled: "1" } ],
+  dns_rule: [
+    { [".name"]: "consumed_with_rs", enabled: "1", type: "default", domain: [ "x" ],
+      rule_set: [ "rs_consumed" ], action: "route", server: "dns1" },
+    { [".name"]: "direct_with_rs", enabled: "1", type: "default", domain: [ "y" ],
+      rule_set: [ "rs_direct" ], action: "route", server: "dns1" },
+    { [".name"]: "logical_rule", enabled: "1", type: "logical", mode: "or",
+      rules: [ "consumed_with_rs" ], action: "route", server: "dns1" },
+  ],
+};
+let cur = {
+  foreach: function(_p, t, fn) { for (let s in (CFG[t] || [])) fn(s); },
+  get_all: function(_p, t) { return CFG[t]; },
+};
+let refs = dns.referenced_rulesets(cur);
+if (length(refs) != 1 || refs[0] != "rs_direct") { print(sprintf("FAIL: expected [rs_direct], got %J\\n", refs)); exit(1); }
+print("OK\\n");
+`;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("OK");
+  });
+
+  it("dns-2: logical rule with empty UCI mode still emits required mode 'or'", async () => {
+    const src = `
+let dns = require("dns");
+let CFG = {
+  dns_server: [ { [".name"]: "dns1", enabled: "1", type: "udp" } ],
+  dns_rule: [
+    { [".name"]: "sub", enabled: "1", type: "default", domain_keyword: [ "ads" ],
+      action: "route", server: "dns1" },
+    { [".name"]: "lg", enabled: "1", type: "logical", mode: "",
+      rules: [ "sub" ], action: "route", server: "dns1" },
+  ],
+};
+let cur = {
+  foreach: function(_p, t, fn) { for (let s in (CFG[t] || [])) fn(s); },
+  get_all: function(_p, t) { return CFG[t]; },
+};
+let rules = dns.build_rules(cur);
+let lg = null;
+for (let r in rules) if (r.type == "logical") lg = r;
+if (lg == null) { print("FAIL: no logical rule emitted\\n"); exit(1); }
+if (lg.mode != "or") { print(sprintf("FAIL: mode=%J want 'or'\\n", lg.mode)); exit(1); }
+print("OK\\n");
+`;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("OK");
+  });
 });

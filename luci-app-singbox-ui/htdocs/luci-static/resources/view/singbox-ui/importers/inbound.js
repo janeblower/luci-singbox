@@ -13,22 +13,7 @@ var SB_INBOUND_KNOWN = {
 	'hysteria2': true,
 };
 
-// parseIntField — coerce a pasted numeric field with validation (IMP-1).
-// Unary + on a non-numeric paste (e.g. "listen_port":"eight") yields NaN, which
-// the import write path String()'d into the literal "NaN" — silently producing
-// a UCI section sing-box later rejects. Returns { ok, value } so the caller can
-// push an actionable parse error into the modal instead. `min`/`max` bound the
-// accepted range (e.g. 1..65535 for ports); pass null to skip a bound.
-function parseIntField(raw, min, max) {
-	var n = parseInt(raw, 10);
-	if (!isFinite(n)) return { ok: false };
-	// Reject "12abc" / objects: parseInt would accept the numeric prefix, so
-	// re-stringify and compare to catch trailing garbage.
-	if (String(n) !== String(raw).trim()) return { ok: false };
-	if (min != null && n < min) return { ok: false };
-	if (max != null && n > max) return { ok: false };
-	return { ok: true, value: n };
-}
+
 
 function jsonImportInbound(o) {
 	var out = { ok: false, errors: [], fields: {} };
@@ -53,7 +38,7 @@ function jsonImportInbound(o) {
 	f.protocol = o.type;
 	if (o.listen      != null) f.listen      = String(o.listen);
 	if (o.listen_port != null) {
-		var lp = parseIntField(o.listen_port, 1, 65535);
+		var lp = SbTransport.parseIntField(o.listen_port, 1, 65535);
 		if (!lp.ok) return bad(_('Invalid port: ') + o.listen_port);
 		f.listen_port = lp.value;
 	}
@@ -113,7 +98,7 @@ function jsonImportInbound(o) {
 			// legacy snake_case for paste-compat.
 			var aidRaw = (u.alterId != null) ? u.alterId : u.alter_id;
 			if (aidRaw != null) {
-				var aid = parseIntField(aidRaw, 0, null);
+				var aid = SbTransport.parseIntField(aidRaw, 0, null);
 				if (!aid.ok) return bad(_('Invalid alter_id: ') + aidRaw);
 				f.vmess_alter_id = String(aid.value);
 			}
@@ -122,7 +107,7 @@ function jsonImportInbound(o) {
 	if (o.type === 'tun') {
 		if (o.interface_name) f.interface_name = o.interface_name;
 		if (o.mtu != null) {
-			var mt = parseIntField(o.mtu, 1, null);
+			var mt = SbTransport.parseIntField(o.mtu, 1, null);
 			if (!mt.ok) return bad(_('Invalid MTU: ') + o.mtu);
 			f.mtu = String(mt.value);
 		}
@@ -149,7 +134,7 @@ function jsonImportInbound(o) {
 		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn;
 		if (o.tls.reality) {
 			if (o.tls.reality.private_key) f.reality_private_key = o.tls.reality.private_key;
-			if (Array.isArray(o.tls.reality.short_id))
+			if (Array.isArray(o.tls.reality.short_id) && o.tls.reality.short_id.length)
 				f.reality_short_id = o.tls.reality.short_id[0];
 			if (o.tls.reality.handshake) {
 				if (o.tls.reality.handshake.server)
@@ -166,12 +151,12 @@ function jsonImportInbound(o) {
 			f.obfs_password = o.obfs.password || '';
 		}
 		if (o.up_mbps != null) {
-			var up = parseIntField(o.up_mbps, 0, null);
+			var up = SbTransport.parseIntField(o.up_mbps, 0, null);
 			if (!up.ok) return bad(_('Invalid up_mbps: ') + o.up_mbps);
 			f.up_mbps = String(up.value);
 		}
 		if (o.down_mbps != null) {
-			var dn = parseIntField(o.down_mbps, 0, null);
+			var dn = SbTransport.parseIntField(o.down_mbps, 0, null);
 			if (!dn.ok) return bad(_('Invalid down_mbps: ') + o.down_mbps);
 			f.down_mbps = String(dn.value);
 		}
@@ -205,7 +190,7 @@ function openJsonExportModal(kind, name) {
 		SbCommon.copyToClipboard(pre.textContent || '', showCopyResult);
 	}
 
-	ui.showModal(_('Export JSON') + ' — ' + kind + ' ' + name, [
+	ui.showModal(_('Export JSON — %s %s').format(kind, name), [
 		pre, status,
 		E('div', { 'class': 'right', 'style': 'margin-top:12px;' }, [
 			E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, _('Close')),

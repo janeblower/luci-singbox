@@ -110,6 +110,8 @@ describe("domain classifier: path -> domain mapping", () => {
       expectDomain("singbox-ui/Makefile", "packaging", "true"));
     it("luci-app-singbox-ui/Makefile => packaging=true", () =>
       expectDomain("luci-app-singbox-ui/Makefile", "packaging", "true"));
+    it("Makefile (root) => packaging=true", () =>
+      expectDomain("Makefile", "packaging", "true"));
     it("tests/cross/test_build_feed.sh => packaging=true", () =>
       expectDomain("tests/cross/test_build_feed.sh", "packaging", "true"));
     it("scripts/build-apk.sh => backend=false", () =>

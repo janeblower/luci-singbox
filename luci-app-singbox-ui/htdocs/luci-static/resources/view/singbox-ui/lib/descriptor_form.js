@@ -43,6 +43,9 @@ function widgetFor(field) {
     }
     if (t === 'enum') return form.ListValue;
     if (t === 'list') return form.DynamicList;
+    // Multiline string fields render as a textarea widget (TextValue) instead of
+    // a single-line input. Used for PEM keys, raw JSON, and share-link URLs.
+    if (t === 'string' && field.multiline) return form.TextValue;
     // A string/list field carrying a static `values` array still renders as a
     // free-entry widget (Value / DynamicList); the values become datalist
     // suggestions, not a strict whitelist. Only `enum` is a strict dropdown.
@@ -377,7 +380,16 @@ function applyMaterialized(s, kind, protoName, materialized) {
 
         if (f.dynamic) attachDynamic(opt, f);
 
-        if (f.secret) {
+        if (f.multiline) {
+            opt.rows = 12;
+            opt.monospace = true;
+        }
+
+        // A multiline field renders as a textarea (TextValue); password masking
+        // and the eye-toggle only work on a single-line input, so multiline wins
+        // for a field that is both (e.g. ssh private_key — a masked one-line PEM
+        // is unusable). Such a field renders as a plain monospace textarea.
+        if (f.secret && !f.multiline) {
             opt.password = true;
             decorateSecretInput(opt);
         }

@@ -140,9 +140,24 @@ function referenced_rulesets(cur, rs_enabled) {
 	if (rs_enabled == null) rs_enabled = ruleset_enabled_map(cur);
 	let out = [];
 	let seen = {};
+	// Compute consumed set: default rules referenced by logical rules are inlined
+	// as headless matchers, so their rule_set matchers are stripped (headless excludes
+	// rule_set). Skip them to avoid orphan route.rule_set definitions.
+	function ref_list(s) {
+		let refs = s.rules ?? [];
+		if (type(refs) === "string") refs = [ refs ];
+		return refs;
+	}
+	let consumed = {};
+	cur.foreach("singbox-ui", "dns_rule", function(s) {
+		if (s.enabled === "0") return;
+		if ((s.type ?? "default") !== "logical") return;
+		for (let n in ref_list(s)) consumed[n] = true;
+	});
 	cur.foreach("singbox-ui", "dns_rule", function(s) {
 		if (s.enabled === "0") return;
 		if ((s.type ?? "default") === "logical") return;
+		if (consumed[s[".name"]]) return;   // consumed → nested only, rule_set stripped
 		let refs = s.rule_set ?? [];
 		if (type(refs) === "string") refs = [ refs ];
 		for (let n in refs)

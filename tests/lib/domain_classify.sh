@@ -31,7 +31,9 @@ sb_classify_domains() {
 		printf '%s\n' "$_in" | grep -qE '^bbolt-client/' && _bbolt=true
 		printf '%s\n' "$_in" | grep -qE '^(singbox-ui/|tests/backend/|tests/parity/)' && _backend=true
 		printf '%s\n' "$_in" | grep -qE '^(luci-app-singbox-ui/|tests/ui/|tests/browser/)' && _ui=true
-		printf '%s\n' "$_in" | grep -qE '^(scripts/|install\.sh|feed/|.*/Makefile|tests/cross/)' && _packaging=true
+		# (.*/)?Makefile matches a repo-ROOT bare `Makefile` as well as any nested
+		# one, mirroring dorny's `**/Makefile` (globstar matches zero segments).
+		printf '%s\n' "$_in" | grep -qE '^(scripts/|install\.sh|feed/|(.*/)?Makefile|tests/cross/)' && _packaging=true
 	fi
 	printf 'bbolt=%s\n'     "$_bbolt"
 	printf 'backend=%s\n'   "$_backend"

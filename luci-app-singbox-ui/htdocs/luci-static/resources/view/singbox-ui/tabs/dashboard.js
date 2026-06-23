@@ -167,7 +167,12 @@ function buildDashboard() {
 		return t === 'selector' || t === 'urltest';
 	}
 	function memberDelay(p) {
-		return (p && p.history && p.history[0] && p.history[0].delay) || 0;
+		// clash/mihomo /proxies history appends the NEWEST sample LAST, so read the
+		// tail. The local Test button writes a single-element array, which the tail
+		// read also handles.
+		var h = (p && p.history) || null;
+		var last = (h && h.length) ? h[h.length - 1] : null;
+		return (last && last.delay) || 0;
 	}
 
 	function showUnreachable() {

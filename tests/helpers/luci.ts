@@ -36,6 +36,12 @@ export function loadLuciModule(
   };
 
   vm.createContext(sandbox);
+  // LuCI provides String.prototype.format at runtime; the sandbox's own String
+  // intrinsic does not, so inject it (guarded) for modules that call `.format()`.
+  vm.runInContext(
+    "if(!String.prototype.format){Object.defineProperty(String.prototype,'format',{value:function(){var a=arguments,i=0;return String(this).replace(/%[sd]/g,function(){return String(a[i++]);});},enumerable:false});}",
+    sandbox,
+  );
   vm.runInContext(body, sandbox, { filename: absPath });
   return { exports: sandbox.__moduleExports, warnings };
 }

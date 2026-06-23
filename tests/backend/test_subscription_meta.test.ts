@@ -194,4 +194,57 @@ print("after_pass2_meta_exists=", (m2 != null) ? "yes" : "no"); print("\\n");
     expect(r.stdout).toContain("after_pass1_meta_exists=yes");
     expect(r.stdout).toContain("after_pass2_meta_exists=no");
   });
+
+  it("FET-2: a hard fetch failure (no valid URLs) unlinks the stale .meta sidecar", async () => {
+    const dir = `/tmp/sbmeta-fet2-${Date.now()}`;
+    await exec(`mkdir -p ${dir}/cfg ${dir}/run`);
+
+    const uciCfg =
+      `config outbound 'subF'\n` +
+      `\toption type 'subscription'\n` +
+      `\toption sub_url 'https://e/f'\n`;
+    await putFile(uciCfg, `${dir}/cfg/singbox-ui`);
+
+    const metaPath = `${dir}/run/sub_subF.meta`;
+
+    const probe = `
+let fs = require("fs");
+let sub = require("subscription");
+let uci = require("uci").cursor(getenv("UCI_CONFIG_DIR"));
+// Pass 1: a good body + title header writes the meta sidecar.
+sub._set_fetcher_for_test(function(jobs){
+  for (let j in jobs) {
+    let b = fs.open(j.body_path, "w"); b.write("vless://x@h:1#n\\n"); b.close();
+    let h = fs.open(j.hdr_path, "w");
+    h.write("HTTP/2 200\\r\\nprofile-title: Plan A\\r\\n\\r\\n");
+    h.close();
+  }
+});
+sub._cmd_fetch_subs_for_test(uci);
+let m1 = fs.stat("${metaPath}");
+print("after_pass1_meta_exists=", (m1 != null) ? "yes" : "no"); print("\\n");
+// Pass 2: a garbage body (no valid proxy URL) is a hard failure; the now-stale
+// meta sidecar from pass 1 must be removed, not left to mislead the dashboard.
+sub._set_fetcher_for_test(function(jobs){
+  for (let j in jobs) {
+    let b = fs.open(j.body_path, "w"); b.write("upstream error page\\n"); b.close();
+    let h = fs.open(j.hdr_path, "w"); h.write("HTTP/2 200\\r\\n\\r\\n"); h.close();
+  }
+});
+sub._cmd_fetch_subs_for_test(uci);
+let m2 = fs.stat("${metaPath}");
+print("after_pass2_meta_exists=", (m2 != null) ? "yes" : "no"); print("\\n");
+`;
+    const probePath = `${dir}/probe_fet2.uc`;
+    await putFile(probe, probePath);
+    const r = await runProbe(probePath, {
+      UCI_CONFIG_DIR: `${dir}/cfg`,
+      SINGBOX_TMPDIR: `${dir}/run`,
+    });
+    await exec(`rm -rf ${dir}`);
+
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("after_pass1_meta_exists=yes");
+    expect(r.stdout).toContain("after_pass2_meta_exists=no");
+  });
 });

@@ -479,6 +479,43 @@ describe("dashboard.js", () => {
     expect(names.indexOf("A") < names.indexOf("B")).toBe(true);
   });
 
+  it("uis-1: sort/memberDelay uses the NEWEST (last) history sample, not the oldest", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    // clash/mihomo appends the newest probe LAST. B's multi-sample history ends
+    // at 50ms (fast); reading history[0] (900, the OLD code) would sort A first.
+    // Reading the tail (the fix) makes B fastest, so B must sort before A.
+    const PROXIES = {
+      proxies: {
+        GW: { type: "Selector", now: "A", all: ["A", "B"] },
+        A: { type: "Shadowsocks", history: [{ delay: 300 }] },
+        B: {
+          type: "Vmess",
+          history: [{ delay: 900 }, { delay: 600 }, { delay: 50 }],
+        },
+      },
+    };
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    const so = Dash.buildDashboard();
+    so.setSortByLatency(true);
+    await so.poll();
+    await so.refreshProxies();
+    const names = findAll(
+      so.node,
+      (n: any) => n.attrs && /sb-dashboard-node-name/.test(n.attrs.class || ""),
+    ).map((n: any) => n.textContent);
+    expect(names.indexOf("B") >= 0).toBe(true);
+    expect(names.indexOf("B") < names.indexOf("A")).toBe(true);
+  });
+
   it("subscription status strip + Update button on subscription groups", async () => {
     const ctx = loadDashboard();
     const Dash = ctx.__moduleExports;
