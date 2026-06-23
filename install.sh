@@ -167,21 +167,29 @@ else
     sing-box-extended|sing-box-extended-upx) : ;;
     *) rm -f "$CORE_LIST" ;;
   esac
-  # Remove any conflicting sing-box core before installing the chosen one.
+  # Swap cores ATOMICALLY. The conflicting old core must NOT be `apk del`'d in a
+  # separate step first: singbox-ui hard-depends on `sing-box` (provided by the
+  # core), so removing the current provider on its own either fails ("required by
+  # singbox-ui") and aborts the install, or cascade-removes singbox-ui. Instead
+  # fold the removal into the SAME `apk add` via apk-world conflict constraints
+  # (`!name`, see apk-world(5)) so singbox-ui's dependency stays satisfied by the
+  # new core throughout the single transaction.
+  #
+  # We only `!`-conflict OTHER cores by their literal package name, and never
+  # `!sing-box`: the `sing-box` name is the virtual the extended cores *provide*,
+  # so `!sing-box` would conflict the chosen core itself. A plain `sing-box`
+  # being replaced by an extended core is displaced by that core's own
+  # `conflicts: sing-box` metadata in the same transaction.
   REMOVE=""
   for _candidate in $(printf '%s\n' "$SINGBOX_CORES" | cut -d'|' -f1); do
     [ "$_candidate" != "$CORE" ] || continue
-    apk info "$_candidate" >/dev/null 2>&1 || continue
-    REMOVE="$REMOVE $_candidate"
+    [ "$_candidate" != "sing-box" ] || continue   # never !sing-box (provided virtual)
+    apk info "$_candidate" >/dev/null 2>&1 || continue   # only if installed
+    REMOVE="$REMOVE !$_candidate"
   done
-  if [ -n "$REMOVE" ]; then
-    # shellcheck disable=SC2086
-    info "removing conflicting core(s):$REMOVE"
-    # shellcheck disable=SC2086
-    apk del $REMOVE || die "apk del failed"
-  fi
-  info "installing $CORE + luci-app-singbox-ui (+ ru translation)"
-  apk add "$CORE" luci-app-singbox-ui luci-i18n-singbox-ui-ru || die "apk add failed"
+  info "installing $CORE + luci-app-singbox-ui (+ ru translation)${REMOVE:+ (replacing:$REMOVE)}"
+  # shellcheck disable=SC2086
+  apk add "$CORE" $REMOVE luci-app-singbox-ui luci-i18n-singbox-ui-ru || die "apk add failed"
 fi
 
 cat <<EOF
