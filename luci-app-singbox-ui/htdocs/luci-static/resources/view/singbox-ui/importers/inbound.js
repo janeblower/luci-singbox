@@ -129,7 +129,11 @@ function jsonImportInbound(o) {
 		if (o.stack) f.stack = o.stack;
 		if (Array.isArray(o.address)) {
 			for (var i = 0; i < o.address.length; i++) {
-				var a = o.address[i];
+				// Imported JSON is untrusted paste: a non-string element
+				// (number/null/object) throws on .indexOf. Coerce and skip
+				// empties so a malformed address can't crash the import.
+				var a = String(o.address[i] == null ? '' : o.address[i]);
+				if (!a.length) continue;
 				if (a.indexOf(':') < 0) f.inet4_address = a;
 				else f.inet6_address = a;
 			}
