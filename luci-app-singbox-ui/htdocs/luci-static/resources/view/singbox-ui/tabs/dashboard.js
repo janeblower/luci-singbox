@@ -37,6 +37,12 @@ function buildDashboard() {
 		});
 	}
 	function refreshProxies() { return fetchProxies().then(repaint); }
+	// True while any group's latency test is mid-run. The background poll uses
+	// this to avoid replacing state.proxies (which would wipe in-flight results).
+	function anyTesting() {
+		for (var k in state.testing) if (state.testing[k]) return true;
+		return false;
+	}
 
 	function fetchSubs() {
 		return callSubStatus().then(function (res) {
@@ -376,7 +382,14 @@ function buildDashboard() {
 			}, function () { state.running = false; })
 		];
 		state.proxiesEvery = (state.proxiesEvery + 1) % 3;
-		if (state.proxiesEvery === 1) { p.push(fetchProxies()); p.push(fetchSubs()); }
+		if (state.proxiesEvery === 1) {
+			p.push(fetchSubs());
+			// Skip the /proxies refresh while a latency test is writing results
+			// into state.proxies[*].history: fetchProxies replaces state.proxies
+			// wholesale and would wipe them mid-run (button stuck "Testing…",
+			// collected latencies flicker back to "—"). The next tick refreshes.
+			if (!anyTesting()) p.push(fetchProxies());
+		}
 		return Promise.all(p).then(repaint).catch(showUnreachable);
 	}
 
