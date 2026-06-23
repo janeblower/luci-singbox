@@ -175,19 +175,6 @@ describe("uci schema coverage", () => {
     }
   });
 
-  it("C2.1.14: helpers.uc exports reset_iface_cache AND generate.uc invokes it", () => {
-    const helpers = readFileSync(
-      "singbox-ui/root/usr/share/singbox-ui/lib/helpers.uc",
-      "utf8",
-    );
-    const generate = readFileSync(
-      "singbox-ui/root/usr/share/singbox-ui/generate.uc",
-      "utf8",
-    );
-    expect(helpers).toContain("reset_iface_cache");
-    expect(generate).toContain("reset_iface_cache");
-  });
-
   it("C2.1.15: ss_user colon-truncation limitation documented in inbound.uc and uci-schema.md", () => {
     const inbound = readFileSync(
       "singbox-ui/root/usr/share/singbox-ui/lib/inbound.uc",

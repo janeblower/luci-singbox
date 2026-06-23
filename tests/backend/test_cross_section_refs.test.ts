@@ -70,8 +70,7 @@ describe("cross_section_refs (detour chains / dangling / circular / resolve)", (
   it("detour chain A->B->C: A.detour==B and B.detour==C preserved", async () => {
     await writeCfg(`config outbound 'C'
 \toption enabled '1'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 
 config outbound 'B'
 \toption enabled '1'
@@ -211,8 +210,7 @@ config outbound 'B'
   it("detour to disabled outbound: scrubbed from 'live'", async () => {
     await writeCfg(`config outbound 'gone'
 \toption enabled '0'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 
 config outbound 'live'
 \toption enabled '1'
@@ -240,8 +238,7 @@ config outbound 'live'
 
 config outbound 'later'
 \toption enabled '1'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 `);
     const g = await runGen();
     expect(g.ok).toBe(true);

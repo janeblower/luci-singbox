@@ -97,20 +97,13 @@ function build_outbounds(cur) {
 		if (kind === "") return;          // unmigrated/empty section — skip
 		let outbound = null;
 
-		if (kind === "interface") {
-			// UCI logical name (e.g. "wan") → Linux netdev (e.g. "eth0").
-			// sing-box bind_interface expects a real device name. Falls
-			// back to the input verbatim if resolution fails (so a user
-			// who already typed a real device name keeps working).
-			let dev = helpers.resolve_iface_device(section.interface);
-			outbound = { tag: name, type: "direct", bind_interface: dev };
-		} else if (kind === "url") {
+		if (kind === "url") {
 			let parsed = parse_proxy_url(section.proxy_url ?? "");
 			if (parsed) { parsed.tag = name; outbound = parsed; }
 		} else if (kind === "direct") {
-			// E2: descriptor-owned direct outbound (type=direct in UCI).
-			// Distinct from the legacy type=interface branch above which
-			// builds the same sing-box JSON but via UCI iface resolution.
+			// E2: descriptor-owned direct outbound (type=direct in UCI). Binds an
+			// interface via the dial shared block (bind_interface, emitted verbatim
+			// as a netdev name) — replaced the removed legacy type=interface shorthand.
 			outbound = build_constructor_for(section, kind);
 		} else if (kind === "json" || kind === "sharelink") {
 			// Task 4: raw passthrough types. Their descriptor emit() parses the

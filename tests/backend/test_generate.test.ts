@@ -110,35 +110,6 @@ config dns_server 'fakeip'
     expect(parseInt(leaked.stdout.trim(), 10)).toBe(0);
   });
 
-  it("proxy via interface", async () => {
-    const base = await setup();
-    await writeCfg(
-      base,
-      `
-config outbound 'via_wg0'
-\toption type 'interface'
-\toption interface 'wg0'
-`,
-    );
-    const { raw } = await runGen(base);
-    expect(raw).toContain('"tag": "via_wg0"');
-    expect(raw).toContain('"bind_interface": "wg0"');
-  });
-
-  it("bind_interface honours SINGBOX_DEV_<iface> resolver override", async () => {
-    const base = await setup();
-    await writeCfg(
-      base,
-      `
-config outbound 'wan_out'
-\toption type 'interface'
-\toption interface 'wan'
-`,
-    );
-    const { raw } = await runGen(base, "SINGBOX_DEV_wan=eth0");
-    expect(raw).toContain('"bind_interface": "eth0"');
-  });
-
   it("vless:// URL", async () => {
     const base = await setup();
     await writeCfg(
@@ -812,8 +783,7 @@ config dns 'dns'
       `
 config outbound 'direct'
 \toption enabled '1'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 
 config dns_server 'out_dns'
 \toption enabled '1'
@@ -878,8 +848,7 @@ config inbound 'tproxy_in'
 \toption hijack_dns '1'
 
 config outbound 'p'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 
 config ruleset 'cn'
 \toption enabled '1'

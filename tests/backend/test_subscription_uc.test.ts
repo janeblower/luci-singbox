@@ -70,7 +70,7 @@ describe("test_subscription_uc", () => {
     const dir = tmpDir();
     await exec(`mkdir -p ${dir}`);
     await putFile(
-      `config outbound 'a'\n\toption type 'subscription'\nconfig outbound 'b'\n\toption type 'interface'\n`,
+      `config outbound 'a'\n\toption type 'subscription'\nconfig outbound 'b'\n\toption type 'direct'\n`,
       `${dir}/singbox-ui`,
     );
     // Use inline probe
@@ -710,7 +710,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
     await putFile(CURL_STUB, `${dir}/bin/curl`);
     await exec(`chmod +x ${dir}/bin/curl`);
     await putFile(
-      `config outbound 'notasub'\n\toption type 'interface'\n\toption interface 'wan'\n`,
+      `config outbound 'notasub'\n\toption type 'direct'\n`,
       `${dir}/singbox-ui`,
     );
     const r = await exec(

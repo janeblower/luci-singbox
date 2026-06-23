@@ -548,7 +548,7 @@ describe("test_json_import", () => {
       });
     });
 
-    it("outbound rejects direct (use type=interface)", () => {
+    it("outbound rejects bare direct type", () => {
       ctx = ctx ?? buildSandbox();
       fnOut = fnOut ?? ctx.SbImpOutbound?.jsonImportOutbound;
       const got = fnOut({ type: "direct", server: "x.y", server_port: 1 });
