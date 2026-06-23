@@ -880,7 +880,9 @@ config route_rule 'scoped'
     await putFile(raw, tmpF);
     // only_rs is dropped; the lone surviving rule is the domain-scoped one.
     expect(await jpath("length(d.route.rules)", tmpF)).toBe("1");
-    expect(await jpath("d.route.rules[0].domain[0]", tmpF)).toBe("keep.example");
+    expect(await jpath("d.route.rules[0].domain[0]", tmpF)).toBe(
+      "keep.example",
+    );
   });
 
   it("dns_server with detour to a named outbound", async () => {
