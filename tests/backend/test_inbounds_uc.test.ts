@@ -371,7 +371,7 @@ config inbound 'ss_multi'
 \toption protocol 'shadowsocks'
 \toption listen_port '8388'
 \toption shadowsocks_method '2022-blake3-aes-128-gcm'
-\toption server_password 'should-be-ignored'
+\toption server_password 'server-psk'
 \tlist   ss_user 'alice:2022-blake3-aes-128-gcm:pw1'
 \tlist   ss_user 'bob:2022-blake3-aes-128-gcm:pw2'
 \toption network 'tcp'
@@ -386,8 +386,9 @@ config inbound 'ss_multi'
     expect(raw).toContain('"password": "pw2"');
     expect(raw).toContain('"network": "tcp"');
     expect(raw).toContain('"protocol": "smux"');
-    // Top-level password dropped when users[] present
-    expect(raw).not.toContain('"password": "should-be-ignored"');
+    // 2022-blake3 multi-user REQUIRES the server PSK alongside the per-user PSKs
+    // (legacy AEAD multi-user would drop it). Code review #3.
+    expect(raw).toContain('"password": "server-psk"');
   });
 
   it("shadowsocks inbound single-user (no ss_user list)", async () => {

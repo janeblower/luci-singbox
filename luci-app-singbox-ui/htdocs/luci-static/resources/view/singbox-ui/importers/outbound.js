@@ -163,11 +163,27 @@ function _shareLinkImport(url) {
 	if (scheme === 'trojan') {
 		match = url.match(/^trojan:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse trojan URL')] };
-		return { ok: true, fields: {
+		// Parse the query like vless/hysteria2 — these were silently dropped, so a
+		// trojan link with sni/transport/TLS imported as a bare host:port draft
+		// that diverged from what the backend parse_trojan yields for the same URL.
+		var tparams = {};
+		if (match[4]) match[4].split('&').forEach(function(p) {
+			var kv = p.split('='); tparams[safeDecode(kv[0])] = safeDecode(kv[1] || '');
+		});
+		var tf = {
 			type: 'trojan',
 			server: match[2], server_port: +match[3],
 			server_password: safeDecode(match[1]),
-		} };
+		};
+		if (tparams.sni)         tf.tls_server_name        = tparams.sni;
+		if (tparams.type)        tf.transport              = tparams.type;
+		if (tparams.path)        tf.transport_path         = tparams.path;
+		if (tparams.host)        tf.transport_host         = tparams.host;
+		if (tparams.serviceName) tf.transport_service_name = tparams.serviceName;
+		if (tparams.allowInsecure === '1' || tparams.allowInsecure === 'true' ||
+		    tparams.insecure === '1' || tparams.insecure === 'true')
+			tf.tls_insecure = '1';
+		return { ok: true, fields: tf };
 	}
 	if (scheme === 'hysteria2') {
 		match = url.match(/^(?:hysteria2|hy2):\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);

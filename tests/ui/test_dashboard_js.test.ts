@@ -314,6 +314,52 @@ describe("dashboard.js", () => {
     ).toBe(true);
   });
 
+  it("poll() does not refetch /proxies while a latency test is in flight (regression: wiped results)", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    const PROXIES = {
+      proxies: {
+        GW: { type: "Selector", now: "A", all: ["A", "B"] },
+        A: { type: "Shadowsocks", history: [{ delay: 120 }] },
+        B: { type: "Vmess", history: [{ delay: 900 }] },
+      },
+    };
+    let proxiesCalls = 0;
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies") {
+        proxiesCalls++;
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      }
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    // A latency probe that never resolves keeps GW flagged "testing".
+    ctx.__test.setDelay(() => new Promise<void>(() => {}));
+    const d = Dash.buildDashboard();
+    await d.poll();
+    await d.refreshProxies();
+    const before = proxiesCalls;
+    // Start a test on GW; its probe hangs, so state.testing[GW] stays true.
+    const testBtn = ctx.__test.find(
+      d.node,
+      (n: any) =>
+        n.attrs &&
+        typeof n.attrs.click === "function" &&
+        /sb-dashboard-test/.test(n.attrs.class || ""),
+    );
+    expect(!!testBtn).toBe(true);
+    testBtn.attrs.click(); // fire-and-forget; probe never resolves
+    // One of these polls hits the every-3rd /proxies fetch tick, which must be
+    // suppressed while a test is in flight (else it wipes the collected history).
+    await d.poll();
+    await d.poll();
+    await d.poll();
+    expect(proxiesCalls).toBe(before);
+  });
+
   it("selector switch sends PUT /proxies/<group> {name}", async () => {
     const ctx = loadDashboard();
     const Dash = ctx.__moduleExports;

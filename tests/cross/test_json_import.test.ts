@@ -133,6 +133,21 @@ describe("test_json_import", () => {
       });
     });
 
+    it("tun with malformed address element does not throw (regression: non-string crashed import)", () => {
+      ctx = ctx ?? buildSandbox();
+      fn = fn ?? ctx.SbImpInbound?.jsonImportInbound;
+      // Untrusted paste: numeric/null elements must not throw on .indexOf.
+      const got = fn({
+        type: "tun",
+        tag: "tun0",
+        interface_name: "tun0",
+        address: [123, null, "10.0.0.1/24", "fd00::1/64"],
+      });
+      expect(got.ok).toBe(true);
+      expect(got.fields.inet4_address).toBe("10.0.0.1/24");
+      expect(got.fields.inet6_address).toBe("fd00::1/64");
+    });
+
     it("shadowsocks inbound multi-user", () => {
       ctx = ctx ?? buildSandbox();
       fn = fn ?? ctx.SbImpInbound?.jsonImportInbound;
@@ -548,7 +563,7 @@ describe("test_json_import", () => {
       });
     });
 
-    it("outbound rejects direct (use type=interface)", () => {
+    it("outbound rejects bare direct type", () => {
       ctx = ctx ?? buildSandbox();
       fnOut = fnOut ?? ctx.SbImpOutbound?.jsonImportOutbound;
       const got = fnOut({ type: "direct", server: "x.y", server_port: 1 });

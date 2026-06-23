@@ -318,6 +318,31 @@ exit 0
     expect(lockState.stdout.trim()).toBe("FREE");
   });
 
+  it("missed-1(d): a timed-out waiter does not delete a live holder's lock (ownership)", async () => {
+    await exec("rm -rf /tmp/singbox-ui/.lifecycle.lock");
+    // A live holder owns the lock; a second acquire that ages past the TTL must
+    // NOT reclaim it (holder is alive) and, on the timeout-proceed path, must
+    // not own it — so _lc_release must leave the holder's lock intact. Before
+    // the ownership fix the waiter's release ran `rm -rf` and destroyed it.
+    const r = await exec(`
+      PATH="${TD}/bin:$PATH" SINGBOX_LIFECYCLE_TTL=1 sh -c '
+        . "${INIT}"
+        sleep 60 & HOLDER=$!
+        mkdir -p /tmp/singbox-ui/.lifecycle.lock
+        echo "$HOLDER" > /tmp/singbox-ui/.lifecycle.lock/pid
+        sleep 2                       # age the lock past TTL=1
+        _lc_acquire                   # live holder -> not reclaimed -> proceed unowned
+        _lc_release                   # must NOT delete the holder lock
+        kill "$HOLDER" 2>/dev/null
+        [ -d /tmp/singbox-ui/.lifecycle.lock ] || exit 11
+        [ "$(cat /tmp/singbox-ui/.lifecycle.lock/pid 2>/dev/null)" = "$HOLDER" ] || exit 12
+        rm -rf /tmp/singbox-ui/.lifecycle.lock
+        exit 0
+      '
+    `);
+    expect(r.exitCode).toBe(0);
+  });
+
   it("missed-1(c): stale lifecycle lock (past TTL=1s) is reclaimed without deadlock", async () => {
     await exec(
       "rm -f /tmp/singbox-ui.json; rm -rf /tmp/singbox-ui/.lifecycle.lock",

@@ -49,9 +49,11 @@ check '"action": "hijack-dns"'  'hijack-dns'
 check '"tag": "russia_inside"'  'russia_inside tag'
 check '"tag": "discord"'  'discord tag'
 
-# -- outbound direct_wan + route rule
+# -- outbound direct_wan + route rule. direct_wan is now a plain type=direct
+# outbound (legacy type=interface removed, code review #2) so it must carry NO
+# bind_interface — the UI iface abstraction is gone.
 check '"tag": "direct_wan"'  'direct_wan tag'
-check '"bind_interface": "wan"'  'direct_wan bind'
+echo "$OUT" | grep -q '"bind_interface"' && { echo "CHECK_FAIL: direct_wan must have no bind_interface"; exit 1; }
 check '"outbound": "direct_wan"'  'route to wan'
 
 # -- dns: fakeip + google + rule + final

@@ -34,20 +34,6 @@ print("ok\\n");
     expect(r.stdout.trim()).toBe("ok");
   });
 
-  it("helpers.uc: resolve_iface_device env override via env variable", async () => {
-    // Pass env via exec directly since runUcode doesn't accept env
-    const { exec } = await import("../helpers/ssh.ts");
-    const LIB =
-      process.env.SB_VM_LIB ??
-      "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
-    const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
-    const snippet = `let h = require("helpers"); if (h.resolve_iface_device("wan") !== "eth-test") { warn("env override ignored\\n"); exit(1); } print("ok\\n");`;
-    const r = await exec(
-      `cd ${WORK} && SINGBOX_DEV_wan=eth-test ucode -L ${LIB} -e ${JSON.stringify(snippet)}`,
-    );
-    expect(r.stdout.trim()).toBe("ok");
-  });
-
   it("clash.uc: build_clash_api defaults + IPv6 bracketing + disabled", async () => {
     const src = `
 let m = require("clash");

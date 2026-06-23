@@ -110,6 +110,12 @@ function buildDnsMap() {
 		if (mat) descriptor_form.applyMaterialized(s, 'dns_rule', tn, mat);
 	});
 
+	// Validate logical sub-rules (mirror route_rule): only existing default
+	// rules, not self/logical. Shared validator so route and dns can't drift.
+	var dnsRulesEntry = (s._sbMatRegistry || {})['match\trules'];
+	if (dnsRulesEntry && dnsRulesEntry.opt)
+		dnsRulesEntry.opt.validate = SbCommon.logicalSubRuleValidate(uci, _);
+
 	// -- Settings --
 	s = m.section(form.NamedSection, 'dns', 'dns', _('DNS Settings'));
 	s.anonymous = true;

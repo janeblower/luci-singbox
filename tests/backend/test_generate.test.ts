@@ -110,35 +110,6 @@ config dns_server 'fakeip'
     expect(parseInt(leaked.stdout.trim(), 10)).toBe(0);
   });
 
-  it("proxy via interface", async () => {
-    const base = await setup();
-    await writeCfg(
-      base,
-      `
-config outbound 'via_wg0'
-\toption type 'interface'
-\toption interface 'wg0'
-`,
-    );
-    const { raw } = await runGen(base);
-    expect(raw).toContain('"tag": "via_wg0"');
-    expect(raw).toContain('"bind_interface": "wg0"');
-  });
-
-  it("bind_interface honours SINGBOX_DEV_<iface> resolver override", async () => {
-    const base = await setup();
-    await writeCfg(
-      base,
-      `
-config outbound 'wan_out'
-\toption type 'interface'
-\toption interface 'wan'
-`,
-    );
-    const { raw } = await runGen(base, "SINGBOX_DEV_wan=eth0");
-    expect(raw).toContain('"bind_interface": "eth0"');
-  });
-
   it("vless:// URL", async () => {
     const base = await setup();
     await writeCfg(
@@ -812,8 +783,7 @@ config dns 'dns'
       `
 config outbound 'direct'
 \toption enabled '1'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 
 config dns_server 'out_dns'
 \toption enabled '1'
@@ -824,6 +794,95 @@ config dns_server 'out_dns'
     );
     const { raw } = await runGen(base);
     expect(raw).toContain('"detour": "direct"');
+  });
+
+  it("stale dns.default_resolver auto-picks an enabled server (no dangling default_domain_resolver)", async () => {
+    // An explicit default_resolver pointing at a disabled/deleted server (the UI
+    // ListValue keeps the stale value) must not be emitted verbatim — that is a
+    // dangling tag sing-box hard-fails on. It falls through to the auto-pick.
+    const base = await setup();
+    await writeCfg(
+      base,
+      `
+config dns_server 'g'
+\toption enabled '1'
+\toption type 'https'
+\toption server '8.8.8.8'
+\toption server_port '443'
+\toption path '/dns-query'
+
+config dns 'dns'
+\toption default_resolver 'ghost'
+`,
+    );
+    const { raw } = await runGen(base);
+    const tmpF = `/tmp/gen_resolver_${process.pid}.json`;
+    await putFile(raw, tmpF);
+    expect(await jpath("d.route.default_domain_resolver.server", tmpF)).toBe(
+      "g",
+    );
+  });
+
+  it("remote rule-set download_detour to an unknown outbound is dropped (no dangling)", async () => {
+    // download_detour was the one outbound reference never validated; a stale
+    // tag emitted a dangling reference that sing-box refuses to start on.
+    const base = await setup();
+    await writeCfg(
+      base,
+      `
+config outbound 'p'
+\toption enabled '1'
+\toption type 'direct'
+
+config ruleset 'rs'
+\toption enabled '1'
+\toption type 'remote'
+\toption url 'https://example.com/x.srs'
+\toption download_detour 'ghost'
+
+config route_rule 'r1'
+\toption enabled '1'
+\tlist rule_set 'rs'
+\toption action 'route'
+\toption outbound 'p'
+`,
+    );
+    const { raw } = await runGen(base);
+    expect(raw).toContain('"tag": "rs"'); // the rule-set still builds
+    expect(raw).not.toContain('"download_detour"'); // dangling detour dropped
+  });
+
+  it("route_rule whose only matcher is a disabled rule-set is dropped (no catch-all)", async () => {
+    // Disabling the only rule_set matcher must not leave a matcher-less rule,
+    // which in sing-box matches ALL traffic (here: reject everything).
+    const base = await setup();
+    await writeCfg(
+      base,
+      `
+config ruleset 'rs_off'
+\toption enabled '0'
+\toption type 'remote'
+\toption url 'https://example.com/x.srs'
+
+config route_rule 'only_rs'
+\toption enabled '1'
+\tlist rule_set 'rs_off'
+\toption action 'reject'
+
+config route_rule 'scoped'
+\toption enabled '1'
+\tlist domain 'keep.example'
+\toption action 'reject'
+`,
+    );
+    const { raw } = await runGen(base);
+    const tmpF = `/tmp/gen_catchall_${process.pid}.json`;
+    await putFile(raw, tmpF);
+    // only_rs is dropped; the lone surviving rule is the domain-scoped one.
+    expect(await jpath("length(d.route.rules)", tmpF)).toBe("1");
+    expect(await jpath("d.route.rules[0].domain[0]", tmpF)).toBe(
+      "keep.example",
+    );
   });
 
   it("dns_server with detour to a named outbound", async () => {
@@ -878,8 +937,7 @@ config inbound 'tproxy_in'
 \toption hijack_dns '1'
 
 config outbound 'p'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 
 config ruleset 'cn'
 \toption enabled '1'

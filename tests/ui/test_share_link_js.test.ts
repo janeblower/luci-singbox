@@ -191,4 +191,15 @@ describe("shareLinkImport (importers/outbound.js)", () => {
       r.ok && r.fields.server === "1.2.3.4" && r.fields.server_port === 443,
     ).toBe(true);
   });
+
+  it("trojan query: sni/transport/path/insecure pre-filled (regression: query was dropped)", () => {
+    const r = mod.shareLinkImport(
+      "trojan://pw@trojan.example:443?sni=cdn.example&type=ws&path=%2Fws&allowInsecure=1#tj",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.fields.tls_server_name).toBe("cdn.example");
+    expect(r.fields.transport).toBe("ws");
+    expect(r.fields.transport_path).toBe("/ws");
+    expect(r.fields.tls_insecure).toBe("1");
+  });
 });

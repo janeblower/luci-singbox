@@ -248,6 +248,49 @@ describe("monitoring.js", () => {
     });
   });
 
+  // Code review #13: the device filter must be driven by the set actually
+  // displayed, so a device whose connections have all closed stays filterable
+  // on the Closed tab (previously rebuildDeviceOptions always used curConns()).
+  it("Closed tab lists a device whose connections have all closed (audit 9.2+)", async () => {
+    const ctx = loadMonitoring();
+    const responses = [
+      JSON.stringify({ connections: [conn("c1", "10.0.0.5", "hostA")] }),
+      JSON.stringify({ connections: [] }),
+    ];
+    let i = 0;
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: responses[Math.min(i++, responses.length - 1)],
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    await m.poll(); // c1 active (device 10.0.0.5)
+    await m.poll(); // c1 disappears -> moved to state.closed
+    // Switch to the Closed tab.
+    const closedBtn = ctx.__test.find(
+      m.node,
+      (n: any) =>
+        n.tag === "button" &&
+        n.attrs &&
+        typeof n.attrs.click === "function" &&
+        /^Closed\b/.test(n.textContent || ""),
+    );
+    expect(!!closedBtn).toBe(true);
+    closedBtn.attrs.click();
+    // 10.0.0.5 exists only among closed connections; it must appear as a device
+    // <option> on the Closed tab.
+    const selects = ctx.__test.findAll(m.node, isSelect);
+    const hasDeviceOpt = selects.some((sel: any) =>
+      ctx.__test.find(
+        sel,
+        (n: any) =>
+          n.tag === "option" && n.attrs && n.attrs.value === "10.0.0.5",
+      ),
+    );
+    expect(hasDeviceOpt).toBe(true);
+  });
+
   // S2-2: the interval self-cancels once root detaches
   describe("S2-2: interval self-cancels on detach", () => {
     it("start() registers exactly one interval (S2-2)", async () => {

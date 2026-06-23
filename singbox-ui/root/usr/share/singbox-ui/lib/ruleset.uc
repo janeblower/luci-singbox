@@ -15,7 +15,7 @@ function detect_format(rs) {
 }
 
 // build_rule_sets(cur, referenced_names) -> [{tag, type, ...}, ...]
-function build_rule_sets(cur, referenced_names) {
+function build_rule_sets(cur, referenced_names, valid_ob) {
     let rule_sets = [];
     let by_name = {};
     cur.foreach("singbox-ui", "ruleset", function(s) { by_name[s[".name"]] = s; });
@@ -56,6 +56,14 @@ function build_rule_sets(cur, referenced_names) {
             }
             // `rules` is UI-only refs in UCI (no json_key); expand to headless JSON here.
             entry.rules = sub;
+        }
+        // download_detour names an outbound used to FETCH a remote rule-set; an
+        // unknown tag is a dangling reference sing-box refuses to start on.
+        // Unlike every other outbound ref (route_rule/route_default/dns.final),
+        // this one was never checked. Drop it when it isn't a defined outbound.
+        if (length(entry.download_detour ?? "") && valid_ob != null && !valid_ob[entry.download_detour]) {
+            warn(sprintf("ruleset.uc: rule-set '%s' download_detour '%s' is not a defined outbound; dropping it\n", name, entry.download_detour));
+            delete entry.download_detour;
         }
         push(rule_sets, entry);
     }

@@ -24,13 +24,6 @@ let ruleset_mod  = require("ruleset");
 let cache_mod    = require("cache");
 let clash_mod    = require("clash");
 
-// Wipe the iface→netdev memoisation table held inside lib/helpers.uc. A
-// long-lived ucode process (e.g. rpcd worker that imports this module once
-// and re-invokes it across config reloads) would otherwise serve stale
-// mappings if /etc/config/network was edited between runs. The cost is
-// negligible — the table is small and re-populated lazily on demand.
-helpers.reset_iface_cache();
-
 let config = {};
 
 let log_block = log_mod.build_log(uci);
@@ -108,7 +101,7 @@ uci.foreach("singbox-ui", "ruleset", function(s) {
 	if (!ref_seen[s[".name"]])
 		warn(sprintf("generate.uc: inline rule-set '%s' is enabled but unreferenced; its member rules are not applied\n", s[".name"]));
 });
-let rsets = ruleset_mod.build_rule_sets(uci, referenced);
+let rsets = ruleset_mod.build_rule_sets(uci, referenced, valid_ob);
 if (length(rsets) || length(r.rules) || r.final) {
 	config.route = {};
 	if (length(rsets))   config.route.rule_set = rsets;
@@ -126,8 +119,17 @@ if (length(rsets) || length(r.rules) || r.final) {
 // warning (1.14 hard failure) this code exists to suppress. When a resolver
 // candidate exists, create a minimal route block to carry it.
 if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
+	let server_tags = {};
+	for (let s in config.dns.servers) if (length(s.tag)) server_tags[s.tag] = true;
 	let dns_section = uci.get_all("singbox-ui", "dns");
 	let resolver_tag = dns_section ? dns_section.default_resolver : null;
+	// An explicit default_resolver must name an enabled dns_server; the UI
+	// ListValue keeps a stale value after that server is disabled/deleted, which
+	// would emit a dangling default_domain_resolver and make sing-box hard-fail.
+	if (length(resolver_tag ?? "") && !server_tags[resolver_tag]) {
+		warn(sprintf("generate.uc: dns.default_resolver '%s' is not an enabled dns_server; auto-picking\n", resolver_tag));
+		resolver_tag = null;
+	}
 	if (resolver_tag == null || resolver_tag === "") {
 		for (let s in config.dns.servers) {
 			if (s.type !== "fakeip" && length(s.tag)) { resolver_tag = s.tag; break; }

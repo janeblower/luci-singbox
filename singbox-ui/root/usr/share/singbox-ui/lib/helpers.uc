@@ -81,47 +81,6 @@ function fnv1a32(s) {
 	return sprintf("%08x", h);
 }
 
-// resolve_iface_device(iface) — translate a UCI logical interface name
-// (e.g. "wan", "lan") into the actual Linux netdev (e.g. "eth0", "pppoe-wan").
-// Falls back to the input verbatim when resolution fails or the daemon is
-// reached outside an OpenWrt environment (tests, dev containers); the latter
-// behaviour is what lets a user type a real device name directly.
-//
-// Test override: env SINGBOX_DEV_<iface> (non-alphanumeric → '_').
-//
-// Caching: each lookup forks `. /lib/functions/network.sh` via popen, which
-// is non-trivial on a slow router (ash + sourcing network.sh ≈ 30–80 ms).
-// Outbound builders may call this N times per generate run (once per
-// `bind_interface`). Memoise at module scope so the second call onward is
-// O(1). The cache lives for the lifetime of the ucode process — rpcd
-// daemonises so generate.uc imports happen per-invocation and the cache is
-// implicitly fresh; long-lived hosts call reset_iface_cache() at the top
-// of generate.uc to avoid stale netdev mappings across config reloads.
-let _iface_dev_cache = {};
-
-function resolve_iface_device(iface) {
-	if (iface == null || iface === "") return iface;
-	if (_iface_dev_cache[iface] !== undefined) return _iface_dev_cache[iface];
-	let key = "SINGBOX_DEV_" + replace(iface, /[^A-Za-z0-9_]/g, "_");
-	let v = getenv(key);
-	if (v != null && length(v)) { _iface_dev_cache[iface] = v; return v; }
-	let fs_mod = require("fs");
-	let p = fs_mod.popen(
-		". /lib/functions/network.sh 2>/dev/null; " +
-		"network_get_device DEV " + sq(iface) + " 2>/dev/null && printf %s \"$DEV\"",
-		"r");
-	if (!p) { _iface_dev_cache[iface] = iface; return iface; }
-	let body = trim(p.read("all") ?? "");
-	p.close();
-	let result = length(body) ? body : iface;
-	_iface_dev_cache[iface] = result;
-	return result;
-}
-
-// reset_iface_cache() — clear the module-scope memoisation table. Called
-// from generate.uc on entry so a config reload always re-resolves netdevs;
-// also useful for tests that flip the SINGBOX_DEV_<iface> env between cases.
-function reset_iface_cache() { _iface_dev_cache = {}; }
 
 // OUTBOUND_PROXY_KINDS — the set of outbound `type` values that are real
 // proxy protocols supported in E2 (as opposed to interface / url /
@@ -149,6 +108,26 @@ function is_outbound_proxy_kind(t) {
 	return _OUTBOUND_PROXY_SET[t] === true;
 }
 
+// b64_decode(s) — tolerant base64 decoder for share-link / subscription
+// payloads. Accepts the url-safe alphabet, missing padding, and embedded
+// whitespace/newlines; returns the decoded string, or null on invalid input.
+// The raw b64dec() builtin rejects all of those, so both the share-link parser
+// (sharelink.uc) and the subscription body decode (subscription.uc) route
+// through this single source so they can't drift.
+function b64_decode(s) {
+	if (s == null) return null;
+	let t = replace(s, /\s+/g, "");
+	t = replace(t, "-", "+");
+	t = replace(t, "_", "/");
+	let pad = length(t) % 4;
+	if (pad === 2) t += "==";
+	else if (pad === 3) t += "=";
+	else if (pad === 1) return null;  // invalid base64 length
+	let dec = null;
+	try { dec = b64dec(t); } catch (e) { return null; }
+	return dec;
+}
+
 return {
 	uci_get_or_empty,
 	s_opt,
@@ -159,9 +138,8 @@ return {
 	as_array,
 	sq,
 	detect_rs_format,
-	resolve_iface_device,
-	reset_iface_cache,
 	fnv1a32,
 	OUTBOUND_PROXY_KINDS,
 	is_outbound_proxy_kind,
+	b64_decode,
 };

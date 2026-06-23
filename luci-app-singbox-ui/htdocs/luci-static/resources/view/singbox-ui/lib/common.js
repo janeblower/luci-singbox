@@ -249,6 +249,24 @@ function notify(promise, okLabel, errPrefix) {
 	});
 }
 
+// logicalSubRuleValidate(uci, _) — shared validate fn for a logical rule's
+// sub-rule list. route_rule and dns_rule both reference default-typed sub-rules
+// by name; reject self-reference and any sub-rule whose UCI type !== 'default'.
+// Factored here so the Route and DNS tabs can't drift (code review #8).
+function logicalSubRuleValidate(uci, _) {
+	return function (section_id, value) {
+		var vals = (value == null) ? [] : (Array.isArray(value) ? value : [value]);
+		for (var i = 0; i < vals.length; i++) {
+			var n = vals[i];
+			if (!n) continue;
+			if (n === section_id) return _('A logical rule cannot reference itself.');
+			var t = uci.get('singbox-ui', n, 'type') || 'default';
+			if (t !== 'default') return _('Sub-rules must be Default rules: ') + n;
+		}
+		return true;
+	};
+}
+
 return L.Class.extend({
     loadOutboundList:  loadOutboundList,
     addRenameField:    addRenameField,
@@ -260,4 +278,5 @@ return L.Class.extend({
     withBusy:          withBusy,
     compareVersions:   compareVersions,
     applyVersionGate:  applyVersionGate,
+    logicalSubRuleValidate: logicalSubRuleValidate,
 });

@@ -69,7 +69,23 @@ reg.register({
             { key: "method", validate: METHODS, discard: true },
             { key: "password", tail: true, warn_if_empty: true },
         ],
-        clear_on_multi: [ "password" ],
+    },
+
+    // SS multi-user PSK handling. When users[] come from the ss_user list, legacy
+    // AEAD methods (aes-*/chacha20) carry per-user passwords ONLY, so the
+    // server-level password is dropped (the former clear_on_multi:["password"]).
+    // But 2022-blake3-* REQUIRE the server PSK alongside the per-user PSKs —
+    // clearing it produced a config sing-box rejects at parse. clear_on_multi
+    // can't express this method-dependent rule, so do it here, gated on method.
+    post: function(out, s) {
+        if (type(out.users) === "array" && length(out.users)) {
+            let method = out.method ?? "";
+            // 2022-blake3 multi-user keeps the (non-empty) server PSK alongside
+            // the per-user PSKs; legacy AEAD multi-user uses per-user passwords
+            // only, and an empty server password is never meaningful here.
+            if (substr(method, 0, 5) !== "2022-" || !length(out.password ?? ""))
+                delete out.password;
+        }
     },
 });
 
