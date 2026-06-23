@@ -19,9 +19,13 @@ function fields() {
           values: [ "route", "route-options", "reject", "predefined", "evaluate", "respond" ],
           ui_label: "Action" },
 
-        // route: server selection (required for route action)
+        // route: server selection (required for route action). required:true →
+        // descriptor_form sets rmempty=false, and since `depends` gates the field
+        // to action=route, LuCI enforces a non-empty server at SAVE time exactly
+        // when route is selected — surfacing what the backend otherwise drops with
+        // only an invisible warn (dns.uc S3.2).
         { name: "server", type: "string", tab: "action", dynamic: "dns_servers",
-          json_key: "server", ui_label: "Server",
+          json_key: "server", ui_label: "Server", required: true,
           requires: { field: "action", value: "route" },
           depends:  { field: "action", value: "route" } },
 

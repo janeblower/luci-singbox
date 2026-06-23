@@ -25,8 +25,8 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:10
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:121
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:353
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:377
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:450
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:376
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:449
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr ""
@@ -84,7 +84,7 @@ msgstr ""
 msgid "Cancel"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:180
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:228
 msgid "Cannot parse hysteria2 URL"
 msgstr ""
 
@@ -92,16 +92,21 @@ msgstr ""
 msgid "Cannot parse link: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:203
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:251
 msgid "Cannot parse shadowsocks URL"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:155
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:203
 msgid "Cannot parse trojan URL"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:132
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:172
 msgid "Cannot parse vless URL"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:137
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:139
+msgid "Cannot parse vmess URL"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:155
@@ -122,7 +127,7 @@ msgstr ""
 msgid "Clash API unreachable — enable it in settings and restart."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:196
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:174
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:157
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:140
 msgid "Close"
@@ -141,7 +146,7 @@ msgstr ""
 msgid "Copied to clipboard."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:199
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:177
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:160
 msgid "Copy"
 msgstr ""
@@ -241,7 +246,7 @@ msgid ""
 "Restart the service after changing."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:205
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:183
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:167
 msgid "Error: "
 msgstr ""
@@ -255,7 +260,7 @@ msgstr ""
 msgid "Export"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:193
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:171
 #, javascript-format
 msgid "Export JSON — %s %s"
 msgstr ""
@@ -354,16 +359,12 @@ msgstr ""
 msgid "Inline"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:239
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:293
 msgid "Internal: unhandled scheme"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:50
 msgid "Invalid JSON: "
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:111
-msgid "Invalid MTU: "
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:32
@@ -375,7 +376,7 @@ msgstr ""
 msgid "Invalid alter_id: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:160
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:138
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:69
 msgid "Invalid down_mbps: "
 msgstr ""
@@ -385,7 +386,7 @@ msgstr ""
 msgid "Invalid port: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:155
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:133
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:64
 msgid "Invalid up_mbps: "
 msgstr ""
@@ -403,7 +404,7 @@ msgstr ""
 msgid "Level"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:177
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:155
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:139
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:57
 msgid "Loading…"
@@ -551,7 +552,7 @@ msgstr ""
 msgid "Protocol"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:210
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:188
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:181
 msgid "RPC failed: "
 msgstr ""
@@ -640,6 +641,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:31
 msgid "Service stopped"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:267
+msgid "Shadowsocks link is missing method/password"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:195
@@ -855,7 +860,7 @@ msgstr ""
 msgid "total"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:205
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:183
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:239
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:247
 msgid "unknown error"
@@ -879,6 +884,10 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:69
 #, javascript-format
 msgid "updated %ds ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:149
+msgid "vmess link missing server/port/uuid"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:239

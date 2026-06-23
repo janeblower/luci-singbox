@@ -296,6 +296,12 @@ function emit_rs_decision_block(rules, mark, fakeip4_cidr, fakeip6_cidr) {
 			"\t\tct state new iifname @wan_ifaces ip6 daddr @fakeip6 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
 			mark));
 	}
+	// rs_* (rule-set) decisions are intentionally NOT iifname-scoped, unlike
+	// the @wan_ifaces-scoped fakeip block above: transparently proxying a
+	// destination CIDR is a property of the DESTINATION, not of which ingress
+	// interface a client used, so these match on any ingress. If a rule-set
+	// CIDR overlaps router-management ranges, scope that rule-set upstream
+	// rather than relying on interface filtering here.
 	for (let r in rules) {
 		let l4 = l4proto_expr(r.network);
 		let pe = port_expr(r.network, r.ports);

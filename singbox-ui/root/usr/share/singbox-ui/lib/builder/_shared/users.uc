@@ -2,7 +2,7 @@
 // Subsumes inbound.uc build_user / build_inbound_users and per-protocol
 // colon-split parsing. Driven by a descriptor `users` spec:
 //   { from?: "<list_field>",
-//     columns: [ { key, required?, tail?, always?, guard?:"uuid",
+//     columns: [ { key, required?, always?, guard?:"uuid",
 //                  validate?:[<allowed>], discard?, warn_if_empty? }, ... ],
 //     single_fallback?: { fields: [ { key, from } ] },
 //     clear_on_multi?: [ "<json_key>", ... ] }   // consumed by the filler

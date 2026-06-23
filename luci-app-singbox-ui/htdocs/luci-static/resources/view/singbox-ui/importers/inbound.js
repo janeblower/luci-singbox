@@ -8,7 +8,7 @@
 // Constrained to the protocols inbound.uc actually builds — importing
 // anything else would create a UCI section that generate.uc silently drops.
 var SB_INBOUND_KNOWN = {
-	'tproxy': true, 'tun': true, 'direct': true,
+	'tproxy': true, 'direct': true,
 	'shadowsocks': true, 'vless': true, 'vmess': true, 'trojan': true,
 	'hysteria2': true,
 };
@@ -103,28 +103,6 @@ function jsonImportInbound(o) {
 				f.vmess_alter_id = String(aid.value);
 			}
 		}
-	}
-	if (o.type === 'tun') {
-		if (o.interface_name) f.interface_name = o.interface_name;
-		if (o.mtu != null) {
-			var mt = SbTransport.parseIntField(o.mtu, 1, null);
-			if (!mt.ok) return bad(_('Invalid MTU: ') + o.mtu);
-			f.mtu = String(mt.value);
-		}
-		if (o.stack) f.stack = o.stack;
-		if (Array.isArray(o.address)) {
-			for (var i = 0; i < o.address.length; i++) {
-				// Imported JSON is untrusted paste: a non-string element
-				// (number/null/object) throws on .indexOf. Coerce and skip
-				// empties so a malformed address can't crash the import.
-				var a = String(o.address[i] == null ? '' : o.address[i]);
-				if (!a.length) continue;
-				if (a.indexOf(':') < 0) f.inet4_address = a;
-				else f.inet6_address = a;
-			}
-		}
-		if (o.auto_route)   f.auto_route   = '1';
-		if (o.strict_route) f.strict_route = '1';
 	}
 	if (o.tls) {
 		f.security = (o.tls.reality && o.tls.reality.enabled) ? 'reality' : 'tls';

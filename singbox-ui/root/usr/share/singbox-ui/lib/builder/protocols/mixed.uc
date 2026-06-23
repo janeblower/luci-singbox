@@ -19,7 +19,7 @@ reg.register({
 		from: "mixed_user",
 		columns: [
 			{ key: "username", required: true },
-			{ key: "password", tail: true, always: true },
+			{ key: "password", always: true },
 		],
 	},
 });

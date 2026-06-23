@@ -365,10 +365,9 @@ function applyMaterialized(s, kind, protoName, materialized) {
         if (f.default != null) opt.default = String(f.default);
         if (f.placeholder)     opt.placeholder = f.placeholder;
         // UX-2: surface per-field inline help when the descriptor carries it.
-        // Accepts `ui_help` (preferred) or `description`; both are optional and
-        // must be whitelisted in schema_dump.uc FIELD_WHITELIST to reach the
-        // frontend. No-op for fields that don't declare one.
-        var help = f.ui_help || f.description;
+        // `ui_help` is optional and must be whitelisted in schema_dump.uc
+        // FIELD_WHITELIST to reach the frontend. No-op when not declared.
+        var help = f.ui_help;
         if (help) opt.description = _(help);
 
         var values = {};
@@ -423,7 +422,7 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         if (f.required)        opt.rmempty = false;
         if (f.default != null) opt.default = String(f.default);
         if (f.placeholder)     opt.placeholder = f.placeholder;
-        var help = f.ui_help || f.description;
+        var help = f.ui_help;
         if (help) opt.description = _(help);
         // depends arms: advanced toggle + per-value depends + parent_enabled.
         // No discriminator arm — singletons have a single type.

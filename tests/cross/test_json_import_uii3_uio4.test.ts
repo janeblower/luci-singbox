@@ -40,6 +40,7 @@ function buildSandbox() {
     Promise,
     console,
     setTimeout,
+    atob: (s: string) => Buffer.from(s, "base64").toString("utf8"),
   };
   sandbox.window = sandbox;
 
@@ -189,6 +190,103 @@ describe("uii3-uio4: reality empty array guard + parseIntField dedup", () => {
       });
       expect(outboundBad.ok).toBe(false);
       expect(outboundBad.errors[0]).toContain("Invalid port");
+    });
+  });
+
+  describe("uii-1: tun inbound is rejected (no backend builder)", () => {
+    it("jsonImportInbound rejects type=tun with a clear error", () => {
+      ctx = ctx ?? buildSandbox();
+      fnIn = fnIn ?? ctx.SbImpInbound?.jsonImportInbound;
+      const got = fnIn({ type: "tun", interface_name: "tun0", mtu: 1500 });
+      expect(got.ok).toBe(false);
+      expect(got.errors[0]).toContain("tun");
+    });
+  });
+
+  describe("uio-1: vmess:// share-link pre-fill", () => {
+    it("decodes v2rayN base64 JSON into UCI fields", () => {
+      ctx = ctx ?? buildSandbox();
+      const link = ctx.SbImpOutbound.shareLinkImport;
+      const v2rayN = {
+        v: "2",
+        ps: "node",
+        add: "e.com",
+        port: "443",
+        id: "11111111-2222-3333-4444-555555555555",
+        aid: "0",
+        net: "ws",
+        path: "/p",
+        host: "h.com",
+        tls: "tls",
+        sni: "s.com",
+        scy: "auto",
+      };
+      const url = `vmess://${Buffer.from(JSON.stringify(v2rayN)).toString("base64")}`;
+      const r = link(url);
+      expect(r.ok).toBe(true);
+      expect(r.fields.server).toBe("e.com");
+      expect(r.fields.server_port).toBe(443);
+      expect(r.fields.server_uuid).toBe(v2rayN.id);
+      expect(r.fields.vmess_security).toBe("auto");
+      expect(r.fields.transport).toBe("ws");
+      expect(r.fields.transport_path).toBe("/p");
+      expect(r.fields.transport_host).toBe("h.com");
+      expect(r.fields.security).toBe("tls");
+      expect(r.fields.tls_server_name).toBe("s.com");
+    });
+
+    it("rejects a vmess link missing server/port/uuid", () => {
+      ctx = ctx ?? buildSandbox();
+      const link = ctx.SbImpOutbound.shareLinkImport;
+      const url = `vmess://${Buffer.from(JSON.stringify({ add: "e.com" })).toString("base64")}`;
+      const r = link(url);
+      expect(r.ok).toBe(false);
+    });
+  });
+
+  describe("uio-2: shadowsocks share-link rejects credential-less links", () => {
+    it("rejects ss://host:port#tag (no method/password)", () => {
+      ctx = ctx ?? buildSandbox();
+      const link = ctx.SbImpOutbound.shareLinkImport;
+      const r = link("ss://e.com:8388#tag");
+      expect(r.ok).toBe(false);
+      expect(r.errors[0]).toContain("method/password");
+    });
+
+    it("still accepts a credentialed ss link", () => {
+      ctx = ctx ?? buildSandbox();
+      const link = ctx.SbImpOutbound.shareLinkImport;
+      const userinfo = Buffer.from("aes-256-gcm:secret").toString("base64");
+      const r = link(`ss://${userinfo}@e.com:8388#tag`);
+      expect(r.ok).toBe(true);
+      expect(r.fields.shadowsocks_method).toBe("aes-256-gcm");
+      expect(r.fields.server_password).toBe("secret");
+    });
+  });
+
+  describe("uio-3: vless reality gate (mirror h_tls_security)", () => {
+    it("security=reality WITHOUT pbk degrades to plain TLS (no short_id)", () => {
+      ctx = ctx ?? buildSandbox();
+      const link = ctx.SbImpOutbound.shareLinkImport;
+      const r = link(
+        "vless://11111111-2222-3333-4444-555555555555@h.com:443?security=reality&sid=ab12#n",
+      );
+      expect(r.ok).toBe(true);
+      expect(r.fields.security).toBe("tls");
+      expect(r.fields.reality_short_id).toBeUndefined();
+      expect(r.fields.reality_public_key).toBeUndefined();
+    });
+
+    it("security=reality WITH pbk keeps reality + short_id", () => {
+      ctx = ctx ?? buildSandbox();
+      const link = ctx.SbImpOutbound.shareLinkImport;
+      const r = link(
+        "vless://11111111-2222-3333-4444-555555555555@h.com:443?security=reality&pbk=PUBKEY&sid=ab12#n",
+      );
+      expect(r.ok).toBe(true);
+      expect(r.fields.security).toBe("reality");
+      expect(r.fields.reality_public_key).toBe("PUBKEY");
+      expect(r.fields.reality_short_id).toBe("ab12");
     });
   });
 });

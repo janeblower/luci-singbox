@@ -25,12 +25,14 @@ reg.register({
           advanced: true, json_key: "obfs" },
         { name: "network", type: "enum", tab: "basic", values: ["", "tcp", "udp"],
           ui_label: "Network", advanced: true, json_key: "network", only_values: ["tcp", "udp"] },
+        // Deprecated hysteria-v1 QUIC knobs removed alongside
+        // disable_mtu_discovery — gate all three identically at 1.14.
         { name: "recv_window_conn", type: "number", tab: "basic",
           ui_label: "Receive window conn (deprecated)", advanced: true,
-          json_key: "recv_window_conn", coerce: "num" },
+          json_key: "recv_window_conn", coerce: "num", max_version: "1.14" },
         { name: "recv_window", type: "number", tab: "basic",
           ui_label: "Receive window (deprecated)", advanced: true,
-          json_key: "recv_window", coerce: "num" },
+          json_key: "recv_window", coerce: "num", max_version: "1.14" },
         { name: "disable_mtu_discovery", type: "bool", tab: "basic",
           ui_label: "Disable MTU discovery (deprecated)", advanced: true,
           json_key: "disable_mtu_discovery", coerce: "bool", max_version: "1.14" },
@@ -55,7 +57,7 @@ reg.register({
     ],
     users: {
         from: "hysteria_user",
-        columns: [ { key: "name", required: true }, { key: "auth_str", tail: true, always: true } ],
+        columns: [ { key: "name", required: true }, { key: "auth_str", always: true } ],
     },
 });
 

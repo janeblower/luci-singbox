@@ -48,7 +48,7 @@ reg.register({
     ],
     users: {
         from: "shadowtls_user",
-        columns: [ { key: "name", required: true }, { key: "password", tail: true, always: true } ],
+        columns: [ { key: "name", required: true }, { key: "password", always: true } ],
     },
 });
 

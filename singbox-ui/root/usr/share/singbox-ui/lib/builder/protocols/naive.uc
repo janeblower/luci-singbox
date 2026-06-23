@@ -41,7 +41,7 @@ reg.register({
     ],
     users: {
         from: "naive_user",
-        columns: [ { key: "username", required: true }, { key: "password", tail: true, always: true } ],
+        columns: [ { key: "username", required: true }, { key: "password", always: true } ],
     },
 });
 

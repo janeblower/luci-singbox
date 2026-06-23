@@ -50,6 +50,15 @@ reg.register({
         out.external_controller = (index(host, ":") >= 0)
             ? sprintf("[%s]:%s", host, port)
             : `${host}:${port}`;
+        // SECURITY (warn-only): a non-loopback external_controller with no secret
+        // exposes an UNAUTHENTICATED control API (mutates proxy selection, reads
+        // traffic stats) to the network. We still honor the explicit bind, but
+        // surface a warning so the operator sets a secret.
+        let is_loopback = (host == "127.0.0.1" || host == "::1" || host == "localhost" ||
+                           substr(host, 0, 4) == "127.");
+        if (!is_loopback && !length(s.secret ?? "")) {
+            warn(sprintf("clash.uc: clash_api binds non-loopback '%s' with an empty secret — the control API is UNAUTHENTICATED and reachable from the network; set a secret\n", host));
+        }
     },
 });
 return {};
