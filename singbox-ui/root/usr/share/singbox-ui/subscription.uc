@@ -29,15 +29,18 @@ const DEFAULT_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36
                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
 // SEC-6: single source of truth for the share-link schemes we actually parse.
-// This list is kept aligned with lib/sharelink.uc::parse_proxy_url's dispatch
-// (vless/vmess/ss/trojan/hy2/hysteria2). Two consumers used to carry divergent
-// inline scheme sets — try_b64_decode's decode-trigger whitelist once included
-// `http`/`https`, contradicting the anti-false-positive heuristic it documents
-// (a plaintext error page line `visit https://…/help` would falsely trigger a
-// base64 decode). The line-scan stays deliberately generic (any `scheme://`,
-// with parse_proxy_url rejecting unsupported schemes downstream); only the
-// decode TRIGGER is narrowed to schemes we can actually parse.
-const PROXY_SCHEME_RE = /^(vmess|vless|ss|trojan|hy2|hysteria2):\/\//;
+// MUST mirror EVERY scheme lib/sharelink.uc::parse_proxy_url dispatches:
+// vless/vmess/ss/trojan/hy2/hysteria2/tuic/hysteria/hy/anytls/socks(5). A subset
+// here silently breaks base64 subscriptions composed only of the missing schemes
+// (the body never decodes → "no valid proxy URL"). Guarded by test_subscription_uc
+// ("decode triggers for every dispatched scheme"). Two consumers used to carry
+// divergent inline scheme sets — try_b64_decode's decode-trigger whitelist once
+// included `http`/`https`, contradicting the anti-false-positive heuristic it
+// documents (a plaintext error page line `visit https://…/help` would falsely
+// trigger a base64 decode). The line-scan stays deliberately generic (any
+// `scheme://`, with parse_proxy_url rejecting unsupported schemes downstream);
+// only the decode TRIGGER is narrowed to schemes we can actually parse.
+const PROXY_SCHEME_RE = /^(vmess|vless|ss|trojan|hy2|hysteria2|tuic|hysteria|hy|anytls|socks5?):\/\//;
 
 let fs  = require("fs");
 let uci_mod = require("uci");
@@ -113,8 +116,11 @@ function _read_raw_for_test(path) { return _reader(path); }
 // The old "contains '://'" check tripped on plaintext error pages like
 // "visit https://example.com/help" and silently mangled the body.
 function try_b64_decode(s) {
-	let dec = null;
-	try { dec = b64dec(s); } catch (e) { /* invalid base64 */ }
+	// helpers.b64_decode is tolerant (url-safe alphabet, missing padding,
+	// embedded whitespace) where the raw b64dec builtin is not — those bodies
+	// silently failed to import before. Same decoder the share-link parser
+	// uses, so subscription and share-link decoding stay in lockstep.
+	let dec = helpers.b64_decode(s);
 	if (dec == null || !length(dec)) return s;
 	let lines = split(dec, "\n");
 	for (let l in lines) {

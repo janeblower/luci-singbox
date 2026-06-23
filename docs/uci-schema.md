@@ -433,7 +433,7 @@ Shared outbound dial options emitted by `_shared/dial.uc`. Applies to all proxy 
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
-| `bind_interface` | string | UCI iface name or netdev | no | any outbound | Bind outgoing connections to this interface. Backend resolves via `helpers.resolve_iface_device()`. |
+| `bind_interface` | string | netdev name | no | any outbound | Bind outgoing connections to this interface. Emitted verbatim — provide the real Linux netdev (e.g. `eth0`, `pppoe-wan`); the UI offers live devices via the `interfaces` dynamic source. |
 | `inet4_bind_address` | string | IPv4 address | no | any outbound | Source IPv4 address for outgoing connections. |
 | `inet6_bind_address` | string | IPv6 address | no | any outbound | Source IPv6 address for outgoing connections. |
 | `routing_mark` | integer | SO_MARK value | no | any outbound | Sets the `SO_MARK` socket option on outgoing connections. |

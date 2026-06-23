@@ -226,23 +226,12 @@ function parse_anytls(url) {
 	return out;
 }
 
-// b64_decode(s) — tolerant base64 decoder for share-link payloads.
-// Accepts both standard and url-safe alphabets and missing padding.
-// Returns the decoded string, or null on invalid input.
-function b64_decode(s) {
-	if (s == null) return null;
-	// Strip whitespace, normalise url-safe alphabet.
-	let t = replace(s, /\s+/g, "");
-	t = replace(t, "-", "+");
-	t = replace(t, "_", "/");
-	let pad = length(t) % 4;
-	if (pad === 2) t += "==";
-	else if (pad === 3) t += "=";
-	else if (pad === 1) return null;  // invalid base64 length
-	let dec = null;
-	try { dec = b64dec(t); } catch (e) { return null; }
-	return dec;
-}
+// b64_decode(s) — tolerant base64 decoder for share-link payloads. The real
+// implementation now lives in helpers.b64_decode (shared with subscription.uc
+// so the two decode paths can't drift). This stays a thin local alias so the
+// file-private call sites and the definition-order constraint documented below
+// (parse_socks etc. call it) remain intact.
+function b64_decode(s) { return helpers.b64_decode(s); }
 
 // parse_socks(url) — SOCKS5 share-link: socks5://[user:pass@]host:port#name
 // userinfo is OPTIONAL: plain "user:pass" or base64("user:pass"). -> sing-box socks (v5).

@@ -31,26 +31,36 @@ LC_LOCK_TTL="${SINGBOX_LIFECYCLE_TTL:-120}"
 _lc_acquire() {
 	_LC_DEPTH=$(( ${_LC_DEPTH:-0} + 1 ))
 	[ "$_LC_DEPTH" -gt 1 ] && return 0   # already held by this process
+	_LC_OWNED=0                          # becomes 1 only once WE create the dir
 	mkdir -p /tmp/singbox-ui
 	_lc_i=0
 	while :; do
 		if mkdir "$LC_LOCK_DIR" 2>/dev/null; then
 			echo $$ > "$LC_LOCK_DIR/pid" 2>/dev/null
+			_LC_OWNED=1
 			return 0
 		fi
-		# Stale-lock reclaim: steal a lock dir older than the TTL.
+		# Stale-lock reclaim: steal a lock dir older than the TTL, but ONLY when
+		# its holder is actually gone (crashed). A live but slow holder (a long
+		# stop+start past the TTL) keeps its lock instead of being stolen, which
+		# would otherwise let two lifecycle cycles run concurrently.
 		_lc_now=$(date +%s)
 		_lc_mt=$(date -r "$LC_LOCK_DIR" +%s 2>/dev/null || echo "$_lc_now")
 		if [ $(( _lc_now - _lc_mt )) -ge "$LC_LOCK_TTL" ]; then
-			logger -t singbox-ui "lifecycle lock stale — reclaiming"
-			rm -rf "$LC_LOCK_DIR" 2>/dev/null
-			continue
+			_lc_pid=$(cat "$LC_LOCK_DIR/pid" 2>/dev/null)
+			if [ -z "$_lc_pid" ] || ! kill -0 "$_lc_pid" 2>/dev/null; then
+				logger -t singbox-ui "lifecycle lock stale (holder ${_lc_pid:-?} gone) — reclaiming"
+				rm -rf "$LC_LOCK_DIR" 2>/dev/null
+				continue
+			fi
 		fi
 		_lc_i=$(( _lc_i + 1 ))
 		if [ "$_lc_i" -ge "$LC_LOCK_TTL" ]; then
-			# Waited a full TTL without success — proceed rather than wedge
-			# boot/cron forever; the holder is reclaimed on the next pass.
-			logger -t singbox-ui "lifecycle lock wait timed out — proceeding"
+			# Waited a full TTL without acquiring — proceed rather than wedge
+			# boot/cron forever, but WITHOUT ownership (_LC_OWNED stays 0): we
+			# never created the dir, so _lc_release must not delete the real
+			# holder's lock.
+			logger -t singbox-ui "lifecycle lock wait timed out — proceeding without the lock"
 			return 0
 		fi
 		sleep 1
@@ -61,7 +71,11 @@ _lc_release() {
 	_LC_DEPTH=$(( ${_LC_DEPTH:-0} - 1 ))
 	[ "${_LC_DEPTH:-0}" -gt 0 ] && return 0   # still held by an outer caller
 	_LC_DEPTH=0
-	rm -rf "$LC_LOCK_DIR" 2>/dev/null
+	# Only remove the lock dir if THIS process created it. A timed-out acquire
+	# proceeded without ownership; deleting the dir here would destroy the real
+	# holder's lock and break mutual exclusion exactly under contention.
+	[ "${_LC_OWNED:-0}" = "1" ] && rm -rf "$LC_LOCK_DIR" 2>/dev/null
+	_LC_OWNED=0
 }
 
 start_service() {

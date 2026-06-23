@@ -47,6 +47,35 @@ const KNOWN_OMIT    = { empty: 1, never: 1 };
 // _emit_seq/_emit_group mutual recursion.
 let _shared_module, _shared_fields;
 
+// _validate_emit_meta(f, ctx) — the subset of field validation that applies to
+// ANY emit target: top-level descriptor.fields AND group / shared-seq scalar
+// fields (which all flow through _filler._emit_scalar). Without this, a typo'd
+// coerce/omit_when/only_values/skip_value/requires on a GROUP field was silently
+// ignored and produced wrong JSON (_emit_scalar's `f.coerce || "str"` guards
+// only null, not unknown strings). Shared so the two paths can't diverge.
+function _validate_emit_meta(f, ctx) {
+    let nm = f.name ?? f.json_key ?? "?";
+    if (f.json_key != null)
+        assert(type(f.json_key) === "string" && length(f.json_key) > 0,
+               sprintf("%s.%s: json_key must be a non-empty string", ctx, nm));
+    if (f.coerce != null)
+        assert(KNOWN_COERCE[f.coerce] != null,
+               sprintf("%s.%s: unknown coerce '%s'", ctx, nm, f.coerce));
+    if (f.omit_when != null)
+        assert(KNOWN_OMIT[f.omit_when] != null,
+               sprintf("%s.%s: unknown omit_when '%s'", ctx, nm, f.omit_when));
+    if (f.skip_value != null)
+        assert(type(f.skip_value) === "string",
+               sprintf("%s.%s: skip_value must be a string", ctx, nm));
+    if (f.only_values != null)
+        assert(type(f.only_values) === "array",
+               sprintf("%s.%s: only_values must be an array", ctx, nm));
+    if (f.requires != null)
+        assert(type(f.requires) === "string" ||
+               (type(f.requires) === "object" && f.requires.field != null && f.requires.value != null),
+               sprintf("%s.%s: requires must be a string or {field,value}", ctx, nm));
+}
+
 function validate_field(f, ctx) {
     assert(f.name != null,                        sprintf("%s: field.name required", ctx));
     assert(KNOWN_TYPES[f.type] != null,           sprintf("%s: field.type unknown: %s", ctx, f.type));
@@ -79,25 +108,7 @@ function validate_field(f, ctx) {
         for (let v in f.values) if (v === f.default) found = true;
         assert(found,                             sprintf("%s.%s: default '%s' is not one of values", ctx, f.name, f.default));
     }
-    if (f.json_key != null)
-        assert(type(f.json_key) === "string" && length(f.json_key) > 0,
-               sprintf("%s.%s: json_key must be a non-empty string", ctx, f.name));
-    if (f.coerce != null)
-        assert(KNOWN_COERCE[f.coerce] != null,
-               sprintf("%s.%s: unknown coerce '%s'", ctx, f.name, f.coerce));
-    if (f.omit_when != null)
-        assert(KNOWN_OMIT[f.omit_when] != null,
-               sprintf("%s.%s: unknown omit_when '%s'", ctx, f.name, f.omit_when));
-    if (f.skip_value != null)
-        assert(type(f.skip_value) === "string",
-               sprintf("%s.%s: skip_value must be a string", ctx, f.name));
-    if (f.only_values != null)
-        assert(type(f.only_values) === "array",
-               sprintf("%s.%s: only_values must be an array", ctx, f.name));
-    if (f.requires != null)
-        assert(type(f.requires) === "string" ||
-               (type(f.requires) === "object" && f.requires.field != null && f.requires.value != null),
-               sprintf("%s.%s: requires must be a string or {field,value}", ctx, f.name));
+    _validate_emit_meta(f, ctx);
     function _ver_ok(v) {
         // 2-part or 3-part dotted numeric, e.g. "1.13" / "1.13.0".
         return type(v) === "string" && match(v, /^[0-9]+\.[0-9]+(\.[0-9]+)?$/) != null;
@@ -119,6 +130,7 @@ function _validate_seq(seq, ctx) {
         if ("const" in e) { assert(e.json_key != null, sprintf("%s: const entry needs json_key", ctx)); continue; }
         if (e.fields != null) { _validate_seq(e.fields, ctx); assert(e.json_key != null, sprintf("%s: group needs json_key", ctx)); continue; }
         assert(e.json_key != null && e.name != null, sprintf("%s: scalar entry needs name+json_key", ctx));
+        _validate_emit_meta(e, ctx);
     }
 }
 function validate_groups(groups, ctx) {
@@ -148,21 +160,36 @@ function validate_field_refs(descriptor, ctx) {
     let names = {};
     for (let f in (descriptor.fields || [])) if (f.name != null) names[f.name] = true;
     for (let f in _shared_fields(descriptor)) if (f.name != null) names[f.name] = true;
+    // Group-nested scalar fields are addressable too (a requires/depends may
+    // reference one). Collect their names recursively so a valid reference to a
+    // group field is not rejected, and a typo'd one is still caught.
+    function _collect_names(fields) {
+        for (let f in (fields || [])) {
+            if (f.name != null) names[f.name] = true;
+            if (f.fields != null) _collect_names(f.fields);
+        }
+    }
+    for (let g in (descriptor.groups || [])) _collect_names(g.fields);
     function check_ref(fname, ref, what) {
         if (ref == null) return;
         assert(names[ref] != null,
                sprintf("%s.%s: %s references unknown field '%s'", ctx, fname, what, ref));
     }
-    for (let f in (descriptor.fields || [])) {
-        if (type(f.requires) === "object") check_ref(f.name, f.requires.field, "requires.field");
-        if (type(f.depends) === "object")  check_ref(f.name, f.depends.field, "depends.field");
-        check_ref(f.name, f.parent_enabled, "parent_enabled");
-        if (f.default_when_empty != null) {
-            let t = type(f.default_when_empty);
-            assert(t === "string" || t === "int" || t === "double" || t === "bool",
-                   sprintf("%s.%s: default_when_empty must be a scalar (string/number/bool)", ctx, f.name));
+    function _walk(fields) {
+        for (let f in (fields || [])) {
+            if (type(f.requires) === "object") check_ref(f.name, f.requires.field, "requires.field");
+            if (type(f.depends) === "object")  check_ref(f.name, f.depends.field, "depends.field");
+            check_ref(f.name, f.parent_enabled, "parent_enabled");
+            if (f.default_when_empty != null) {
+                let t = type(f.default_when_empty);
+                assert(t === "string" || t === "int" || t === "double" || t === "bool",
+                       sprintf("%s.%s: default_when_empty must be a scalar (string/number/bool)", ctx, f.name));
+            }
+            if (f.fields != null) _walk(f.fields);
         }
     }
+    _walk(descriptor.fields);
+    for (let g in (descriptor.groups || [])) _walk(g.fields);
 }
 
 function register(descriptor) {

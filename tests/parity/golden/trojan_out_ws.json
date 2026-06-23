@@ -1,1 +1,1 @@
-{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "t4", "transport": { "headers": { "Host": "h.com" }, "path": "/ws", "type": "ws" }, "type": "trojan" }
+{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "t4", "transport": { "early_data_header_name": "Sec-WebSocket-Protocol", "headers": { "Host": "h.com" }, "max_early_data": 2048, "path": "/ws", "type": "ws" }, "type": "trojan" }

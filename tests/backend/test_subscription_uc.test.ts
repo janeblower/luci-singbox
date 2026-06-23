@@ -70,7 +70,7 @@ describe("test_subscription_uc", () => {
     const dir = tmpDir();
     await exec(`mkdir -p ${dir}`);
     await putFile(
-      `config outbound 'a'\n\toption type 'subscription'\nconfig outbound 'b'\n\toption type 'interface'\n`,
+      `config outbound 'a'\n\toption type 'subscription'\nconfig outbound 'b'\n\toption type 'direct'\n`,
       `${dir}/singbox-ui`,
     );
     // Use inline probe
@@ -110,6 +110,62 @@ print(n);
       `cat ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`,
     );
     expect(check.stdout).toMatch(/^vless:\/\/uuid@host:443/);
+    await exec(`rm -rf ${dir}`);
+  });
+
+  it("fetch-subs decodes base64 body of a tuic-only sub (regression: PROXY_SCHEME_RE must cover every parse_proxy_url scheme)", async () => {
+    // tuic/hysteria/hy/anytls/socks were dispatched by parse_proxy_url but were
+    // missing from the decode-trigger whitelist (PROXY_SCHEME_RE), so a base64
+    // subscription composed only of them never decoded and was rejected with
+    // "no valid proxy URL in response".
+    const dir = tmpDir();
+    await exec(`mkdir -p ${dir}/bin ${dir}/runtime`);
+    await putFile(CURL_STUB, `${dir}/bin/curl`);
+    await exec(`chmod +x ${dir}/bin/curl`);
+    // base64("tuic://11111111-1111-1111-1111-111111111111:pass@host.test:443#NodeT\n")
+    await putFile(
+      "dHVpYzovLzExMTExMTExLTExMTEtMTExMS0xMTExLTExMTExMTExMTExMTpwYXNzQGhvc3QudGVzdDo0NDMjTm9kZVQK",
+      `${dir}/body`,
+    );
+    await putFile(
+      uciSub("subT", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
+    await exec(
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+    );
+    const check = await exec(
+      `cat ${dir}/runtime/sub_subT.txt 2>/dev/null || echo MISSING`,
+    );
+    expect(check.stdout).toMatch(/^tuic:\/\/11111111-/);
+    await exec(`rm -rf ${dir}`);
+  });
+
+  it("fetch-subs decodes a url-safe, unpadded base64 body (regression: tolerant b64 via helpers.b64_decode)", async () => {
+    // The raw b64dec() builtin rejects the url-safe alphabet (-/_) and missing
+    // padding; subscription used it directly, so url-safe subscriptions silently
+    // failed. try_b64_decode now shares the tolerant helpers.b64_decode with the
+    // share-link parser.
+    const dir = tmpDir();
+    await exec(`mkdir -p ${dir}/bin ${dir}/runtime`);
+    await putFile(CURL_STUB, `${dir}/bin/curl`);
+    await exec(`chmod +x ${dir}/bin/curl`);
+    // base64("vless://uuid@host.test:443?security=tls#A\n"), url-safe + unpadded
+    await putFile(
+      "dmxlc3M6Ly91dWlkQGhvc3QudGVzdDo0NDM_c2VjdXJpdHk9dGxzI0EK",
+      `${dir}/body`,
+    );
+    await putFile(
+      uciSub("subU", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
+    await exec(
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+    );
+    const check = await exec(
+      `cat ${dir}/runtime/sub_subU.txt 2>/dev/null || echo MISSING`,
+    );
+    expect(check.stdout).toMatch(/^vless:\/\/uuid@host\.test:443/);
     await exec(`rm -rf ${dir}`);
   });
 
@@ -455,7 +511,7 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
   it("C2.1.10: PROXY_SCHEME_RE shared scheme constant present in subscription.uc", async () => {
     const content = readFileSync(`${HOST_SHARE}/subscription.uc`, "utf8");
     expect(content).toMatch(
-      /PROXY_SCHEME_RE\s*=\s*\/\^\(vmess\|vless\|ss\|trojan\|hy2\|hysteria2\)/,
+      /PROXY_SCHEME_RE\s*=\s*\/\^\(vmess\|vless\|ss\|trojan\|hy2\|hysteria2\|tuic\|hysteria\|hy\|anytls\|socks5\?\)/,
     );
     expect(content).toMatch(/match\(t, PROXY_SCHEME_RE\)/);
     expect(content).not.toMatch(/PROXY_SCHEME_RE.*http/);
@@ -654,7 +710,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
     await putFile(CURL_STUB, `${dir}/bin/curl`);
     await exec(`chmod +x ${dir}/bin/curl`);
     await putFile(
-      `config outbound 'notasub'\n\toption type 'interface'\n\toption interface 'wan'\n`,
+      `config outbound 'notasub'\n\toption type 'direct'\n`,
       `${dir}/singbox-ui`,
     );
     const r = await exec(

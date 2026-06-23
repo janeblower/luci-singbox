@@ -64,7 +64,9 @@ case "$1" in
   --print-arch) cat "${ARCHFILE}" ;;
   update) : ;;
   list) shift; echo "$1-1.99.0-r1 x86_64 {$1} (GPL-3.0) [available]" ;;
+  info) shift; case " \${STUB_INSTALLED:-} " in *" $1 "*) exit 0 ;; *) exit 1 ;; esac ;;
   add) shift; echo "apk add $*" >> "${TMP}/apk.log" ;;
+  del) shift; echo "apk del $*" >> "${TMP}/apk.log" ;;
   *) : ;;
 esac
 `,
@@ -220,6 +222,49 @@ describe("install_sh", () => {
       "apk add sing-box luci-app-singbox-ui luci-i18n-singbox-ui-ru",
     );
     expect(existsSync(resolve(REPO_DIR, "singbox-core.list"))).toBe(false);
+  });
+
+  it("TEST 4b: core swap removes the old core in the SAME apk add (no standalone apk del)", () => {
+    resetLogs();
+    writeFileSync(ARCHFILE, "x86_64\n");
+    const r = spawnSync("sh", [INSTALL_SH], {
+      encoding: "utf8",
+      env: {
+        ...stubEnv,
+        SINGBOX_FEED_MINOR: "25.12",
+        SINGBOX_CORE: "sing-box-extended-upx",
+        STUB_INSTALLED: "sing-box-extended", // an old conflicting core is installed
+      },
+    });
+    expect(r.status).toBe(0);
+    const log = apkLog();
+    // The old core is removed via a !conflict folded into the single apk add,
+    // never a standalone `apk del` (which would break singbox-ui's sing-box dep).
+    expect(log).not.toContain("apk del");
+    expect(log.trim()).toBe(
+      "apk add sing-box-extended-upx !sing-box-extended luci-app-singbox-ui luci-i18n-singbox-ui-ru",
+    );
+  });
+
+  it("TEST 4c: swapping to plain sing-box never emits a bare !sing-box (provided-virtual trap)", () => {
+    resetLogs();
+    writeFileSync(ARCHFILE, "x86_64\n");
+    const r = spawnSync("sh", [INSTALL_SH], {
+      encoding: "utf8",
+      env: {
+        ...stubEnv,
+        SINGBOX_FEED_MINOR: "25.12",
+        SINGBOX_CORE: "sing-box",
+        STUB_INSTALLED: "sing-box-extended sing-box-extended-upx",
+      },
+    });
+    expect(r.status).toBe(0);
+    const log = apkLog();
+    expect(log).not.toContain("apk del");
+    expect(log).not.toContain("!sing-box "); // bare !sing-box would conflict the new core's provide
+    expect(log.trim()).toBe(
+      "apk add sing-box !sing-box-extended !sing-box-extended-upx luci-app-singbox-ui luci-i18n-singbox-ui-ru",
+    );
   });
 
   it("TEST 6: invalid SINGBOX_CORE aborts non-zero, no apk add", () => {

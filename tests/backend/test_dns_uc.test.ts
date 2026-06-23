@@ -40,8 +40,7 @@ describe("dns_uc (generate.uc DNS block integration)", () => {
       `
 config outbound 'direct'
 \toption enabled '1'
-\toption type 'interface'
-\toption interface 'eth0'
+\toption type 'direct'
 
 config dns_server 'google'
 \toption enabled '1'

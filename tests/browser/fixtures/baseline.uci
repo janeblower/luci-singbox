@@ -23,8 +23,7 @@ config ruleset 'discord'
 
 config outbound 'direct_wan'
 	option enabled '1'
-	option type 'interface'
-	option interface 'wan'
+	option type 'direct'
 
 config route_rule 'defaults_direct'
 	option enabled '1'
