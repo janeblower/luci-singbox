@@ -751,7 +751,7 @@ function call_plugin_install() {
 // Порядок ключей load-bearing: %J сохраняет порядок вставки (проверено на
 // целевом ucode), поэтому вывод list() байт-идентичен прежнему хардкоду.
 // Read/write-класс НЕ здесь — он в ACL-файле (acl.d), сторожится
-// tests/test_acl_coverage.sh + tests/test_rpcd_acl_sync.sh.
+// tests/backend/test_acl_coverage.test.ts + tests/backend/test_rpcd_acl_sync.test.ts.
 const METHODS = {
 	generate:            { sig: {},                                                   handler: call_generate },
 	nftables:            { sig: { action: "string" },                                 handler: call_nftables },
