@@ -94,3 +94,7 @@ config subscriptions 'subscriptions'
 
 config singbox-ui 'main'
 	option ui_compat_only '0'
+
+config singbox-ui 'plugins'
+	# Phase E plugin manager. Per-plugin enable flags live here as
+	# '<name>_enabled'. Seeded by 99-luci-singbox-ui.

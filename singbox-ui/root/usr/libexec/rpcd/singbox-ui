@@ -19,7 +19,8 @@
 
 'use strict';
 
-let fs = require("fs");
+let fs  = require("fs");
+let uci = require("uci");
 
 const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/nftables.uc";
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
@@ -434,7 +435,7 @@ function clash_params() {
 	let secret = getenv("CLASH_SECRET");
 	if (listen == null || port == null || secret == null) {
 		let s = {};
-		try { s = require("uci").cursor().get_all("singbox-ui", "clash_api") ?? {}; } catch (e) {}
+		try { s = uci.cursor().get_all("singbox-ui", "clash_api") ?? {}; } catch (e) {}
 		if (listen == null) listen = (s.listen != null && length(s.listen)) ? s.listen : "127.0.0.1";
 		if (port   == null) port   = (s.port   != null && length(s.port))   ? s.port   : "9090";
 		if (secret == null) secret = s.secret ?? "";
@@ -697,6 +698,27 @@ function call_clash_delay() {
 }
 
 
+// call_plugins — list installed plugins for the frontend. Read-side: enumerates
+// registered plugins (discovery already ran during the plugin-merge IIFE) and
+// reports their enabled flag + conventional frontend module path.
+function call_plugins() {
+	let cur = uci.cursor();
+	let out = [];
+	let all;
+	try { all = require("plugins.registry").get_all(); } catch (_) { all = []; }
+	for (let p in all) {
+		let flag = cur.get("singbox-ui", "plugins", p.name + "_enabled");
+		push(out, {
+			name:            p.name,
+			version:         p.version ?? "",
+			enabled:         (flag === "1"),
+			frontend_module: "view.singbox-ui.plugins." + p.name + ".tab",
+			installed:       true,
+		});
+	}
+	emit({ status: "ok", plugins: out });
+}
+
 // METHODS — единый источник правды: имя метода → { sig, handler }. `sig`
 // уходит в emit_list() (rpcd читает сигнатуры), `handler` — в диспетчер.
 // Порядок ключей load-bearing: %J сохраняет порядок вставки (проверено на
@@ -718,6 +740,7 @@ const METHODS = {
 	export_section:      { sig: { kind: "string", name: "string" },                   handler: call_export_section },
 	preview_config:      { sig: {},                                                   handler: call_preview_config },
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
+	plugins:             { sig: {},                                                   handler: call_plugins },
 };
 
 // Phase E: merge plugin-contributed rpcd methods. Discovery require()s each

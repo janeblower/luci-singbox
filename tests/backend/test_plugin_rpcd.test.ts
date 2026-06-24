@@ -10,6 +10,30 @@ const HANDLER = `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
 describe("test_plugin_rpcd", () => {
   useGuest();
 
+  it("plugins method lists installed plugins with enabled + frontend_module", async () => {
+    const r = await exec(`
+      set -e
+      PLUG="${LIB}/plugins/zz_list"
+      mkdir -p "$PLUG"
+      cat > "$PLUG/init.uc" <<'EOF'
+let reg = require("plugins.registry");
+reg.register({ name: "zz_list", version: "2" });
+return {};
+EOF
+      out=$(echo '{}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugins)
+      rm -rf "$PLUG"
+      echo "$out"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    expect(o.status).toBe("ok");
+    const p = o.plugins.find((x: any) => x.name === "zz_list");
+    expect(p).toBeTruthy();
+    expect(p.version).toBe("2");
+    expect(p.frontend_module).toBe("view.singbox-ui.plugins.zz_list.tab");
+    expect(typeof p.enabled).toBe("boolean");
+  });
+
   it("handler list + call surface a plugin-registered method", async () => {
     const r = await exec(`
       set -e

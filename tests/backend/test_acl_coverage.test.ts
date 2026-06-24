@@ -21,6 +21,7 @@ const SAFE_READ_METHODS = [
   "export_section",
   "preview_config",
   "protocol_schema",
+  "plugins",
 ];
 
 const EXPECTED_WRITE_METHODS = [
