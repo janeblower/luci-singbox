@@ -18,7 +18,10 @@ function loadEnabled() {
 			return L.require(p.frontend_module).then(function (mod) {
 				return { name: p.name, module: p.frontend_module, api: mod || {} };
 			}).catch(function (e) {
-				L.error && L.error('plugin frontend load failed: ' + p.frontend_module + ' ' + e);
+				// NOTE: use console.error, NOT L.error — in the LuCI runtime L.error()
+				// CREATES AND THROWS a tagged exception, which would re-reject this
+				// promise and defeat the per-plugin "log + skip" isolation below.
+				console.error('plugin frontend load failed: ' + p.frontend_module + ' ' + e);
 				return null;
 			});
 		})).then(function (list) { return list.filter(Boolean); });
