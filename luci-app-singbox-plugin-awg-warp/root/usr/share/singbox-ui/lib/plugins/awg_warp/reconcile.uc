@@ -160,12 +160,15 @@ function _bring_up(cur, item) {
 // _del_iface — remove one amneziawg interface and its per-interface addrlabel
 // entries.  Shared by apply()'s orphan/disable path and teardown() to avoid
 // duplicating the addrlabel cleanup logic (FIX: addrlabel leak on disable).
-// v6_addr must already be safe (safe_cidr-validated or raw UCI — we gate on
-// non-empty, and `ip addrlabel del` on a non-existent entry fails silently).
+// v6_addr is sanitized here via safe_cidr() — callers pass raw UCI values
+// (HIGH-severity: crafted warp_address_v6 could inject into `ip addrlabel del`).
+// A malformed value sanitizes to "" → addrlabel del is skipped (safe, since
+// no valid label was ever added for a malformed address).
 function _del_iface(dev, v6_addr) {
 	sh(sprintf("%s link del dev %s", IP_BIN, dev));
-	if (length(`${v6_addr ?? ""}`)) {
-		sh(sprintf("%s addrlabel del prefix %s label 100", IP_BIN, v6_addr));
+	let v6 = safe_cidr(v6_addr);
+	if (length(v6)) {
+		sh(sprintf("%s addrlabel del prefix %s label 100", IP_BIN, v6));
 		sh(sprintf("%s addrlabel del prefix ::/0 label 100", IP_BIN));
 	}
 }
