@@ -3,7 +3,7 @@ include $(TOPDIR)/rules.mk
 PKG_NAME:=luci-app-singbox-plugin-awg-warp
 PKG_VERSION:=1.0.0
 PKG_RELEASE:=1
-PKG_LICENSE:=MIT
+PKG_LICENSE:=GPL-2.0-or-later
 PKG_MAINTAINER:=Jyn
 
 LUCI_TITLE:=AWG WARP plugin for luci-app-singbox-ui (Cloudflare WARP + AmneziaWG)

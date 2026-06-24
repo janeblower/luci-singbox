@@ -79,10 +79,12 @@ jobs:
               - 'bbolt-client/**'
             backend:
               - 'singbox-ui/**'
+              - 'luci-app-singbox-plugin-awg-warp/root/**'
               - 'tests/backend/**'
               - 'tests/parity/**'
             ui:
               - 'luci-app-singbox-ui/**'
+              - 'luci-app-singbox-plugin-awg-warp/htdocs/**'
               - 'tests/ui/**'
               - 'tests/browser/**'
             packaging:

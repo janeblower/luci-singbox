@@ -1,0 +1,113 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the luci-app-singbox-plugin-awg-warp package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: luci-singbox-plugin-awg-warp\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-06-25 00:00+0000\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:33
+msgid "AWG WARP"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:45
+msgid "AWG components"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:47
+msgid "Install AWG + ip-full"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:55
+msgid "AWG + ip-full installed successfully."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:55
+msgid "Install failed: "
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:55
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:87
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:111
+msgid "unknown error"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:61
+msgid "WARP account"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:63
+msgid "Register (Cloudflare WARP)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:70
+msgid "WARP account registered."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:70
+msgid "Registration failed: "
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:76
+msgid "Paste WARP .conf"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:81
+msgid "Paste the contents of a Cloudflare WARP .conf file to register via paste mode."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:87
+msgid "WARP conf applied."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:87
+msgid "Paste registration failed: "
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:93
+msgid "Mimic protocol"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:102
+msgid "AWG parameters"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:104
+msgid "Regenerate (WARP-safe)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:111
+msgid "Regenerate failed: "
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:116
+#, javascript-format
+msgid "AWG parameters regenerated: Jc=%d Jmin=%d Jmax=%d"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:122
+msgid "Enable IPv6"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:126
+msgid "Enable IPv6 auto-masquerade for WARP."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:129
+msgid "MTU override"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:134
+msgid "empty = WAN−80"
+msgstr ""

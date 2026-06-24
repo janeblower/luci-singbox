@@ -371,6 +371,50 @@ beyond the raw payload.
 
 ---
 
+## AWG-WARP plugin (`luci-app-singbox-plugin-awg-warp`)
+
+The AWG-WARP plugin ships as a **separate 5th package** (noarch) with its own
+install path at `luci-app-singbox-plugin-awg-warp/`. It adds a single contributed
+outbound type `awg_warp` via the plugin registry (`lib/plugins/registry.uc`).
+
+**Architecture summary:**
+- `lib/plugins/awg_warp/descriptor.uc` — registers the outbound type; `emit()` escape-hatch produces `{type:direct, tag, bind_interface:<iface>}` (no listen base).
+- `lib/plugins/awg_warp/iface.uc` — computes the per-outbound interface name (`awg<N>`, max 12 chars); all UCI-derived names/CIDR sanitized.
+- `lib/plugins/awg_warp/reconcile.uc` — native ephemeral interface lifecycle via `ip`/`awg`; never writes `/etc/config/network`. `setconf` split avoids cleartext key in process args.
+- `lib/plugins/awg_warp/warp.uc` — WARP registration (`auto` + `paste` modes); WARP-safe AWG keygen forces `S=0`/`H=1234` reserved bytes.
+- `lib/plugins/awg_warp/nft.uc` — masquerade fragment: `table ip singbox_ui_awg_nat` (v4) + `table ip6 singbox_ui_awg_nat6` (v6 when `ipv6_enabled`); no double-NAT; all interface names double-sanitized.
+- `lib/plugins/awg_warp/awggen.uc` — AWG parameter generation; `target=warp` forces S=0/H=1234.
+- `lib/plugins/awg_warp/init.uc` — rpcd method dispatcher (`awg_status`, `awg_install`, `warp_register`, `awg_generate`); self-provision adds amneziawg feed key + `apk add ip-full kmod-amneziawg amneziawg-tools`.
+- `htdocs/.../plugins/awg_warp/tab.js` — plugin frontend tab (own i18n domain `luci-singbox-plugin-awg-warp`).
+
+### awg_warp outbound
+
+Descriptor: `lib/plugins/awg_warp/descriptor.uc`. sing-box type: **`direct`** with `bind_interface`. WARP credentials + AWG obfuscation params are UCI-only; only `bind_interface` reaches the generated sing-box JSON.
+
+| sing-box JSON | UCI | Status | Notes |
+|---|---|---|---|
+| `type` | — | есть | always `"direct"` |
+| `tag` | `outbound` section name | есть | |
+| `bind_interface` | derived via `iface_name()` | есть | ephemeral `awgN` iface |
+| — | `awg_mimic` | есть (UCI-only) | outer UDP camouflage protocol |
+| — | `ipv6_enabled` | есть (UCI-only) | enables NAT66 masquerade |
+| — | `mtu_override` | есть (UCI-only) | empty = WAN MTU − 80 |
+| — | `warp_public_key` | есть (UCI-only, rpcd-written) | WARP endpoint public key |
+| — | `warp_private_key` | есть (UCI-only, rpcd-written) | local private key |
+| — | `warp_address_v4` | есть (UCI-only, rpcd-written) | WARP-assigned IPv4/CIDR |
+| — | `warp_address_v6` | есть (UCI-only, rpcd-written) | WARP-assigned IPv6/CIDR |
+| — | `warp_endpoint` | есть (UCI-only, rpcd-written) | WARP UDP endpoint |
+| — | `awg_jc` / `awg_jmin` / `awg_jmax` | есть (UCI-only, rpcd-written) | AWG junk parameters |
+| — | `awg_i1` | есть (UCI-only, rpcd-written) | AWG init packet magic |
+
+**Self-provision pattern:** Plugins tab → "Install AWG + ip-full" button calls `awg_install` rpcd method, which adds the amneziawg OpenWrt feed key and runs `apk add ip-full kmod-amneziawg amneziawg-tools`. Runtime kmod is NOT a package dependency — self-provisioned to avoid arch-specific dep resolution at LuCI install time.
+
+**WARP-safe keygen:** `awggen.uc` `generate(target="warp")` always sets `S=0` and `H=1234` (Cloudflare's reserved-byte values); `target="selfhosted"` generates random obfuscation. Mixing is an error caught by `validate_selfhosted`.
+
+**Addrlabel / MTU:** reconciler adds per-interface IPv6 addrlabel; MTU = WAN MTU − 80 (default, overridable via `mtu_override`).
+
+---
+
 ## Subscription / share-link parsers
 
 `lib/outbound.uc` `parse_proxy_url(url)` dispatcher (Phase E2: vmess removed).
@@ -420,4 +464,4 @@ beyond the raw payload.
 
 ---
 
-*Last updated: 2026-06-09. Update this file every time a protocol descriptor or shared block gains a new field.*
+*Last updated: 2026-06-25. Update this file every time a protocol descriptor or shared block gains a new field.*

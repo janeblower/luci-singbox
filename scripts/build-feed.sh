@@ -11,8 +11,8 @@
 # Usage: build-feed.sh <version> <dist_dir> <out_dir>
 #   version   OpenWrt minor used as the top path segment (e.g. 25.12)
 #   dist_dir  dir containing bbolt-client-<arch>.apk (the only per-arch package)
-#             + the noarch trio singbox-ui.apk / luci-app-singbox-ui.apk /
-#             luci-i18n-singbox-ui-ru.apk
+#             + the noarch quartet singbox-ui.apk / luci-app-singbox-ui.apk /
+#             luci-i18n-singbox-ui-ru.apk / luci-app-singbox-plugin-awg-warp.apk
 #   out_dir   output dir (wiped and recreated); this is what is deployed to Pages
 #
 # Env knobs:
@@ -28,7 +28,8 @@
 # relative to the repository's packages.adb directory (verified against the
 # official OpenWrt feed: e.g. csstidy-2021.06.13~707feaec-r1.apk). The GitHub
 # release assets are named bbolt-client-<arch>.apk (per-arch) and the noarch
-# trio singbox-ui.apk / luci-app-singbox-ui.apk / luci-i18n-singbox-ui-ru.apk, so
+# quartet singbox-ui.apk / luci-app-singbox-ui.apk / luci-i18n-singbox-ui-ru.apk /
+# luci-app-singbox-plugin-awg-warp.apk, so
 # each package is copied into the feed under its apk "<name>-<version>.apk" name.
 set -eu
 
@@ -42,6 +43,7 @@ REPO_NAME="luci-singbox"
 CORE="singbox-ui.apk"
 APP="luci-app-singbox-ui.apk"
 I18N="luci-i18n-singbox-ui-ru.apk"
+PLUGIN="luci-app-singbox-plugin-awg-warp.apk"
 PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
 FEED_PUBKEY="${FEED_PUBKEY:-feed/luci-singbox.pem}"
 RELEASE_REPO="${RELEASE_REPO:-janeblower/luci-singbox}"
@@ -89,15 +91,15 @@ gen_dir_index() {
 }
 
 # Assemble one arch directory: copy apks (renamed), build/sign the index, indexes.
-# Four packages land here: the per-arch bbolt-client plus the noarch trio
-# (core/app/i18n), the trio duplicated into every arch dir so apk at arch X
+# Five packages land here: the per-arch bbolt-client plus the noarch quartet
+# (core/app/i18n/plugin), the quartet duplicated into every arch dir so apk at arch X
 # resolves the whole stack from this single packages.adb.
 build_arch_dir() {
   ba_arch="$1"
   ba_d="$OUT/$VERSION/$ba_arch/$REPO_NAME"
   mkdir -p "$ba_d"
   copy_pkg "$DIST/bbolt-client-$ba_arch.apk" "$ba_d"
-  for ba_noarch in "$CORE" "$APP" "$I18N"; do
+  for ba_noarch in "$CORE" "$APP" "$I18N" "$PLUGIN"; do
     if [ -f "$DIST/$ba_noarch" ]; then
       copy_pkg "$DIST/$ba_noarch" "$ba_d"
     fi
