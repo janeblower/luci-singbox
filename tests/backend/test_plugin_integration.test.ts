@@ -43,7 +43,9 @@ describe("test_plugin_integration", () => {
     expect(o.in_list).toBe("yes");
     expect(o.ping.pong).toBe(true);
     expect(o.applied).toBe(1);
-    expect(o.plist.plugins.some((p: any) => p.name === "fixture_plugin")).toBe(true);
+    expect(o.plist.plugins.some((p: any) => p.name === "fixture_plugin")).toBe(
+      true,
+    );
     expect(o.torndown).toBe(1);
     expect(o.nft_has_marker).toBeGreaterThan(0);
   });

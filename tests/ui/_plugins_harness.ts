@@ -2,12 +2,14 @@
 // Plan 2's browser suite asserts the live module behaves identically).
 export function collectOutboundTypes(plugins: any[]) {
   const out: [string, string][] = [];
-  for (const p of plugins) if (p.api?.outboundTypes) out.push(...p.api.outboundTypes());
+  for (const p of plugins)
+    if (p.api?.outboundTypes) out.push(...p.api.outboundTypes());
   return out;
 }
 export function collectInboundTypes(plugins: any[]) {
   const out: [string, string][] = [];
-  for (const p of plugins) if (p.api?.inboundTypes) out.push(...p.api.inboundTypes());
+  for (const p of plugins)
+    if (p.api?.inboundTypes) out.push(...p.api.inboundTypes());
   return out;
 }
 export function collectTabs(plugins: any[]) {
@@ -17,6 +19,10 @@ export function collectTabs(plugins: any[]) {
 }
 export function collectModes(plugins: any[]) {
   const out: any[] = [];
-  for (const p of plugins) if (p.api?.mode) { const m = p.api.mode(); if (m) out.push(m); }
+  for (const p of plugins)
+    if (p.api?.mode) {
+      const m = p.api.mode();
+      if (m) out.push(m);
+    }
   return out;
 }

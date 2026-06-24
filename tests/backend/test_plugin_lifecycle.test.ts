@@ -4,7 +4,6 @@ import { exec } from "../helpers/ssh.ts";
 
 const LIB =
   process.env.SB_VM_LIB ?? "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
-const NFT = `${LIB}/../nftables.uc`; // entry point sits one level up from lib
 
 describe("test_plugin_lifecycle", () => {
   useGuest();
