@@ -181,7 +181,7 @@ __do_start() {
 	# trailing space — matching the rpcd split(line," ")[0] behaviour. The old
 	# ` .*` form required a trailing space and would emit nothing on such a line.
 	apk list --installed luci-singbox-ui 2>/dev/null \
-		| sed -n 's/^luci-singbox-ui-\([^ ]*\).*/\1/p' \
+		| sed -n 's/^luci-singbox-ui-\([^ ]*\).*/\1/p;q' \
 		> /var/lib/singbox-ui/pkg_version || true
 }
 

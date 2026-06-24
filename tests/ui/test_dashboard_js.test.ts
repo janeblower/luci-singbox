@@ -720,4 +720,51 @@ describe("dashboard.js", () => {
     expect(doneBtn && doneBtn.attrs.disabled === undefined).toBe(true);
     expect((doneBtn?.textContent || "") === "Test").toBe(true);
   });
+
+  it("uis-3: poll does not refetch /proxies while a node switch is pending", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    const PROXIES = {
+      proxies: {
+        GW: { type: "Selector", now: "A", all: ["A", "B"] },
+        A: { type: "Shadowsocks", history: [{ delay: 120 }] },
+        B: { type: "Vmess", history: [{ delay: 900 }] },
+      },
+    };
+    let proxiesCalls = 0;
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies") {
+        proxiesCalls++;
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      }
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    // The PUT /proxies/<group> never resolves, so state.switchPending stays true.
+    ctx.__test.setMutate(() => new Promise<void>(() => {}));
+    const d = Dash.buildDashboard();
+    await d.poll();
+    await d.refreshProxies();
+    const before = proxiesCalls;
+    // Click node B to switch; the hanging PUT keeps the switch pending.
+    const bRow = findNode(
+      d.node,
+      (n: any) =>
+        n.attrs &&
+        n.attrs["data-group"] === "GW" &&
+        n.attrs["data-name"] === "B" &&
+        typeof n.attrs.click === "function",
+    );
+    expect(!!bRow).toBe(true);
+    bRow.attrs.click(); // fire-and-forget; PUT never resolves
+    // The every-3rd-tick /proxies refresh must be suppressed while pending so it
+    // can't wipe the optimistic selection.
+    await d.poll();
+    await d.poll();
+    await d.poll();
+    expect(proxiesCalls).toBe(before);
+  });
 });

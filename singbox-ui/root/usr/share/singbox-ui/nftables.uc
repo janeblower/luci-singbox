@@ -100,7 +100,7 @@ function safe_cidr(family, v) {
 		if (!m) return null;
 		for (let i = 1; i <= 4; i++) if (+m[i] > 255) return null;   // octet range
 		if (m[6] != null && +m[6] > 32) return null;                 // prefix range
-		return t;
+		return sprintf("%d.%d.%d.%d%s", +m[1], +m[2], +m[3], +m[4], m[6] != null ? sprintf("/%d", +m[6]) : "");
 	}
 	if (family === "v6") {
 		let slash = index(t, "/");
@@ -638,6 +638,17 @@ function _set_lock_owner(token) {
 // only ever removes its own lock.
 function acquire_apply_lock() {
 	fs.mkdir(TMPDIR, 0o755);
+	// Best-effort sweep of leftover ${APPLY_LOCK}.stale.* directories from
+	// previous reclaims where rmdir(moved) failed. These accumulate over time;
+	// silently remove them to prevent permanent dir leaks.
+	let entries = fs.lsdir(TMPDIR);
+	if (entries) {
+		for (let e in entries) {
+			if (substr(e, 0, length(".apply.lock.stale.")) === ".apply.lock.stale.") {
+				try { fs.rmdir(`${TMPDIR}/${e}`); } catch (_) {}
+			}
+		}
+	}
 	let token = rand_hex(8) ?? sprintf("%d-%d", time(), 0);
 	if (fs.mkdir(APPLY_LOCK, 0o755)) {
 		// SEC-3: confirm the owner token persisted. If the write failed
@@ -679,7 +690,9 @@ function acquire_apply_lock() {
 		let moved = `${APPLY_LOCK}.stale.${rand_hex(6) ?? sprintf("%d", time())}`;
 		if (fs.rename(APPLY_LOCK, moved)) {
 			try { fs.unlink(`${moved}/owner`); } catch (_) {}
-			fs.rmdir(moved);
+			// Best-effort rmdir; if it fails the .stale.* dir will be cleaned
+			// up on the next acquire_apply_lock call via the sweep at the start.
+			try { fs.rmdir(moved); } catch (_) {}
 			if (fs.mkdir(APPLY_LOCK, 0o755)) {
 				if (!_set_lock_owner(token)) {
 					fs.rmdir(APPLY_LOCK);

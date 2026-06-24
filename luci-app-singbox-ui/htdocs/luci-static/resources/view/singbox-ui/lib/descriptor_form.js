@@ -157,8 +157,10 @@ function disableWithNote(opt, note) {
     if (typeof orig === 'function') {
         opt.renderWidget = function (section_id, option_index, cfgvalue) {
             var node = orig.call(this, section_id, option_index, cfgvalue);
-            if (node && node.querySelectorAll)
+            if (node && node.querySelectorAll) {
                 node.querySelectorAll('input, select, textarea').forEach(function (el) { el.disabled = true; });
+                node.querySelectorAll('.sb-eye-toggle').forEach(function (el) { el.disabled = true; });
+            }
             return node;
         };
     }

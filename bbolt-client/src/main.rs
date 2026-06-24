@@ -299,8 +299,8 @@ fn fnv1a64(d: &[u8]) -> u64 {
 
 // returns (root-bucket pgid, txid) if the meta at file offset `off` is valid
 fn read_meta(m: &[u8], off: usize) -> Option<(u64, u64)> {
-    let mo = off + 16; // page header is 16 bytes; meta begins at the page data
-    if mo + 64 > m.len() { return None; }
+    let mo = ck_add(off, 16); // page header is 16 bytes; meta begins at the page data
+    if ck_add(mo, 64) > m.len() { return None; }
     if u32le(m, mo) != 0xED0CDAED { return None; }   // magic
     if u32le(m, mo + 4) != 2 { return None; }         // version
     if fnv1a64(&m[mo..mo + 56]) != u64le(m, mo + 56) { return None; } // checksum
@@ -323,7 +323,11 @@ fn select_root(m: &[u8], ps: usize) -> u64 {
 // "invalid database" exit on a too-small / non-bbolt file (no OOB read).
 fn page_size(m: &[u8]) -> usize {
     if read_meta(m, 0).is_some() {
-        return u32le(m, 24) as usize;
+        let ps = u32le(m, 24) as usize;
+        // Reject if 0, not a power of two, < 512, or > 65536
+        if ps > 0 && ps >= 512 && ps <= 65536 && (ps & (ps - 1)) == 0 {
+            return ps;
+        }
     }
     let mut p = 512usize;
     while p <= 65536 {
@@ -455,7 +459,7 @@ fn uvarint(b: &[u8]) -> (u64, usize) {
     let mut x = 0u64;
     let mut s = 0u32;
     let mut i = 0;
-    while i < b.len() {
+    while i < b.len() && i < 10 {
         let c = b[i];
         if c < 0x80 {
             if i > 9 || (i == 9 && c > 1) { return (0, 0); } // u64 overflow
