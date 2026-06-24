@@ -27,4 +27,63 @@ EOF
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim().endsWith("FOUND")).toBe(true);
   });
+
+  // Regression test for the forward-compat defect: plugin fragments must be
+  // applied via the `apply` path even when no transparent tproxy/tun inbound
+  // is configured (i.e. p.transparent=0). Previously _cmd_apply_locked would
+  // early-return before reaching append_plugin_fragments in this case.
+  // Uses SINGBOX_NFT_CAPTURE seam: ucode writes the would-be applied ruleset
+  // to the capture file instead of invoking `nft -f`.
+  it("apply path applies plugin fragment when no transparent inbound (tproxy-less fix)", async () => {
+    const r = await exec(`
+      D=/tmp/plc-apply-test-$$
+      PLUG="${LIB}/plugins/zz_apply_marker"
+      mkdir -p "$PLUG" "$D/uci"
+      cat > "$PLUG/init.uc" <<'EOF'
+let reg = require("plugins.registry");
+reg.register({ name: "zz_apply_marker", nft: { fragment: function(cur){ return "table inet zz_apply_marker_table { }"; } } });
+return {};
+EOF
+      # Minimal UCI config: no tproxy/tun inbound — transparent=0.
+      printf '' > "$D/uci/singbox-ui"
+      # Run the apply path with SINGBOX_NFT_CAPTURE seam: captures the assembled
+      # ruleset to $D/captured instead of invoking nft, returns 0.
+      UCI_CONFIG_DIR="$D/uci" \
+        UCODE_APP_LIB_DIR="${LIB}" \
+        SINGBOX_NFT_CAPTURE="$D/captured" \
+        ucode -L "${LIB}" "${LIB}/../nftables.uc" apply 2>/dev/null
+      rc=$?
+      captured=$(cat "$D/captured" 2>/dev/null || echo "")
+      rm -rf "$PLUG" "$D"
+      if [ $rc -ne 0 ]; then echo "APPLY_FAILED:rc=$rc"; exit 0; fi
+      echo "$captured" | grep -q "zz_apply_marker_table" && echo FOUND || echo MISSING
+    `);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim().endsWith("FOUND")).toBe(true);
+  });
+
+  // Confirm: !transparent + no plugin fragments → apply returns 0 cleanly
+  // and does NOT invoke run_nft_ruleset (no capture file created).
+  it("apply path with no transparent inbound and no plugin fragments returns 0 without applying ruleset", async () => {
+    const r = await exec(`
+      D=/tmp/plc-nofrag-test-$$
+      mkdir -p "$D/uci"
+      printf '' > "$D/uci/singbox-ui"
+      UCI_CONFIG_DIR="$D/uci" \
+        UCODE_APP_LIB_DIR="${LIB}" \
+        SINGBOX_NFT_CAPTURE="$D/captured" \
+        ucode -L "${LIB}" "${LIB}/../nftables.uc" apply 2>/dev/null
+      rc=$?
+      captured_exists=0
+      [ -f "$D/captured" ] && captured_exists=1
+      rm -rf "$D"
+      if [ $rc -ne 0 ]; then echo "FAILED:rc=$rc"; exit 0; fi
+      # No fragments, no transparent inbound: run_nft_ruleset must NOT be called.
+      [ $captured_exists -eq 0 ] && echo NO_APPLY || echo UNEXPECTED_APPLY
+      echo CLEAN_EXIT
+    `);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("NO_APPLY");
+    expect(r.stdout).toContain("CLEAN_EXIT");
+  });
 });

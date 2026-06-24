@@ -737,6 +737,54 @@ function make_nft_tmp() {
 	return null;
 }
 
+// run_nft_ruleset(content) — write content to a tmp file and apply it via
+// `nft -f`, optionally bounded by `timeout 30` when the binary is present.
+// Returns 0 on success, 1 on any error. Extracted so the transparent and
+// frags-only branches of _cmd_apply_locked share one apply seam (DRY).
+// S5.4: `timeout` is NOT present on a stock OpenWrt; probe once and fall
+// back to plain `nft -f` when absent — the timeout bound is best-effort.
+function run_nft_ruleset(content) {
+	let tmp = make_nft_tmp();
+	if (tmp == null) {
+		log_err("nftables: could not allocate a tmp file path");
+		return 1;
+	}
+	let fd = fs.open(tmp, "w");
+	if (!fd) {
+		log_err(`nftables: cannot open ${tmp}`);
+		fs.unlink(tmp);
+		return 1;
+	}
+	fd.write(content);
+	fd.close();
+	// SINGBOX_NFT_CAPTURE: test-seam. When set to a file path, write the
+	// assembled ruleset to that path and return 0 without invoking `nft -f`.
+	// Lets tests inspect the would-be applied content without needing a live
+	// nft binary or a stub script. Env-only; not reachable from rpcd/init.d.
+	let capture = getenv("SINGBOX_NFT_CAPTURE");
+	if (capture != null && length(trim(capture)) > 0) {
+		let cfd = fs.open(capture, "w");
+		if (cfd) { cfd.write(content); cfd.close(); }
+		fs.unlink(tmp);
+		return 0;
+	}
+	let timed = false;
+	let tproc = fs.popen("command -v timeout 2>/dev/null");
+	if (tproc) {
+		let tout = tproc.read("all");
+		tproc.close();
+		timed = (tout != null && length(trim(tout)) > 0);
+	}
+	let rc = timed ? system(["timeout", "30", "nft", "-f", tmp])
+	               : system(["nft", "-f", tmp]);
+	fs.unlink(tmp);
+	if (rc !== 0) {
+		log_err((timed && rc == 124) ? "nftables: nft -f timed out (30s)" : "nftables: nft -f failed");
+		return 1;
+	}
+	return 0;
+}
+
 // ip_rule_smoke_check(mark, mask) — best-effort, log-only check that
 // the host has an `ip rule` entry whose fwmark matches what we baked
 // into the ruleset. Missing rule → warning in syslog (silent
@@ -832,13 +880,22 @@ function append_plugin_fragments(ruleset, cur) {
 function _cmd_apply_locked(cur) {
 	let p = gather_apply_params(cur);
 
-	// Transparent gate: when no tproxy/tun inbound owns nft rules there is no
-	// table to build — drop any stale table and return success. This is what
-	// makes the fakeip and rule-set nft checkboxes no-ops when tproxy nft is
-	// off: their sets only ever live inside this table.
+	// Phase E (forward-compat): gather plugin nft fragments unconditionally.
+	// A plugin may contribute an independent table (e.g. masquerade) that has
+	// nothing to do with the core singbox_ui tproxy table and must be applied
+	// regardless of whether any transparent inbound is configured.
+	let frags = append_plugin_fragments("", cur);
+
+	// Transparent gate: when no tproxy/tun inbound owns nft rules AND there are
+	// no plugin fragments, drop any stale table and return success early.
+	// When frags exist we must apply them even without a core table.
 	if (!p.transparent) {
 		nft_delete_table_quiet();
-		return 0;
+		if (!length(frags)) {
+			return 0;
+		}
+		// Plugin fragments only — no core singbox_ui table.
+		return run_nft_ruleset(frags);
 	}
 
 	// More than one tproxy inbound requests the chain: it points at the first
@@ -864,47 +921,10 @@ function _cmd_apply_locked(cur) {
 	}
 
 	let ruleset = build_ruleset(p.port, p.v4, p.v6, p.ifaces, p.mark, p.mask, p.router_out, rules);
-	ruleset = append_plugin_fragments(ruleset, cur);
+	ruleset += frags;
 
-	// G6: tmp file path composed on the ucode side — no shell, no mktemp.
-	let tmp = make_nft_tmp();
-	if (tmp == null) {
-		log_err("nftables: could not allocate a tmp file path");
-		return 1;
-	}
-
-	let fd = fs.open(tmp, "w");
-	if (!fd) {
-		log_err(`nftables: cannot open ${tmp}`);
-		fs.unlink(tmp);
-		return 1;
-	}
-	fd.write(ruleset);
-	fd.close();
-	// S5.4: bound nft -f with `timeout` so a wedged apply (e.g. nft blocked on a
-	// busy ruleset) can't hold the apply lock for its full 60s stale TTL. 30s is
-	// comfortably above a normal atomic load and well under the TTL. busybox and
-	// coreutils both return 124 on timeout.
-	//
-	// `timeout` is NOT present on a stock OpenWrt though — it is not a busybox
-	// applet and coreutils-timeout is not a dependency — so system(["timeout",..])
-	// would return 127 and make EVERY firewall apply fail on a default box. Probe
-	// for it once and fall back to a plain `nft -f` when absent; the timeout bound
-	// is a best-effort safety net, not a correctness requirement.
-	let timed = false;
-	let tproc = fs.popen("command -v timeout 2>/dev/null");
-	if (tproc) {
-		let tout = tproc.read("all");
-		tproc.close();
-		timed = (tout != null && length(trim(tout)) > 0);
-	}
-	let rc = timed ? system(["timeout", "30", "nft", "-f", tmp])
-	               : system(["nft", "-f", tmp]);
-	fs.unlink(tmp);
-	if (rc !== 0) {
-		log_err((timed && rc == 124) ? "nftables: nft -f timed out (30s)" : "nftables: nft -f failed");
-		return 1;
-	}
+	let rc = run_nft_ruleset(ruleset);
+	if (rc !== 0) return rc;
 	// Best-effort smoke check: warn (don't fail) when the host has no
 	// `ip rule` matching the fwmark/mask we baked into the ruleset.
 	ip_rule_smoke_check(p.mark, p.mask);
