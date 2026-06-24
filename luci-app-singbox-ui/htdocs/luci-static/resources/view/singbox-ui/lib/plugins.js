@@ -34,6 +34,11 @@ function collectOutboundTypes(plugins) {
 	plugins.forEach(function (p) { if (p.api && p.api.outboundTypes) out = out.concat(p.api.outboundTypes()); });
 	return out;
 }
+function collectInboundTypes(plugins) {
+	var out = [];
+	plugins.forEach(function (p) { if (p.api && p.api.inboundTypes) out = out.concat(p.api.inboundTypes()); });
+	return out;
+}
 function collectTabs(plugins) {
 	var out = [];
 	plugins.forEach(function (p) { if (p.api && p.api.tabs) out = out.concat(p.api.tabs()); });
@@ -61,6 +66,7 @@ function formRendererFor(plugins, type) {
 return L.Class.extend({
 	loadEnabled: loadEnabled,
 	collectOutboundTypes: collectOutboundTypes,
+	collectInboundTypes: collectInboundTypes,
 	collectTabs: collectTabs,
 	collectModes: collectModes,
 	applySettingsSections: applySettingsSections,

@@ -61,6 +61,7 @@ return view.extend({
 		return SbTabPlugins.buildPluginsMap().then(function (mPlugins) {
 		var plugins = self._plugins || [];
 		SbTabOutbounds.setPluginOutboundTypes(SbPlugins.collectOutboundTypes(plugins));
+		SbTabInbounds.setPluginInboundTypes(SbPlugins.collectInboundTypes(plugins));
 		var mInbounds     = SbTabInbounds.buildInboundsMap();
 		var mOutbounds    = SbTabOutbounds.buildOutboundsMap();
 		var mRouteRules   = SbTabRoute.buildRouteRulesMap();

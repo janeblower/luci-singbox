@@ -5,6 +5,11 @@ export function collectOutboundTypes(plugins: any[]) {
   for (const p of plugins) if (p.api?.outboundTypes) out.push(...p.api.outboundTypes());
   return out;
 }
+export function collectInboundTypes(plugins: any[]) {
+  const out: [string, string][] = [];
+  for (const p of plugins) if (p.api?.inboundTypes) out.push(...p.api.inboundTypes());
+  return out;
+}
 export function collectTabs(plugins: any[]) {
   const out: any[] = [];
   for (const p of plugins) if (p.api?.tabs) out.push(...p.api.tabs());
