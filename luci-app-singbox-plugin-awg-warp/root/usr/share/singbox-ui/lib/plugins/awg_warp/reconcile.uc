@@ -13,6 +13,23 @@ const TMPDIR  = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 function sh(cmd) { return system(cmd + " >/dev/null 2>&1"); }
 function sh_ok(cmd) { return system(cmd + " >/dev/null 2>&1") === 0; }
 
+// safe_cidr — sanitize an IP/CIDR string from UCI before it reaches the shell.
+// Accepts: IPv4 dotted-decimal, IPv6 hex-colon, with optional /prefixlen.
+// Returns the original string if it matches the allowed charset; "" otherwise.
+// HIGH-severity: warp_address_v4/v6 may be user-supplied on selfhosted targets.
+function safe_cidr(s) {
+	s = `${s ?? ""}`;
+	if (length(s) == 0) return "";
+	// Capturing group (/[0-9]+) is intentional — ucode supports capturing but
+	// not non-capturing (?:...) groups. {1,3} quantifier also not supported —
+	// use /[0-9]+ instead (prefix length is validated indirectly via the
+	// overall CIDR semantics; an over-long prefix is rejected by `ip` itself).
+	if (match(s, /^[0-9a-fA-F:.]+\/[0-9]+$/)) return s;
+	if (match(s, /^[0-9a-fA-F:.]+$/)) return s;
+	require("log").log_event("warn", "awg.unsafe_cidr_rejected", { value: s });
+	return "";
+}
+
 // render_setconf — genl-only setconf (NO Address/MTU — those go via ip addr/ip link).
 // Putting Address/MTU here causes `awg setconf` to fail.
 function render_setconf(creds, p) {
@@ -101,11 +118,16 @@ function _bring_up(cur, item) {
 	let creds = {
 		private_key:     s.warp_private_key      ?? "",
 		peer_public_key: s.warp_peer_public_key  ?? "",
-		address_v4:      s.warp_address_v4       ?? "172.16.0.2/32",
-		address_v6:      s.warp_address_v6       ?? "",
+		address_v4:      safe_cidr(s.warp_address_v4 ?? "172.16.0.2/32"),
+		address_v6:      safe_cidr(s.warp_address_v6 ?? ""),
 		endpoint:        s.warp_endpoint         ?? "engage.cloudflareclient.com:2408",
 	};
-	let ipv6 = (s.ipv6_enabled == "1") && length(`${creds.address_v6}`);
+	// Abort if v4 address is malformed (safe_cidr returned "").
+	if (length(creds.address_v4) == 0) {
+		require("log").log_event("error", "awg.bad_address_v4", { iface: dev });
+		return;
+	}
+	let ipv6 = (s.ipv6_enabled == "1") && length(creds.address_v6);
 
 	// 1. load kernel module
 	sh("modprobe amneziawg");
@@ -135,6 +157,19 @@ function _bring_up(cur, item) {
 	}
 }
 
+// _del_iface — remove one amneziawg interface and its per-interface addrlabel
+// entries.  Shared by apply()'s orphan/disable path and teardown() to avoid
+// duplicating the addrlabel cleanup logic (FIX: addrlabel leak on disable).
+// v6_addr must already be safe (safe_cidr-validated or raw UCI — we gate on
+// non-empty, and `ip addrlabel del` on a non-existent entry fails silently).
+function _del_iface(dev, v6_addr) {
+	sh(sprintf("%s link del dev %s", IP_BIN, dev));
+	if (length(`${v6_addr ?? ""}`)) {
+		sh(sprintf("%s addrlabel del prefix %s label 100", IP_BIN, v6_addr));
+		sh(sprintf("%s addrlabel del prefix ::/0 label 100", IP_BIN));
+	}
+}
+
 // apply — idempotent: bring up all enabled awg_warp ifaces, remove orphans.
 function apply(cur) {
 	let items = _managed_names(cur);
@@ -145,10 +180,11 @@ function apply(cur) {
 			_bring_up(cur, it);
 		}
 	}
-	// teardown disabled sections whose iface is not also wanted by an enabled section
+	// teardown disabled sections whose iface is not also wanted by an enabled section;
+	// also remove addrlabel entries to avoid IPv6 source-address selection corruption.
 	for (let it in items) {
 		if (!it.enabled && !want[it.iface]) {
-			sh(sprintf("%s link del dev %s", IP_BIN, it.iface));
+			_del_iface(it.iface, it.s.warp_address_v6);
 		}
 	}
 }
@@ -156,11 +192,7 @@ function apply(cur) {
 // teardown — remove all managed amneziawg ifaces + per-interface addrlabel entries.
 function teardown(cur) {
 	for (let it in _managed_names(cur)) {
-		sh(sprintf("%s link del dev %s", IP_BIN, it.iface));
-		if (length(`${it.s.warp_address_v6 ?? ""}`)) {
-			sh(sprintf("%s addrlabel del prefix %s label 100", IP_BIN, it.s.warp_address_v6));
-			sh(sprintf("%s addrlabel del prefix ::/0 label 100", IP_BIN));
-		}
+		_del_iface(it.iface, it.s.warp_address_v6);
 	}
 }
 
