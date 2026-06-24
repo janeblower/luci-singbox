@@ -1,0 +1,17 @@
+{
+	"luci-singbox-plugin-skeleton": {
+		"description": "Grant LuCI access to skeleton plugin rpcd methods",
+		"read": {
+			"uci": [ "singbox-ui" ],
+			"ubus": {
+				"singbox-ui": [ "skeleton_hello" ]
+			}
+		},
+		"write": {
+			"uci": [ "singbox-ui" ],
+			"ubus": {
+				"singbox-ui": []
+			}
+		}
+	}
+}
