@@ -132,6 +132,24 @@ return view.extend({
 			pluginTabs.forEach(function (t, i) { rootChildren.push(nodes[8 + i]); });
 			var root = E('div', {}, rootChildren);
 
+			var modes = SbPlugins.collectModes(plugins);
+			if (modes.length) {
+				var advancedView = root;
+				var paneHolder = E('div', {}, [ advancedView ]);
+				var switcher = E('ul', { 'class': 'cbi-tabmenu sb-mode-switch' },
+					[ E('li', { 'data-mode': 'advanced', 'class': 'cbi-tab' }, _('Advanced')) ].concat(
+						modes.map(function (mo) { return E('li', { 'data-mode': mo.id }, mo.label); })));
+				switcher.querySelectorAll('li').forEach(function (li) {
+					li.addEventListener('click', function () {
+						var id = li.getAttribute('data-mode');
+						while (paneHolder.firstChild) paneHolder.removeChild(paneHolder.firstChild);
+						if (id === 'advanced') paneHolder.appendChild(advancedView);
+						else { var mo = modes.find(function (x) { return x.id === id; }); paneHolder.appendChild(mo.render()); }
+					});
+				});
+				return E('div', {}, [ switcher, paneHolder ]);
+			}
+
 			// Defer tab wiring until after the DOM is attached. A microtask
 			// (Promise.resolve().then) runs before the next macrotask without
 			// the 0-delay flicker setTimeout introduced (spec C2.2.10).

@@ -20,4 +20,7 @@ describe("plugins loader merge helpers", () => {
   it("collects modes", () => {
     expect(collectModes(plugins).map((m) => m.id)).toEqual(["easy"]);
   });
+  it("mode switcher is suppressed when no plugin provides a mode", () => {
+    expect(collectModes([{ name: "x", api: {} }])).toEqual([]);
+  });
 });
