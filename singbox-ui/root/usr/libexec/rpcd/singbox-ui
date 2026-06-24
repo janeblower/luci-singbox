@@ -37,6 +37,7 @@ const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
 // (etc/init.d/singbox-ui: SINGBOX_BIN), so a non-PATH install still reports a
 // real version instead of an empty string.
 const SINGBOX_BIN  = getenv("SINGBOX_BIN") || "/usr/bin/sing-box";
+const APK_CMD      = getenv("APK_CMD")      || "apk";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }
@@ -719,6 +720,32 @@ function call_plugins() {
 	emit({ status: "ok", plugins: out });
 }
 
+// call_plugin_enable — toggle a plugin's enabled flag in the manager section.
+function call_plugin_enable() {
+	let a = parse_args();
+	let name = a.name;
+	if (type(name) !== "string" || !length(name)) return emit_err("name required");
+	if (!match(name, /^[a-z0-9_]+$/)) return emit_err("invalid plugin name");
+	let val = a.enabled ? "1" : "0";
+	let uci_dir = getenv("UCI_CONFIG_DIR");
+	let cur = uci_dir ? uci.cursor(uci_dir) : uci.cursor();
+	if (cur.get("singbox-ui", "plugins") == null) cur.set("singbox-ui", "plugins", "singbox-ui");
+	cur.set("singbox-ui", "plugins", name + "_enabled", val);
+	cur.commit("singbox-ui");
+	emit_ok();
+}
+
+// call_plugin_install — `apk add <package>` for a plugin from our feed. No feed
+// or key handling here: plugins self-provision external components themselves.
+function call_plugin_install() {
+	let a = parse_args();
+	let pkg = a.package;
+	if (type(pkg) !== "string" || !match(pkg, /^[a-zA-Z0-9._+-]+$/))
+		return emit_err("invalid package");
+	let rc = system(sprintf("%s add %s >/dev/null 2>&1", APK_CMD, sq(pkg)));
+	if (rc === 0) emit_ok(); else emit_err(sprintf("apk add failed (rc=%d)", rc));
+}
+
 // METHODS — единый источник правды: имя метода → { sig, handler }. `sig`
 // уходит в emit_list() (rpcd читает сигнатуры), `handler` — в диспетчер.
 // Порядок ключей load-bearing: %J сохраняет порядок вставки (проверено на
@@ -741,6 +768,8 @@ const METHODS = {
 	preview_config:      { sig: {},                                                   handler: call_preview_config },
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
 	plugins:             { sig: {},                                                   handler: call_plugins },
+	plugin_enable:       { sig: { name: "string", enabled: "boolean" },               handler: call_plugin_enable },
+	plugin_install:      { sig: { package: "string" },                                handler: call_plugin_install },
 };
 
 // Phase E: merge plugin-contributed rpcd methods. Discovery require()s each

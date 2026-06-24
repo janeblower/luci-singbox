@@ -30,6 +30,8 @@ const EXPECTED_WRITE_METHODS = [
   "restart",
   "refresh",
   "clash_mutate",
+  "plugin_install",
+  "plugin_enable",
 ];
 
 describe("test_acl_coverage", () => {

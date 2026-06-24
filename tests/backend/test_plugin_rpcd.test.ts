@@ -58,4 +58,39 @@ EOF
     expect(o.call_out.status).toBe("ok");
     expect(o.call_out.who).toBe("zz");
   });
+
+  it("plugin_enable toggles the UCI flag; plugin_install shells apk (mocked)", async () => {
+    const r = await exec(`
+      set -e
+      # Ensure the singbox-ui UCI config exists in the system location.
+      # The test VM does not have singbox-ui installed; copy the working-tree
+      # default config so uci can read/write it.
+      if [ ! -f /etc/config/singbox-ui ]; then
+        cp '${WORK}/singbox-ui/root/etc/config/singbox-ui' /etc/config/singbox-ui
+      fi
+
+      # mock apk: record args, succeed
+      MOCK=/tmp/zz_apk_called; rm -f "$MOCK"
+      cat > /tmp/zz_apk <<'EOF'
+#!/bin/sh
+echo "$@" > /tmp/zz_apk_called
+exit 0
+EOF
+      chmod +x /tmp/zz_apk
+
+      echo '{"name":"zz_en","enabled":true}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugin_enable >/dev/null
+      flag=$(uci -q get singbox-ui.plugins.zz_en_enabled || echo MISSING)
+
+      echo '{"package":"luci-app-singbox-plugin-x"}' | APK_CMD=/tmp/zz_apk UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugin_install >/dev/null
+      args=$(cat /tmp/zz_apk_called 2>/dev/null || echo NONE)
+
+      uci -q delete singbox-ui.plugins.zz_en_enabled || true; uci -q commit singbox-ui || true
+      echo "{\\"flag\\":\\"$flag\\",\\"args\\":\\"$args\\"}"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    expect(o.flag).toBe("1");
+    expect(o.args).toContain("add");
+    expect(o.args).toContain("luci-app-singbox-plugin-x");
+  });
 });

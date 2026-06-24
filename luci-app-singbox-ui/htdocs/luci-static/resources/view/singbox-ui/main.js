@@ -20,6 +20,7 @@
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
 'require view.singbox-ui.lib.view_state as SbViewState';
 'require view.singbox-ui.lib.plugins as SbPlugins';
+'require view.singbox-ui.tabs.plugins as SbTabPlugins';
 
 return view.extend({
 	load: function () {
@@ -57,6 +58,7 @@ return view.extend({
 
 	render: function () {
 		var self = this;
+		return SbTabPlugins.buildPluginsMap().then(function (mPlugins) {
 		var plugins = self._plugins || [];
 		SbTabOutbounds.setPluginOutboundTypes(SbPlugins.collectOutboundTypes(plugins));
 		var mInbounds     = SbTabInbounds.buildInboundsMap();
@@ -71,7 +73,7 @@ return view.extend({
 
 		var pluginTabs = SbPlugins.collectTabs(plugins);
 		SbPlugins.applySettingsSections(plugins, mGeneral);
-		self._maps = [ mInbounds, mOutbounds, mRouteRules, mRulesets, mRouteDefault, mDns, mGeneral ];
+		self._maps = [ mInbounds, mOutbounds, mRouteRules, mRulesets, mRouteDefault, mDns, mGeneral, mPlugins ];
 		pluginTabs.forEach(function (t) { self._maps.push(t.build()); });
 
 		return Promise.all(self._maps.map(function (m) { return m.render(); }))
@@ -83,6 +85,7 @@ return view.extend({
 			var routedefNode   = nodes[4];
 			var dnsNode        = nodes[5];
 			var generalNode    = nodes[6];
+			var pluginsNode    = nodes[7];
 
 			var statusHolder = E('div', { 'class': 'sb-status' });
 			var actionBar    = SbActionBar.renderActionBar(statusHolder);
@@ -114,18 +117,19 @@ return view.extend({
 				E('li', { 'data-tab': 'dns'        }, _('DNS')),
 				E('li', { 'data-tab': 'dashboard'  }, _('Dashboard')),
 				E('li', { 'data-tab': 'monitoring' }, _('Monitoring')),
-				E('li', { 'data-tab': 'general'    }, _('General'))
+				E('li', { 'data-tab': 'general'    }, _('General')),
+				E('li', { 'data-tab': 'plugins'    }, _('Plugins'))
 			]);
 			var pluginTabMap = {};
 			pluginTabs.forEach(function (t, i) {
-				var node = nodes[7 + i];
+				var node = nodes[8 + i];
 				tabHeader.appendChild(E('li', { 'data-tab': t.id }, _(t.label)));
 				pluginTabMap[t.id] = node;
 			});
 
 			var rootChildren = [cssLink, actionBar, statusHolder, tabHeader,
-				inboundsNode, outboundsNode, routeWrap, dnsNode, dash.node, mon.node, generalNode];
-			pluginTabs.forEach(function (t, i) { rootChildren.push(nodes[7 + i]); });
+				inboundsNode, outboundsNode, routeWrap, dnsNode, dash.node, mon.node, generalNode, pluginsNode];
+			pluginTabs.forEach(function (t, i) { rootChildren.push(nodes[8 + i]); });
 			var root = E('div', {}, rootChildren);
 
 			// Defer tab wiring until after the DOM is attached. A microtask
@@ -144,7 +148,8 @@ return view.extend({
 					dns:        dnsNode,
 					dashboard:  dash.node,
 					monitoring: mon.node,
-					general:    generalNode
+					general:    generalNode,
+					plugins:    pluginsNode
 				};
 				Object.keys(pluginTabMap).forEach(function (k) { tabMap[k] = pluginTabMap[k]; });
 				SbCommon.wireTabs(root, '.sb-tab-header', tabMap, 'inbounds');
@@ -161,6 +166,7 @@ return view.extend({
 
 			return root;
 		});
+		}); // SbTabPlugins.buildPluginsMap
 	},
 
 	handleSave: function (ev) {

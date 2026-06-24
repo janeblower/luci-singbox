@@ -18,6 +18,7 @@ htdocs/luci-static/resources/view/singbox-ui/tabs/general.js	www/luci-static/res
 htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js	www/luci-static/resources/view/singbox-ui/tabs/inbounds.js	data
 htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js	www/luci-static/resources/view/singbox-ui/tabs/monitoring.js	data
 htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js	www/luci-static/resources/view/singbox-ui/tabs/outbounds.js	data
+htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js	www/luci-static/resources/view/singbox-ui/tabs/plugins.js	data
 htdocs/luci-static/resources/view/singbox-ui/tabs/route.js	www/luci-static/resources/view/singbox-ui/tabs/route.js	data
 htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js	www/luci-static/resources/view/singbox-ui/widgets/action-bar.js	data
 htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js	www/luci-static/resources/view/singbox-ui/widgets/status-panel.js	data

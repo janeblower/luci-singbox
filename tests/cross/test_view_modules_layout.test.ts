@@ -27,6 +27,7 @@ const REQUIRED_FILES = [
   "tabs/dns.js",
   "tabs/general.js",
   "tabs/monitoring.js",
+  "tabs/plugins.js",
   "widgets/action-bar.js",
   "widgets/status-panel.js",
 ];
