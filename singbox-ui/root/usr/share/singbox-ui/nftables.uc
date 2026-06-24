@@ -4,6 +4,7 @@
 // Subcommands (CLI contract identical to the prior nftables.sh):
 //   apply                          — read UCI + rs_*.json, push ruleset to `nft -f -`
 //   remove                         — delete the inet singbox_ui table
+//   print                          — dry-run: assemble ruleset (+ plugin fragments) and print to stdout, no nft apply
 //   emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]  — print the ruleset to stdout (used by tests)
 //
 // Single prerouting chain at priority mangle:
@@ -796,6 +797,32 @@ function gather_apply_params(cur) {
 	};
 }
 
+// append_plugin_fragments(ruleset, cur) — Phase E: discover and append any
+// plugin-contributed nft table blocks after the core singbox_ui table.
+// Each fragment must be a complete `table ... { }` string; it is concatenated
+// verbatim and the whole compound ruleset is applied atomically by `nft -f`.
+// A fragment that throws or returns empty/non-string is skipped + logged so a
+// misbehaving plugin cannot prevent the core ruleset from being applied.
+// Called from both the `apply` path and the `print` dry-run path — the logic
+// lives here once (DRY) and both callers pass the result through.
+function append_plugin_fragments(ruleset, cur) {
+	try {
+		require("plugins.discovery").load_all();
+		for (let f in require("plugins.registry").get_nft_fragments()) {
+			let frag;
+			try { frag = f.fragment(cur); }
+			catch (e) {
+				require("log").log_event("error", "plugin.hook_failed",
+					{ plugin: f.name, hook: "nft.fragment", err: ""+e });
+				continue;
+			}
+			if (type(frag) === "string" && length(trim(frag)))
+				ruleset += "\n" + frag + "\n";
+		}
+	} catch (e) { warn(sprintf("nftables.uc: plugin nft merge failed: %s\n", e)); }
+	return ruleset;
+}
+
 // _cmd_apply_locked(cur) — the real apply body. Every return path here
 // (S1-2 invalid-port guard, table-removed, tmp-alloc/open failure, nft -f
 // failure, success) is reached *inside* the lock held by the cmd_apply
@@ -837,6 +864,7 @@ function _cmd_apply_locked(cur) {
 	}
 
 	let ruleset = build_ruleset(p.port, p.v4, p.v6, p.ifaces, p.mark, p.mask, p.router_out, rules);
+	ruleset = append_plugin_fragments(ruleset, cur);
 
 	// G6: tmp file path composed on the ucode side — no shell, no mktemp.
 	let tmp = make_nft_tmp();
@@ -941,7 +969,24 @@ case "emit":
 		length(argv) > 6 ? argv[6] : null,
 		length(argv) > 7 ? argv[7] : null);
 	break;
+// `print` — dry-run test seam: gather UCI params, build the full ruleset
+// (including plugin fragments), print it to stdout, and exit 0 without
+// touching nft. Mirrors the apply path but never writes a tmp file or calls
+// `nft -f`. When no transparent inbound is configured the core ruleset is
+// empty ("") but plugin fragments are still appended and emitted — this
+// lets tests verify plugin integration without a full UCI fixture.
+case "print": {
+	let p = gather_apply_params(cur);
+	let core_ruleset = "";
+	if (p.transparent) {
+		let rules = load_rs_rules();
+		core_ruleset = build_ruleset(p.port, p.v4, p.v6, p.ifaces, p.mark, p.mask, p.router_out, rules);
+	}
+	let ruleset = append_plugin_fragments(core_ruleset, cur);
+	print(ruleset);
+	exit(0);
+}
 default:
-	log_err("Usage: nftables.uc {apply|remove|needed|params|emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]}");
+	log_err("Usage: nftables.uc {apply|remove|needed|params|print|emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]}");
 	exit(2);
 }
