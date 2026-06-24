@@ -45,6 +45,7 @@ await runTest('plugin:awg_warp — outbound form controls render', async ({ page
 
     if (!hasType) {
         // Plugin not installed in this container — close modal and skip.
+        // Host-side logic coverage (renderOutboundForm) lives in tests/ui/test_awg_warp_form.test.ts.
         const cancelBtn = await page.$('#modal_overlay .cbi-button:not(.cbi-button-positive)');
         if (cancelBtn) await cancelBtn.click();
         await wait(300);

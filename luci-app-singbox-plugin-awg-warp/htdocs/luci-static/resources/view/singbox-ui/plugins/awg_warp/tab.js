@@ -47,6 +47,7 @@ function renderOutboundForm(type, sectionId, ctx) {
 	o.inputtitle = _('Install AWG + ip-full');
 	o.inputstyle = 'apply';
 	o.depends('type', 'awg_warp');
+	// Global action (no sid): installs system-wide, unlike _register/_regen which act per-outbound section.
 	o.onclick = function () {
 		return callInstall().then(function (r) {
 			var ok = r && r.status === 'ok';
@@ -79,7 +80,7 @@ function renderOutboundForm(type, sectionId, ctx) {
 	o.depends('type', 'awg_warp');
 	o.description = _('Paste the contents of a Cloudflare WARP .conf file to register via paste mode.');
 	o.write = function (sid, val) {
-		if (!val || !val.length) return;
+		if (!val || !val.length) return Promise.resolve();
 		return callRegister(sid, 'paste', val).then(function (r) {
 			var ok = r && r.status === 'ok';
 			ui.addNotification(null,
