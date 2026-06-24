@@ -29,6 +29,12 @@ for (let _m in ["builder.protocols.direct", "builder.protocols.shadowsocks", "bu
 	catch (e) { warn(sprintf("outbound.uc: descriptor '%s' failed to load; skipping: %s\n", _m, e)); }
 }
 
+// Phase E: load plugin descriptors. Each plugin's init.uc require()s its own
+// descriptor modules, which self-register into builder.protocols.registry (and
+// the dns/route/settings registries). Failures are isolated by discovery.
+try { require("plugins.discovery").load_all(); }
+catch (e) { warn(sprintf("outbound.uc: plugin discovery failed: %s\n", e)); }
+
 const s_opt = helpers.s_opt;
 
 // Share-link parsers live in lib/sharelink.uc (SRP, S4-10). Re-export

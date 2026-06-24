@@ -12,6 +12,9 @@
 
 var addRenameField   = SbCommon.addRenameField;
 
+var _pluginTypes = [];
+function setPluginInboundTypes(types) { _pluginTypes = types || []; }
+
 var SB_INBOUND_PROTOCOLS = [
 	['direct',      'Direct (DNS / port-forward)'],
 	['tproxy',      'TProxy (transparent)'],
@@ -153,7 +156,8 @@ function buildInboundsMap() {
 	};
 
 	o = s.taboption('basic', form.ListValue, 'protocol', _('Protocol'));
-	SB_INBOUND_PROTOCOLS.forEach(function (p) { o.value(p[0], _(p[1])); });
+	var allTypes = SB_INBOUND_PROTOCOLS.concat(_pluginTypes);
+	allTypes.forEach(function (p) { o.value(p[0], _(p[1])); });
 	o.default = 'tproxy'; o.rmempty = false;
 	SbCommon.applyVersionGate(o,
 		(SbViewState.getSchema() || {}).inbound || {},
@@ -183,7 +187,8 @@ function buildInboundsMap() {
 }
 
 return L.Class.extend({
-	SB_INBOUND_PROTOCOLS: SB_INBOUND_PROTOCOLS,
-	openJsonImportModal:  openJsonImportModal,
-	buildInboundsMap:     buildInboundsMap,
+	SB_INBOUND_PROTOCOLS:    SB_INBOUND_PROTOCOLS,
+	setPluginInboundTypes:   setPluginInboundTypes,
+	openJsonImportModal:     openJsonImportModal,
+	buildInboundsMap:        buildInboundsMap,
 });

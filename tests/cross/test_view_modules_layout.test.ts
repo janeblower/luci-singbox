@@ -17,6 +17,7 @@ const REQUIRED_FILES = [
   "main.js",
   "lib/rpc.js",
   "lib/common.js",
+  "lib/plugins.js",
   "importers/inbound.js",
   "importers/outbound.js",
   "importers/transport.js",
@@ -26,6 +27,7 @@ const REQUIRED_FILES = [
   "tabs/dns.js",
   "tabs/general.js",
   "tabs/monitoring.js",
+  "tabs/plugins.js",
   "widgets/action-bar.js",
   "widgets/status-panel.js",
 ];
