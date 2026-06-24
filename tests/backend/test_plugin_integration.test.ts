@@ -15,6 +15,7 @@ describe("test_plugin_integration", () => {
       set -e
       SRC="${WORK}/tests/fixtures/plugins/fixture_plugin"
       DST="${LIB}/plugins/fixture_plugin"
+      trap 'rm -rf "$DST"; rm -f /tmp/fixture_applied /tmp/fixture_torndown' EXIT
       mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/
       rm -f /tmp/fixture_applied /tmp/fixture_torndown
 
@@ -24,9 +25,18 @@ describe("test_plugin_integration", () => {
       UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' apply
 
       applied=$([ -f /tmp/fixture_applied ] && echo 1 || echo 0)
-      rm -rf "$DST"
-      rm -f /tmp/fixture_applied /tmp/fixture_torndown
-      echo "{\\"in_list\\":\\"$in_list\\",\\"ping\\":$ping,\\"applied\\":$applied,\\"plist\\":$plist}"
+
+      # teardown hook via prod path (apply-plugins.uc teardown)
+      UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' teardown
+      torndown=$([ -f /tmp/fixture_torndown ] && echo 1 || echo 0)
+
+      # nft.fragment hook via prod dry-run path (nftables.uc print)
+      nft_out=$(SINGBOX_NFT_APPLY=/bin/true UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${LIB}/../nftables.uc' print 2>&1 || true)
+      nft_has_marker=$(echo "$nft_out" | grep -c fixture_marker || true)
+
+      # on_generate_post coverage lives in tests/backend/test_plugins_registry.test.ts (invoke_on_generate_post)
+
+      echo "{\\"in_list\\":\\"$in_list\\",\\"ping\\":$ping,\\"applied\\":$applied,\\"plist\\":$plist,\\"torndown\\":$torndown,\\"nft_has_marker\\":$nft_has_marker}"
     `);
     expect(r.exitCode).toBe(0);
     const o = JSON.parse(r.stdout);
@@ -34,5 +44,7 @@ describe("test_plugin_integration", () => {
     expect(o.ping.pong).toBe(true);
     expect(o.applied).toBe(1);
     expect(o.plist.plugins.some((p: any) => p.name === "fixture_plugin")).toBe(true);
+    expect(o.torndown).toBe(1);
+    expect(o.nft_has_marker).toBeGreaterThan(0);
   });
 });
