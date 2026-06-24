@@ -52,10 +52,17 @@ try { r.register({ on_generate_post: function() {} }); }
 catch (_) { bad_caught = true; }
 assert(bad_caught, "register without name must throw");
 
-bad_caught = false;
+// Phase E: hooks are optional — a name-only plugin is a valid no-op registration.
+let nohook_ok = true;
 try { r.register({ name: "no_hook" }); }
+catch (_) { nohook_ok = false; }
+assert(nohook_ok, "register without hooks must succeed (Phase E)");
+
+// But a non-function on_generate_post must still be rejected.
+bad_caught = false;
+try { r.register({ name: "bad_hook", on_generate_post: 123 }); }
 catch (_) { bad_caught = true; }
-assert(bad_caught, "register without on_generate_post must throw");
+assert(bad_caught, "register with non-function on_generate_post must throw");
 
 print("PASS test_plugins_registry\\n");
 `;

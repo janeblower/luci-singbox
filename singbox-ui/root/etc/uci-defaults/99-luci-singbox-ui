@@ -9,7 +9,7 @@
 # this is the canonical idempotency guarantee. (Individual data-shape guards
 # inside each migration_*() are kept as defence-in-depth.)
 # ---------------------------------------------------------------------------
-CURRENT_SCHEMA=18
+CURRENT_SCHEMA=19
 
 cur_ver=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
 case "$cur_ver" in
@@ -128,6 +128,9 @@ if ensure_section cache cache; then
 	uci -q set singbox-ui.cache.enabled='0'
 	uci -q set singbox-ui.cache.path='/tmp/singbox-ui-cache.db'
 fi
+
+# Phase E: ensure the 'plugins' manager section exists.
+ensure_section plugins singbox-ui
 
 # ---------------------------------------------------------------------------
 # DNS model migration to typed dns_server/dns_rule/dns (piece C).

@@ -19,7 +19,8 @@
 
 'use strict';
 
-let fs = require("fs");
+let fs  = require("fs");
+let uci = require("uci");
 
 const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/nftables.uc";
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
@@ -36,6 +37,7 @@ const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
 // (etc/init.d/singbox-ui: SINGBOX_BIN), so a non-PATH install still reports a
 // real version instead of an empty string.
 const SINGBOX_BIN  = getenv("SINGBOX_BIN") || "/usr/bin/sing-box";
+const APK_CMD      = getenv("APK_CMD")      || "apk";
 
 function emit(obj) { printf("%J\n", obj); }
 function emit_ok()        { emit({ status: "ok" }); }
@@ -434,7 +436,7 @@ function clash_params() {
 	let secret = getenv("CLASH_SECRET");
 	if (listen == null || port == null || secret == null) {
 		let s = {};
-		try { s = require("uci").cursor().get_all("singbox-ui", "clash_api") ?? {}; } catch (e) {}
+		try { s = uci.cursor().get_all("singbox-ui", "clash_api") ?? {}; } catch (e) {}
 		if (listen == null) listen = (s.listen != null && length(s.listen)) ? s.listen : "127.0.0.1";
 		if (port   == null) port   = (s.port   != null && length(s.port))   ? s.port   : "9090";
 		if (secret == null) secret = s.secret ?? "";
@@ -697,12 +699,59 @@ function call_clash_delay() {
 }
 
 
+// call_plugins — list installed plugins for the frontend. Read-side: enumerates
+// registered plugins (discovery already ran during the plugin-merge IIFE) and
+// reports their enabled flag + conventional frontend module path.
+function call_plugins() {
+	let cur = uci.cursor();
+	let out = [];
+	let all;
+	try { all = require("plugins.registry").get_all(); } catch (_) { all = []; }
+	for (let p in all) {
+		let flag = cur.get("singbox-ui", "plugins", p.name + "_enabled");
+		push(out, {
+			name:            p.name,
+			version:         p.version ?? "",
+			enabled:         (flag === "1"),
+			frontend_module: "view.singbox-ui.plugins." + p.name + ".tab",
+			installed:       true,
+		});
+	}
+	emit({ status: "ok", plugins: out });
+}
+
+// call_plugin_enable — toggle a plugin's enabled flag in the manager section.
+function call_plugin_enable() {
+	let a = parse_args();
+	let name = a.name;
+	if (type(name) !== "string" || !length(name)) return emit_err("name required");
+	if (!match(name, /^[a-z0-9_]+$/)) return emit_err("invalid plugin name");
+	let val = a.enabled ? "1" : "0";
+	let uci_dir = getenv("UCI_CONFIG_DIR");
+	let cur = uci_dir ? uci.cursor(uci_dir) : uci.cursor();
+	if (cur.get("singbox-ui", "plugins") == null) cur.set("singbox-ui", "plugins", "singbox-ui");
+	cur.set("singbox-ui", "plugins", name + "_enabled", val);
+	cur.commit("singbox-ui");
+	emit_ok();
+}
+
+// call_plugin_install — `apk add <package>` for a plugin from our feed. No feed
+// or key handling here: plugins self-provision external components themselves.
+function call_plugin_install() {
+	let a = parse_args();
+	let pkg = a.package;
+	if (type(pkg) !== "string" || !match(pkg, /^[a-zA-Z0-9._+-]+$/))
+		return emit_err("invalid package");
+	let rc = system(sprintf("%s add %s >/dev/null 2>&1", APK_CMD, sq(pkg)));
+	if (rc === 0) emit_ok(); else emit_err(sprintf("apk add failed (rc=%d)", rc));
+}
+
 // METHODS — единый источник правды: имя метода → { sig, handler }. `sig`
 // уходит в emit_list() (rpcd читает сигнатуры), `handler` — в диспетчер.
 // Порядок ключей load-bearing: %J сохраняет порядок вставки (проверено на
 // целевом ucode), поэтому вывод list() байт-идентичен прежнему хардкоду.
 // Read/write-класс НЕ здесь — он в ACL-файле (acl.d), сторожится
-// tests/test_acl_coverage.sh + tests/test_rpcd_acl_sync.sh.
+// tests/backend/test_acl_coverage.test.ts + tests/backend/test_rpcd_acl_sync.test.ts.
 const METHODS = {
 	generate:            { sig: {},                                                   handler: call_generate },
 	nftables:            { sig: { action: "string" },                                 handler: call_nftables },
@@ -718,7 +767,28 @@ const METHODS = {
 	export_section:      { sig: { kind: "string", name: "string" },                   handler: call_export_section },
 	preview_config:      { sig: {},                                                   handler: call_preview_config },
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
+	plugins:             { sig: {},                                                   handler: call_plugins },
+	plugin_enable:       { sig: { name: "string", enabled: "boolean" },               handler: call_plugin_enable },
+	plugin_install:      { sig: { package: "string" },                                handler: call_plugin_install },
 };
+
+// Phase E: merge plugin-contributed rpcd methods. Discovery require()s each
+// plugin init.uc (which registers its rpcd.methods); we wrap each plugin fn so
+// it matches the core handler shape (no args object — handlers read stdin via
+// parse_args() themselves, exactly like core handlers).
+(function () {
+	try {
+		require("plugins.discovery").load_all();
+		let pmethods = require("plugins.registry").get_rpcd_methods();
+		for (let name, fn in pmethods) {
+			if (METHODS[name] != null) {
+				warn(sprintf("rpcd: plugin method '%s' collides with a core method; ignoring plugin copy\n", name));
+				continue;
+			}
+			METHODS[name] = { sig: {}, handler: fn };
+		}
+	} catch (e) { warn(sprintf("rpcd: plugin rpcd merge failed: %s\n", e)); }
+})();
 
 function emit_list() {
 	let sigs = {};
