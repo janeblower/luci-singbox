@@ -9,7 +9,6 @@ const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
   process.env.SB_VM_LIB ?? "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
 const HANDLER = `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
-const ACL = `${WORK}/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json`;
 
 describe("test_rpcd_acl_sync", () => {
   useGuest();
@@ -28,12 +27,22 @@ describe("test_rpcd_acl_sync", () => {
 
       acl_methods=$(ucode -e '
         let fs = require("fs");
-        let d = json(fs.readfile("${ACL}") || "{}");
-        let o = d["luci-singbox-ui"] ?? {};
+        let dir = "${WORK}/luci-app-singbox-ui/root/usr/share/rpcd/acl.d";
+        let files = fs.glob(dir + "/*.json") ?? [];
         let s = [];
-        for (let k in (o.read.ubus["singbox-ui"] ?? []))  push(s, k);
-        for (let k in (o.write.ubus["singbox-ui"] ?? [])) push(s, k);
-        print(join("\\n", sort(s)) + "\\n");
+        for (let f in files) {
+          let d = json(fs.readfile(f) || "{}");
+          for (let role, obj in d) {
+            let r = (((obj.read ?? {}).ubus ?? {})["singbox-ui"] ?? []);
+            let w = (((obj.write ?? {}).ubus ?? {})["singbox-ui"] ?? []);
+            for (let k in r) push(s, k);
+            for (let k in w) push(s, k);
+          }
+        }
+        // de-dup
+        let seen = {}, out = [];
+        for (let k in s) if (!seen[k]) { seen[k] = true; push(out, k); }
+        print(join("\\n", sort(out)) + "\\n");
       ')
 
       if [ "$handler_methods" != "$acl_methods" ]; then

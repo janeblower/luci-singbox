@@ -720,6 +720,24 @@ const METHODS = {
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
 };
 
+// Phase E: merge plugin-contributed rpcd methods. Discovery require()s each
+// plugin init.uc (which registers its rpcd.methods); we wrap each plugin fn so
+// it matches the core handler shape (no args object — handlers read stdin via
+// parse_args() themselves, exactly like core handlers).
+(function () {
+	try {
+		require("plugins.discovery").load_all();
+		let pmethods = require("plugins.registry").get_rpcd_methods();
+		for (let name, fn in pmethods) {
+			if (METHODS[name] != null) {
+				warn(sprintf("rpcd: plugin method '%s' collides with a core method; ignoring plugin copy\n", name));
+				continue;
+			}
+			METHODS[name] = { sig: {}, handler: fn };
+		}
+	} catch (e) { warn(sprintf("rpcd: plugin rpcd merge failed: %s\n", e)); }
+})();
+
 function emit_list() {
 	let sigs = {};
 	for (let name, m in METHODS) sigs[name] = m.sig;
