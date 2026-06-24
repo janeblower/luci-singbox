@@ -123,19 +123,23 @@ __do_start() {
 	# Defensive: if a previous start_service installed nft rules and the
 	# user has since flipped every tproxy inbound to a non-tproxy protocol
 	# (or disabled the section), `needed` will now return "0" — but the
-	# old table would linger until the next `stop`. Remove unconditionally
-	# first so the post-apply state always reflects the latest `needed`
+	# old table would linger until the next `stop`. Only remove when nft
+	# is not needed so the post-apply state always reflects the latest `needed`
 	# decision. The remove is idempotent and a no-op when no table exists.
-	ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove 2>/dev/null || true
+	# apply's atomic `add+delete+table` prelude self-replaces the table,
+	# so we don't remove unconditionally before apply (which would leave a
+	# blackhole if apply then fails).
 
 	if [ "$(ucode -L "$UCODE_LIB" "$NFTABLES_UC" needed)" = "1" ]; then
-		# G4: surface apply failures via syslog. The script's atomic
-		# `add+delete+table` prelude means the prior live table is
-		# untouched on failure, so we don't try to roll back here —
-		# we only ensure the operator sees the rc.
+		# G4: surface apply failures via syslog. apply's atomic
+		# `add+delete+table` prelude self-replaces the table on failure,
+		# so a stale table from a prior start won't linger.
 		ucode -L "$UCODE_LIB" "$NFTABLES_UC" apply
 		_nft_rc=$?
 		[ "$_nft_rc" = 0 ] || logger -t singbox-ui "nft apply failed (rc=$_nft_rc)"
+	else
+		# nft not needed; clean up any stale table from a previous start.
+		ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove 2>/dev/null || true
 	fi
 
 	procd_open_instance
@@ -177,7 +181,7 @@ __do_start() {
 	# trailing space — matching the rpcd split(line," ")[0] behaviour. The old
 	# ` .*` form required a trailing space and would emit nothing on such a line.
 	apk list --installed luci-singbox-ui 2>/dev/null \
-		| sed -n 's/^luci-singbox-ui-\([^ ]*\).*/\1/p' \
+		| sed -n 's/^luci-singbox-ui-\([^ ]*\).*/\1/p;q' \
 		> /var/lib/singbox-ui/pkg_version || true
 }
 

@@ -35,7 +35,7 @@ reg.register({
     ],
     users: {
         from: "socks_user",
-        columns: [ { key: "username", required: true }, { key: "password", tail: true, always: true } ],
+        columns: [ { key: "username", required: true }, { key: "password", always: true } ],
     },
 });
 

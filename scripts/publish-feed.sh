@@ -82,16 +82,33 @@ while :; do
     exit 0
   fi
 
-  if git -C "$WORK" push origin "HEAD:$BRANCH"; then
+  push_err="$WORK/.push_err"
+  if git -C "$WORK" push origin "HEAD:$BRANCH" 2>"$push_err"; then
+    rm -f "$push_err"
     echo "published feed to $BRANCH"
     exit 0
   fi
+
+  # Only a non-fast-forward / fetch-first rejection is a retryable concurrent
+  # update (the sibling sing-box-extended.yml pushes the same branch). Auth,
+  # network and branch-protection failures surface immediately instead of
+  # burning every retry behind a generic message.
+  if ! grep -qiE 'non-fast-forward|fetch first|\[rejected\]' "$push_err"; then
+    echo "push to $BRANCH failed (not a non-fast-forward conflict):" >&2
+    cat "$push_err" >&2
+    rm -f "$push_err"
+    exit 1
+  fi
+  rm -f "$push_err"
 
   attempt=$((attempt + 1))
   if [ "$attempt" -ge "$RETRIES" ]; then
     echo "failed to push $BRANCH after $attempt attempts" >&2
     exit 1
   fi
-  echo "push rejected (concurrent $BRANCH update?) -> re-clone and retry $attempt/$RETRIES" >&2
-  sleep "$attempt"
+  echo "push rejected (non-fast-forward; concurrent $BRANCH update) -> re-clone and retry $attempt/$RETRIES" >&2
+  # Jitter (0-2s, /dev/urandom) decorrelates the backoff from the sibling
+  # workflow retries so they do not livelock in lockstep.
+  jitter=$(( $(od -An -N1 -tu1 /dev/urandom 2>/dev/null || echo 0) % 3 ))
+  sleep "$(( attempt + jitter ))"
 done

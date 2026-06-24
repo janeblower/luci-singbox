@@ -54,7 +54,7 @@ reg.register({
         columns: [
             { key: "name", required: true },
             { key: "uuid", required: true, guard: "uuid" },
-            { key: "password", tail: true, always: true },
+            { key: "password", always: true },
         ],
     },
 });

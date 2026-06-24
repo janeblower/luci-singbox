@@ -36,7 +36,9 @@ function renderActionBar(statusHolder) {
 					return Promise.resolve(handler.call(self)).then(refreshStatus);
 				});
 			})
-		}, _(label));
+		}, label);   // label (and busyLabel) are already _()-translated by the
+		             // caller; translating again here double-handles the msgid
+		             // and pollutes .pot extraction.
 	}
 	return E('div', { 'class': 'sb-actionbar', 'style': 'display:flex;gap:.5em;margin:.5em 0' }, [
 		btn(_('Refresh subscriptions'), _('Refreshing…'), function () {

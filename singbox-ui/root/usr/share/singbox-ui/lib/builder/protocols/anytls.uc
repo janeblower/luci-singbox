@@ -40,7 +40,7 @@ reg.register({
     ],
     users: {
         from: "anytls_user",
-        columns: [ { key: "name", required: true }, { key: "password", tail: true, always: true } ],
+        columns: [ { key: "name", required: true }, { key: "password", always: true } ],
     },
 });
 

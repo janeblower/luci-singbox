@@ -142,4 +142,64 @@ describe("build_apk_per_arch", () => {
       expect(existsSync(backendBbolt)).toBe(false);
     },
   );
+
+  it.skipIf(!hasBash)(
+    "stale prior-version .apks are removed before build",
+    () => {
+      const work = mkdtempSync(resolve(tmpdir(), "apk-stale-"));
+      const binDir = resolve(work, "bins");
+      mkdirSync(binDir, { recursive: true });
+      const out = resolve(work, "dist");
+      mkdirSync(out, { recursive: true });
+
+      // Create fake bbolt binaries for all 5 ABIs
+      for (const abi of ["x86_64", "aarch64", "armv7", "mipsel", "mips"]) {
+        writeFileSync(
+          resolve(binDir, `bbolt-client-rs-${abi}`),
+          `BBOLT-${abi}\n`,
+        );
+      }
+
+      // Plant stale .apks from a prior version (0.0.0-r0) alongside unrelated files
+      writeFileSync(resolve(out, "singbox-ui_0.0.0-r0.apk"), "stale");
+      writeFileSync(resolve(out, "luci-app-singbox-ui_0.0.0-r0.apk"), "stale");
+      writeFileSync(
+        resolve(out, "luci-i18n-singbox-ui-ru_0.0.0-r0.apk"),
+        "stale",
+      );
+      writeFileSync(resolve(out, "bbolt-client_0.0.0-r0_x86_64.apk"), "stale");
+      writeFileSync(resolve(out, "unrelated-package_1.2.3.apk"), "keep me");
+
+      // Run build-apk.sh with new version (0.0.0-r1)
+      const result = spawnSync("bash", [BUILDSH, "0.0.0-r1", out], {
+        cwd: ROOT,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          APK_MKPKG_STUB: "1",
+          BBOLT_BIN_DIR: binDir,
+          WORK_DIR: resolve(work, ".build"),
+        },
+      });
+
+      try {
+        expect(result.status).toBe(0);
+
+        const files = readdirSync(out);
+        // Stale prior-version .apks must be gone
+        expect(files).not.toContain("singbox-ui_0.0.0-r0.apk");
+        expect(files).not.toContain("luci-app-singbox-ui_0.0.0-r0.apk");
+        expect(files).not.toContain("luci-i18n-singbox-ui-ru_0.0.0-r0.apk");
+        expect(files).not.toContain("bbolt-client_0.0.0-r0_x86_64.apk");
+        // Unrelated .apk must survive
+        expect(files).toContain("unrelated-package_1.2.3.apk");
+        // New version .apks must be present
+        expect(files).toContain("singbox-ui_0.0.0-r1.apk");
+        expect(files).toContain("luci-app-singbox-ui_0.0.0-r1.apk");
+        expect(files).toContain("luci-i18n-singbox-ui-ru_0.0.0-r1.apk");
+      } finally {
+        rmSync(work, { recursive: true, force: true });
+      }
+    },
+  );
 });

@@ -67,7 +67,7 @@ reg.register({
         columns: [
             { key: "name", required: true },
             { key: "method", validate: METHODS, discard: true },
-            { key: "password", tail: true, warn_if_empty: true },
+            { key: "password", warn_if_empty: true },
         ],
     },
 

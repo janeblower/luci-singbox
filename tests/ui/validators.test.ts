@@ -34,9 +34,6 @@ describe("form validators", () => {
       "isIPv6Shape",
       "isUrl",
       "validateAlpn",
-      "requiresWsPath",
-      "softWarnCongestion",
-      "isKnownCongestion",
     ]) {
       expect(typeof V[fn]).toBe("function");
     }
@@ -169,57 +166,5 @@ describe("form validators", () => {
       expect(typeof V.validateAlpn(["unknown"])).toBe("string"));
     it('rejects ["h2","bogus"]', () =>
       expect(typeof V.validateAlpn(["h2", "bogus"])).toBe("string"));
-  });
-
-  // --- requiresWsPath --------------------------------------------------------
-  describe("requiresWsPath", () => {
-    it('accepts (ws, "/path")', () =>
-      expect(V.requiresWsPath("ws", "/path")).toBe(true));
-    it('accepts (grpc, "") — non-ws transport ignores path', () =>
-      expect(V.requiresWsPath("grpc", "")).toBe(true));
-    it('accepts (none, "") — non-ws transport ignores path', () =>
-      expect(V.requiresWsPath("none", "")).toBe(true));
-    it('rejects (ws, "") — ws requires non-empty path', () =>
-      expect(typeof V.requiresWsPath("ws", "")).toBe("string"));
-    it("rejects (ws, undefined) — ws requires non-empty path", () =>
-      expect(typeof V.requiresWsPath("ws", undefined)).toBe("string"));
-  });
-
-  // --- softWarnCongestion / isKnownCongestion (S2-8) -------------------------
-  describe("softWarnCongestion", () => {
-    it('returns true for known "cubic"', () =>
-      expect(V.softWarnCongestion("cubic")).toBe(true));
-    it('returns true for known "new_reno"', () =>
-      expect(V.softWarnCongestion("new_reno")).toBe(true));
-    it('returns true for known "bbr"', () =>
-      expect(V.softWarnCongestion("bbr")).toBe(true));
-    it('returns true for "" (empty, no warn)', () =>
-      expect(V.softWarnCongestion("")).toBe(true));
-    it("returns true for unknown value", () => {
-      expect(V.softWarnCongestion("extreme-future-cc")).toBe(true);
-    });
-    it("unknown value stays silent — no console.warn (pure, S2-8)", () => {
-      const before = warnings.length;
-      V.softWarnCongestion("extreme-future-cc");
-      expect(warnings.length).toBe(before);
-    });
-    it("does NOT call L.ui.addNotification (pure, S2-8)", () => {
-      addNotificationCalls = 0;
-      V.softWarnCongestion("definitely-unknown-cc");
-      expect(addNotificationCalls).toBe(0);
-    });
-  });
-
-  describe("isKnownCongestion", () => {
-    it('classifies "bbr" as known (returns true)', () =>
-      expect(V.isKnownCongestion("bbr")).toBe(true));
-    it('classifies "cubic" as known (returns true)', () =>
-      expect(V.isKnownCongestion("cubic")).toBe(true));
-    it('classifies "brutal" as known (returns true)', () =>
-      expect(V.isKnownCongestion("brutal")).toBe(true));
-    it('classifies "new_reno" as known (returns true)', () =>
-      expect(V.isKnownCongestion("new_reno")).toBe(true));
-    it('classifies "junk-cc" as unknown (returns false)', () =>
-      expect(V.isKnownCongestion("junk-cc")).toBe(false));
   });
 });

@@ -6,7 +6,7 @@ let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "outbound", type: "vless", sing_box_type: "vless",
-    shared: { tls: {}, transport: {}, multiplex: {}, dial: {} },
+    shared: { tls: {}, transport: {}, multiplex: {}, dial: true },
 
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
@@ -56,7 +56,7 @@ reg.register({
         columns: [
             { key: "name", required: true },
             { key: "uuid", required: true, guard: "uuid" },
-            { key: "flow", tail: true },
+            { key: "flow" },
         ],
         single_fallback: {
             fields: [

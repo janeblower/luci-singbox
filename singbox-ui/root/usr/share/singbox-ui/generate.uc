@@ -131,8 +131,17 @@ if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
 		resolver_tag = null;
 	}
 	if (resolver_tag == null || resolver_tag === "") {
+		// Only a general-purpose upstream resolver can serve as the domain
+		// resolver. hosts/dhcp/mdns/tailscale/resolved/fakeip cannot resolve
+		// arbitrary domains (they would loop or fail), so restrict the
+		// auto-pick to resolving types — plus a legacy server (empty type,
+		// <=1.13) which resolves via its address. Fall through to NO resolver
+		// if none qualify (safer than a non-resolving pick).
+		let resolver_types = { udp: true, tcp: true, tls: true, quic: true, https: true, h3: true, local: true };
 		for (let s in config.dns.servers) {
-			if (s.type !== "fakeip" && length(s.tag)) { resolver_tag = s.tag; break; }
+			if (length(s.tag) && (resolver_types[s.type] || !length(s.type ?? ""))) {
+				resolver_tag = s.tag; break;
+			}
 		}
 	}
 	if (resolver_tag != null && length(resolver_tag)) {

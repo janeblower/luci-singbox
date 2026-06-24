@@ -55,8 +55,18 @@ function buildRouteRulesMap() {
 	// Read-only "Used by" badge column (grid only).
 	o = s.taboption('match', form.DummyValue, '_used_by', _('Used by'));
 	o.modalonly = false;
+	// Memoize consumedMap() for ONE synchronous render pass: every grid row's
+	// cfgvalue runs in the same tick, so compute the O(rules+rulesets) scan once
+	// and serve all rows from it (was O(N) per row → O(N²) per render). Reset on
+	// the next microtask so a later re-render (e.g. after Save) recomputes fresh
+	// consumed relationships rather than serving a stale cache.
+	var _consumedCache = null;
 	o.cfgvalue = function (id) {
-		var c = consumedMap()[id];
+		if (_consumedCache === null) {
+			_consumedCache = consumedMap();
+			Promise.resolve().then(function () { _consumedCache = null; });
+		}
+		var c = _consumedCache[id];
 		return c ? c.join(', ') : '';
 	};
 

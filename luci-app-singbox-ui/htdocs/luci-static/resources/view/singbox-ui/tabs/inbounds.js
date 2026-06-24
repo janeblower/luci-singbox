@@ -88,7 +88,7 @@ function openJsonImportModal(kind, m) {
 	}
 
 	ui.showModal(_('Import JSON'), [
-		E('p', {}, _('Paste a sing-box ') + kind + _(' object. Fields will be parsed and a new section created.')),
+		E('p', {}, _('Paste a sing-box %s object. Fields will be parsed and a new section created.').format(kind)),
 		ta, err,
 		E('div', { 'class': 'right', 'style': 'margin-top:12px;' }, [
 			E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, _('Cancel')),
