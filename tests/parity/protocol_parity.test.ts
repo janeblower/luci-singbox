@@ -30,9 +30,14 @@ describe("protocol parity", () => {
     // corpus.uc lives in tests/parity, so pass it as extraLibDirs.
     // The AWG-WARP plugin descriptor lives in the plugin package's lib tree;
     // add it as a second extra lib dir so require("plugins.awg_warp.descriptor")
-    // in corpus.uc can find it. Only descriptor.uc + iface.uc are present there
-    // (no init.uc) so plugins.discovery.load_all() does NOT pick up the plugin
-    // via its glob — ACL/rpcd guards remain clean.
+    // in corpus.uc can find it (explicit require — that is what registers the type).
+    // ISOLATION (why the ACL/rpcd guards stay clean even though init.uc DOES exist
+    // in that plugin lib tree): plugins.discovery.load_all() does NOT use the `-L`
+    // module-search path — it `fs.glob`s the SYSTEM filesystem path
+    // `/usr/share/singbox-ui/lib/plugins/*/init.uc` (lib_root() default, since
+    // UCODE_APP_LIB_DIR is unset here). The plugin tree is only reachable via `-L`,
+    // never installed at that system path, so the glob never finds awg_warp/init.uc
+    // and the handler never advertises the plugin's rpcd methods.
     // Shell equivalent: ucode -L tests/parity -L "<plugin-lib>" -L "$LIB" -e '...'
     const built = await runUcodeJSON<Record<string, unknown>>(
       DRIVER,
