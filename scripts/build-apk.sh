@@ -654,16 +654,21 @@ EOF
 }
 
 # populate_awgwarp_root
-#   Lay down the plugin file set (root/ subtree) + .list + post-install script.
-#   No manifest file — the plugin root/ tree is copied directly (no htdocs->www
-#   remapping needed; all files live under usr/).
+#   Lay down the plugin file set (root/ subtree + htdocs->www mapping) + .list
+#   + post-install script.
+#   root/ files (usr/) are copied directly; htdocs/ is remapped to www/ mirroring
+#   the luci-app-singbox-ui convention (LuCI serves from www/luci-static/...).
 populate_awgwarp_root() {
     rm -rf "$AWGWARP_ROOT" "$AWGWARP_SCRIPTS"
+    mkdir -p "$AWGWARP_ROOT"
     # Copy the full root/ subtree from the plugin source package.
     if [ -d "$AWGWARP_SRC/root" ]; then
         cp -a "$AWGWARP_SRC/root/." "$AWGWARP_ROOT/"
-    else
-        mkdir -p "$AWGWARP_ROOT"
+    fi
+    # Map htdocs/luci-static/... -> www/luci-static/... (LuCI serving convention).
+    if [ -d "$AWGWARP_SRC/htdocs" ]; then
+        mkdir -p "$AWGWARP_ROOT/www"
+        cp -a "$AWGWARP_SRC/htdocs/." "$AWGWARP_ROOT/www/"
     fi
     write_pkg_list "$AWGWARP_ROOT" "$AWGWARP_NAME"
     write_awgwarp_scripts "$AWGWARP_SCRIPTS"

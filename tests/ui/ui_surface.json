@@ -81,5 +81,13 @@
   { "id": "xcut.rpc_generate_fail","tab": "_top",   "kind": "rpc-error",  "label": "generate failure surfaced" },
   { "id": "xcut.rpc_acl_denied",   "tab": "_top",   "kind": "rpc-error",  "label": "ACL-denied surfaced" },
 
-  { "id": "vm.tproxy_save_roundtrip", "tab": "_vm", "kind": "vm", "label": "tproxy save-roundtrip installs nft (NET_ADMIN)" }
+  { "id": "vm.tproxy_save_roundtrip", "tab": "_vm", "kind": "vm", "label": "tproxy save-roundtrip installs nft (NET_ADMIN)" },
+
+  { "id": "plugin.awg_warp._install",     "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Install AWG + ip-full button" },
+  { "id": "plugin.awg_warp._register",    "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Register (Cloudflare WARP) button" },
+  { "id": "plugin.awg_warp.warp_paste",   "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Paste WARP .conf textarea" },
+  { "id": "plugin.awg_warp.awg_mimic",    "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Mimic protocol select" },
+  { "id": "plugin.awg_warp._regen",       "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Regenerate AWG parameters button" },
+  { "id": "plugin.awg_warp.ipv6_enabled", "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Enable IPv6 flag" },
+  { "id": "plugin.awg_warp.mtu_override", "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: MTU override value" }
 ]
