@@ -20,7 +20,7 @@ const ACL = resolve(
 
 const PEM = resolve(
   ROOT,
-  "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/plugins/awg_warp/awg-openwrt-feed.pem",
+  "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp/awg-openwrt-feed.pem",
 );
 
 describe("awg-warp package shape", () => {
