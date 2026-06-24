@@ -77,15 +77,20 @@ describe("install_manifest_fresh", () => {
     }
   });
 
-  it("D4.5: exactly one file under lib/plugins/ in the backend manifest (registry.uc)", () => {
+  it("D4.5/E: core ships only plugin INFRASTRUCTURE under lib/plugins/ (registry.uc + discovery.uc); no plugin payloads", () => {
+    // Phase E: the framework adds discovery.uc alongside registry.uc. These are
+    // the only two files the CORE backend package ships under lib/plugins/.
+    // Actual plugins ship their own lib/plugins/<name>/ subtree from their own
+    // package (e.g. luci-app-singbox-plugin-awg-warp), never from core.
     const be = resolve(ROOT, "scripts/install-manifest-singbox-ui.txt");
     const lines = readFileSync(be, "utf8").split("\n");
-    const pluginLines = lines.filter((l) =>
-      l.startsWith("root/usr/share/singbox-ui/lib/plugins/"),
-    );
-    expect(pluginLines.length).toBe(1);
-    expect(pluginLines[0]).toMatch(
-      /^root\/usr\/share\/singbox-ui\/lib\/plugins\/registry\.uc\b/,
-    );
+    const pluginLines = lines
+      .filter((l) => l.startsWith("root/usr/share/singbox-ui/lib/plugins/"))
+      .map((l) => l.split("\t")[0]);
+    const expected = [
+      "root/usr/share/singbox-ui/lib/plugins/discovery.uc",
+      "root/usr/share/singbox-ui/lib/plugins/registry.uc",
+    ];
+    expect(pluginLines.sort()).toEqual(expected);
   });
 });
