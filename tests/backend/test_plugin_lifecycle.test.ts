@@ -62,6 +62,33 @@ EOF
     expect(r.stdout.trim().endsWith("FOUND")).toBe(true);
   });
 
+  it("apply-plugins runs a plugin lifecycle.apply hook", async () => {
+    const r = await exec(`
+      set -e
+      PLUG="${LIB}/plugins/zz_lc"
+      mkdir -p "$PLUG"
+      cat > "$PLUG/init.uc" <<'EOF'
+let reg = require("plugins.registry");
+let fs = require("fs");
+reg.register({ name: "zz_lc", lifecycle: {
+  apply: function(cur){ fs.writefile("/tmp/zz_lc_applied", "1"); },
+  teardown: function(cur){ fs.writefile("/tmp/zz_lc_torndown", "1"); } } });
+return {};
+EOF
+      rm -f /tmp/zz_lc_applied /tmp/zz_lc_torndown
+      UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' apply
+      UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' teardown
+      rm -rf "$PLUG"
+      a=$([ -f /tmp/zz_lc_applied ] && echo 1 || echo 0)
+      t=$([ -f /tmp/zz_lc_torndown ] && echo 1 || echo 0)
+      echo "{\\"applied\\":$a,\\"torndown\\":$t}"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    expect(o.applied).toBe(1);
+    expect(o.torndown).toBe(1);
+  });
+
   // Confirm: !transparent + no plugin fragments → apply returns 0 cleanly
   // and does NOT invoke run_nft_ruleset (no capture file created).
   it("apply path with no transparent inbound and no plugin fragments returns 0 without applying ruleset", async () => {

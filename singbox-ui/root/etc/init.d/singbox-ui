@@ -8,6 +8,7 @@ GENERATE_UC=/usr/share/singbox-ui/generate.uc
 SUBSCRIPTION_UC=/usr/share/singbox-ui/subscription.uc
 RULESETS_UC=/usr/share/singbox-ui/nft-rulesets.uc
 NFTABLES_UC=/usr/share/singbox-ui/nftables.uc
+APPLY_PLUGINS_UC=/usr/share/singbox-ui/apply-plugins.uc
 UCODE_LIB=/usr/share/singbox-ui/lib
 # Overridable so tests can stub the binary (default is the packaged path used by
 # the procd command below). Used for both `check` (S6.1) and `run`.
@@ -142,6 +143,11 @@ __do_start() {
 		ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove 2>/dev/null || true
 	fi
 
+	# Phase E: reconcile plugin-managed resources (e.g. AWG-WARP interfaces) before
+	# the daemon starts. Idempotent; never fatal.
+	ucode -L "$UCODE_LIB" "$APPLY_PLUGINS_UC" apply 2>/dev/null || \
+		logger -t singbox-ui "apply-plugins apply returned non-zero"
+
 	procd_open_instance
 	# C3.6: drop to minimal capability set so sing-box runs without root.
 	# We intentionally do NOT switch user/group to nobody/nogroup here —
@@ -191,6 +197,7 @@ stop_service() {
 	# fresh stop (no table to delete). Symmetric with start_service
 	# (line above already suppresses); keep operator logs quiet.
 	ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove 2>/dev/null
+	ucode -L "$UCODE_LIB" "$APPLY_PLUGINS_UC" teardown 2>/dev/null || true
 	_lc_release
 }
 
