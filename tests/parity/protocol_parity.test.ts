@@ -28,11 +28,19 @@ describe("protocol parity", () => {
 
   it("every corpus fixture deep-equals its golden", async () => {
     // corpus.uc lives in tests/parity, so pass it as extraLibDirs.
-    // Shell equivalent: ucode -L tests/parity -L "$LIB" -e '...'
+    // The AWG-WARP plugin descriptor lives in the plugin package's lib tree;
+    // add it as a second extra lib dir so require("plugins.awg_warp.descriptor")
+    // in corpus.uc can find it. Only descriptor.uc + iface.uc are present there
+    // (no init.uc) so plugins.discovery.load_all() does NOT pick up the plugin
+    // via its glob — ACL/rpcd guards remain clean.
+    // Shell equivalent: ucode -L tests/parity -L "<plugin-lib>" -L "$LIB" -e '...'
     const built = await runUcodeJSON<Record<string, unknown>>(
       DRIVER,
       [],
-      ["tests/parity"],
+      [
+        "tests/parity",
+        "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib",
+      ],
     );
 
     const drift: string[] = [];
