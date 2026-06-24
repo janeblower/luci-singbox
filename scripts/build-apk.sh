@@ -87,6 +87,13 @@ I18N_DESC="Translation for luci-app-singbox-ui — Русский (Russian)"
 I18N_DEPENDS="libc $LUCIAPP_NAME"
 I18N_DOMAIN="luci-singbox-ui"
 
+# 5) luci-app-singbox-plugin-awg-warp — noarch AWG/WARP plugin.
+# Runtime components (amneziawg-tools, kmod-*, ip-full) are NOT listed here —
+# they are self-provisioned at runtime via the plugin's rpcd methods.
+AWGWARP_NAME="luci-app-singbox-plugin-awg-warp"
+AWGWARP_DESC="AWG WARP plugin for luci-app-singbox-ui (Cloudflare WARP + AmneziaWG)"
+AWGWARP_DEPENDS="libc $LUCIAPP_NAME"
+
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_URL="https://github.com/janeblower/luci-singbox"
 PKG_MAINTAINER="Jyn"
@@ -124,6 +131,7 @@ mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 rm -f "$OUTPUT_DIR/${SINGBOX_NAME}_"*.apk \
       "$OUTPUT_DIR/${LUCIAPP_NAME}_"*.apk \
       "$OUTPUT_DIR/${I18N_NAME}_"*.apk \
+      "$OUTPUT_DIR/${AWGWARP_NAME}_"*.apk \
       "$OUTPUT_DIR/${BBOLT_NAME}_"*_*.apk
 
 # ---------------------------------------------------------------------------
@@ -232,6 +240,8 @@ SINGBOX_MANIFEST="$SCRIPT_DIR/install-manifest-singbox-ui.txt"
 LUCIAPP_SRC="$ROOT_DIR/luci-app-singbox-ui"
 LUCIAPP_MANIFEST="$SCRIPT_DIR/install-manifest-luci-app-singbox-ui.txt"
 [ -f "$LUCIAPP_MANIFEST" ] || { echo "install-manifest-luci-app-singbox-ui.txt missing at $LUCIAPP_MANIFEST" >&2; exit 1; }
+
+AWGWARP_SRC="$ROOT_DIR/luci-app-singbox-plugin-awg-warp"
 
 # ---------------------------------------------------------------------------
 # Generic manifest installer: lay down a package root from a tab-separated
@@ -615,7 +625,75 @@ mkpkg_i18n() {
 }
 
 # ===========================================================================
-# Build dispatch — three ownership modes, all four packages.
+# 5) luci-app-singbox-plugin-awg-warp (noarch) — populate + mkpkg
+# ===========================================================================
+AWGWARP_ROOT="$WORK_DIR/pkg-root-awg-warp"
+AWGWARP_SCRIPTS="$WORK_DIR/scripts-awg-warp"
+AWGWARP_OUT="$OUTPUT_DIR/${AWGWARP_NAME}_${VERSION}.apk"
+
+# write_awgwarp_scripts <scripts_dir>
+#   post-install only: default_postinst + flush LuCI caches + HUP rpcd.
+#   No init.d (the plugin has no service of its own).
+write_awgwarp_scripts() {
+    local scripts_dir="$1"
+    mkdir -p "$scripts_dir"
+    cat > "$scripts_dir/post-install.sh" <<'EOF'
+#!/bin/sh
+[ "${IPKG_NO_SCRIPT}" = "1" ] && exit 0
+[ -s ${IPKG_INSTROOT}/lib/functions.sh ] || exit 0
+. ${IPKG_INSTROOT}/lib/functions.sh
+default_postinst $0 $@
+[ -n "${IPKG_INSTROOT}" ] || {
+  rm -f /tmp/luci-indexcache.*
+  rm -rf /tmp/luci-modulecache/
+  killall -HUP rpcd 2>/dev/null
+}
+exit 0
+EOF
+    chmod 0755 "$scripts_dir"/*.sh
+}
+
+# populate_awgwarp_root
+#   Lay down the plugin file set (root/ subtree) + .list + post-install script.
+#   No manifest file — the plugin root/ tree is copied directly (no htdocs->www
+#   remapping needed; all files live under usr/).
+populate_awgwarp_root() {
+    rm -rf "$AWGWARP_ROOT" "$AWGWARP_SCRIPTS"
+    # Copy the full root/ subtree from the plugin source package.
+    if [ -d "$AWGWARP_SRC/root" ]; then
+        cp -a "$AWGWARP_SRC/root/." "$AWGWARP_ROOT/"
+    else
+        mkdir -p "$AWGWARP_ROOT"
+    fi
+    write_pkg_list "$AWGWARP_ROOT" "$AWGWARP_NAME"
+    write_awgwarp_scripts "$AWGWARP_SCRIPTS"
+
+    if [ "$APK_MKPKG_STUB" = "1" ]; then
+        : > "$AWGWARP_OUT"
+    fi
+}
+
+# mkpkg_awgwarp
+#   apk mkpkg for the noarch AWG/WARP plugin.
+mkpkg_awgwarp() {
+    "$APK_BIN" mkpkg \
+        --files "$AWGWARP_ROOT" \
+        --output "$AWGWARP_OUT" \
+        -I "name:$AWGWARP_NAME" \
+        -I "version:$VERSION" \
+        -I "description:$AWGWARP_DESC" \
+        -I "arch:noarch" \
+        -I "license:$PKG_LICENSE" \
+        -I "origin:$AWGWARP_NAME" \
+        -I "maintainer:$PKG_MAINTAINER" \
+        -I "url:$PKG_URL" \
+        -I "depends:$AWGWARP_DEPENDS" \
+        -I "provides:${AWGWARP_NAME}-any" \
+        -s "post-install:$AWGWARP_SCRIPTS/post-install.sh"
+}
+
+# ===========================================================================
+# Build dispatch — three ownership modes, all five packages.
 # ===========================================================================
 echo ">>> Building apk packages"
 
@@ -631,6 +709,7 @@ if [ "$APK_MKPKG_STUB" = "1" ]; then
     populate_singbox_root
     populate_luciapp_root
     populate_i18n_root
+    populate_awgwarp_root
 elif [ "$(id -u)" -eq 0 ]; then
     # Already running as root — populate the roots, chown 0:0, then mkpkg sees
     # correct ownership.
@@ -656,6 +735,10 @@ elif [ "$(id -u)" -eq 0 ]; then
     populate_i18n_root
     chown -R 0:0 "$I18N_ROOT" "$I18N_SCRIPTS"
     mkpkg_i18n
+
+    populate_awgwarp_root
+    chown -R 0:0 "$AWGWARP_ROOT" "$AWGWARP_SCRIPTS"
+    mkpkg_awgwarp
 elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
     # Unprivileged user namespace: populate roots as current user (no mkpkg yet),
     # then chown+mkpkg exactly once inside the namespace where UID 0 is mapped to us.
@@ -669,6 +752,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
     populate_singbox_root
     populate_luciapp_root
     populate_i18n_root
+    populate_awgwarp_root
 
     # Whether mkpkg tolerates -I "conflicts:..." — probed in parent (the inner
     # shell can't run our bash functions), passed through to the namespaced sh.
@@ -686,6 +770,8 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
            LUCIAPP_ROOT LUCIAPP_SCRIPTS LUCIAPP_OUT \
            I18N_NAME I18N_DESC I18N_DEPENDS \
            I18N_ROOT I18N_SCRIPTS I18N_OUT \
+           AWGWARP_NAME AWGWARP_DESC AWGWARP_DEPENDS \
+           AWGWARP_ROOT AWGWARP_SCRIPTS AWGWARP_OUT \
            APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER \
            WORK_DIR OUTPUT_DIR \
            bbolt_arches_x86_64 bbolt_arches_aarch64 bbolt_arches_armv7 \
@@ -787,6 +873,22 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
             -I "depends:$I18N_DEPENDS" \
             -I "provides:${I18N_NAME}-any" \
             -s "post-install:$I18N_SCRIPTS/post-install.sh"
+
+        chown -R 0:0 "$AWGWARP_ROOT" "$AWGWARP_SCRIPTS"
+        "$APK_BIN" mkpkg \
+            --files "$AWGWARP_ROOT" \
+            --output "$AWGWARP_OUT" \
+            -I "name:$AWGWARP_NAME" \
+            -I "version:$VERSION" \
+            -I "description:$AWGWARP_DESC" \
+            -I "arch:noarch" \
+            -I "license:$PKG_LICENSE" \
+            -I "origin:$AWGWARP_NAME" \
+            -I "maintainer:$PKG_MAINTAINER" \
+            -I "url:$PKG_URL" \
+            -I "depends:$AWGWARP_DEPENDS" \
+            -I "provides:${AWGWARP_NAME}-any" \
+            -s "post-install:$AWGWARP_SCRIPTS/post-install.sh"
     '
 else
     cat >&2 <<EOF
