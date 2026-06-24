@@ -461,7 +461,7 @@ function cmd_refresh(cur, force) {
 			let after = cache_list_keys(db);
 			for (let t in tags) {
 				if (after != null && after[t] === true) clear_cold_attempt(t);
-				else record_cold_attempt(t);
+				else if (after != null) record_cold_attempt(t);
 			}
 		}
 	}

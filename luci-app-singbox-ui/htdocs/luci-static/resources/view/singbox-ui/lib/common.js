@@ -186,9 +186,15 @@ function showJsonModal(title, contentOrPromise) {
 // Empty/unknown either side -> 0 (fail open: never gate when version unknown).
 function compareVersions(a, b) {
 	if (!a || !b) return 0;
-	var pa = String(a).split('.'), pb = String(b).split('.');
-	for (var i = 0; i < 3; i++) {
+	// Strip build/pre-release suffixes (everything after the first - or +) so
+	// e.g. '1.14.0-rc1' compares as '1.14.0'; compare ALL components, not just 3.
+	var pa = String(a).split(/[-+]/)[0].split('.');
+	var pb = String(b).split(/[-+]/)[0].split('.');
+	var n = Math.max(pa.length, pb.length);
+	for (var i = 0; i < n; i++) {
 		var na = parseInt(pa[i] || '0', 10), nb = parseInt(pb[i] || '0', 10);
+		if (isNaN(na)) na = 0;
+		if (isNaN(nb)) nb = 0;
 		if (na > nb) return 1;
 		if (na < nb) return -1;
 	}

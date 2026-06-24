@@ -12,17 +12,7 @@ var SB_OUTBOUND_KNOWN = {
 	'shadowsocks': true, 'tuic': true, 'anytls': true,
 };
 
-// parseIntField — see importers/inbound.js (IMP-1). A pasted non-numeric port
-// or rate must surface a parse error instead of writing the literal "NaN" into
-// UCI. Returns { ok, value }.
-function parseIntField(raw, min, max) {
-	var n = parseInt(raw, 10);
-	if (!isFinite(n)) return { ok: false };
-	if (String(n) !== String(raw).trim()) return { ok: false };
-	if (min != null && n < min) return { ok: false };
-	if (max != null && n > max) return { ok: false };
-	return { ok: true, value: n };
-}
+
 
 function jsonImportOutbound(o) {
 	var out = { ok: false, errors: [], fields: {} };
@@ -46,7 +36,7 @@ function jsonImportOutbound(o) {
 	f.type = o.type;
 	if (o.server)      f.server      = o.server;
 	if (o.server_port != null) {
-		var sp = parseIntField(o.server_port, 1, 65535);
+		var sp = SbTransport.parseIntField(o.server_port, 1, 65535);
 		if (!sp.ok) return bad(_('Invalid port: ') + o.server_port);
 		f.server_port = sp.value;
 	}
@@ -59,7 +49,7 @@ function jsonImportOutbound(o) {
 		if (o.uuid) f.server_uuid = o.uuid;
 		if (o.flow) f.vless_flow  = o.flow;
 		if (o.alter_id != null) {
-			var aid = parseIntField(o.alter_id, 0, null);
+			var aid = SbTransport.parseIntField(o.alter_id, 0, null);
 			if (!aid.ok) return bad(_('Invalid alter_id: ') + o.alter_id);
 			f.vmess_alter_id = String(aid.value);
 		}
@@ -70,12 +60,12 @@ function jsonImportOutbound(o) {
 	}
 	if (o.type === 'hysteria2') {
 		if (o.up_mbps != null) {
-			var up = parseIntField(o.up_mbps, 0, null);
+			var up = SbTransport.parseIntField(o.up_mbps, 0, null);
 			if (!up.ok) return bad(_('Invalid up_mbps: ') + o.up_mbps);
 			f.up_mbps = String(up.value);
 		}
 		if (o.down_mbps != null) {
-			var dn = parseIntField(o.down_mbps, 0, null);
+			var dn = SbTransport.parseIntField(o.down_mbps, 0, null);
 			if (!dn.ok) return bad(_('Invalid down_mbps: ') + o.down_mbps);
 			f.down_mbps = String(dn.value);
 		}
@@ -129,12 +119,52 @@ function _shareLinkImport(url) {
 		if (s == null) return '';
 		try { return decodeURIComponent(s); } catch (e) { return String(s); }
 	}
-	var schemes = ['vless', 'shadowsocks', 'trojan', 'hysteria2'];
+	var schemes = ['vless', 'vmess', 'shadowsocks', 'trojan', 'hysteria2'];
 	var scheme = (url.split(':')[0] || '').toLowerCase();
 	if (scheme === 'ss')  scheme = 'shadowsocks';
 	if (scheme === 'hy2') scheme = 'hysteria2';
 	if (schemes.indexOf(scheme) === -1)
 		return { ok: false, errors: [_('Unsupported scheme: ') + scheme] };
+
+	if (scheme === 'vmess') {
+		// v2rayN vmess:// is base64(JSON). Decode + map to the sing-box outbound
+		// shape parse_vmess produces, then reuse jsonImportOutbound's field mapping
+		// so client pre-fill agrees with the backend parser.
+		var vbody = url.slice('vmess://'.length).split('#')[0].replace(/-/g, '+').replace(/_/g, '/');
+		while (vbody.length % 4) vbody += '=';
+		var vj;
+		try { vj = JSON.parse(atob(vbody)); }
+		catch (e) { return { ok: false, errors: [_('Cannot parse vmess URL')] }; }
+		if (!vj || typeof vj !== 'object' || Array.isArray(vj))
+			return { ok: false, errors: [_('Cannot parse vmess URL')] };
+		var vo = {
+			type: 'vmess',
+			server: String(vj.add || ''),
+			server_port: +vj.port || 0,
+			uuid: String(vj.id || ''),
+			security: vj.scy ? String(vj.scy) : 'auto',
+			alter_id: +vj.aid || 0,
+		};
+		if (!vo.server || !vo.server_port || !vo.uuid)
+			return { ok: false, errors: [_('vmess link missing server/port/uuid')] };
+		var vnet = String(vj.net || 'tcp');
+		var vpath = String(vj.path || ''), vhost = String(vj.host || '');
+		if (vnet === 'ws') {
+			vo.transport = { type: 'ws' };
+			if (vpath) vo.transport.path = vpath;
+			if (vhost) vo.transport.headers = { Host: vhost };
+		} else if (vnet === 'grpc') {
+			vo.transport = { type: 'grpc' };
+			if (vpath) vo.transport.service_name = vpath;
+		} else if (vnet === 'h2' || vnet === 'http') {
+			vo.transport = { type: 'http' };
+			if (vpath) vo.transport.path = vpath;
+			if (vhost) vo.transport.host = [ vhost ];
+		}
+		if (String(vj.tls || '') === 'tls')
+			vo.tls = { enabled: true, server_name: String(vj.sni || '') || vhost || vo.server };
+		return jsonImportOutbound(vo);
+	}
 
 	var match;
 	if (scheme === 'vless') {
@@ -151,10 +181,18 @@ function _shareLinkImport(url) {
 		};
 		if (params.sni)         f.tls_server_name = params.sni;
 		if (params.flow)        f.vless_flow       = params.flow;
-		if (params.security)    f.security         = params.security;
 		if (params.fp)          f.utls_fingerprint = params.fp;
-		if (params.pbk)         f.reality_public_key = params.pbk;
-		if (params.sid)         f.reality_short_id   = params.sid;
+		// Mirror backend h_tls_security: a reality block (public_key + short_id)
+		// is emitted ONLY when pbk is present. reality without a public key is
+		// fatal in sing-box, so security=reality without pbk degrades to plain
+		// TLS instead of poisoning the draft with a dangling short_id.
+		if (params.security === 'reality' && params.pbk) {
+			f.security           = 'reality';
+			f.reality_public_key = params.pbk;
+			if (params.sid)      f.reality_short_id = params.sid;
+		} else if (params.security === 'tls' || params.security === 'reality') {
+			f.security = 'tls';
+		}
 		if (params.type)        f.transport        = params.type;
 		if (params.path)        f.transport_path   = params.path;
 		if (params.serviceName) f.transport_service_name = params.serviceName;
@@ -221,11 +259,17 @@ function _shareLinkImport(url) {
 				mp = decoded.split(':');
 			} catch (e) { /* keep plain mp */ }
 		}
+		// Mirror backend parse_ss: a credential-less link (empty method or
+		// password) is rejected, not fabricated into a default-method draft.
+		var ssMethod = mp[0] || '';
+		var ssPass   = mp.slice(1).join(':');
+		if (!ssMethod.length || !ssPass.length)
+			return { ok: false, errors: [_('Shadowsocks link is missing method/password')] };
 		var ssf = {
 			type: 'shadowsocks',
 			server: match[2], server_port: +match[3],
-			shadowsocks_method:  mp[0] || '2022-blake3-aes-128-gcm',
-			server_password:     mp.slice(1).join(':'),
+			shadowsocks_method:  ssMethod,
+			server_password:     ssPass,
 		};
 		// SIP002 ?plugin=name;opt=val;... → UCI plugin / plugin_opts (the field
 		// names the shadowsocks descriptor and backend sharelink.uc both use).

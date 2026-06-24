@@ -96,7 +96,7 @@ function valid_section_name(name) {
 // redirect child stdout/stderr away from our own — anything the child prints
 // would otherwise corrupt the JSON response we emit to rpcd.
 function run(cmd, ...extra) {
-	let argv = (type(cmd) === "array") ? [...cmd] : split(cmd, " ");
+	let argv = (type(cmd) === "array") ? [...cmd] : filter(split(cmd, /\s+/), a => length(a));
 	for (let a in extra) push(argv, a);
 	let quoted = [];
 	for (let a in argv) push(quoted, sq(a));
@@ -111,7 +111,7 @@ function run(cmd, ...extra) {
 // keep the same stdout/stderr redirection as run() so a chatty child can't
 // corrupt our JSON response.
 function run_env(cmd, env_map) {
-	let argv = (type(cmd) === "array") ? [...cmd] : split(cmd, " ");
+	let argv = (type(cmd) === "array") ? [...cmd] : filter(split(cmd, /\s+/), a => length(a));
 	let quoted = [];
 	if (type(env_map) === "object") {
 		for (let k, v in env_map) push(quoted, k + "=" + sq(v));
@@ -403,7 +403,16 @@ function clash_safe_listen(v) {
 	if (match(v, /^[A-Za-z0-9._-]+$/)) return v;
 	// bracket-less IPv6 literal: hex groups separated by ':' (and '.' for an
 	// embedded v4 tail). Requires at least one ':' so it can't alias a hostname.
-	if (match(v, /^[0-9A-Fa-f:.]+$/) && index(v, ":") >= 0) return v;
+	// Reject obviously-malformed IPv6 (e.g. more than one "::", or only colons/dots).
+	if (match(v, /^[0-9A-Fa-f:.]+$/) && index(v, ":") >= 0) {
+		// Reject multiple "::", which is invalid IPv6.
+		let cc = 0, idx = 0;
+		while ((idx = index(substr(v, idx), "::")) >= 0) { cc++; idx += 2; }
+		if (cc > 1) return null;
+		// Reject strings with no hex digits (e.g. "::::").
+		if (!match(v, /[0-9A-Fa-f]/)) return null;
+		return v;
+	}
 	return null;
 }
 

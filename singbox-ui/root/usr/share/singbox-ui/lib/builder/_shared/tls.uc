@@ -15,7 +15,7 @@ return {
 
         { name: "tls_alpn", type: "list", tab: "tls",
           ui_label: "ALPN", placeholder: "h2 / http/1.1",
-          values: ["h2", "http/1.1", "h3"],
+          values: ["h2", "http/1.1", "h3"], validate: "validateAlpn",
           parent_enabled: "tls_enabled", advanced: true },
         { name: "tls_min_version", type: "enum", tab: "tls",
           ui_label: "TLS min version", values: ["", "1.0", "1.1", "1.2", "1.3"],

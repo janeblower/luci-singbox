@@ -31,7 +31,7 @@ reg.register({
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,
           validate: "port", default: 443, ui_label: "Listen port" },
-        { name: "network", type: "enum", tab: "basic", values: ["", "udp", "tcp"],
+        { name: "network", type: "enum", tab: "basic", values: ["", "tcp", "udp"],
           ui_label: "Network", json_key: "network", only_values: ["tcp", "udp"] },
         { name: "naive_user", type: "list", tab: "basic", secret: true,
           ui_label: "Users (username:password)", placeholder: "alice:secret" },
@@ -41,7 +41,7 @@ reg.register({
     ],
     users: {
         from: "naive_user",
-        columns: [ { key: "username", required: true }, { key: "password", tail: true, always: true } ],
+        columns: [ { key: "username", required: true }, { key: "password", always: true } ],
     },
 });
 

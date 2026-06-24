@@ -119,6 +119,13 @@ OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 WORK_DIR="${WORK_DIR:-$ROOT_DIR/.build}"
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 
+# Clean up stale outputs from prior versions before building. Only remove THIS
+# package set's outputs (3 noarch + per-arch bbolt filenames), not unrelated .apks.
+rm -f "$OUTPUT_DIR/${SINGBOX_NAME}_"*.apk \
+      "$OUTPUT_DIR/${LUCIAPP_NAME}_"*.apk \
+      "$OUTPUT_DIR/${I18N_NAME}_"*.apk \
+      "$OUTPUT_DIR/${BBOLT_NAME}_"*_*.apk
+
 # ---------------------------------------------------------------------------
 # bbolt-client arch map (single source of truth)
 # Each bbolt_arches_<abi> variable lists the exact OpenWrt arches that use

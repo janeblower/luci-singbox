@@ -51,6 +51,11 @@ function build_rule_sets(cur, referenced_names, valid_ob) {
                 if (rr == null) continue;
                 if ((rr.type ?? "default") === "logical") continue;
                 if (rr.enabled === "0") continue;
+                // Mirror route.uc's logical loop: a rule_set matcher is excluded
+                // from a headless rule (NO_HL), so warn before it vanishes
+                // silently rather than dropping the matcher without a trace.
+                if (rr.rule_set != null && length(rr.rule_set))
+                    warn(sprintf("ruleset.uc: inline rule-set '%s' sub-rule '%s' has a rule_set matcher; not valid in an inline rule-set rule, dropped\n", name, n));
                 let h = headless.build(rr);
                 if (length(keys(h))) push(sub, h);
             }

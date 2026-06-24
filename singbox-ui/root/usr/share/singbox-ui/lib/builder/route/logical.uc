@@ -7,7 +7,8 @@ reg.register({
     kind: "route_rule", type: "logical", sing_box_type: "logical",
     fields: [
         { name: "mode", type: "enum", tab: "match", required: true,
-          json_key: "mode", values: [ "and", "or" ], default: "or", ui_label: "Mode" },
+          json_key: "mode", values: [ "and", "or" ], default: "or",
+          default_when_empty: "or", ui_label: "Mode" },
         { name: "rules", type: "list", tab: "match", dynamic: "route_rules",
           ui_label: "Sub-rules" },
         { name: "invert", type: "bool", tab: "match", advanced: true,

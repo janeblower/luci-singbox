@@ -127,30 +127,6 @@ function validateAlpn(list) {
 	return true;
 }
 
-function requiresWsPath(transportType, path) {
-	if (transportType !== 'ws')
-		return true;
-	if (typeof path !== 'string' || !path.length)
-		return _('WebSocket transport requires a non-empty path');
-	return true;
-}
-
-// softWarnCongestion — PURE, non-blocking validator (spec S2-8). It only
-// *classifies* the value; it must not touch L/E/console (the module contract
-// at the top of this file). An unknown value is permitted (sing-box rejects it
-// at runtime if truly invalid); callers that want a UI hint can compare against
-// KNOWN_CONGESTION themselves.
-var KNOWN_CONGESTION = ['cubic', 'new_reno', 'bbr', 'brutal'];
-function isKnownCongestion(v) {
-	return !(typeof v === 'string' && v.length && KNOWN_CONGESTION.indexOf(v) < 0);
-}
-function softWarnCongestion(v) {
-	// Non-blocking by design — always valid. Classification lives in
-	// isKnownCongestion for callers that want to surface a warning.
-	void isKnownCongestion(v);
-	return true;
-}
-
 return L.Class.extend({
 	isPort:              isPort,
 	isUuid:              isUuid,
@@ -158,7 +134,4 @@ return L.Class.extend({
 	isIPv6Shape:         isIPv6Shape,
 	isUrl:               isUrl,
 	validateAlpn:        validateAlpn,
-	requiresWsPath:      requiresWsPath,
-	softWarnCongestion:  softWarnCongestion,
-	isKnownCongestion:   isKnownCongestion,
 });

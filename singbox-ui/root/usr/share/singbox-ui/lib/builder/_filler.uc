@@ -29,6 +29,10 @@ const SHARED_DISPATCH = {
 // Fields without json_key never reach here (filtered in build()).
 function _emit_scalar(out, s, f) {
     if (f.requires != null) {
+        // String-form `requires` gates on NON-EMPTINESS of the named sibling, so a
+        // UCI bool OFF value "0" (length 1) SATISFIES it. Only safe when the
+        // sibling is a string field; use object-form {field, value:"1"} to gate
+        // on a bool sibling.
         if (type(f.requires) === "string") {
             if (!length(s_opt(s, f.requires))) return;
         } else {
@@ -97,8 +101,8 @@ function _emit_scalar(out, s, f) {
     // "str" (default)
     let v = s_opt(s, f.name);
     if (f.skip_value != null && v === f.skip_value) return;
-    if (f.only_values != null && !(v in f.only_values)) return;
     if (!length(v) && f.default_when_empty != null) v = f.default_when_empty;
+    if (f.only_values != null && !(v in f.only_values)) return;
     if (omit === "never" || length(v)) out[f.json_key] = v;
 }
 
@@ -139,7 +143,7 @@ _emit_group = function(out, s, g) {
     if (!_gate(s, g.gate, null)) return;
     let sub = {};
     _emit_seq(sub, s, g.fields);
-    out[g.json_key] = sub;
+    if (length(keys(sub)) > 0 || g.emit_empty) out[g.json_key] = sub;
 };
 
 // _build_block(s, spec, kind, opts) — build a shared-block object from its
@@ -187,7 +191,7 @@ function _emit_shared(out, s, kind, d) {
         if (mod.emit_spec == null) { warn(sprintf("_filler: shared '%s' has no emit_spec\n", blk)); continue; }
         if (spec.merge) {
             let o = _build_block(s, mod.emit_spec, kind, opts);
-            for (let k in keys(o)) out[k] = o[k];
+            if (o != null) for (let k in keys(o)) out[k] = o[k];
         } else {
             let res = _build_block(s, mod.emit_spec, kind, opts);
             if (res != null) out[spec.key] = res;

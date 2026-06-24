@@ -18,7 +18,11 @@ function buildDashboard() {
 		// DASH-1/DASH-4: per-group "latency test in progress" flag. Set while a
 		// group's probes run so renderGroups() can disable its Test button and
 		// repeated clicks don't stack concurrent probe storms.
-		testing: {}
+		testing: {},
+		// UIS-3: flag to suppress periodic fetchProxies while a node switch is
+		// pending (between chooseNode's PUT and refreshProxies), preventing the
+		// poll from wiping the optimistic selection mid-flight.
+		switchPending: false
 	};
 	var root = E('div', { 'class': 'sb-dashboard' });
 
@@ -91,13 +95,15 @@ function buildDashboard() {
 	function chooseNode(groupName, member) {
 		// optimistic: reflect selection immediately, then resync from /proxies
 		if (state.proxies[groupName]) state.proxies[groupName].now = member;
+		state.switchPending = true;
 		renderGroups();
 		return callClashMutate('PUT', '/proxies/' + groupName,
 		                       JSON.stringify({ name: member }))
 			.then(refreshProxies, function () {
 				ui.addNotification(null, E('p', {}, _('Failed to switch node')));
 				return refreshProxies();
-			});
+			})
+			.then(function () { state.switchPending = false; });
 	}
 
 	// DASH-1: probe at most TEST_POOL members concurrently and coalesce
@@ -167,7 +173,12 @@ function buildDashboard() {
 		return t === 'selector' || t === 'urltest';
 	}
 	function memberDelay(p) {
-		return (p && p.history && p.history[0] && p.history[0].delay) || 0;
+		// clash/mihomo /proxies history appends the NEWEST sample LAST, so read the
+		// tail. The local Test button writes a single-element array, which the tail
+		// read also handles.
+		var h = (p && p.history) || null;
+		var last = (h && h.length) ? h[h.length - 1] : null;
+		return (last && last.delay) || 0;
 	}
 
 	function showUnreachable() {
@@ -388,7 +399,9 @@ function buildDashboard() {
 			// into state.proxies[*].history: fetchProxies replaces state.proxies
 			// wholesale and would wipe them mid-run (button stuck "Testing…",
 			// collected latencies flicker back to "—"). The next tick refreshes.
-			if (!anyTesting()) p.push(fetchProxies());
+			// Also skip while a node switch is pending to preserve the optimistic
+			// selection until refreshProxies completes (UIS-3).
+			if (!anyTesting() && !state.switchPending) p.push(fetchProxies());
 		}
 		return Promise.all(p).then(repaint).catch(showUnreachable);
 	}

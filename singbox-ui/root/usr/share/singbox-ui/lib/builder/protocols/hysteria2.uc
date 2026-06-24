@@ -99,7 +99,7 @@ reg.register({
         from: "inbound_user",
         columns: [
             { key: "name", required: true },
-            { key: "password", tail: true, always: true },
+            { key: "password", always: true },
         ],
         single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
     },

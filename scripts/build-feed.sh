@@ -57,7 +57,7 @@ RELEASE_REPO="${RELEASE_REPO:-janeblower/luci-singbox}"
 # filename (which apk uses to build the download URL; a wrong name -> 404). This
 # mirrors the precise anchoring build-apk.sh's verify step uses on the same dump.
 feed_pkg_filename() {
-  "$APK_BIN" adbdump "$1" 2>/dev/null | awk '
+  "$APK_BIN" adbdump "$1" | awk '
     /^  name: /    && n=="" { n=$2 }
     /^  version: / && v=="" { v=$2 }
     n!="" && v!=""          { printf "%s-%s.apk\n", n, v; exit }

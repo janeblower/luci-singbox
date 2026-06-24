@@ -2,6 +2,7 @@
 let reg = require("builder.protocols.registry");
 reg.register({
     kind: "dns", type: "tailscale", sing_box_type: "tailscale",
+    min_version: "1.14",   // Tailscale DNS server introduced in sing-box 1.14
     fields: [
         { name: "endpoint", type: "string", tab: "basic", required: true,
           ui_label: "Endpoint tag", json_key: "endpoint", omit_when: "never" },

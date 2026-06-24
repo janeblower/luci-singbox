@@ -43,6 +43,9 @@ function widgetFor(field) {
     }
     if (t === 'enum') return form.ListValue;
     if (t === 'list') return form.DynamicList;
+    // Multiline string fields render as a textarea widget (TextValue) instead of
+    // a single-line input. Used for PEM keys, raw JSON, and share-link URLs.
+    if (t === 'string' && field.multiline) return form.TextValue;
     // A string/list field carrying a static `values` array still renders as a
     // free-entry widget (Value / DynamicList); the values become datalist
     // suggestions, not a strict whitelist. Only `enum` is a strict dropdown.
@@ -154,8 +157,10 @@ function disableWithNote(opt, note) {
     if (typeof orig === 'function') {
         opt.renderWidget = function (section_id, option_index, cfgvalue) {
             var node = orig.call(this, section_id, option_index, cfgvalue);
-            if (node && node.querySelectorAll)
+            if (node && node.querySelectorAll) {
                 node.querySelectorAll('input, select, textarea').forEach(function (el) { el.disabled = true; });
+                node.querySelectorAll('.sb-eye-toggle').forEach(function (el) { el.disabled = true; });
+            }
             return node;
         };
     }
@@ -362,10 +367,9 @@ function applyMaterialized(s, kind, protoName, materialized) {
         if (f.default != null) opt.default = String(f.default);
         if (f.placeholder)     opt.placeholder = f.placeholder;
         // UX-2: surface per-field inline help when the descriptor carries it.
-        // Accepts `ui_help` (preferred) or `description`; both are optional and
-        // must be whitelisted in schema_dump.uc FIELD_WHITELIST to reach the
-        // frontend. No-op for fields that don't declare one.
-        var help = f.ui_help || f.description;
+        // `ui_help` is optional and must be whitelisted in schema_dump.uc
+        // FIELD_WHITELIST to reach the frontend. No-op when not declared.
+        var help = f.ui_help;
         if (help) opt.description = _(help);
 
         var values = {};
@@ -377,7 +381,16 @@ function applyMaterialized(s, kind, protoName, materialized) {
 
         if (f.dynamic) attachDynamic(opt, f);
 
-        if (f.secret) {
+        if (f.multiline) {
+            opt.rows = 12;
+            opt.monospace = true;
+        }
+
+        // A multiline field renders as a textarea (TextValue); password masking
+        // and the eye-toggle only work on a single-line input, so multiline wins
+        // for a field that is both (e.g. ssh private_key — a masked one-line PEM
+        // is unusable). Such a field renders as a plain monospace textarea.
+        if (f.secret && !f.multiline) {
             opt.password = true;
             decorateSecretInput(opt);
         }
@@ -411,7 +424,7 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         if (f.required)        opt.rmempty = false;
         if (f.default != null) opt.default = String(f.default);
         if (f.placeholder)     opt.placeholder = f.placeholder;
-        var help = f.ui_help || f.description;
+        var help = f.ui_help;
         if (help) opt.description = _(help);
         // depends arms: advanced toggle + per-value depends + parent_enabled.
         // No discriminator arm — singletons have a single type.

@@ -261,17 +261,25 @@ function cmd_fetch_subs(cur, only) {
 
 	// Step 3: parse each result; on failure, leave existing out_path alone.
 	for (let m in jobs) {
+		// SEC-7: any failure path below means THIS fetch produced no valid meta,
+		// so a stale sidecar from a prior fetch (traffic/expiry/title) must be
+		// dropped — symmetric with the success path that drops meta a response
+		// stops carrying. Otherwise the dashboard renders stale quota indefinitely
+		// for a now-failing subscription.
+		let meta_path = `${TMPDIR}/sub_${m.name}.meta`;
 		let st = fs.stat(m.body_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_subs: download failed for ${m.name}`);
 			unlink_quiet(m.body_path);
 			unlink_quiet(m.hdr_path);
+			unlink_quiet(meta_path);
 			continue;
 		}
 		if (st.size > MAX_BODY) {
 			log_err(`fetch_subs: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
 			unlink_quiet(m.body_path);
 			unlink_quiet(m.hdr_path);
+			unlink_quiet(meta_path);
 			continue;
 		}
 
@@ -280,6 +288,7 @@ function cmd_fetch_subs(cur, only) {
 		if (length(raw) === 0) {
 			log_err(`fetch_subs: empty body for ${m.name}`);
 			unlink_quiet(m.hdr_path);
+			unlink_quiet(meta_path);
 			continue;
 		}
 
@@ -301,18 +310,19 @@ function cmd_fetch_subs(cur, only) {
 			sample = replace(sample, /[\r\n]+/g, " ");
 			log_err(`fetch_subs: no valid proxy URL in response for ${m.name} (body starts: ${sample})`);
 			unlink_quiet(m.hdr_path);
+			unlink_quiet(meta_path);
 			continue;
 		}
 
 		if (!write_atomic(m.out_path, join("\n", urls) + "\n")) {
 			log_err(`fetch_subs: cannot write ${m.out_path}`);
 			unlink_quiet(m.hdr_path);
+			unlink_quiet(meta_path);
 			continue;
 		}
 		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
 		let hdr_raw = _reader(m.hdr_path) ?? "";
 		let meta = parse_headers(hdr_raw);
-		let meta_path = `${TMPDIR}/sub_${m.name}.meta`;
 		if (length(meta)) {
 			write_atomic(meta_path, sprintf("%J", meta));
 		} else {

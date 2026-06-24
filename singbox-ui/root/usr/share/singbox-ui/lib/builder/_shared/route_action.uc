@@ -22,7 +22,7 @@ function fields() {
 
         // route
         { name: "outbound", type: "string", tab: "action", dynamic: "outbounds",
-          json_key: "outbound", ui_label: "Outbound",
+          json_key: "outbound", ui_label: "Outbound", required: true,
           requires: { field: "action", value: "route" },
           depends:  { field: "action", value: "route" } },
 

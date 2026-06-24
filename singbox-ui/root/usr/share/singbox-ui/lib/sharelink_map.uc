@@ -115,7 +115,8 @@ const SPEC = {
         { param: "host",        handler: "transport" },
         { param: "serviceName", handler: "transport" },
         // Direct:
-        { param: "flow",         path: "flow" },
+        { param: "flow",         path: "flow",
+                                 when: { security: ["tls", "reality"] } },
         { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled",
                                  when: { security: ["tls", "reality"] } },
         { param: "alpn",         path: "tls.alpn", transform: "csv",
