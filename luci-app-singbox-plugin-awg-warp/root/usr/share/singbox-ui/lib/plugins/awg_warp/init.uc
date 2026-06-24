@@ -19,6 +19,8 @@ const FEED_KEY  = getenv("SB_AWG_FEED_KEY")
 const APK_CMD   = getenv("APK_CMD")      || "apk";
 const KEYS_DIR  = getenv("SB_APK_KEYS") || "/etc/apk/keys";
 const REPOS     = getenv("SB_APK_REPOS") || "/etc/apk/repositories";
+// SB_UBUS_BOARD overrides the board-query command (e.g. a stub script in tests).
+const BOARD_CMD = getenv("SB_UBUS_BOARD") || "ubus call system board";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,10 +49,11 @@ function m_awg_status() {
 }
 
 // ── board helper ─────────────────────────────────────────────────────────────
-// _board: call `ubus call system board` and return parsed JSON, or {} on error.
+// _board: call `ubus call system board` (or SB_UBUS_BOARD stub) and return
+// parsed JSON, or {} on error.
 // Must be defined before m_awg_install (definition-order rule).
 function _board() {
-	let p = fs.popen("ubus call system board 2>/dev/null");
+	let p = fs.popen(BOARD_CMD + " 2>/dev/null");
 	if (!p) return {};
 	let body = p.read("all") ?? "";
 	p.close();
@@ -74,12 +77,20 @@ function m_awg_install() {
 
 	// 2) Resolve the board target from ubus and build the feed URL.
 	//    release.target is e.g. "x86/64"; fall back gracefully.
+	//    SECURITY: board JSON comes from root-local firmware data, but we
+	//    validate strictly to prevent a crafted target containing newlines or
+	//    URL metacharacters from injecting extra lines into /etc/apk/repositories.
+	//    Accepted pattern: "<subtarget>/<arch>" where each component is
+	//    lowercase alnum plus "_"/"-", at least one char each.
 	let board  = _board();
 	let target = "";
 	let rel = board.release;
 	if (type(rel) === "object" && length(`${rel.target ?? ""}`))
 		target = rel.target;
-	if (!length(target)) target = "x86/64";
+	// Reject any target that does not match the strict OpenWrt target pattern.
+	// Non-capturing groups are not supported in ucode regex; use plain char classes.
+	if (!match(target, /^[a-z0-9][a-z0-9_-]*\/[a-z0-9][a-z0-9_-]*$/))
+		target = "x86/64";
 
 	// Pin the awg-openwrt train version published at time of plugin build.
 	let ver = "25.12.4";

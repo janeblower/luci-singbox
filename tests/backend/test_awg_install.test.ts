@@ -80,6 +80,75 @@ STUB
     // Repo line containing the awg feed URL was written.
     expect(hasr).toBeGreaterThan(0);
   });
+
+  it("rejects malicious board target with newline injection, falls back to x86/64", async () => {
+    // Regression: board.release.target containing a newline + injected repo line
+    // must NOT reach /etc/apk/repositories.  The sanitizer should reject the value
+    // and fall back to "x86/64", so only the legitimate slava-shchipunov line appears.
+    const r = await exec(`
+      set -e
+      cleanup() {
+        rm -rf "${LIB}/plugins/awg_warp"
+        rm -f /tmp/m_apk2 /tmp/m_apk2_log /tmp/board_stub2 /tmp/apk_repos2
+      }
+      trap cleanup EXIT
+
+      cp -r "${PLUGIN_SRC}" "${LIB}/plugins/awg_warp"
+
+      # Stub apk: silent success.
+      cat > /tmp/m_apk2 <<'STUB'
+#!/bin/sh
+echo "$@" >> /tmp/m_apk2_log
+exit 0
+STUB
+      chmod +x /tmp/m_apk2
+
+      # Board stub: returns a MALICIOUS target with an embedded newline + injected line.
+      cat > /tmp/board_stub2 <<'BOARDSTUB'
+#!/bin/sh
+printf '{"release":{"target":"x86/64\\nhttps://evil.example/malicious.adb evil"}}'
+BOARDSTUB
+      chmod +x /tmp/board_stub2
+
+      mkdir -p /tmp/apk_keys2
+      : > /tmp/apk_repos2
+
+      out=$(echo '{}' | \
+        APK_CMD=/tmp/m_apk2 \
+        SB_APK_KEYS=/tmp/apk_keys2 \
+        SB_APK_REPOS=/tmp/apk_repos2 \
+        SB_AWG_FEED_KEY="${LIB}/plugins/awg_warp/awg-openwrt-feed.pem" \
+        SB_UBUS_BOARD=/tmp/board_stub2 \
+        UCODE_APP_LIB_DIR="${LIB}" \
+        ucode -L "${LIB}" "${HANDLER}" call awg_install)
+
+      hasevil=$(grep -c "evil.example" /tmp/apk_repos2 2>/dev/null || true)
+      hasgood=$(grep -c "slava-shchipunov" /tmp/apk_repos2 2>/dev/null || true)
+
+      printf '%s\\n' "$out"
+      echo "hasevil=$hasevil hasgood=$hasgood"
+    `);
+    expect(r.exitCode).toBe(0);
+
+    // rpcd response must be ok (install succeeded with fallback target).
+    const firstLine = r.stdout
+      .split("\n")
+      .find((l) => l.trim().startsWith("{"));
+    expect(firstLine).toBeTruthy();
+    const o = JSON.parse(firstLine ?? "{}");
+    expect(o.status).toBe("ok");
+
+    // Parse the summary line.
+    const summary = r.stdout.split("\n").find((l) => l.includes("hasevil="));
+    expect(summary).toBeTruthy();
+    const hasevil = parseInt(summary?.match(/hasevil=(\d+)/)?.[1] ?? "1", 10);
+    const hasgood = parseInt(summary?.match(/hasgood=(\d+)/)?.[1] ?? "0", 10);
+
+    // The malicious line must NOT appear in the repos file.
+    expect(hasevil).toBe(0);
+    // The legitimate feed URL (fallback x86/64) IS written.
+    expect(hasgood).toBeGreaterThan(0);
+  });
 });
 
 describe("plugin ACL guard", () => {
