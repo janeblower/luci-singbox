@@ -14,6 +14,9 @@
 var addRenameField      = SbCommon.addRenameField;
 var openJsonImportModal = SbTabInbounds.openJsonImportModal;
 
+var _pluginTypes = [];
+function setPluginOutboundTypes(types) { _pluginTypes = types || []; }
+
 var SB_OUTBOUND_PROTOCOLS = [
 	['direct',       'Direct (interface bind)'],
 	['socks',        'SOCKS'],
@@ -156,7 +159,8 @@ function buildOutboundsMap() {
 	};
 
 	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
-	SB_OUTBOUND_PROTOCOLS.forEach(function (e) { o.value(e[0], _(e[1])); });
+	var allTypes = SB_OUTBOUND_PROTOCOLS.concat(_pluginTypes);
+	allTypes.forEach(function (e) { o.value(e[0], _(e[1])); });
 	o.rmempty = false;
 	SbCommon.applyVersionGate(o,
 		(SbViewState.getSchema() || {}).outbound || {},
@@ -233,7 +237,8 @@ function buildOutboundsMap() {
 }
 
 return L.Class.extend({
-	SB_OUTBOUND_PROTOCOLS: SB_OUTBOUND_PROTOCOLS,
-	openShareLinkModal:    openShareLinkModal,
-	buildOutboundsMap:     buildOutboundsMap,
+	SB_OUTBOUND_PROTOCOLS:    SB_OUTBOUND_PROTOCOLS,
+	openShareLinkModal:       openShareLinkModal,
+	buildOutboundsMap:        buildOutboundsMap,
+	setPluginOutboundTypes:   setPluginOutboundTypes,
 });

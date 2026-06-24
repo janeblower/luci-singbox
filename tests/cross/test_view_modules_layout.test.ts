@@ -17,6 +17,7 @@ const REQUIRED_FILES = [
   "main.js",
   "lib/rpc.js",
   "lib/common.js",
+  "lib/plugins.js",
   "importers/inbound.js",
   "importers/outbound.js",
   "importers/transport.js",
