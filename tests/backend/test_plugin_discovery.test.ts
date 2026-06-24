@@ -42,6 +42,7 @@ describe("test_plugin_discovery", () => {
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_fixture"
+      trap 'rm -rf "$PLUG"' EXIT
       mkdir -p "$PLUG"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
@@ -54,7 +55,6 @@ EOF
         let reg = require("plugins.registry");
         print(sprintf("%J", { loaded_at_least: n >= 1, has_zz: type(reg.get_rpcd_methods().zz_ping) === "function" }));
       '
-      rm -rf "$PLUG"
     `);
     expect(r.exitCode).toBe(0);
     const o = JSON.parse(r.stdout);

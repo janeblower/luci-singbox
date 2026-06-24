@@ -917,7 +917,11 @@ function _cmd_apply_locked(cur) {
 	if (p.v4 === "" && p.v6 === "" && !length(rules)) {
 		nft_delete_table_quiet();
 		log_err("nftables: no fakeip ranges and no ruleset rules; table removed");
-		return 0;
+		// Mirror the !p.transparent branch: plugin fragments must still be applied
+		// even when the core singbox_ui table is removed. Without this, a plugin
+		// contributing an independent nft table (e.g. masquerade) would silently
+		// lose its rules whenever there are no fakeip ranges AND no rule-set rules.
+		return length(frags) ? run_nft_ruleset(frags) : 0;
 	}
 
 	let ruleset = build_ruleset(p.port, p.v4, p.v6, p.ifaces, p.mark, p.mask, p.router_out, rules);

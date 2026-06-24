@@ -14,6 +14,7 @@ describe("test_plugin_rpcd", () => {
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_list"
+      trap 'rm -rf "$PLUG"' EXIT
       mkdir -p "$PLUG"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
@@ -21,7 +22,6 @@ reg.register({ name: "zz_list", version: "2" });
 return {};
 EOF
       out=$(echo '{}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugins)
-      rm -rf "$PLUG"
       echo "$out"
     `);
     expect(r.exitCode).toBe(0);
@@ -38,6 +38,7 @@ EOF
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_rpcd"
+      trap 'rm -rf "$PLUG"' EXIT
       mkdir -p "$PLUG"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
@@ -48,7 +49,6 @@ return {};
 EOF
       list_has=$(UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' list | ucode -e 'let fs=require("fs"); let d=json(fs.stdin.read("all")||"{}"); print(d.zz_echo != null ? "yes" : "no");')
       call_out=$(echo '{}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call zz_echo)
-      rm -rf "$PLUG"
       print(){ :; }
       echo "{\\"list_has\\":\\"$list_has\\",\\"call_out\\":$call_out}"
     `);

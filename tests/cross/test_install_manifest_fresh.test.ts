@@ -9,8 +9,8 @@
  * gen-manifest.sh pins LC_ALL=C sort internally; we compare byte-for-byte
  * so no locale override is needed here.
  *
- * Also enforces D4.5: exactly one file under lib/plugins/ in the backend
- * manifest — plugins/registry.uc.
+ * Also enforces D4.5: exactly two files under lib/plugins/ in the backend
+ * manifest — plugins/registry.uc + plugins/discovery.uc.
  */
 import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";

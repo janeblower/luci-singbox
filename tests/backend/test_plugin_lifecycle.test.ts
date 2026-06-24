@@ -12,6 +12,7 @@ describe("test_plugin_lifecycle", () => {
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_nft"
+      trap 'rm -rf "$PLUG"' EXIT
       mkdir -p "$PLUG"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
@@ -20,7 +21,6 @@ return {};
 EOF
       # Use the nftables.uc CLI 'print' path (no actual nft apply) with the stub apply seam.
       out=$(UCODE_APP_LIB_DIR="${LIB}" SINGBOX_NFT_APPLY=/bin/true ucode -L '${LIB}' '${LIB}/../nftables.uc' print 2>/dev/null || true)
-      rm -rf "$PLUG"
       echo "$out" | grep -q "zz_nft_marker" && echo FOUND || echo MISSING
     `);
     expect(r.exitCode).toBe(0);
@@ -37,6 +37,7 @@ EOF
     const r = await exec(`
       D=/tmp/plc-apply-test-$$
       PLUG="${LIB}/plugins/zz_apply_marker"
+      trap 'rm -rf "$PLUG" "$D"' EXIT
       mkdir -p "$PLUG" "$D/uci"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
@@ -53,7 +54,6 @@ EOF
         ucode -L "${LIB}" "${LIB}/../nftables.uc" apply 2>/dev/null
       rc=$?
       captured=$(cat "$D/captured" 2>/dev/null || echo "")
-      rm -rf "$PLUG" "$D"
       if [ $rc -ne 0 ]; then echo "APPLY_FAILED:rc=$rc"; exit 0; fi
       echo "$captured" | grep -q "zz_apply_marker_table" && echo FOUND || echo MISSING
     `);
@@ -65,6 +65,7 @@ EOF
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_lc"
+      trap 'rm -rf "$PLUG"; rm -f /tmp/zz_lc_applied /tmp/zz_lc_torndown' EXIT
       mkdir -p "$PLUG"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
@@ -77,7 +78,6 @@ EOF
       rm -f /tmp/zz_lc_applied /tmp/zz_lc_torndown
       UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' apply
       UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' teardown
-      rm -rf "$PLUG"
       a=$([ -f /tmp/zz_lc_applied ] && echo 1 || echo 0)
       t=$([ -f /tmp/zz_lc_torndown ] && echo 1 || echo 0)
       echo "{\\"applied\\":$a,\\"torndown\\":$t}"
@@ -86,6 +86,46 @@ EOF
     const o = JSON.parse(r.stdout);
     expect(o.applied).toBe(1);
     expect(o.torndown).toBe(1);
+  });
+
+  // Regression test for the third early-return branch in _cmd_apply_locked:
+  // transparent inbound IS configured BUT there are no fakeip ranges AND no
+  // rule-set rules.  Previously `return 0` dropped frags; now it mirrors the
+  // !p.transparent branch and calls run_nft_ruleset(frags) when frags exist.
+  // Uses SINGBOX_NFT_CAPTURE seam so no actual nft binary is needed.
+  it("apply path applies plugin fragment when transparent inbound but no fakeip/rules (third-branch fix)", async () => {
+    const r = await exec(`
+      D=/tmp/plc-tproxy-nofakeip-$$
+      PLUG="${LIB}/plugins/zz_tproxy_frag"
+      trap 'rm -rf "$PLUG" "$D"' EXIT
+      mkdir -p "$PLUG" "$D/uci"
+      cat > "$PLUG/init.uc" <<'EOF'
+let reg = require("plugins.registry");
+reg.register({ name: "zz_tproxy_frag", nft: { fragment: function(cur){ return "table inet zz_tproxy_frag_marker { }"; } } });
+return {};
+EOF
+      # UCI config: one tproxy inbound with nft_rules=1 but no fakeip ranges
+      # and no rule-set sections — triggers the v4==""&&v6==""&&!length(rules) branch.
+      cat > "$D/uci/singbox-ui" <<'UCEOF'
+config singbox-ui main
+	option enabled 1
+
+config inbound tproxy_in
+	option type tproxy
+	option listen_port 7895
+	option nft_rules 1
+UCEOF
+      UCI_CONFIG_DIR="$D/uci" \
+        UCODE_APP_LIB_DIR="${LIB}" \
+        SINGBOX_NFT_CAPTURE="$D/captured" \
+        ucode -L "${LIB}" "${LIB}/../nftables.uc" apply 2>/dev/null
+      rc=$?
+      captured=$(cat "$D/captured" 2>/dev/null || echo "")
+      if [ $rc -ne 0 ]; then echo "APPLY_FAILED:rc=$rc"; exit 0; fi
+      echo "$captured" | grep -q "zz_tproxy_frag_marker" && echo FOUND || echo MISSING
+    `);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim().endsWith("FOUND")).toBe(true);
   });
 
   // Confirm: !transparent + no plugin fragments → apply returns 0 cleanly
