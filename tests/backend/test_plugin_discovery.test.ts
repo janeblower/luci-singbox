@@ -36,4 +36,28 @@ describe("test_plugin_discovery", () => {
     expect(o.nf_count).toBe(1);
     expect(o.names).toContain("p1");
   });
+
+  it("discovery globs lib/plugins/*/init.uc and self-registers descriptors", async () => {
+    // Stage a throwaway plugin dir next to the lib, then load it.
+    const r = await exec(`
+      set -e
+      PLUG="${LIB}/plugins/zz_fixture"
+      mkdir -p "$PLUG"
+      cat > "$PLUG/init.uc" <<'EOF'
+let reg = require("plugins.registry");
+reg.register({ name: "zz_fixture", rpcd: { methods: { zz_ping: function(){ return "pong"; } }, acl_read: ["zz_ping"], acl_write: [] } });
+return {};
+EOF
+      UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' -e '
+        let d = require("plugins.discovery");
+        let n = d.load_all();
+        let reg = require("plugins.registry");
+        print(sprintf("%J", { loaded_at_least: n >= 1, has_zz: type(reg.get_rpcd_methods().zz_ping) === "function" }));
+      '
+      rm -rf "$PLUG"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    expect(o.has_zz).toBe(true);
+  });
 });
