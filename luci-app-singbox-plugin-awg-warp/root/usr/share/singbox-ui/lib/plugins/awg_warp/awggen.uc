@@ -70,6 +70,10 @@ function generate(opts) {
 	return p;
 }
 
+// Note: validate_selfhosted and the selfhosted branch in generate() are
+// EXPERT-UCI-ONLY — no product UI sets awg_target=selfhosted (the form is
+// WARP-only); this path + validate_selfhosted exist for hand-edited configs
+// / future use.
 function validate_selfhosted(p, mtu) {
 	let e = [];
 	if (p.jmin >= p.jmax) push(e, "Jmin must be < Jmax");

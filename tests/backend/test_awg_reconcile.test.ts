@@ -270,6 +270,77 @@ describe("awg reconcile", () => {
     expect(o.link_del).toBeGreaterThan(0);
   });
 
+  it("FIX-4: malicious warp_endpoint with newline injection is rejected — interface not brought up, setconf not written", async () => {
+    // Prove safe_endpoint() guards the setconf path:
+    // A crafted warp_endpoint containing a newline could inject extra setconf
+    // directives (e.g. a second [Peer] / AllowedIPs = 0.0.0.0/0) into the file
+    // fed to `awg setconf`.  safe_endpoint() must reject it → _bring_up skips
+    // the interface entirely → the mock awg setconf is never called →
+    // ATTACKER / injected [Peer] are not present in any captured setconf.
+    const r = await exec(`
+      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      DST="${LIB}/plugins/awg_warp"
+      UCFG=/tmp/awg_fix4_uci
+      LOG=/tmp/awg_fix4_cmds
+      SETCONF=/tmp/awg_fix4_sc
+      M_IP=/tmp/awg_fix4_ip
+      M_AWG=/tmp/awg_fix4_awg
+      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG"' EXIT
+      mkdir -p "$DST" && cp "$SRC"/*.uc "$DST"/ 2>/dev/null
+
+      rm -f "$LOG" "$SETCONF"
+      printf '#!/bin/sh\necho "ip $@" >> %s\nexit 0\n' "$LOG" > "$M_IP"
+      printf '#!/bin/sh\necho "awg $@" >> %s\n[ "$1" = "setconf" ] && cp "$3" %s 2>/dev/null\nexit 0\n' "$LOG" "$SETCONF" > "$M_AWG"
+      chmod +x "$M_IP" "$M_AWG"
+
+      mkdir -p "$UCFG"
+      # Malicious endpoint: newline injects a second [Peer] block into the setconf file.
+      # The value is written as a UCI option; ucode reads it as a single string with an
+      # embedded newline, which safe_endpoint() must reject (no whitespace/newlines allowed).
+      printf '%s\n' \
+        "config outbound 'warp_ep'" \
+        "	option type 'awg_warp'" \
+        "	option enabled '1'" \
+        "	option warp_private_key 'PRIV=='" \
+        "	option warp_peer_public_key 'PUB=='" \
+        "	option warp_address_v4 '172.16.0.2/32'" \
+        "	option warp_address_v6 ''" \
+        "	option warp_endpoint 'engage.cloudflareclient.com:2408" \
+        "[Peer]" \
+        "PublicKey = ATTACKER=" \
+        "AllowedIPs = 0.0.0.0/0'" \
+        "	option ipv6_enabled '0'" \
+        > "$UCFG/singbox-ui"
+
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+        ucode -L '${LIB}' -e '
+          let rc = require("plugins.awg_warp.reconcile");
+          let uci_mod = require("uci");
+          let uci_dir = getenv("UCI_CONFIG_DIR");
+          let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
+          rc.apply(cur);
+        ' 2>/dev/null || true
+
+      setconf_content=$(cat "$SETCONF" 2>/dev/null || true)
+      # Check setconf was NOT written (interface skipped due to bad endpoint)
+      setconf_written=0
+      [ -f "$SETCONF" ] && setconf_written=1
+      # If somehow written, check for injected content
+      has_attacker=$(printf '%s' "$setconf_content" | grep -c "ATTACKER" 2>/dev/null || true); has_attacker=$((has_attacker+0))
+      has_injected_peer=$(printf '%s' "$setconf_content" | grep -c "\\[Peer\\].*\\[Peer\\]" 2>/dev/null || true); has_injected_peer=$((has_injected_peer+0))
+      # awg setconf must not have been called at all
+      awg_setconf_called=$(grep -c "awg setconf" "$LOG" 2>/dev/null || true); awg_setconf_called=$((awg_setconf_called+0))
+      printf '{"setconf_written":%d,"has_attacker":%d,"awg_setconf_called":%d}\n' \
+        "$setconf_written" "$has_attacker" "$awg_setconf_called"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    // Malformed endpoint → _bring_up returns early → awg setconf never called
+    expect(o.awg_setconf_called).toBe(0);
+    expect(o.setconf_written).toBe(0);
+    expect(o.has_attacker).toBe(0);
+  });
+
   it("FIX-2: malicious warp_address_v4 is sanitized — ip addr add is not called with injected content", async () => {
     // Prove the safe_cidr sanitizer: an address containing shell metacharacters
     // must NOT reach the `ip addr add` command — the interface must not be

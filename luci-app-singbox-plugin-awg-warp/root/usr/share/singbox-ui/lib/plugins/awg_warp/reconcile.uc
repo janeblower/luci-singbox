@@ -30,6 +30,24 @@ function safe_cidr(s) {
 	return "";
 }
 
+// safe_endpoint — sanitize warp_endpoint (host:port) before it reaches the
+// setconf file fed to `awg setconf`.  Not a shell command, but a crafted value
+// containing a NEWLINE could inject extra setconf directives (e.g. a second
+// [Peer] / AllowedIPs), violating WARP-tunnel integrity.
+// Accepts: hostname/IPv4/bracketless-IPv6-like chars plus colon and port digits.
+// Charset ^[a-zA-Z0-9._:-]+$ covers: hostnames, dotted-IPv4, hex-colon-IPv6,
+// and :port — no whitespace, newlines, or shell metacharacters are permitted.
+// Note: ucode does not support (?:...) non-capturing groups; '-' is placed last
+// in the character class to avoid being mis-read as a range.
+// Returns the original string if valid; "" otherwise.
+function safe_endpoint(s) {
+	s = `${s ?? ""}`;
+	if (length(s) == 0) return "";
+	if (match(s, /^[a-zA-Z0-9._:-]+$/)) return s;
+	require("log").log_event("warn", "awg.unsafe_endpoint_rejected", { value: s });
+	return "";
+}
+
 // render_setconf — genl-only setconf (NO Address/MTU — those go via ip addr/ip link).
 // Putting Address/MTU here causes `awg setconf` to fail.
 function render_setconf(creds, p) {
@@ -62,6 +80,9 @@ function render_conf(creds, p, ipv6_enabled) {
 // _params_from_section — derive genl params from a UCI outbound section.
 // For target=warp: S1..S4=0, H1=1,H2=2,H3=3,H4=4 (WARP-safe, spec §10).
 // For selfhosted: read stored awg_s*/awg_h* from UCI.
+// Note: selfhosted (custom S/H) is EXPERT-UCI-ONLY — no product UI sets
+// awg_target=selfhosted (the form is WARP-only); this path exists for
+// hand-edited configs / future use.
 function _params_from_section(s) {
 	function n(k, d) { let v = int(`${s[k] ?? ""}`); return (v != 0 || s[k] == "0") ? v : d; }
 	let target = (s.awg_target == "selfhosted") ? "selfhosted" : "warp";
@@ -120,11 +141,17 @@ function _bring_up(cur, item) {
 		peer_public_key: s.warp_peer_public_key  ?? "",
 		address_v4:      safe_cidr(s.warp_address_v4 ?? "172.16.0.2/32"),
 		address_v6:      safe_cidr(s.warp_address_v6 ?? ""),
-		endpoint:        s.warp_endpoint         ?? "engage.cloudflareclient.com:2408",
+		endpoint:        safe_endpoint(s.warp_endpoint ?? "engage.cloudflareclient.com:2408"),
 	};
 	// Abort if v4 address is malformed (safe_cidr returned "").
 	if (length(creds.address_v4) == 0) {
 		require("log").log_event("error", "awg.bad_address_v4", { iface: dev });
+		return;
+	}
+	// Abort if endpoint is malformed or contains injection payload (safe_endpoint returned "").
+	// The tunnel cannot work without a valid endpoint; skip rather than bring up a broken iface.
+	if (length(creds.endpoint) == 0) {
+		require("log").log_event("error", "awg.bad_endpoint", { iface: dev });
 		return;
 	}
 	let ipv6 = (s.ipv6_enabled == "1") && length(creds.address_v6);

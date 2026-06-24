@@ -143,6 +143,9 @@ function m_warp_register() {
 	let uci_dir = getenv("UCI_CONFIG_DIR");
 	let cur = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 	warp.store_creds(cur, sec, res.creds);
+	// Contract: creds are committed here; the native amneziawg interface is
+	// (re)built on the NEXT init.d apply (lifecycle hook), consistent with the
+	// Save&Apply model — do NOT trigger reconcile here (would double-apply).
 	emit({ status: "ok" });
 }
 
