@@ -3,7 +3,7 @@
 // and through _safe_iface() ([a-z0-9_]-only filter) before embedding in nft text.
 //
 // Emits:
-//   table inet singbox_ui_awg_nat  — ip4 postrouting masquerade for each enabled iface
+//   table ip singbox_ui_awg_nat    — ip4-only postrouting masquerade for each enabled iface
 //   table ip6 singbox_ui_awg_nat6  — NAT66 postrouting masquerade (ipv6_enabled + v6 addr)
 let ifaceh = require("plugins.awg_warp.iface");
 
@@ -33,7 +33,7 @@ function fragment(cur) {
 	if (!length(v4_rules) && !length(v6_rules)) return "";
 	let out = "";
 	if (length(v4_rules)) {
-		out += "table inet singbox_ui_awg_nat {\n";
+		out += "table ip singbox_ui_awg_nat {\n";
 		out += "\tchain postrouting {\n\t\ttype nat hook postrouting priority srcnat; policy accept;\n";
 		for (let r in v4_rules) out += r + "\n";
 		out += "\t}\n}\n";

@@ -35,10 +35,15 @@ describe("awg nft fragment", () => {
       ')
       echo "$out" | grep -q 'oifname "warp_n" masquerade' && echo V4 || echo NOV4
       echo "$out" | grep -qi "ip6" && echo V6 || echo NOV6
+      echo "$out" | grep -q 'table ip singbox_ui_awg_nat' && echo TABLEIP || echo NOTABLEIP
+      echo "$out" | grep -q 'table inet singbox_ui_awg_nat' && echo TABLEINET || echo NOTABLEINET
     `);
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("V4");
     expect(r.stdout).toContain("V6");
+    // double-NAT regression guard: v4 table must be ip-only, NOT inet (dual-stack)
+    expect(r.stdout).toContain("TABLEIP");
+    expect(r.stdout).toContain("NOTABLEINET");
   });
 });
 
