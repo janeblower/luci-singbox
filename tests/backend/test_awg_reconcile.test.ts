@@ -40,6 +40,8 @@ describe("awg reconcile", () => {
   useGuest();
 
   it("apply issues native ip/awg commands; setconf excludes Address/MTU; addrlabel gated on ipv6", async () => {
+    // Creds come from a pre-placed .conf in $SINGBOX_TMPDIR (confstore source of truth).
+    // UCI section carries only type/enabled/warp_storage/ipv6_enabled/mtu_override.
     const r = await exec(`
       SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
@@ -48,7 +50,8 @@ describe("awg reconcile", () => {
       SETCONF=/tmp/awg_rci_sc
       M_IP=/tmp/awg_rci_ip
       M_AWG=/tmp/awg_rci_awg
-      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG"' EXIT
+      RAM=/tmp/awg_rci_ram
+      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG" "$RAM"' EXIT
       mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$LOG"
@@ -57,25 +60,44 @@ describe("awg reconcile", () => {
       printf '#!/bin/sh\necho "awg $@" >> %s\n[ "$1" = "setconf" ] && cp "$3" %s 2>/dev/null\nexit 0\n' "$LOG" "$SETCONF" > "$M_AWG"
       chmod +x "$M_IP" "$M_AWG"
 
-      # Seed UCI config using UCI_CONFIG_DIR seam (uci.cursor() reads from this dir)
+      # Pre-place the .conf seed in SINGBOX_TMPDIR (confstore reads it for source of truth).
+      mkdir -p "$RAM"
+      cat > "$RAM/warp_t.conf" << 'WGEOF'
+[Interface]
+PrivateKey = PRIV==
+Jc = 8
+Jmin = 64
+Jmax = 900
+S1 = 0
+S2 = 0
+S3 = 0
+S4 = 0
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+Address = 172.16.0.2/32
+Address = 2606:4700::2/128
+MTU = 1380
+[Peer]
+PublicKey = PUB==
+Endpoint = engage.cloudflareclient.com:2408
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+WGEOF
+
+      # Seed UCI config — no warp_* cred fields; creds come from .conf
       mkdir -p "$UCFG"
       printf '%s\n' \
         "config outbound 'warp_t'" \
         "	option type 'awg_warp'" \
         "	option enabled '1'" \
-        "	option warp_private_key 'PRIV=='" \
-        "	option warp_peer_public_key 'PUB=='" \
-        "	option warp_address_v4 '172.16.0.2/32'" \
-        "	option warp_address_v6 '2606:4700::2/128'" \
-        "	option warp_endpoint 'engage.cloudflareclient.com:2408'" \
-        "	option awg_jc '8'" \
-        "	option awg_jmin '64'" \
-        "	option awg_jmax '900'" \
+        "	option warp_storage 'ram'" \
         "	option ipv6_enabled '1'" \
         "	option mtu_override '1380'" \
         > "$UCFG/singbox-ui"
 
-      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
         ucode -L '${LIB}' -e '
           let rc = require("plugins.awg_warp.reconcile");
           let uci_mod = require("uci");
@@ -91,7 +113,7 @@ describe("awg reconcile", () => {
       has_v6=$(grep -c "addr add 2606:4700::2/128" "$LOG" 2>/dev/null || true); has_v6=$((has_v6+0))
       has_mtu=$(grep -c "mtu 1380" "$LOG" 2>/dev/null || true); has_mtu=$((has_mtu+0))
       has_label=$(grep -c "addrlabel add" "$LOG" 2>/dev/null || true); has_label=$((has_label+0))
-      bad_setconf=$(printf '%s' "$setconf" | grep -ci '^Address|^MTU' 2>/dev/null || true); bad_setconf=$((bad_setconf+0))
+      bad_setconf=$(printf '%s' "$setconf" | grep -ci '^Address\|^MTU' 2>/dev/null || true); bad_setconf=$((bad_setconf+0))
       printf '{"link":%d,"v6":%d,"mtu":%d,"label":%d,"bad_setconf":%d}\n' \
         "$has_link" "$has_v6" "$has_mtu" "$has_label" "$bad_setconf"
     `);
@@ -105,9 +127,9 @@ describe("awg reconcile", () => {
   });
 
   it("FIX-1: disabling a section (enabled=0) also removes addrlabel entries", async () => {
-    // Prove the addrlabel leak fix: enable a section with ipv6, apply, then set
-    // enabled=0, apply again — the second apply must emit BOTH link del AND
-    // addrlabel del for that interface (not just link del as before the fix).
+    // Prove the addrlabel leak fix: enable a section with ipv6 and a pre-placed .conf,
+    // apply, then set enabled=0, apply again — the second apply must emit BOTH link del
+    // AND addrlabel del for that interface (_managed_names reads del_v6 from .conf).
     const r = await exec(`
       SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
@@ -115,29 +137,52 @@ describe("awg reconcile", () => {
       LOG=/tmp/awg_fix1_cmds
       M_IP=/tmp/awg_fix1_ip
       M_AWG=/tmp/awg_fix1_awg
-      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG"' EXIT
+      RAM=/tmp/awg_fix1_ram
+      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG" "$RAM"' EXIT
       mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       printf '#!/bin/sh\necho "ip $@" >> %s\nexit 0\n' "$LOG" > "$M_IP"
       printf '#!/bin/sh\nexit 0\n' > "$M_AWG"
       chmod +x "$M_IP" "$M_AWG"
 
+      # Pre-place .conf with v6 address — this is the source of truth for del_v6
+      mkdir -p "$RAM"
+      cat > "$RAM/warp_dis.conf" << 'WGEOF'
+[Interface]
+PrivateKey = PRIV==
+Jc = 8
+Jmin = 64
+Jmax = 900
+S1 = 0
+S2 = 0
+S3 = 0
+S4 = 0
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+Address = 10.0.0.2/32
+Address = 2606:4700::9/128
+MTU = 1280
+[Peer]
+PublicKey = PUB==
+Endpoint = engage.cloudflareclient.com:2408
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+WGEOF
+
       mkdir -p "$UCFG"
-      # First apply: section enabled=1 with ipv6
+      # First apply: section enabled=1 — no warp_* creds in UCI, come from .conf
       printf '%s\n' \
         "config outbound 'warp_dis'" \
         "	option type 'awg_warp'" \
         "	option enabled '1'" \
-        "	option warp_private_key 'PRIV=='" \
-        "	option warp_peer_public_key 'PUB=='" \
-        "	option warp_address_v4 '10.0.0.2/32'" \
-        "	option warp_address_v6 '2606:4700::9/128'" \
-        "	option warp_endpoint 'engage.cloudflareclient.com:2408'" \
+        "	option warp_storage 'ram'" \
         "	option ipv6_enabled '1'" \
         > "$UCFG/singbox-ui"
 
       rm -f "$LOG"
-      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
         ucode -L '${LIB}' -e '
           let rc = require("plugins.awg_warp.reconcile");
           let uci_mod = require("uci");
@@ -146,21 +191,17 @@ describe("awg reconcile", () => {
           rc.apply(cur);
         ' 2>/dev/null || true
 
-      # Second apply: same section but enabled=0 (simulate user disabling it)
+      # Second apply: same section but enabled=0 — .conf still present, del_v6 sourced from it
       printf '%s\n' \
         "config outbound 'warp_dis'" \
         "	option type 'awg_warp'" \
         "	option enabled '0'" \
-        "	option warp_private_key 'PRIV=='" \
-        "	option warp_peer_public_key 'PUB=='" \
-        "	option warp_address_v4 '10.0.0.2/32'" \
-        "	option warp_address_v6 '2606:4700::9/128'" \
-        "	option warp_endpoint 'engage.cloudflareclient.com:2408'" \
+        "	option warp_storage 'ram'" \
         "	option ipv6_enabled '1'" \
         > "$UCFG/singbox-ui"
 
       rm -f "$LOG"
-      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
         ucode -L '${LIB}' -e '
           let rc = require("plugins.awg_warp.reconcile");
           let uci_mod = require("uci");
@@ -170,6 +211,7 @@ describe("awg reconcile", () => {
         ' 2>/dev/null || true
 
       # The second apply (disable path) must emit link del AND addrlabel del
+      # (.conf is still present so _managed_names finds del_v6 = 2606:4700::9/128)
       has_link_del=$(grep -c "link del dev warp_dis" "$LOG" 2>/dev/null || true); has_link_del=$((has_link_del+0))
       has_addrlabel_del=$(grep -c "addrlabel del prefix 2606:4700::9/128" "$LOG" 2>/dev/null || true); has_addrlabel_del=$((has_addrlabel_del+0))
       has_default_del=$(grep -c "addrlabel del prefix ::/0" "$LOG" 2>/dev/null || true); has_default_del=$((has_default_del+0))
@@ -183,12 +225,11 @@ describe("awg reconcile", () => {
     expect(o.default_del).toBeGreaterThan(0);
   });
 
-  it("FIX-3: malicious warp_address_v6 in del path is sanitized — ip addrlabel del is not called with injected content", async () => {
+  it("FIX-3: malicious address_v6 in stored .conf del path is sanitized — ip addrlabel del is not called with injected content", async () => {
     // Prove safe_cidr() guards the DELETE path in _del_iface:
-    // enable a section with a malicious warp_address_v6, then disable it so
-    // apply() calls _del_iface(iface, raw_v6).  The mock `ip` stub evaluates
-    // its args (same as FIX-2) — if the injection reaches `ip addrlabel del`,
-    // the MARKER file will be created.  Assert it is NOT created.
+    // _managed_names reads del_v6 from the stored .conf. When that .conf contains
+    // a malicious address_v6, safe_cidr() in _del_iface must reject it so the
+    // marker file is NOT created. link del must still be called (unaffected).
     const r = await exec(`
       SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
@@ -196,8 +237,9 @@ describe("awg reconcile", () => {
       LOG=/tmp/awg_fix3_cmds
       M_IP=/tmp/awg_fix3_ip
       M_AWG=/tmp/awg_fix3_awg
+      RAM=/tmp/awg_fix3_ram
       MARKER=/tmp/awg_fix3_pwned
-      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG" "$MARKER"' EXIT
+      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG" "$RAM" "$MARKER"' EXIT
       mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$MARKER"
@@ -206,21 +248,43 @@ describe("awg reconcile", () => {
       printf '#!/bin/sh\nexit 0\n' > "$M_AWG"
       chmod +x "$M_IP" "$M_AWG"
 
+      # Pre-place a valid .conf for first apply (enabled=1)
+      mkdir -p "$RAM"
+      cat > "$RAM/warp_evil6.conf" << 'WGEOF'
+[Interface]
+PrivateKey = PRIV==
+Jc = 8
+Jmin = 64
+Jmax = 900
+S1 = 0
+S2 = 0
+S3 = 0
+S4 = 0
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+Address = 10.0.0.5/32
+Address = 2001:db8::1/128
+MTU = 1280
+[Peer]
+PublicKey = PUB==
+Endpoint = engage.cloudflareclient.com:2408
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+WGEOF
+
       mkdir -p "$UCFG"
-      # First apply: section enabled=1 with valid addresses (bring-up path)
+      # First apply: section enabled=1
       printf '%s\n' \
         "config outbound 'warp_evil6'" \
         "	option type 'awg_warp'" \
         "	option enabled '1'" \
-        "	option warp_private_key 'PRIV=='" \
-        "	option warp_peer_public_key 'PUB=='" \
-        "	option warp_address_v4 '10.0.0.5/32'" \
-        "	option warp_address_v6 '2001:db8::1/128'" \
-        "	option warp_endpoint 'engage.cloudflareclient.com:2408'" \
+        "	option warp_storage 'ram'" \
         "	option ipv6_enabled '1'" \
         > "$UCFG/singbox-ui"
 
-      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
         ucode -L '${LIB}' -e '
           let rc = require("plugins.awg_warp.reconcile");
           let uci_mod = require("uci");
@@ -229,22 +293,46 @@ describe("awg reconcile", () => {
           rc.apply(cur);
         ' 2>/dev/null || true
 
-      # Second apply: same section, disabled, MALICIOUS warp_address_v6
+      # Overwrite .conf with malicious address_v6 — this is what _managed_names reads for del_v6.
+      # safe_cidr() in _del_iface must reject it.
+      # Use printf so the shell variable $MARKER is expanded correctly at runtime
+      # (not interpolated by JS template literal).
+      printf '%s\n' \
+        "[Interface]" \
+        "PrivateKey = PRIV==" \
+        "Jc = 8" \
+        "Jmin = 64" \
+        "Jmax = 900" \
+        "S1 = 0" \
+        "S2 = 0" \
+        "S3 = 0" \
+        "S4 = 0" \
+        "H1 = 1" \
+        "H2 = 2" \
+        "H3 = 3" \
+        "H4 = 4" \
+        "Address = 10.0.0.5/32" \
+        "Address = 2001:db8::1/128; touch \${MARKER}" \
+        "MTU = 1280" \
+        "[Peer]" \
+        "PublicKey = PUB==" \
+        "Endpoint = engage.cloudflareclient.com:2408" \
+        "AllowedIPs = 0.0.0.0/0, ::/0" \
+        "PersistentKeepalive = 25" \
+        > "$RAM/warp_evil6.conf"
+
+      # Second apply: section disabled — _managed_names reads del_v6 from the malicious .conf
       rm -f "$MARKER"
       printf '%s\n' \
         "config outbound 'warp_evil6'" \
         "	option type 'awg_warp'" \
         "	option enabled '0'" \
-        "	option warp_private_key 'PRIV=='" \
-        "	option warp_peer_public_key 'PUB=='" \
-        "	option warp_address_v4 '10.0.0.5/32'" \
-        "	option warp_address_v6 '2001:db8::1/128; touch \${MARKER}'" \
-        "	option warp_endpoint 'engage.cloudflareclient.com:2408'" \
+        "	option warp_storage 'ram'" \
         "	option ipv6_enabled '1'" \
         > "$UCFG/singbox-ui"
 
       rm -f "$LOG"
-      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
         ucode -L '${LIB}' -e '
           let rc = require("plugins.awg_warp.reconcile");
           let uci_mod = require("uci");
@@ -270,13 +358,13 @@ describe("awg reconcile", () => {
     expect(o.link_del).toBeGreaterThan(0);
   });
 
-  it("FIX-4: malicious warp_endpoint with newline injection is rejected — interface not brought up, setconf not written", async () => {
-    // Prove safe_endpoint() guards the setconf path:
-    // A crafted warp_endpoint containing a newline could inject extra setconf
-    // directives (e.g. a second [Peer] / AllowedIPs = 0.0.0.0/0) into the file
-    // fed to `awg setconf`.  safe_endpoint() must reject it → _bring_up skips
-    // the interface entirely → the mock awg setconf is never called →
-    // ATTACKER / injected [Peer] are not present in any captured setconf.
+  it("FIX-4: malicious endpoint in stored .conf is rejected — interface not brought up, setconf not written", async () => {
+    // Prove safe_endpoint() guards the setconf path after ensure():
+    // A crafted Endpoint in .conf containing disallowed characters (e.g. a space
+    // followed by injected directives) is rejected by safe_endpoint() in _bring_up
+    // after confstore.ensure() returns the parsed wg object.
+    // safe_endpoint() only allows [a-zA-Z0-9._:-]; a space causes rejection →
+    // _bring_up returns early → awg setconf never called → no injected content.
     const r = await exec(`
       SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
@@ -285,7 +373,8 @@ describe("awg reconcile", () => {
       SETCONF=/tmp/awg_fix4_sc
       M_IP=/tmp/awg_fix4_ip
       M_AWG=/tmp/awg_fix4_awg
-      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG"' EXIT
+      RAM=/tmp/awg_fix4_ram
+      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG" "$RAM"' EXIT
       mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$LOG" "$SETCONF"
@@ -293,26 +382,45 @@ describe("awg reconcile", () => {
       printf '#!/bin/sh\necho "awg $@" >> %s\n[ "$1" = "setconf" ] && cp "$3" %s 2>/dev/null\nexit 0\n' "$LOG" "$SETCONF" > "$M_AWG"
       chmod +x "$M_IP" "$M_AWG"
 
+      # Pre-place .conf with a malicious Endpoint value containing a space followed by
+      # injected setconf directives. parse_full() reads this as the Endpoint value
+      # (everything after '=' on that line). safe_endpoint() in reconcile rejects it
+      # because spaces are not in [a-zA-Z0-9._:-] → _bring_up aborts → no setconf.
+      mkdir -p "$RAM"
+      printf '%s\n' \
+        "[Interface]" \
+        "PrivateKey = PRIV==" \
+        "Jc = 8" \
+        "Jmin = 64" \
+        "Jmax = 900" \
+        "S1 = 0" \
+        "S2 = 0" \
+        "S3 = 0" \
+        "S4 = 0" \
+        "H1 = 1" \
+        "H2 = 2" \
+        "H3 = 3" \
+        "H4 = 4" \
+        "Address = 172.16.0.2/32" \
+        "MTU = 1280" \
+        "[Peer]" \
+        "PublicKey = PUB==" \
+        "Endpoint = engage.cloudflareclient.com:2408 [Peer] PublicKey = ATTACKER= AllowedIPs = 0.0.0.0/0" \
+        "AllowedIPs = 0.0.0.0/0, ::/0" \
+        "PersistentKeepalive = 25" \
+        > "$RAM/warp_ep.conf"
+
+      # UCI section — no warp_* cred fields; creds come from .conf
       mkdir -p "$UCFG"
-      # Malicious endpoint: newline injects a second [Peer] block into the setconf file.
-      # The value is written as a UCI option; ucode reads it as a single string with an
-      # embedded newline, which safe_endpoint() must reject (no whitespace/newlines allowed).
       printf '%s\n' \
         "config outbound 'warp_ep'" \
         "	option type 'awg_warp'" \
         "	option enabled '1'" \
-        "	option warp_private_key 'PRIV=='" \
-        "	option warp_peer_public_key 'PUB=='" \
-        "	option warp_address_v4 '172.16.0.2/32'" \
-        "	option warp_address_v6 ''" \
-        "	option warp_endpoint 'engage.cloudflareclient.com:2408" \
-        "[Peer]" \
-        "PublicKey = ATTACKER=" \
-        "AllowedIPs = 0.0.0.0/0'" \
+        "	option warp_storage 'ram'" \
         "	option ipv6_enabled '0'" \
         > "$UCFG/singbox-ui"
 
-      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
         ucode -L '${LIB}' -e '
           let rc = require("plugins.awg_warp.reconcile");
           let uci_mod = require("uci");
@@ -327,7 +435,6 @@ describe("awg reconcile", () => {
       [ -f "$SETCONF" ] && setconf_written=1
       # If somehow written, check for injected content
       has_attacker=$(printf '%s' "$setconf_content" | grep -c "ATTACKER" 2>/dev/null || true); has_attacker=$((has_attacker+0))
-      has_injected_peer=$(printf '%s' "$setconf_content" | grep -c "\\[Peer\\].*\\[Peer\\]" 2>/dev/null || true); has_injected_peer=$((has_injected_peer+0))
       # awg setconf must not have been called at all
       awg_setconf_called=$(grep -c "awg setconf" "$LOG" 2>/dev/null || true); awg_setconf_called=$((awg_setconf_called+0))
       printf '{"setconf_written":%d,"has_attacker":%d,"awg_setconf_called":%d}\n' \
@@ -341,10 +448,11 @@ describe("awg reconcile", () => {
     expect(o.has_attacker).toBe(0);
   });
 
-  it("FIX-2: malicious warp_address_v4 is sanitized — ip addr add is not called with injected content", async () => {
-    // Prove the safe_cidr sanitizer: an address containing shell metacharacters
-    // must NOT reach the `ip addr add` command — the interface must not be
-    // brought up with the bad address, and no marker file must be created.
+  it("FIX-2: malicious address_v4 in stored .conf is sanitized — ip addr add is not called with injected content", async () => {
+    // Prove the safe_cidr sanitizer applied after confstore.ensure():
+    // an address_v4 in .conf containing shell metacharacters must NOT reach
+    // the `ip addr add` command — the interface must not be brought up with
+    // the bad address, and no marker file must be created.
     const r = await exec(`
       SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
@@ -352,8 +460,9 @@ describe("awg reconcile", () => {
       LOG=/tmp/awg_fix2_cmds
       M_IP=/tmp/awg_fix2_ip
       M_AWG=/tmp/awg_fix2_awg
+      RAM=/tmp/awg_fix2_ram
       MARKER=/tmp/awg_fix2_pwned
-      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG" "$MARKER"' EXIT
+      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG" "$RAM" "$MARKER"' EXIT
       mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$MARKER"
@@ -361,21 +470,45 @@ describe("awg reconcile", () => {
       printf '#!/bin/sh\nexit 0\n' > "$M_AWG"
       chmod +x "$M_IP" "$M_AWG"
 
+      # Pre-place .conf with malicious address_v4 — would inject a command if passed
+      # unsanitized to shell. safe_cidr() in _bring_up must reject it after ensure().
+      # Use printf so the shell variable $MARKER is expanded correctly at runtime
+      # (not interpolated by JS template literal).
+      mkdir -p "$RAM"
+      printf '%s\n' \
+        "[Interface]" \
+        "PrivateKey = PRIV==" \
+        "Jc = 8" \
+        "Jmin = 64" \
+        "Jmax = 900" \
+        "S1 = 0" \
+        "S2 = 0" \
+        "S3 = 0" \
+        "S4 = 0" \
+        "H1 = 1" \
+        "H2 = 2" \
+        "H3 = 3" \
+        "H4 = 4" \
+        "Address = 1.2.3.4/32; touch \${MARKER}" \
+        "MTU = 1280" \
+        "[Peer]" \
+        "PublicKey = PUB==" \
+        "Endpoint = engage.cloudflareclient.com:2408" \
+        "AllowedIPs = 0.0.0.0/0, ::/0" \
+        "PersistentKeepalive = 25" \
+        > "$RAM/warp_evil.conf"
+
+      # UCI section — no warp_* cred fields; creds come from .conf
       mkdir -p "$UCFG"
-      # Malicious address: would inject a command if passed unsanitized to shell
       printf '%s\n' \
         "config outbound 'warp_evil'" \
         "	option type 'awg_warp'" \
         "	option enabled '1'" \
-        "	option warp_private_key 'PRIV=='" \
-        "	option warp_peer_public_key 'PUB=='" \
-        "	option warp_address_v4 '1.2.3.4/32; touch \${MARKER}'" \
-        "	option warp_address_v6 ''" \
-        "	option warp_endpoint 'engage.cloudflareclient.com:2408'" \
+        "	option warp_storage 'ram'" \
         "	option ipv6_enabled '0'" \
         > "$UCFG/singbox-ui"
 
-      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" \
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
         ucode -L '${LIB}' -e '
           let rc = require("plugins.awg_warp.reconcile");
           let uci_mod = require("uci");
