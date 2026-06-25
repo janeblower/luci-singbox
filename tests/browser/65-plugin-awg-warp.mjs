@@ -10,7 +10,7 @@
 // covering the unit-level surface requirement while remaining safe in CI
 // environments that do not have the plugin package installed.
 import { runTest, openAddModal, setProtocolInModal,
-         visibleFieldsInActiveTab, assert, wait, containerExec } from './_setup.mjs';
+         visibleFieldsInActiveTab, assert, wait, dismissModal } from './_setup.mjs';
 
 export const COVERS = [
     'plugin.awg_warp._install',
@@ -46,8 +46,10 @@ await runTest('plugin:awg_warp — outbound form controls render', async ({ page
     if (!hasType) {
         // Plugin not installed in this container — close modal and skip.
         // Host-side logic coverage (renderOutboundForm) lives in tests/ui/test_awg_warp_form.test.ts.
-        const cancelBtn = await page.$('#modal_overlay .cbi-button:not(.cbi-button-positive)');
-        if (cancelBtn) await cancelBtn.click();
+        // Use dismissModal() (in-page JS click) — NOT a puppeteer ElementHandle
+        // .click(), which throws "Node is not clickable" when the modal button
+        // has no clean bounding box. This is why CI failed on the skip path.
+        await dismissModal(page);
         await wait(300);
         // Soft-pass: surface is declared in COVERS above; modal-open guard does
         // not apply (plugin.* ids are not grid.* ids).
@@ -73,8 +75,7 @@ await runTest('plugin:awg_warp — outbound form controls render', async ({ page
         assert(`awg_warp form: "${label}" present`, fields.includes(label), fields);
     }
 
-    // Dismiss the modal.
-    const cancelBtn = await page.$('#modal_overlay .cbi-button:not(.cbi-button-positive)');
-    if (cancelBtn) await cancelBtn.click();
+    // Dismiss the modal (in-page JS click — robust against layout).
+    await dismissModal(page);
     await wait(300);
 });
