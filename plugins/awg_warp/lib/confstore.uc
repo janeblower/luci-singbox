@@ -88,4 +88,59 @@ function parse_full(text) {
 	return wg;
 }
 
-return { conf_path, render_setconf, render_conf, parse_full };
+// ensure — вернуть wgconf для секции: переиспользовать существующий .conf или
+// зарегистрироваться и записать новый. null = регистрация недоступна/упала.
+function ensure(cur, item, mtu, ipv6) {
+	let s = item.s;
+	let storage = (s.warp_storage == "flash") ? "flash" : "ram";
+	let path  = conf_path(item.sec, storage);
+
+	// 1) Существующий конфиг → переиспользуем, регистрацию НЕ делаем.
+	let existing = fs.readfile(path);
+	if (existing != null && length(existing)) {
+		let wg = parse_full(existing);
+		if (wg == null)
+			require("log").log_event("warn", "awg.conf_parse_failed", { path });
+		return wg;
+	}
+
+	// 2) Нет файла. selfhosted — авто-CF недоступна (ждём заранее положенный .conf).
+	let target = (s.awg_target == "selfhosted") ? "selfhosted" : "warp";
+	if (target == "selfhosted") {
+		require("log").log_event("warn", "awg.selfhosted_conf_missing", { path });
+		return null;
+	}
+
+	// 3) warp — тихая авто-регистрация.
+	let res = warp.register_auto();
+	if (!res.ok) {
+		require("log").log_event("error", "awg.register_failed", { error: res.error });
+		return null;
+	}
+	let p = awggen.generate({ target: "warp", mimic: s.awg_mimic, mtu });
+	let wg = {
+		private_key:     res.creds.private_key,
+		peer_public_key: res.creds.peer_public_key,
+		address_v4:      res.creds.address_v4,
+		address_v6:      res.creds.address_v6,
+		endpoint:        res.creds.endpoint,
+		jc: p.jc, jmin: p.jmin, jmax: p.jmax,
+		s1: p.s1, s2: p.s2, s3: p.s3, s4: p.s4,
+		h1: p.h1, h2: p.h2, h3: p.h3, h4: p.h4,
+		i1: p.i1,
+	};
+
+	// Записать артефакт 0600 (приватный ключ внутри).
+	let base = (storage == "flash") ? FLASH_BASE : RAM_BASE;
+	fs.mkdir(base, 0755);
+	fs.writefile(path, render_conf(wg, mtu, ipv6));
+	fs.chmod(path, 384);   // 0600
+
+	// Удалить протухший конфиг в другом расположении (смена ram↔flash).
+	let other = conf_path(item.sec, (storage == "flash") ? "ram" : "flash");
+	try { fs.unlink(other); } catch (e) {}
+
+	return wg;
+}
+
+return { conf_path, render_setconf, render_conf, parse_full, ensure };
