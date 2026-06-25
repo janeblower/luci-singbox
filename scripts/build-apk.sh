@@ -121,6 +121,27 @@ if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$'; th
     echo "invalid package version '$VERSION' (expected X.Y.Z or X.Y.Z-rN)" >&2
     exit 1
 fi
+
+# Per-package versions. Each of the five packages may carry its OWN version,
+# passed by the CI workflow via PKG_VER_<PKG> as 0.1.0-r<N> where <N> counts only
+# the commits that touched THAT package's source paths. An unchanged package then
+# keeps its version+filename across pushes that don't touch it, so the feed stops
+# republishing it and it stops looking like a new release every commit (the old
+# behaviour, where all five shared 0.0.0-r<total-commit-count>). Any unset
+# override falls back to the single positional $VERSION — so local builds and
+# tagged releases (one coordinated version for the whole set) work unchanged.
+V_BBOLT="${PKG_VER_BBOLT:-$VERSION}"
+V_SINGBOX="${PKG_VER_SINGBOX:-$VERSION}"
+V_LUCIAPP="${PKG_VER_LUCIAPP:-$VERSION}"
+V_I18N="${PKG_VER_I18N:-$VERSION}"
+V_AWGWARP="${PKG_VER_AWGWARP:-$VERSION}"
+for _pv in "$V_BBOLT" "$V_SINGBOX" "$V_LUCIAPP" "$V_I18N" "$V_AWGWARP"; do
+    if ! printf '%s' "$_pv" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$'; then
+        echo "invalid per-package version '$_pv' (expected X.Y.Z or X.Y.Z-rN)" >&2
+        exit 1
+    fi
+done
+
 OUTPUT_DIR="${2:-$ROOT_DIR/dist}"
 
 WORK_DIR="${WORK_DIR:-$ROOT_DIR/.build}"
@@ -291,7 +312,7 @@ populate_bbolt_root() {
     local abi="$2"
 
     local root="$WORK_DIR/pkg-root-bbolt-$exact_arch"
-    local out="$OUTPUT_DIR/${BBOLT_NAME}_${VERSION}_${exact_arch}.apk"
+    local out="$OUTPUT_DIR/${BBOLT_NAME}_${V_BBOLT}_${exact_arch}.apk"
     rm -rf "$root"
 
     if [ -n "$BBOLT_BIN_DIR" ]; then
@@ -318,12 +339,12 @@ populate_bbolt_root() {
 mkpkg_bbolt() {
     local exact_arch="$1"
     local root="$WORK_DIR/pkg-root-bbolt-$exact_arch"
-    local out="$OUTPUT_DIR/${BBOLT_NAME}_${VERSION}_${exact_arch}.apk"
+    local out="$OUTPUT_DIR/${BBOLT_NAME}_${V_BBOLT}_${exact_arch}.apk"
     "$APK_BIN" mkpkg \
         --files "$root" \
         --output "$out" \
         -I "name:$BBOLT_NAME" \
-        -I "version:$VERSION" \
+        -I "version:$V_BBOLT" \
         -I "description:$BBOLT_DESC" \
         -I "arch:$exact_arch" \
         -I "license:$PKG_LICENSE" \
@@ -339,7 +360,7 @@ mkpkg_bbolt() {
 # ===========================================================================
 SINGBOX_ROOT="$WORK_DIR/pkg-root-singbox-ui"
 SINGBOX_SCRIPTS="$WORK_DIR/scripts-singbox-ui"
-SINGBOX_OUT="$OUTPUT_DIR/${SINGBOX_NAME}_${VERSION}.apk"
+SINGBOX_OUT="$OUTPUT_DIR/${SINGBOX_NAME}_${V_SINGBOX}.apk"
 
 # write_singbox_scripts <scripts_dir>
 #   post-install / pre-deinstall / post-upgrade for the backend service.
@@ -443,7 +464,7 @@ mkpkg_singbox() {
             --files "$SINGBOX_ROOT" \
             --output "$SINGBOX_OUT" \
             -I "name:$SINGBOX_NAME" \
-            -I "version:$VERSION" \
+            -I "version:$V_SINGBOX" \
             -I "description:$SINGBOX_DESC" \
             -I "arch:noarch" \
             -I "license:$PKG_LICENSE" \
@@ -465,7 +486,7 @@ mkpkg_singbox() {
         --files "$SINGBOX_ROOT" \
         --output "$SINGBOX_OUT" \
         -I "name:$SINGBOX_NAME" \
-        -I "version:$VERSION" \
+        -I "version:$V_SINGBOX" \
         -I "description:$SINGBOX_DESC" \
         -I "arch:noarch" \
         -I "license:$PKG_LICENSE" \
@@ -484,7 +505,7 @@ mkpkg_singbox() {
 # ===========================================================================
 LUCIAPP_ROOT="$WORK_DIR/pkg-root-luci-app"
 LUCIAPP_SCRIPTS="$WORK_DIR/scripts-luci-app"
-LUCIAPP_OUT="$OUTPUT_DIR/${LUCIAPP_NAME}_${VERSION}.apk"
+LUCIAPP_OUT="$OUTPUT_DIR/${LUCIAPP_NAME}_${V_LUCIAPP}.apk"
 
 # write_luciapp_scripts <scripts_dir>
 #   post-install only: default_postinst + flush LuCI caches + HUP rpcd. NO
@@ -530,7 +551,7 @@ mkpkg_luciapp() {
         --files "$LUCIAPP_ROOT" \
         --output "$LUCIAPP_OUT" \
         -I "name:$LUCIAPP_NAME" \
-        -I "version:$VERSION" \
+        -I "version:$V_LUCIAPP" \
         -I "description:$LUCIAPP_DESC" \
         -I "arch:noarch" \
         -I "license:$PKG_LICENSE" \
@@ -549,7 +570,7 @@ mkpkg_luciapp() {
 # ===========================================================================
 I18N_ROOT="$WORK_DIR/pkg-root-i18n-ru"
 I18N_SCRIPTS="$WORK_DIR/scripts-i18n-ru"
-I18N_OUT="$OUTPUT_DIR/${I18N_NAME}_${VERSION}.apk"
+I18N_OUT="$OUTPUT_DIR/${I18N_NAME}_${V_I18N}.apk"
 
 # The i18n .po now lives under the LuCI frontend package source tree. The DOMAIN
 # (and the .po/.lmo basename) stays luci-singbox-ui — do NOT rename it.
@@ -612,7 +633,7 @@ mkpkg_i18n() {
         --files "$I18N_ROOT" \
         --output "$I18N_OUT" \
         -I "name:$I18N_NAME" \
-        -I "version:$VERSION" \
+        -I "version:$V_I18N" \
         -I "description:$I18N_DESC" \
         -I "arch:noarch" \
         -I "license:$PKG_LICENSE" \
@@ -629,7 +650,7 @@ mkpkg_i18n() {
 # ===========================================================================
 AWGWARP_ROOT="$WORK_DIR/pkg-root-awg-warp"
 AWGWARP_SCRIPTS="$WORK_DIR/scripts-awg-warp"
-AWGWARP_OUT="$OUTPUT_DIR/${AWGWARP_NAME}_${VERSION}.apk"
+AWGWARP_OUT="$OUTPUT_DIR/${AWGWARP_NAME}_${V_AWGWARP}.apk"
 
 # write_awgwarp_scripts <scripts_dir>
 #   post-install only: default_postinst + flush LuCI caches + HUP rpcd.
@@ -691,7 +712,7 @@ mkpkg_awgwarp() {
         --files "$AWGWARP_ROOT" \
         --output "$AWGWARP_OUT" \
         -I "name:$AWGWARP_NAME" \
-        -I "version:$VERSION" \
+        -I "version:$V_AWGWARP" \
         -I "description:$AWGWARP_DESC" \
         -I "arch:noarch" \
         -I "license:$PKG_LICENSE" \
@@ -784,6 +805,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
            AWGWARP_NAME AWGWARP_DESC AWGWARP_DEPENDS \
            AWGWARP_ROOT AWGWARP_SCRIPTS AWGWARP_OUT \
            APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER \
+           V_BBOLT V_SINGBOX V_LUCIAPP V_I18N V_AWGWARP \
            WORK_DIR OUTPUT_DIR \
            bbolt_arches_x86_64 bbolt_arches_aarch64 bbolt_arches_armv7 \
            bbolt_arches_mipsel bbolt_arches_mips BBOLT_ABIS
@@ -794,13 +816,13 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
                 eval "exacts=\$bbolt_arches_$abi"
                 for exact in $exacts; do
                     root="$WORK_DIR/pkg-root-bbolt-$exact"
-                    out="$OUTPUT_DIR/${BBOLT_NAME}_${VERSION}_${exact}.apk"
+                    out="$OUTPUT_DIR/${BBOLT_NAME}_${V_BBOLT}_${exact}.apk"
                     chown -R 0:0 "$root"
                     "$APK_BIN" mkpkg \
                         --files "$root" \
                         --output "$out" \
                         -I "name:$BBOLT_NAME" \
-                        -I "version:$VERSION" \
+                        -I "version:$V_BBOLT" \
                         -I "description:$BBOLT_DESC" \
                         -I "arch:$exact" \
                         -I "license:$PKG_LICENSE" \
@@ -819,7 +841,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
                 --files "$SINGBOX_ROOT" \
                 --output "$SINGBOX_OUT" \
                 -I "name:$SINGBOX_NAME" \
-                -I "version:$VERSION" \
+                -I "version:$V_SINGBOX" \
                 -I "description:$SINGBOX_DESC" \
                 -I "arch:noarch" \
                 -I "license:$PKG_LICENSE" \
@@ -837,7 +859,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
                 --files "$SINGBOX_ROOT" \
                 --output "$SINGBOX_OUT" \
                 -I "name:$SINGBOX_NAME" \
-                -I "version:$VERSION" \
+                -I "version:$V_SINGBOX" \
                 -I "description:$SINGBOX_DESC" \
                 -I "arch:noarch" \
                 -I "license:$PKG_LICENSE" \
@@ -856,7 +878,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
             --files "$LUCIAPP_ROOT" \
             --output "$LUCIAPP_OUT" \
             -I "name:$LUCIAPP_NAME" \
-            -I "version:$VERSION" \
+            -I "version:$V_LUCIAPP" \
             -I "description:$LUCIAPP_DESC" \
             -I "arch:noarch" \
             -I "license:$PKG_LICENSE" \
@@ -874,7 +896,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
             --files "$I18N_ROOT" \
             --output "$I18N_OUT" \
             -I "name:$I18N_NAME" \
-            -I "version:$VERSION" \
+            -I "version:$V_I18N" \
             -I "description:$I18N_DESC" \
             -I "arch:noarch" \
             -I "license:$PKG_LICENSE" \
@@ -890,7 +912,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
             --files "$AWGWARP_ROOT" \
             --output "$AWGWARP_OUT" \
             -I "name:$AWGWARP_NAME" \
-            -I "version:$VERSION" \
+            -I "version:$V_AWGWARP" \
             -I "description:$AWGWARP_DESC" \
             -I "arch:noarch" \
             -I "license:$PKG_LICENSE" \

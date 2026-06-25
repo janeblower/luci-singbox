@@ -34,20 +34,26 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      # Rebuild the feed only when the version published in the rolling `latest`
-      # release differs from the one already committed to gh-pages. This is the
-      # actual invariant we care about (gh-pages must mirror the release), and it
-      # is self-healing: the next successful Build reconciles any drift no matter
-      # which commit touched what.
+      # Rebuild the feed only when the SET of per-package versions published in the
+      # rolling `latest` release differs from the set already committed to gh-pages.
+      # This is the invariant we care about (gh-pages must mirror the release) and
+      # it is self-healing: the next successful Build reconciles any drift.
       #
-      # Why NOT a path-diff of the tip commit (the previous approach): the package
-      # version is `0.0.0-r<rev-list --count>`, so it bumps on EVERY commit —
-      # docs/tests included — which means packages.adb is never "identical" on a
-      # docs-only push, and the path-diff premise is false. Worse, the tip-commit
-      # diff is blind to (a) batched pushes whose tip is a docs/test commit while
-      # feed-relevant commits sit below it, and (b) feed-relevant commits whose
-      # own Build failed (Pages never ran). Both silently froze gh-pages behind
-      # the release until a manual workflow_dispatch. Version-compare fixes both.
+      # Why a version SET, not a single version: packages are now versioned
+      # per-package (build.yml emits 0.1.0-r<N> per package, <N> = commits touching
+      # that package's paths). A single global version no longer answers "did any
+      # package change" — a backend-only push leaves the UI version untouched yet
+      # still needs the changed backend apk republished. So build.yml publishes a
+      # `versions.txt` manifest (one `<name> <version>` line per package) as a
+      # release asset AND into the feed root; we compare the two. Versions are
+      # deterministic (they move only when content moves), so this is a stable
+      # skip/deploy signal — unlike an apk byte-hash (mkpkg embeds timestamps).
+      #
+      # Why a manifest and not a tip-commit path-diff (an even older approach): the
+      # diff was blind to batched pushes (feed-relevant commits below a docs tip)
+      # and to feed-relevant commits whose own Build failed. The manifest compare
+      # handles both — it reflects what was actually published, not what the tip
+      # touched.
       - name: Decide whether the feed needs rebuilding
         id: gate
         env:
@@ -59,27 +65,25 @@ jobs:
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Version published in the rolling release — build.yml titles it
-          # "Latest build (<version>)" (version == 0.0.0-r<count> on main).
-          REL="$(gh release view latest --repo "$GITHUB_REPOSITORY" --json name -q .name 2>/dev/null || true)"
-          NEW="$(printf '%s' "$REL" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+' | head -n1 || true)"
+          # Per-package version manifest published with the rolling release.
+          NEW="$(gh release download latest --repo "$GITHUB_REPOSITORY" \
+                   --pattern versions.txt --output - 2>/dev/null || true)"
           if [ -z "$NEW" ]; then
-            echo "could not read latest-release version (name='$REL') -> fail-open, deploy"
+            echo "could not read release versions.txt -> fail-open, deploy"
             echo "relevant=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Version already on gh-pages — embedded in the apk filenames. After the
-          # three-package split the UI package (luci-app-singbox-ui-<version>.apk)
-          # is always present in every arch dir. Absent branch / no apk -> empty.
-          CUR="$(gh api "repos/$GITHUB_REPOSITORY/git/trees/gh-pages?recursive=1" -q '.tree[].path' 2>/dev/null \
-                  | grep -oE 'luci-app-singbox-ui-[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+\.apk' \
-                  | grep -oE '[0-9]+\.[0-9]+\.[0-9]+-r[0-9]+' | head -n1 || true)"
-          echo "latest-release: $NEW ; gh-pages: ${CUR:-<none>}"
-          if [ "$NEW" = "$CUR" ]; then
-            echo "gh-pages already at $NEW -> skip deploy" | tee -a "$GITHUB_STEP_SUMMARY"
+          # The copy build-feed.sh stored at the gh-pages feed root last deploy.
+          # Absent branch / first deploy / pre-manifest tree -> empty -> deploy.
+          CUR="$(gh api "repos/$GITHUB_REPOSITORY/contents/versions.txt?ref=gh-pages" \
+                   -H 'Accept: application/vnd.github.raw' 2>/dev/null || true)"
+          echo "release versions.txt:"; printf '%s\n' "$NEW"
+          echo "gh-pages versions.txt:"; printf '%s\n' "${CUR:-<none>}"
+          if [ -n "$CUR" ] && [ "$NEW" = "$CUR" ]; then
+            echo "all package versions already on gh-pages -> skip deploy" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "relevant=false" >> "$GITHUB_OUTPUT"
           else
-            echo "version drift (${CUR:-<none>} -> $NEW) -> deploy" | tee -a "$GITHUB_STEP_SUMMARY"
+            echo "package version set changed -> deploy" | tee -a "$GITHUB_STEP_SUMMARY"
             echo "relevant=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -121,8 +125,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
+          # versions.txt too: build-feed.sh copies it into the feed root so the
+          # NEXT Pages run can compare per-package versions (the redeploy gate).
           gh release download latest --repo "$GITHUB_REPOSITORY" \
-            --pattern '*.apk' --pattern 'sha256sums.txt' --dir dist
+            --pattern '*.apk' --pattern 'sha256sums.txt' --pattern 'versions.txt' --dir dist
           ( cd dist && sha256sum -c sha256sums.txt )
 
       - name: Write signing key

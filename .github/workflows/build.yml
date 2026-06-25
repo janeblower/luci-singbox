@@ -40,16 +40,20 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' && !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  # Path-filtered CI via dorny/paths-filter: on a pull_request, only the area(s)
-  # whose source paths changed run. The downstream jobs keep their
-  # `|| github.event_name != 'pull_request'` escape hatch, so on push/main, tags,
-  # release and workflow_dispatch EVERY job runs — the release path is NEVER
-  # path-gated and these outputs are only consulted on pull_request. That is why
-  # the paths-filter step runs only on pull_request; elsewhere its outputs are
-  # ignored. Directory-based 4-domain model (bbolt/backend/ui/packaging) with a
-  # `shared` fan-out (test harness / CI infra -> all four). The domain names
-  # mirror tests/lib/domain_classify.sh (kept as the local classifier + its
-  # unit test tests/cross/test_changes_domains.test.ts).
+  # Path-filtered CI via dorny/paths-filter: only the area(s) whose source paths
+  # changed run. This now applies to BOTH pull_request AND push-to-main, so a
+  # push that only touches (say) the UI skips the heavy backend VM `test` job —
+  # the previous `|| github.event_name != 'pull_request'` escape forced every
+  # domain to run on every push, re-testing code that hadn't changed. Tags and
+  # workflow_dispatch still run everything (downstream gates fall through on
+  # `startsWith(refs/tags/)` / workflow_dispatch), so the release path is never
+  # accidentally skipped. The one exception is `bbolt`: it stays ungated on push
+  # because the release `build` job downloads its binary artifact — but its
+  # compile is content-hash cached, so an unchanged bbolt is a seconds-long
+  # cache-restore, not a rebuild. Directory-based 4-domain model
+  # (bbolt/backend/ui/packaging) with a `shared` fan-out (test harness / CI infra
+  # -> all four). The domain names mirror tests/lib/domain_classify.sh (kept as
+  # the local classifier + its unit test tests/cross/test_changes_domains.test.ts).
   changes:
     name: Detect changed domains
     runs-on: ubuntu-24.04
@@ -65,13 +69,16 @@ jobs:
           fetch-depth: 0
 
       # Pinned to a full commit SHA (v3.0.3) per this repo's SHA-pin policy for
-      # third-party actions. paths-filter resolves the diff base itself (PR base
-      # on pull_request); we only run it there since non-PR events run-all anyway.
+      # third-party actions. paths-filter resolves the diff base itself: PR base
+      # on pull_request, github.event.before..after on a branch push. We run it on
+      # BOTH so a push to main also skips unchanged domains' (heavy) test jobs —
+      # tags and workflow_dispatch deliberately bypass the filter (run everything)
+      # via the downstream gates, so we don't bother filtering there.
       # list-files: shell exposes steps.f.outputs.github_files for the
       # sing-box-extended carve-out below.
       - uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
         id: f
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         with:
           list-files: shell
           filters: |
@@ -205,7 +212,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [lint, changes]
     # UI gate: run on UI/cross/lib changes, and always on push/main/tags.
-    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request' }}
+    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     timeout-minutes: 12
     # All UI/JS tests now live in tests/ui/*.test.ts and run via `bun test
     # tests/ui`. ucode is absent on this host; json_import's ucode-half
@@ -246,7 +253,7 @@ jobs:
     needs: [lint, changes]
     # Backend gate: run the VM suite on backend/cross/lib/scripts changes, and
     # always on push/main/tags.
-    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name != 'pull_request' }}
+    if: ${{ needs.changes.outputs.backend == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     # The QEMU-OpenWrt VM job is the one most likely to wedge (bad boot/loadvm).
     # Bound it so a hung guest fails fast instead of idling the runner ~6h.
     timeout-minutes: 25
@@ -283,7 +290,7 @@ jobs:
     # correctness is unchanged while browser-test runs in parallel with the VM suite.
     needs: [lint, changes]
     # UI gate: run on UI/cross/lib changes, and always on push/main/tags.
-    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name != 'pull_request' }}
+    if: ${{ needs.changes.outputs.ui == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     timeout-minutes: 15
 
     steps:
@@ -362,6 +369,11 @@ jobs:
   bbolt:
     name: Build bbolt-client (5 arches)
     needs: [changes]
+    # Unlike the other domain jobs, bbolt keeps the broad non-PR escape: the
+    # release `build` job downloads this job's binary artifact, so bbolt MUST run
+    # on every push/tag/dispatch even when bbolt-client/ is unchanged. That is not
+    # a rebuild — the compile is content-hash cached (see the cache step below), so
+    # an unchanged push just restores and re-uploads the 5 binaries in seconds.
     if: ${{ needs.changes.outputs.bbolt == 'true' || github.event_name != 'pull_request' }}
     # Pinned (not floating ubuntu-latest) for reproducibility, matching the
     # rest of the workflow's pinning philosophy (SHA-pinned actions, pinned
@@ -483,7 +495,7 @@ jobs:
     name: Packaging suite (host, apk-tools 3.0.5+)
     runs-on: ubuntu-24.04
     needs: [lint, changes]
-    if: ${{ needs.changes.outputs.packaging == 'true' || github.event_name != 'pull_request' }}
+    if: ${{ needs.changes.outputs.packaging == 'true' || github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/') }}
     timeout-minutes: 20
     env:
       # Single source of the SDK version within this job (mirrors the `build`
@@ -628,23 +640,52 @@ jobs:
       # we use the tag (allowing an explicit -rN suffix); for rolling builds
       # the release number is the commit count so `apk upgrade` always sees a
       # strictly newer package.
+      # Per-package versioning. A tag is a coordinated release: all five packages
+      # share the tag version. A rolling main build versions EACH package as
+      # 0.1.0-r<N>, where <N> = commits that touched THAT package's own paths — so
+      # an unchanged package keeps its version+filename across pushes that don't
+      # touch it (the feed then stops republishing it / it stops looking like a
+      # new release every commit). `version` (the global 0.1.0-r<total>) is kept
+      # only for the human-facing release title + workflow-artifact name.
+      #
+      # Why minor 0.1.x and not 0.0.x: every package already shipped 0.0.0-r<total>
+      # (total commit count, ~r250). A per-package count is SMALLER, so reusing the
+      # 0.0.0 base would be an apk DOWNGRADE on installed routers. Bumping the minor
+      # to 1 makes 0.1.0-r<small> outrank any prior 0.0.0-r<big> (minor dominates),
+      # so installs upgrade cleanly while per-package -r<N> drives churn from here.
+      #
+      # Path-sets are intentionally append-only / stable: each is `git rev-list
+      # --count` over the package subtree + the packager (build-apk.sh) + its
+      # install manifest. We bias toward OVER-counting (a shared packager/manifest
+      # change re-versions everything) because under-counting is the dangerous
+      # direction — it would leave a CHANGED package on a stale version so the feed
+      # never ships the update.
       - name: Derive version
         id: version
         run: |
           set -euo pipefail
+          emit() { echo "$1=$2" >> "$GITHUB_OUTPUT"; echo "$1=$2"; }
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             RAW="${GITHUB_REF#refs/tags/v}"
-            if [[ "$RAW" == *-r* ]]; then
-              VERSION="$RAW"
-            else
-              VERSION="${RAW}-r1"
-            fi
+            if [[ "$RAW" == *-r* ]]; then VERSION="$RAW"; else VERSION="${RAW}-r1"; fi
+            # Coordinated release: every package gets the tag version.
+            emit version    "$VERSION"
+            emit v_bbolt     "$VERSION"
+            emit v_singbox   "$VERSION"
+            emit v_luciapp   "$VERSION"
+            emit v_i18n      "$VERSION"
+            emit v_awgwarp   "$VERSION"
           else
-            COUNT="$(git rev-list --count HEAD)"
-            VERSION="0.0.0-r${COUNT}"
+            BASE="0.1.0"
+            PKGR="scripts/build-apk.sh"
+            count() { git rev-list --count HEAD -- "$@"; }
+            emit version  "${BASE}-r$(git rev-list --count HEAD)"
+            emit v_bbolt   "${BASE}-r$(count bbolt-client/ "$PKGR")"
+            emit v_singbox "${BASE}-r$(count singbox-ui/ scripts/install-manifest-singbox-ui.txt "$PKGR")"
+            emit v_luciapp "${BASE}-r$(count luci-app-singbox-ui/ scripts/install-manifest-luci-app-singbox-ui.txt "$PKGR")"
+            emit v_i18n    "${BASE}-r$(count luci-app-singbox-ui/po/ "$PKGR")"
+            emit v_awgwarp "${BASE}-r$(count plugins/awg_warp/ "$PKGR")"
           fi
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Using version: $VERSION"
 
       # Binaries built by the `bbolt` job above — no external release download needed.
       - name: Download bbolt-client binaries
@@ -676,7 +717,17 @@ jobs:
         # hijacks LD_PRELOAD and silently produced nobody:nogroup packages
         # (see scripts/build-apk.sh comments). Real root is the reliable
         # path.
-        run: sudo -E env BBOLT_BIN_DIR="$PWD/${{ steps.bbolt.outputs.dir }}" bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
+        # PKG_VER_* drive per-package versions (see Derive version). The positional
+        # version is the fallback for any unset override; we set all five, so it is
+        # only a belt-and-suspenders default.
+        run: |
+          sudo -E env BBOLT_BIN_DIR="$PWD/${{ steps.bbolt.outputs.dir }}" \
+            PKG_VER_BBOLT="${{ steps.version.outputs.v_bbolt }}" \
+            PKG_VER_SINGBOX="${{ steps.version.outputs.v_singbox }}" \
+            PKG_VER_LUCIAPP="${{ steps.version.outputs.v_luciapp }}" \
+            PKG_VER_I18N="${{ steps.version.outputs.v_i18n }}" \
+            PKG_VER_AWGWARP="${{ steps.version.outputs.v_awgwarp }}" \
+            bash scripts/build-apk.sh "${{ steps.version.outputs.version }}" "$PWD/dist"
 
       # build-apk.sh ran under sudo, so the SDK tarball + extracted SDK are
       # root-owned. The actions/cache POST-step saves them as the unprivileged
@@ -716,27 +767,50 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
+          # Each package now carries its OWN version in its built filename
+          # (per-package versioning), so reference each one's version explicitly.
+          V_BBOLT="${{ steps.version.outputs.v_bbolt }}"
+          V_SINGBOX="${{ steps.version.outputs.v_singbox }}"
+          V_LUCIAPP="${{ steps.version.outputs.v_luciapp }}"
+          V_I18N="${{ steps.version.outputs.v_i18n }}"
+          V_AWGWARP="${{ steps.version.outputs.v_awgwarp }}"
           # dist/ is root-owned (build-apk.sh runs under sudo).
-          # bbolt-client is the ONLY per-arch package now:
-          #   bbolt-client_<version>_<exact-arch>.apk
+          # bbolt-client is the ONLY per-arch package:
+          #   bbolt-client_<v_bbolt>_<exact-arch>.apk
           # <exact-arch> may contain underscores (e.g. mipsel_24kc,
           # arm_cortex-a7_neon-vfpv4), so strip the known prefix+version rather
           # than splitting on the last underscore.
           ls dist/bbolt-client_*.apk >/dev/null 2>&1 || { echo "no per-arch bbolt-client apks in dist/"; exit 1; }
           for f in dist/bbolt-client_*.apk; do
             base="${f##*/}"
-            arch="${base#bbolt-client_${VERSION}_}"
+            arch="${base#bbolt-client_${V_BBOLT}_}"
             arch="${arch%.apk}"
             sudo cp "$f" "dist/bbolt-client-${arch}.apk"
           done
-          # The three noarch packages -> fixed, version-less asset names.
-          sudo cp "dist/singbox-ui_${VERSION}.apk"             dist/singbox-ui.apk
-          sudo cp "dist/luci-app-singbox-ui_${VERSION}.apk"    dist/luci-app-singbox-ui.apk
-          sudo cp "dist/luci-i18n-singbox-ui-ru_${VERSION}.apk" dist/luci-i18n-singbox-ui-ru.apk
+          # The four noarch packages -> fixed, version-less asset names.
+          sudo cp "dist/singbox-ui_${V_SINGBOX}.apk"               dist/singbox-ui.apk
+          sudo cp "dist/luci-app-singbox-ui_${V_LUCIAPP}.apk"      dist/luci-app-singbox-ui.apk
+          sudo cp "dist/luci-i18n-singbox-ui-ru_${V_I18N}.apk"     dist/luci-i18n-singbox-ui-ru.apk
+          sudo cp "dist/singbox-ui-plugin-awg_warp_${V_AWGWARP}.apk" dist/singbox-ui-plugin-awg_warp.apk
           sudo chown "$(id -u):$(id -g)" \
             dist/bbolt-client-*.apk dist/singbox-ui.apk \
-            dist/luci-app-singbox-ui.apk dist/luci-i18n-singbox-ui-ru.apk
+            dist/luci-app-singbox-ui.apk dist/luci-i18n-singbox-ui-ru.apk \
+            dist/singbox-ui-plugin-awg_warp.apk
+          # Per-package version manifest. The Pages workflow (a separate workflow
+          # that can't see this job's step outputs) compares this against the copy
+          # stored in gh-pages to decide whether the feed needs redeploying — with
+          # per-package versions a single global version no longer answers "did any
+          # package change", so we publish the whole set. Deterministic (versions
+          # only move when content moves), unlike an apk byte-hash (mkpkg embeds
+          # timestamps), so it is a stable skip/deploy signal.
+          {
+            echo "bbolt-client ${V_BBOLT}"
+            echo "singbox-ui ${V_SINGBOX}"
+            echo "luci-app-singbox-ui ${V_LUCIAPP}"
+            echo "luci-i18n-singbox-ui-ru ${V_I18N}"
+            echo "singbox-ui-plugin-awg_warp ${V_AWGWARP}"
+          } | sudo tee dist/versions.txt
+          sudo chown "$(id -u):$(id -g)" dist/versions.txt
           ls -1 dist/*.apk
 
       # Checksums for every published apk. Consumed by the Pages workflow, which
@@ -751,9 +825,9 @@ jobs:
           set -euo pipefail
           cd dist
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            sha256sum bbolt-client-*.apk singbox-ui.apk luci-app-singbox-ui.apk luci-i18n-singbox-ui-ru.apk | sudo tee sha256sums.txt
+            sha256sum bbolt-client-*.apk singbox-ui.apk luci-app-singbox-ui.apk luci-i18n-singbox-ui-ru.apk singbox-ui-plugin-awg_warp.apk | sudo tee sha256sums.txt
           else
-            sha256sum bbolt-client_*.apk singbox-ui_*.apk luci-app-singbox-ui_*.apk luci-i18n-singbox-ui-ru_*.apk | sudo tee sha256sums.txt
+            sha256sum bbolt-client_*.apk singbox-ui_*.apk luci-app-singbox-ui_*.apk luci-i18n-singbox-ui-ru_*.apk singbox-ui-plugin-awg_warp_*.apk | sudo tee sha256sums.txt
           fi
           sudo chown "$(id -u):$(id -g)" sha256sums.txt
           cat sha256sums.txt
@@ -772,7 +846,7 @@ jobs:
           # `create` it the first time (guarded by `release view`), and retarget
           # the tag to the current SHA via `release edit` so the asset reflects
           # the tip of main.
-          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. Replaced on every push to main. Three-package split: \`bbolt-client-<arch>.apk\` (per-arch, e.g. \`bbolt-client-x86_64.apk\`), \`singbox-ui.apk\` (noarch backend), \`luci-app-singbox-ui.apk\` (noarch LuCI UI), \`luci-i18n-singbox-ui-ru.apk\` (noarch RU translation). These feed the signed apk feed (GitHub Pages); end users install via that feed — see install.sh / the Pages landing. \`sha256sums.txt\` covers every published asset."
+          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. Replaced on every push to main. Package set: \`bbolt-client-<arch>.apk\` (per-arch, e.g. \`bbolt-client-x86_64.apk\`), \`singbox-ui.apk\` (noarch backend), \`luci-app-singbox-ui.apk\` (noarch LuCI UI), \`luci-i18n-singbox-ui-ru.apk\` (noarch RU translation), \`singbox-ui-plugin-awg_warp.apk\` (noarch AWG/WARP plugin). These feed the signed apk feed (GitHub Pages); end users install via that feed — see install.sh / the Pages landing. \`sha256sums.txt\` covers every published asset."
           if ! gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create latest \
               --repo "$GITHUB_REPOSITORY" \
@@ -790,7 +864,8 @@ jobs:
           fi
           gh release upload latest \
             dist/bbolt-client-*.apk dist/singbox-ui.apk dist/luci-app-singbox-ui.apk \
-            dist/luci-i18n-singbox-ui-ru.apk dist/sha256sums.txt \
+            dist/luci-i18n-singbox-ui-ru.apk dist/singbox-ui-plugin-awg_warp.apk \
+            dist/sha256sums.txt dist/versions.txt \
             --repo "$GITHUB_REPOSITORY" --clobber
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.

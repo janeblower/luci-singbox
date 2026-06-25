@@ -57,9 +57,16 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "dispatch -> build"; echo "build=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
+          # The feed publishes per-arch at $OWRT_MINOR/<arch>/sing-box/, and apk
+          # reconstructs each file as <name>-<version>.apk, so the published asset
+          # is e.g. 25.12/<arch>/sing-box/sing-box-extended-<VER>.apk. Match THAT
+          # actual path — the old "^sing-box-extended/$VER/" prefix never existed
+          # on gh-pages, so the gate always saw 0 and rebuilt all 40 apks daily
+          # even when upstream was unchanged. Escape dots in VER so they are literal.
+          VER_RE="$(printf '%s' "$VER" | sed 's/[.]/\\./g')"
           EXISTS="$(gh api "repos/$GITHUB_REPOSITORY/git/trees/gh-pages?recursive=1" -q '.tree[].path' 2>/dev/null \
-                    | grep -c "^sing-box-extended/$VER/" || true)"
-          echo "gh-pages has $VER dir: ${EXISTS:-0}"
+                    | grep -cE "^${OWRT_MINOR}/[^/]+/sing-box/sing-box-extended-${VER_RE}\.apk$" || true)"
+          echo "gh-pages has $VER apks: ${EXISTS:-0}"
           if [ "${EXISTS:-0}" -gt 0 ]; then echo "build=false" >> "$GITHUB_OUTPUT"; else echo "build=true" >> "$GITHUB_OUTPUT"; fi
 
       - uses: actions/setup-go@v5

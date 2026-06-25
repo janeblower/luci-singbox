@@ -204,4 +204,63 @@ describe("build_apk_per_arch", () => {
       }
     },
   );
+
+  // Per-package versioning: each package's filename (and therefore its apk
+  // metadata version, set from the same V_* var) must carry its OWN
+  // PKG_VER_<PKG> override. An unset override falls back to the positional
+  // version. Regression for the rolling-feed behaviour where bbolt no longer
+  // re-versions on a commit that didn't touch bbolt-client/.
+  it.skipIf(!hasBash)(
+    "PKG_VER_* override each package's version independently",
+    () => {
+      const work = mkdtempSync(resolve(tmpdir(), "apk-perpkg-ver-"));
+      const binDir = resolve(work, "bins");
+      mkdirSync(binDir, { recursive: true });
+      const out = resolve(work, "dist");
+      for (const abi of ["x86_64", "aarch64", "armv7", "mipsel", "mips"]) {
+        writeFileSync(
+          resolve(binDir, `bbolt-client-rs-${abi}`),
+          `BBOLT-${abi}\n`,
+        );
+      }
+
+      // Distinct version per package; I18N intentionally left UNSET so it falls
+      // back to the positional 0.0.0-r99.
+      const result = spawnSync("bash", [BUILDSH, "0.0.0-r99", out], {
+        cwd: ROOT,
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          APK_MKPKG_STUB: "1",
+          BBOLT_BIN_DIR: binDir,
+          WORK_DIR: resolve(work, ".build"),
+          PKG_VER_BBOLT: "0.1.0-r5",
+          PKG_VER_SINGBOX: "0.1.0-r10",
+          PKG_VER_LUCIAPP: "0.1.0-r7",
+          PKG_VER_AWGWARP: "0.1.0-r2",
+        },
+      });
+
+      try {
+        expect(result.status).toBe(0);
+        const files = readdirSync(out);
+        // Each noarch package carries its own override.
+        expect(files).toContain("singbox-ui_0.1.0-r10.apk");
+        expect(files).toContain("luci-app-singbox-ui_0.1.0-r7.apk");
+        expect(files).toContain("singbox-ui-plugin-awg_warp_0.1.0-r2.apk");
+        // Unset override -> positional fallback.
+        expect(files).toContain("luci-i18n-singbox-ui-ru_0.0.0-r99.apk");
+        // bbolt (per-arch) carries its own override on every arch.
+        const bbolt = files.filter((f) => /^bbolt-client_.*\.apk$/.test(f));
+        expect(bbolt.length).toBe(20);
+        expect(bbolt.every((f) => f.startsWith("bbolt-client_0.1.0-r5_"))).toBe(
+          true,
+        );
+        // The mixed positional must NOT leak onto an overridden package.
+        expect(files).not.toContain("singbox-ui_0.0.0-r99.apk");
+      } finally {
+        rmSync(work, { recursive: true, force: true });
+      }
+    },
+  );
 });

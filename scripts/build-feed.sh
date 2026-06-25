@@ -139,6 +139,13 @@ gen_dir_index "$OUT/$VERSION" "OpenWrt $VERSION - architectures"
 # Publish the public signing key at the feed root.
 cp "$FEED_PUBKEY" "$OUT/$REPO_NAME.pem"
 
+# Per-package version manifest, used by the Pages redeploy gate (pages.yml) to
+# decide on the NEXT run whether anything changed. Carried from the release into
+# the feed root. Optional (absent in unit-test fixtures) — skip if not present.
+if [ -f "$DIST/versions.txt" ]; then
+  cp "$DIST/versions.txt" "$OUT/versions.txt"
+fi
+
 # Jekyll site config — GitHub Pages renders the .md files with this theme.
 cat > "$OUT/_config.yml" <<EOF
 title: luci-singbox APK feed
