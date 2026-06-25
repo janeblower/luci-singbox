@@ -229,6 +229,31 @@ function ensureFeed(): FeedResult {
     { cwd: resolve(tmp, "i"), encoding: "utf8" },
   );
 
+  // Noarch AWG-WARP plugin
+  mkdirSync(resolve(tmp, "p/x"), { recursive: true });
+  writeFileSync(resolve(tmp, "p/x/e"), "e\n");
+  spawnSync(
+    apkBin,
+    [
+      "mkpkg",
+      "--info",
+      "name:singbox-ui-plugin-awg_warp",
+      "--info",
+      "version:9.9.9-r1",
+      "--info",
+      "arch:all",
+      "--info",
+      "description:t",
+      "--info",
+      "license:GPL-2.0-or-later",
+      "--files",
+      "x",
+      "-o",
+      resolve(dist, "singbox-ui-plugin-awg_warp.apk"),
+    ],
+    { cwd: resolve(tmp, "p"), encoding: "utf8" },
+  );
+
   // Dummy public key
   writeFileSync(resolve(tmp, "pub.pem"), "DUMMY PUBLIC KEY\n");
 
@@ -303,7 +328,7 @@ describe("build_feed", () => {
   );
 
   it.skipIf(skipAll)(
-    "per-arch: every arch dir holds four <name>-<version>.apk files + packages.adb",
+    "per-arch: every arch dir holds five <name>-<version>.apk files + packages.adb",
     () => {
       requireCapable();
       const { out } = ensureFeed();
@@ -320,6 +345,9 @@ describe("build_feed", () => {
         expect(
           existsSync(resolve(d, "luci-i18n-singbox-ui-ru-9.9.9-r1.apk")),
         ).toBe(true);
+        expect(
+          existsSync(resolve(d, "singbox-ui-plugin-awg_warp-9.9.9-r1.apk")),
+        ).toBe(true);
 
         // Release-asset name must NOT appear
         expect(existsSync(resolve(d, `bbolt-client-${arch}.apk`))).toBe(false);
@@ -327,9 +355,9 @@ describe("build_feed", () => {
         // packages.adb index present
         expect(existsSync(resolve(d, "packages.adb"))).toBe(true);
 
-        // Exactly 4 apks
+        // Exactly 5 apks
         const napk = readdirSync(d).filter((f) => f.endsWith(".apk")).length;
-        expect(napk).toBe(4);
+        expect(napk).toBe(5);
 
         // Every package referenced by the index exists on disk
         const dump = spawnSync(

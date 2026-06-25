@@ -11,7 +11,7 @@ var callEnable = rpc.declare({ object: 'singbox-ui', method: 'plugin_enable', pa
 // a small static list; installed ones come from the `plugins` rpcd method.
 var KNOWN = [
 	{ name: 'awg_warp', label: _('AWG WARP (Cloudflare WARP + AmneziaWG)'),
-	  pkg: 'luci-app-singbox-plugin-awg-warp',
+	  pkg: 'singbox-ui-plugin-awg_warp',
 	  description: _('Adds a Cloudflare WARP egress obfuscated with AmneziaWG.') },
 ];
 

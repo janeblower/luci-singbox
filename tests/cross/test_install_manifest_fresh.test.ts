@@ -81,7 +81,7 @@ describe("install_manifest_fresh", () => {
     // Phase E: the framework adds discovery.uc alongside registry.uc. These are
     // the only two files the CORE backend package ships under lib/plugins/.
     // Actual plugins ship their own lib/plugins/<name>/ subtree from their own
-    // package (e.g. luci-app-singbox-plugin-awg-warp), never from core.
+    // package (e.g. singbox-ui-plugin-awg_warp), never from core.
     const be = resolve(ROOT, "scripts/install-manifest-singbox-ui.txt");
     const lines = readFileSync(be, "utf8").split("\n");
     const pluginLines = lines

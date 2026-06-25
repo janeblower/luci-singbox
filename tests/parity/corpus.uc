@@ -1,6 +1,14 @@
 // tests/parity/corpus.uc — fixture sections covering every emit feature combo.
 // Each section mirrors what cur.foreach yields: scalars are strings, list
 // fields are arrays. `.name` is the tag; inbounds also set `protocol`.
+
+// Load the AWG-WARP plugin descriptor when available (it lives in the plugin
+// package's lib tree, not in the core lib). The parity test passes the plugin's
+// lib dir as an extra -L; the coverage-guard does NOT, so we guard with
+// try/catch to avoid breaking the guard's corpus require() call when the
+// plugin lib dir is absent.
+try { require("plugins.awg_warp.protocols.awg_warp"); } catch (_) {}
+
 return [
     { name: "trojan_out_min", kind: "outbound", type: "trojan",
       section: { ".name": "t1", server: "ex.com", server_port: "443", server_password: "p" } },
@@ -272,4 +280,9 @@ return [
     { name: "sharelink_out", kind: "outbound", type: "sharelink",
       section: { ".name": "shlink",
                  raw_link: "vless://11111111-1111-1111-1111-111111111111@ex.com:443?security=tls&sni=ex.com#node" } },
+    // AWG-WARP plugin: emits {type:direct, tag, bind_interface}. UCI-only fields
+    // (awg_mimic, ipv6_enabled, mtu_override, warp_*/awg_*) never reach the JSON.
+    { name: "awg_warp_basic", kind: "outbound", type: "awg_warp",
+      section: { ".name": "warp_p", type: "awg_warp", enabled: "1",
+                 awg_mimic: "auto", ipv6_enabled: "0" } },
 ];
