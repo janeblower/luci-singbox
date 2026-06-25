@@ -1,4 +1,4 @@
-// lib/plugins/awg_warp/warp.uc — Cloudflare WARP registration + .conf paste parser.
+// lib/plugins/awg_warp/warp.uc — Cloudflare WARP registration (anonymous /reg).
 // Anonymous POST to CF /reg (spec §2.1). Binaries via env seams for testability.
 let fs      = require("fs");
 let helpers = require("helpers");
