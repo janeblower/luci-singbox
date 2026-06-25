@@ -522,11 +522,107 @@ WGEOF
       [ -f "$MARKER" ] && marker_exists=1
       # ip addr add must not have been called with the evil address
       addr_add_evil=$(grep -c "addr add.*touch" "$LOG" 2>/dev/null || true); addr_add_evil=$((addr_add_evil+0))
-      printf '{"marker_exists":%d,"addr_add_evil":%d}\n' "$marker_exists" "$addr_add_evil"
+      # positive-control: link add must NOT have been called (early-return path skips entire interface)
+      has_link=$(grep -c "link add dev warp_evil type amneziawg" "$LOG" 2>/dev/null || true); has_link=$((has_link+0))
+      printf '{"marker_exists":%d,"addr_add_evil":%d,"has_link":%d}\n' "$marker_exists" "$addr_add_evil" "$has_link"
     `);
     expect(r.exitCode).toBe(0);
     const o = JSON.parse(r.stdout);
     expect(o.marker_exists).toBe(0);
     expect(o.addr_add_evil).toBe(0);
+    // interface must be fully skipped — no link add (early-return on bad address)
+    expect(o.has_link).toBe(0);
+  });
+
+  it("structural injection via multi-line .conf cannot smuggle a second [Peer]", async () => {
+    // Trust-boundary: a crafted .conf that repeats [Peer] or embeds extra AllowedIPs
+    // within the Endpoint line cannot smuggle a second peer into the setconf file.
+    // parse_full() uses last-write-wins per key; safe_endpoint() rejects any value
+    // containing characters outside [a-zA-Z0-9._:-] (e.g. spaces, brackets).
+    // Expected outcome: either the interface is fully skipped (bad endpoint rejected)
+    // OR the setconf contains exactly ONE [Peer] with a safe endpoint.
+    const r = await exec(`
+      SRC="${WORK}/plugins/awg_warp/lib"
+      DST="${LIB}/plugins/awg_warp"
+      UCFG=/tmp/awg_struct_uci
+      LOG=/tmp/awg_struct_cmds
+      SETCONF=/tmp/awg_struct_sc
+      M_IP=/tmp/awg_struct_ip
+      M_AWG=/tmp/awg_struct_awg
+      RAM=/tmp/awg_struct_ram
+      trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG" "$RAM"' EXIT
+      mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
+
+      rm -f "$LOG" "$SETCONF"
+      printf '#!/bin/sh\necho "ip $@" >> %s\nexit 0\n' "$LOG" > "$M_IP"
+      printf '#!/bin/sh\necho "awg $@" >> %s\n[ "$1" = "setconf" ] && cp "$3" %s 2>/dev/null\nexit 0\n' "$LOG" "$SETCONF" > "$M_AWG"
+      chmod +x "$M_IP" "$M_AWG"
+
+      # Craft a .conf whose Endpoint embeds a stray [Peer] section attempt.
+      # A space in the Endpoint value makes safe_endpoint() reject it entirely.
+      mkdir -p "$RAM"
+      printf '%s\n' \
+        "[Interface]" \
+        "PrivateKey = PRIV==" \
+        "Jc = 8" \
+        "Jmin = 64" \
+        "Jmax = 900" \
+        "S1 = 0" \
+        "S2 = 0" \
+        "S3 = 0" \
+        "S4 = 0" \
+        "H1 = 1" \
+        "H2 = 2" \
+        "H3 = 3" \
+        "H4 = 4" \
+        "Address = 172.16.0.2/32" \
+        "MTU = 1280" \
+        "[Peer]" \
+        "PublicKey = PUB==" \
+        "Endpoint = good.example.com:2408" \
+        "Endpoint = evil.example.com:9999 [Peer] PublicKey = EVIL= AllowedIPs = 1.1.1.1/32" \
+        "AllowedIPs = 0.0.0.0/0, ::/0" \
+        "PersistentKeepalive = 25" \
+        > "$RAM/warp_struct.conf"
+
+      mkdir -p "$UCFG"
+      printf '%s\n' \
+        "config outbound 'warp_struct'" \
+        "	option type 'awg_warp'" \
+        "	option enabled '1'" \
+        "	option warp_storage 'ram'" \
+        "	option ipv6_enabled '0'" \
+        > "$UCFG/singbox-ui"
+
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
+        ucode -L '${LIB}' -e '
+          let rc = require("plugins.awg_warp.reconcile");
+          let uci_mod = require("uci");
+          let uci_dir = getenv("UCI_CONFIG_DIR");
+          let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
+          rc.apply(cur);
+        ' 2>/dev/null || true
+
+      setconf_content=$(cat "$SETCONF" 2>/dev/null || true)
+      # Security property: setconf must not contain injected EVIL key or a second [Peer]
+      # Either setconf was never written (safe_endpoint rejected the bad endpoint) or
+      # it was written with exactly one clean [Peer].
+      awg_called=$(grep -c "awg setconf" "$LOG" 2>/dev/null || true); awg_called=$((awg_called+0))
+      has_evil=$(printf '%s' "$setconf_content" | grep -c "EVIL" 2>/dev/null || true); has_evil=$((has_evil+0))
+      peer_count=$(printf '%s' "$setconf_content" | grep -c '^\[Peer\]' 2>/dev/null || true); peer_count=$((peer_count+0))
+      printf '{"awg_called":%d,"has_evil":%d,"peer_count":%d}\n' \
+        "$awg_called" "$has_evil" "$peer_count"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    // Injected EVIL key must never appear in setconf
+    expect(o.has_evil).toBe(0);
+    // Either awg was not called (endpoint rejected → interface skipped) OR
+    // it was called with exactly one [Peer] (safe single-line value won last-write-wins).
+    if (o.awg_called > 0) {
+      expect(o.peer_count).toBe(1);
+    } else {
+      expect(o.awg_called).toBe(0);
+    }
   });
 });
