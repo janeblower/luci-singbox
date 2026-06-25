@@ -47,7 +47,7 @@ function m_awg_status() {
 // Thin wrapper: delegates all provisioning logic to awg-provision.sh.
 // The script is env-overridable (SB_AWG_PROVISION) for test injection.
 function m_awg_install() {
-	let rc = system(sprintf("%s 2>&1", PROVISION_SH));
+	let rc = system(sprintf("%s >/dev/null 2>&1", PROVISION_SH));
 	if (rc !== 0) {
 		emit({ status: "error", message: sprintf("provision script failed (rc=%d)", rc) });
 		return;

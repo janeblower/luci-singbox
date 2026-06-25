@@ -35,10 +35,12 @@ describe("awg_install rpcd wrapper", () => {
       cp -r "${PLUGIN_SRC}/protocols"/. "${LIB}/plugins/awg_warp/protocols"/ 2>/dev/null || true
 
       # Stub provision script: records it was called, exits 0.
+      # Emits progress lines to stdout to verify rpcd wrapper suppresses them.
       cat > /tmp/fake_provision.sh <<'PROV'
 #!/bin/sh
 echo "provision called" > /tmp/prov_called
-echo "awg-provision: ok"
+echo "fetching..."
+echo "Installing kmod-amneziawg..."
 exit 0
 PROV
       chmod +x /tmp/fake_provision.sh
@@ -53,11 +55,16 @@ PROV
     `);
     expect(r.exitCode).toBe(0);
 
-    const firstLine = r.stdout
-      .split("\n")
-      .find((l) => l.trim().startsWith("{"));
-    expect(firstLine).toBeTruthy();
-    const o = JSON.parse(firstLine ?? "{}");
+    // The provision stub emits progress lines to stdout. With the >/dev/null 2>&1
+    // suppression in init.uc, those lines must NOT appear in the rpcd response.
+    // The raw captured output must be parseable as JSON directly (no leading apk text).
+    const rawOut = r.stdout.split("\n").find((l) => l.trim() !== "" && !l.startsWith("prov_called=")) ?? "";
+    expect(rawOut).toBeTruthy();
+    // Must not contain progress lines that the stub printed.
+    expect(rawOut).not.toContain("fetching...");
+    expect(rawOut).not.toContain("Installing kmod-amneziawg");
+    // Must be clean parseable JSON.
+    const o = JSON.parse(rawOut);
     expect(o.status).toBe("ok");
 
     expect(r.stdout).toContain("provision called");
