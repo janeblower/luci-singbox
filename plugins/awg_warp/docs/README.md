@@ -28,17 +28,29 @@ Or via the LuCI software manager.
 ### 2. Install AWG components (self-provision)
 
 The plugin does NOT require AmneziaWG kernel modules or tools at install time —
-they are self-provisioned at runtime to avoid arch-specific dependency resolution.
+they are self-provisioned at runtime to avoid arch-specific dependency resolution
+and to keep the plugin package itself free of external deps.
 
 In LuCI: **Sing-box UI → Outbounds → add AWG WARP outbound → Plugins tab →
 "Install AWG + ip-full"** button.
 
-This calls `awg_install` via rpcd, which:
-1. Adds the amneziawg OpenWrt feed signing key.
-2. Runs `apk add ip-full kmod-amneziawg amneziawg-tools`.
+This calls `awg_install` via rpcd, which runs
+`root/usr/libexec/singbox-ui/awg-provision.sh`. The script:
 
-You need network access and a compatible OpenWrt 25.12.x target/subtarget with
-the amneziawg feed available.
+1. Reads `/etc/openwrt_release` to detect the OpenWrt version and
+   target/subtarget.
+2. Fetches the AWG feed signing key dynamically via `wget` and writes it to
+   `/etc/apk/keys/` (TOFU — clicking "Install AWG + ip-full" is the trust
+   decision).
+3. Idempotently adds the AWG feed URL (version + target injected at runtime)
+   to `/etc/apk/repositories.d/awg.list`.
+4. Runs `apk update` then `apk add ip-full kmod-amneziawg amneziawg-tools`.
+5. Runs `modprobe amneziawg` (best-effort).
+
+The script's stdout is suppressed by the rpcd wrapper so the JSON response
+stays clean. Errors are printed to stderr and surfaced as `status: "error"`.
+
+You need network access and a compatible OpenWrt 25.12.x target/subtarget.
 
 ### 3. Register with Cloudflare WARP
 
@@ -99,16 +111,25 @@ plugins/awg_warp/
   po/
     templates/singbox-ui-plugin-awg_warp.pot   Translatable strings template
     ru/singbox-ui-plugin-awg_warp.po           Russian translation
-  htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/
-    tab.js                              LuCI frontend tab (own i18n domain)
-  lib/
+  lib/                                  → /usr/share/singbox-ui/lib/plugins/awg_warp/
     protocols/awg_warp.uc               Outbound descriptor (emit = direct+bind_interface)
     iface.uc                            Interface name derivation + sanitization
     reconcile.uc                        Native AWG interface lifecycle (ip/awg)
     warp.uc                             Cloudflare WARP registration
     awggen.uc                           AWG key + junk parameter generation
     nft.uc                              nftables masquerade fragment
-    init.uc                             rpcd method dispatcher
-  root/usr/share/rpcd/acl.d/
-    singbox-ui-plugin-awg_warp.json     rpcd ACL (read: awg_status; write: the rest)
+    init.uc                             Framework discovery entry; registers all hooks + rpcd
+  htdocs/                               → www/
+    luci-static/resources/view/singbox-ui/plugins/awg_warp/
+      tab.js                            LuCI frontend tab (own i18n domain)
+  root/                                 → /  (rootfs overlay)
+    usr/share/rpcd/acl.d/
+      singbox-ui-plugin-awg_warp.json   rpcd ACL (read: awg_status; write: the rest)
+    usr/libexec/singbox-ui/
+      awg-provision.sh                  Bash self-provision script (fetches AWG feed key + installs)
 ```
+
+`build-apk.sh` maps `lib/` → `/usr/share/singbox-ui/lib/plugins/awg_warp/`
+(recursive, includes `protocols/`), `htdocs/` → `www/`, and `root/` → `/`.
+Discovery globs `/usr/share/singbox-ui/lib/plugins/*/init.uc` so `lib/init.uc`
+is picked up automatically after installation.

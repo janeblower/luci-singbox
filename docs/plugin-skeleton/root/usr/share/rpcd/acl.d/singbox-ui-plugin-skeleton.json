@@ -1,5 +1,5 @@
 {
-	"luci-singbox-plugin-skeleton": {
+	"singbox-ui-plugin-skeleton": {
 		"description": "Grant LuCI access to skeleton plugin rpcd methods",
 		"read": {
 			"uci": [ "singbox-ui" ],
