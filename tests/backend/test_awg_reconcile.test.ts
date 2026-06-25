@@ -91,7 +91,7 @@ describe("awg reconcile", () => {
       has_v6=$(grep -c "addr add 2606:4700::2/128" "$LOG" 2>/dev/null || true); has_v6=$((has_v6+0))
       has_mtu=$(grep -c "mtu 1380" "$LOG" 2>/dev/null || true); has_mtu=$((has_mtu+0))
       has_label=$(grep -c "addrlabel add" "$LOG" 2>/dev/null || true); has_label=$((has_label+0))
-      bad_setconf=$(printf '%s' "$setconf" | grep -ci '^Address\|^MTU' 2>/dev/null || true); bad_setconf=$((bad_setconf+0))
+      bad_setconf=$(printf '%s' "$setconf" | grep -ci '^Address|^MTU' 2>/dev/null || true); bad_setconf=$((bad_setconf+0))
       printf '{"link":%d,"v6":%d,"mtu":%d,"label":%d,"bad_setconf":%d}\n' \
         "$has_link" "$has_v6" "$has_mtu" "$has_label" "$bad_setconf"
     `);

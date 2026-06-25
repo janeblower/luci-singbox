@@ -58,7 +58,10 @@ PROV
     // The provision stub emits progress lines to stdout. With the >/dev/null 2>&1
     // suppression in init.uc, those lines must NOT appear in the rpcd response.
     // The raw captured output must be parseable as JSON directly (no leading apk text).
-    const rawOut = r.stdout.split("\n").find((l) => l.trim() !== "" && !l.startsWith("prov_called=")) ?? "";
+    const rawOut =
+      r.stdout
+        .split("\n")
+        .find((l) => l.trim() !== "" && !l.startsWith("prov_called=")) ?? "";
     expect(rawOut).toBeTruthy();
     // Must not contain progress lines that the stub printed.
     expect(rawOut).not.toContain("fetching...");
