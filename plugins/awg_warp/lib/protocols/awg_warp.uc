@@ -1,4 +1,4 @@
-// lib/plugins/awg_warp/descriptor.uc — AWG-WARP outbound = a `direct` outbound
+// lib/plugins/awg_warp/protocols/awg_warp.uc — AWG-WARP outbound = a `direct` outbound
 // bound to the plugin's amneziawg interface. WARP creds + AWG params are UCI-only
 // (drive the reconciler); only bind_interface reaches sing-box JSON.
 let reg = require("builder.protocols.registry");

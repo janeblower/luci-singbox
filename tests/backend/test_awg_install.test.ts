@@ -9,9 +9,9 @@ const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
   process.env.SB_VM_LIB ?? "/tmp/work/singbox-ui/root/usr/share/singbox-ui/lib";
 const HANDLER = `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
-// Plugin source tree (unified lib/ path — result of prior refactor).
-const PLUGIN_SRC = `${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp`;
-const PLUGIN_ACL_SRC = `${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/rpcd/acl.d/luci-singbox-plugin-awg-warp.json`;
+// Plugin source tree (flat lib/ layout after R1 restructure).
+const PLUGIN_SRC = `${WORK}/plugins/awg_warp/lib`;
+const PLUGIN_ACL_SRC = `${WORK}/plugins/awg_warp/root/usr/share/rpcd/acl.d/singbox-ui-plugin-awg_warp.json`;
 
 describe("awg_install", () => {
   useGuest();
@@ -27,7 +27,7 @@ describe("awg_install", () => {
       }
       trap cleanup EXIT
 
-      cp -r "${PLUGIN_SRC}" "${LIB}/plugins/awg_warp"
+      mkdir -p "${LIB}/plugins/awg_warp" && cp -r "${PLUGIN_SRC}"/. "${LIB}/plugins/awg_warp"/
 
       # Stub apk: records all invocations.
       cat > /tmp/m_apk <<'STUB'
@@ -38,6 +38,9 @@ STUB
       chmod +x /tmp/m_apk
       rm -f /tmp/m_apk_log
 
+      # Provide a stub PEM key (R2 will fetch the real key dynamically).
+      printf '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEAstubstubstubstubstubstubstubstubstubstubstubstubs=\n-----END PUBLIC KEY-----\n' > /tmp/awg_stub.pem
+
       mkdir -p /tmp/apk_keys
       : > /tmp/apk_repos
 
@@ -45,7 +48,7 @@ STUB
         APK_CMD=/tmp/m_apk \
         SB_APK_KEYS=/tmp/apk_keys \
         SB_APK_REPOS=/tmp/apk_repos \
-        SB_AWG_FEED_KEY="${LIB}/plugins/awg_warp/awg-openwrt-feed.pem" \
+        SB_AWG_FEED_KEY=/tmp/awg_stub.pem \
         UCODE_APP_LIB_DIR="${LIB}" \
         ucode -L "${LIB}" "${HANDLER}" call awg_install)
 
@@ -93,7 +96,7 @@ STUB
       }
       trap cleanup EXIT
 
-      cp -r "${PLUGIN_SRC}" "${LIB}/plugins/awg_warp"
+      mkdir -p "${LIB}/plugins/awg_warp" && cp -r "${PLUGIN_SRC}"/. "${LIB}/plugins/awg_warp"/
 
       # Stub apk: silent success.
       cat > /tmp/m_apk2 <<'STUB'
@@ -110,6 +113,9 @@ printf '{"release":{"target":"x86/64\\nhttps://evil.example/malicious.adb evil"}
 BOARDSTUB
       chmod +x /tmp/board_stub2
 
+      # Provide a stub PEM key (R2 will fetch the real key dynamically).
+      printf '-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VuAyEAstubstubstubstubstubstubstubstubstubstubstubstubs=\n-----END PUBLIC KEY-----\n' > /tmp/awg_stub2.pem
+
       mkdir -p /tmp/apk_keys2
       : > /tmp/apk_repos2
 
@@ -117,7 +123,7 @@ BOARDSTUB
         APK_CMD=/tmp/m_apk2 \
         SB_APK_KEYS=/tmp/apk_keys2 \
         SB_APK_REPOS=/tmp/apk_repos2 \
-        SB_AWG_FEED_KEY="${LIB}/plugins/awg_warp/awg-openwrt-feed.pem" \
+        SB_AWG_FEED_KEY=/tmp/awg_stub2.pem \
         SB_UBUS_BOARD=/tmp/board_stub2 \
         UCODE_APP_LIB_DIR="${LIB}" \
         ucode -L "${LIB}" "${HANDLER}" call awg_install)
@@ -163,7 +169,7 @@ describe("plugin ACL guard", () => {
         let fs = require("fs");
         let f = "${PLUGIN_ACL_SRC}";
         let d = json(fs.readfile(f) || "{}");
-        let entry = d["luci-singbox-plugin-awg-warp"] ?? {};
+        let entry = d["singbox-ui-plugin-awg_warp"] ?? {};
         let read_arr  = ((entry.read  ?? {}).ubus ?? {})["singbox-ui"] ?? [];
         let write_arr = ((entry.write ?? {}).ubus ?? {})["singbox-ui"] ?? [];
         let all = [];

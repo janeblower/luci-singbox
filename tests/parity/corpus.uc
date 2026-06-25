@@ -7,7 +7,7 @@
 // lib dir as an extra -L; the coverage-guard does NOT, so we guard with
 // try/catch to avoid breaking the guard's corpus require() call when the
 // plugin lib dir is absent.
-try { require("plugins.awg_warp.descriptor"); } catch (_) {}
+try { require("plugins.awg_warp.protocols.awg_warp"); } catch (_) {}
 
 return [
     { name: "trojan_out_min", kind: "outbound", type: "trojan",

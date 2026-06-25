@@ -7,7 +7,7 @@
  *   - singbox-ui_<ver>.apk                     noarch backend
  *   - luci-app-singbox-ui_<ver>.apk            noarch LuCI frontend
  *   - luci-i18n-singbox-ui-ru_<ver>.apk        noarch Russian translation
- *   - luci-app-singbox-plugin-awg-warp_<ver>.apk  noarch AWG-WARP plugin
+ *   - singbox-ui-plugin-awg_warp_<ver>.apk        noarch AWG-WARP plugin
  *
  * Driven via APK_MKPKG_STUB=1 (no SDK needed). SKIPs if bash is unavailable
  * (e.g. OpenWrt qemu guest has only BusyBox ash).
@@ -95,7 +95,7 @@ describe("build_apk_per_arch", () => {
       "singbox-ui",
       "luci-app-singbox-ui",
       "luci-i18n-singbox-ui-ru",
-      "luci-app-singbox-plugin-awg-warp",
+      "singbox-ui-plugin-awg_warp",
     ]) {
       const apks = readdirSync(out).filter((f) => f === `${name}_0.0.0-r1.apk`);
       expect(apks.length).toBe(1);

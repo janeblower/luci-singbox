@@ -1,4 +1,4 @@
-# luci-app-singbox-plugin-awg-warp
+# singbox-ui-plugin-awg_warp
 
 AWG-WARP plugin for `luci-app-singbox-ui`. Adds Cloudflare WARP registration
 and AmneziaWG (AWG) obfuscated WireGuard support as a contributed outbound type
@@ -20,7 +20,7 @@ and is NATed before leaving the WAN uplink.
 From the luci-singbox feed (same feed you installed `luci-app-singbox-ui` from):
 
 ```
-apk add luci-app-singbox-plugin-awg-warp
+apk add singbox-ui-plugin-awg_warp
 ```
 
 Or via the LuCI software manager.
@@ -93,23 +93,22 @@ To check status: **Sing-box UI → Outbounds → AWG WARP outbound → "AWG stat
 ## File layout
 
 ```
-luci-app-singbox-plugin-awg-warp/
+plugins/awg_warp/
   Makefile                              OpenWrt/LuCI package definition
   docs/README.md                        This file
   po/
-    templates/luci-singbox-plugin-awg-warp.pot   Translatable strings template
-    ru/luci-singbox-plugin-awg-warp.po            Russian translation
+    templates/singbox-ui-plugin-awg_warp.pot   Translatable strings template
+    ru/singbox-ui-plugin-awg_warp.po           Russian translation
   htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/
     tab.js                              LuCI frontend tab (own i18n domain)
-  root/usr/share/singbox-ui/lib/plugins/awg_warp/
-    descriptor.uc                       Outbound descriptor (emit = direct+bind_interface)
+  lib/
+    protocols/awg_warp.uc               Outbound descriptor (emit = direct+bind_interface)
     iface.uc                            Interface name derivation + sanitization
     reconcile.uc                        Native AWG interface lifecycle (ip/awg)
     warp.uc                             Cloudflare WARP registration
     awggen.uc                           AWG key + junk parameter generation
     nft.uc                              nftables masquerade fragment
     init.uc                             rpcd method dispatcher
-    awg-openwrt-feed.pem                amneziawg feed signing key (bundled)
   root/usr/share/rpcd/acl.d/
-    luci-singbox-plugin-awg-warp.json   rpcd ACL (read: awg_status; write: the rest)
+    singbox-ui-plugin-awg_warp.json     rpcd ACL (read: awg_status; write: the rest)
 ```

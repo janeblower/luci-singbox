@@ -11,11 +11,11 @@ describe("awg nft fragment", () => {
   it("emits a masquerade chain for an enabled iface (v4+v6)", async () => {
     const r = await exec(`
       set -e
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       UCFG=/tmp/awg_nft_uci
       trap 'rm -rf "$DST" "$UCFG"' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/ 2>/dev/null || true
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
 
       mkdir -p "$UCFG"
       printf '%s\n' \
@@ -52,13 +52,13 @@ describe("awg descriptor", () => {
   it("emit() returns {type:direct, tag, bind_interface} for a section name", async () => {
     const r = await exec(`
       set -e
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       trap 'rm -rf "$DST"' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/ 2>/dev/null || true
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
 
       ucode -L '${LIB}' -e '
-        require("plugins.awg_warp.descriptor");
+        require("plugins.awg_warp.protocols.awg_warp");
         let reg = require("builder.protocols.registry");
         let d = reg.get("outbound", "awg_warp");
         let out = d.emit({ ".name": "warp_x" });

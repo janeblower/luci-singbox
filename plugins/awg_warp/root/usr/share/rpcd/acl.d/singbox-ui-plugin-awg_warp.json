@@ -1,5 +1,5 @@
 {
-	"luci-singbox-plugin-awg-warp": {
+	"singbox-ui-plugin-awg_warp": {
 		"description": "AWG WARP plugin rpcd methods",
 		"read": {
 			"uci": [ "singbox-ui" ],

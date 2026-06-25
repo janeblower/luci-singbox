@@ -12,7 +12,7 @@
 #   version   OpenWrt minor used as the top path segment (e.g. 25.12)
 #   dist_dir  dir containing bbolt-client-<arch>.apk (the only per-arch package)
 #             + the noarch quartet singbox-ui.apk / luci-app-singbox-ui.apk /
-#             luci-i18n-singbox-ui-ru.apk / luci-app-singbox-plugin-awg-warp.apk
+#             luci-i18n-singbox-ui-ru.apk / singbox-ui-plugin-awg_warp.apk
 #   out_dir   output dir (wiped and recreated); this is what is deployed to Pages
 #
 # Env knobs:
@@ -29,7 +29,7 @@
 # official OpenWrt feed: e.g. csstidy-2021.06.13~707feaec-r1.apk). The GitHub
 # release assets are named bbolt-client-<arch>.apk (per-arch) and the noarch
 # quartet singbox-ui.apk / luci-app-singbox-ui.apk / luci-i18n-singbox-ui-ru.apk /
-# luci-app-singbox-plugin-awg-warp.apk, so
+# singbox-ui-plugin-awg_warp.apk, so
 # each package is copied into the feed under its apk "<name>-<version>.apk" name.
 set -eu
 
@@ -43,7 +43,7 @@ REPO_NAME="luci-singbox"
 CORE="singbox-ui.apk"
 APP="luci-app-singbox-ui.apk"
 I18N="luci-i18n-singbox-ui-ru.apk"
-PLUGIN="luci-app-singbox-plugin-awg-warp.apk"
+PLUGIN="singbox-ui-plugin-awg_warp.apk"
 PAGES_URL="${PAGES_URL:-https://janeblower.github.io/luci-singbox}"
 FEED_PUBKEY="${FEED_PUBKEY:-feed/luci-singbox.pem}"
 RELEASE_REPO="${RELEASE_REPO:-janeblower/luci-singbox}"

@@ -1,7 +1,7 @@
 /**
  * tests/cross/test_awg_acl.test.ts
  *
- * Package-shape smoke test for luci-app-singbox-plugin-awg-warp.
+ * Package-shape smoke test for singbox-ui-plugin-awg_warp.
  * Verifies the ACL file is present and contains the expected read/write split.
  * Host-only (file-read shape test via Bun.file; no VM needed).
  * Expanded by Task 9 to cover the full plugin backend surface.
@@ -15,12 +15,7 @@ const ROOT = process.env.SB_REPO
 
 const ACL = resolve(
   ROOT,
-  "luci-app-singbox-plugin-awg-warp/root/usr/share/rpcd/acl.d/luci-singbox-plugin-awg-warp.json",
-);
-
-const PEM = resolve(
-  ROOT,
-  "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp/awg-openwrt-feed.pem",
+  "plugins/awg_warp/root/usr/share/rpcd/acl.d/singbox-ui-plugin-awg_warp.json",
 );
 
 describe("awg-warp package shape", () => {
@@ -28,7 +23,7 @@ describe("awg-warp package shape", () => {
     const f = Bun.file(ACL);
     expect(await f.exists()).toBe(true);
     const j = JSON.parse(await f.text());
-    const role = j["luci-singbox-plugin-awg-warp"];
+    const role = j["singbox-ui-plugin-awg_warp"];
     expect(role).toBeTruthy();
     expect(role.read.ubus["singbox-ui"]).toContain("awg_status");
     expect(role.write.ubus["singbox-ui"]).toContain("warp_register");
@@ -36,11 +31,5 @@ describe("awg-warp package shape", () => {
     expect(role.write.ubus["singbox-ui"]).toContain("awg_generate");
   });
 
-  it("bundles the awg-openwrt feed signing key as a PEM public key", async () => {
-    const f = Bun.file(PEM);
-    expect(await f.exists()).toBe(true);
-    const text = await f.text();
-    expect(text).toMatch(/^-----BEGIN PUBLIC KEY-----/);
-    expect(text).toMatch(/-----END PUBLIC KEY-----/);
-  });
+  // R2 TODO: test that the feed key is fetched dynamically (bundled .pem removed in R1).
 });

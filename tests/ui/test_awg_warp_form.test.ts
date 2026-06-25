@@ -10,7 +10,7 @@ import { loadLuciModule } from "../helpers/luci.ts";
 
 const TAB_JS = resolve(
   import.meta.dir,
-  "../../luci-app-singbox-plugin-awg-warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js",
+  "../../plugins/awg_warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js",
 );
 
 // --- Option stub: supports all chained property assignments / method calls

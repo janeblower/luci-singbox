@@ -371,25 +371,25 @@ beyond the raw payload.
 
 ---
 
-## AWG-WARP plugin (`luci-app-singbox-plugin-awg-warp`)
+## AWG-WARP plugin (`singbox-ui-plugin-awg_warp`)
 
 The AWG-WARP plugin ships as a **separate 5th package** (noarch) with its own
-install path at `luci-app-singbox-plugin-awg-warp/`. It adds a single contributed
+install path at `plugins/awg_warp/`. It adds a single contributed
 outbound type `awg_warp` via the plugin registry (`lib/plugins/registry.uc`).
 
 **Architecture summary:**
-- `lib/plugins/awg_warp/descriptor.uc` — registers the outbound type; `emit()` escape-hatch produces `{type:direct, tag, bind_interface:<iface>}` (no listen base).
-- `lib/plugins/awg_warp/iface.uc` — computes the per-outbound interface name (`awg<N>`, max 12 chars); all UCI-derived names/CIDR sanitized.
-- `lib/plugins/awg_warp/reconcile.uc` — native ephemeral interface lifecycle via `ip`/`awg`; never writes `/etc/config/network`. `setconf` split avoids cleartext key in process args.
-- `lib/plugins/awg_warp/warp.uc` — WARP registration (`auto` + `paste` modes); WARP-safe AWG keygen forces `S=0`/`H=1234` reserved bytes.
-- `lib/plugins/awg_warp/nft.uc` — masquerade fragment: `table ip singbox_ui_awg_nat` (v4) + `table ip6 singbox_ui_awg_nat6` (v6 when `ipv6_enabled`); no double-NAT; all interface names double-sanitized.
-- `lib/plugins/awg_warp/awggen.uc` — AWG parameter generation; `target=warp` forces S=0/H=1234.
-- `lib/plugins/awg_warp/init.uc` — rpcd method dispatcher (`awg_status`, `awg_install`, `warp_register`, `awg_generate`); self-provision adds amneziawg feed key + `apk add ip-full kmod-amneziawg amneziawg-tools`.
-- `htdocs/.../plugins/awg_warp/tab.js` — plugin frontend tab (own i18n domain `luci-singbox-plugin-awg-warp`).
+- `plugins/awg_warp/lib/protocols/awg_warp.uc` — registers the outbound type; `emit()` escape-hatch produces `{type:direct, tag, bind_interface:<iface>}` (no listen base).
+- `plugins/awg_warp/lib/iface.uc` — computes the per-outbound interface name (`awg<N>`, max 12 chars); all UCI-derived names/CIDR sanitized.
+- `plugins/awg_warp/lib/reconcile.uc` — native ephemeral interface lifecycle via `ip`/`awg`; never writes `/etc/config/network`. `setconf` split avoids cleartext key in process args.
+- `plugins/awg_warp/lib/warp.uc` — WARP registration (`auto` + `paste` modes); WARP-safe AWG keygen forces `S=0`/`H=1234` reserved bytes.
+- `plugins/awg_warp/lib/nft.uc` — masquerade fragment: `table ip singbox_ui_awg_nat` (v4) + `table ip6 singbox_ui_awg_nat6` (v6 when `ipv6_enabled`); no double-NAT; all interface names double-sanitized.
+- `plugins/awg_warp/lib/awggen.uc` — AWG parameter generation; `target=warp` forces S=0/H=1234.
+- `plugins/awg_warp/lib/init.uc` — rpcd method dispatcher (`awg_status`, `awg_install`, `warp_register`, `awg_generate`); self-provision adds amneziawg feed key + `apk add ip-full kmod-amneziawg amneziawg-tools`.
+- `plugins/awg_warp/htdocs/.../plugins/awg_warp/tab.js` — plugin frontend tab (own i18n domain `singbox-ui-plugin-awg_warp`).
 
 ### awg_warp outbound
 
-Descriptor: `lib/plugins/awg_warp/descriptor.uc`. sing-box type: **`direct`** with `bind_interface`. WARP credentials + AWG obfuscation params are UCI-only; only `bind_interface` reaches the generated sing-box JSON.
+Descriptor: `plugins/awg_warp/lib/protocols/awg_warp.uc`. sing-box type: **`direct`** with `bind_interface`. WARP credentials + AWG obfuscation params are UCI-only; only `bind_interface` reaches the generated sing-box JSON.
 
 | sing-box JSON | UCI | Status | Notes |
 |---|---|---|---|

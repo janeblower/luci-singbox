@@ -190,48 +190,40 @@ describe("domain classifier: path -> domain mapping", () => {
   describe("11) AWG-WARP plugin path-gating", () => {
     it("plugin root/ (ucode) => backend=true", () =>
       expectDomain(
-        "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp/descriptor.uc",
+        "plugins/awg_warp/lib/protocols/awg_warp.uc",
         "backend",
         "true",
       ));
     it("plugin root/ => ui=false", () =>
       expectDomain(
-        "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp/descriptor.uc",
+        "plugins/awg_warp/lib/protocols/awg_warp.uc",
         "ui",
         "false",
       ));
     it("plugin root/ => packaging=false", () =>
       expectDomain(
-        "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp/descriptor.uc",
+        "plugins/awg_warp/lib/protocols/awg_warp.uc",
         "packaging",
         "false",
       ));
     it("plugin htdocs/ (JS) => ui=true", () =>
       expectDomain(
-        "luci-app-singbox-plugin-awg-warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js",
+        "plugins/awg_warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js",
         "ui",
         "true",
       ));
     it("plugin htdocs/ => backend=false", () =>
       expectDomain(
-        "luci-app-singbox-plugin-awg-warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js",
+        "plugins/awg_warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js",
         "backend",
         "false",
       ));
     it("plugin Makefile => packaging=true", () =>
-      expectDomain(
-        "luci-app-singbox-plugin-awg-warp/Makefile",
-        "packaging",
-        "true",
-      ));
+      expectDomain("plugins/awg_warp/Makefile", "packaging", "true"));
     it("plugin Makefile => backend=false", () =>
-      expectDomain(
-        "luci-app-singbox-plugin-awg-warp/Makefile",
-        "backend",
-        "false",
-      ));
+      expectDomain("plugins/awg_warp/Makefile", "backend", "false"));
     it("plugin Makefile => ui=false", () =>
-      expectDomain("luci-app-singbox-plugin-awg-warp/Makefile", "ui", "false"));
+      expectDomain("plugins/awg_warp/Makefile", "ui", "false"));
   });
 
   // Goal-e isolation matrix
@@ -287,9 +279,8 @@ describe("domain classifier: path -> domain mapping", () => {
         packaging: "true",
       });
     });
-    it("plugin root/.../descriptor.uc: bbolt=F backend=T ui=F packaging=F", () => {
-      const f =
-        "luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp/descriptor.uc";
+    it("plugin lib/.../awg_warp.uc: bbolt=F backend=T ui=F packaging=F", () => {
+      const f = "plugins/awg_warp/lib/protocols/awg_warp.uc";
       const r = classify(f);
       expect(r).toMatchObject({
         bbolt: "false",
@@ -300,7 +291,7 @@ describe("domain classifier: path -> domain mapping", () => {
     });
     it("plugin htdocs/.../tab.js: bbolt=F backend=F ui=T packaging=F", () => {
       const f =
-        "luci-app-singbox-plugin-awg-warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js";
+        "plugins/awg_warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js";
       const r = classify(f);
       expect(r).toMatchObject({
         bbolt: "false",
@@ -353,13 +344,13 @@ describe("static wiring guard: build.yml changes job (dorny/paths-filter)", () =
     expect(yml).toMatch(/sing-box-extended\.yml/);
   });
 
-  it("build.yml backend filter includes plugin root/", () => {
+  it("build.yml backend filter includes plugin lib/", () => {
     const yml = readFileSync(BUILD_YML, "utf8");
-    expect(yml).toContain("luci-app-singbox-plugin-awg-warp/root/**");
+    expect(yml).toContain("plugins/awg_warp/lib/**");
   });
 
   it("build.yml ui filter includes plugin htdocs/", () => {
     const yml = readFileSync(BUILD_YML, "utf8");
-    expect(yml).toContain("luci-app-singbox-plugin-awg-warp/htdocs/**");
+    expect(yml).toContain("plugins/awg_warp/htdocs/**");
   });
 });

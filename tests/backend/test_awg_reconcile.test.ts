@@ -10,10 +10,10 @@ describe("awg iface helpers", () => {
   useGuest();
   it("sanitizes interface names and computes MTU via override", async () => {
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       trap 'rm -rf "$DST"' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/ 2>/dev/null || true
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
 
       ucode -L '${LIB}' -e '
         let h = require("plugins.awg_warp.iface");
@@ -41,7 +41,7 @@ describe("awg reconcile", () => {
 
   it("apply issues native ip/awg commands; setconf excludes Address/MTU; addrlabel gated on ipv6", async () => {
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       UCFG=/tmp/awg_rci_uci
       LOG=/tmp/awg_rci_cmds
@@ -49,7 +49,7 @@ describe("awg reconcile", () => {
       M_IP=/tmp/awg_rci_ip
       M_AWG=/tmp/awg_rci_awg
       trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG"' EXIT
-      mkdir -p "$DST" && cp "$SRC"/*.uc "$DST"/ 2>/dev/null
+      mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$LOG"
       # Write mock stubs — printf expands shell vars into the script body at write time
@@ -109,14 +109,14 @@ describe("awg reconcile", () => {
     // enabled=0, apply again — the second apply must emit BOTH link del AND
     // addrlabel del for that interface (not just link del as before the fix).
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       UCFG=/tmp/awg_fix1_uci
       LOG=/tmp/awg_fix1_cmds
       M_IP=/tmp/awg_fix1_ip
       M_AWG=/tmp/awg_fix1_awg
       trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG"' EXIT
-      mkdir -p "$DST" && cp "$SRC"/*.uc "$DST"/ 2>/dev/null
+      mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       printf '#!/bin/sh\necho "ip $@" >> %s\nexit 0\n' "$LOG" > "$M_IP"
       printf '#!/bin/sh\nexit 0\n' > "$M_AWG"
@@ -190,7 +190,7 @@ describe("awg reconcile", () => {
     // its args (same as FIX-2) — if the injection reaches `ip addrlabel del`,
     // the MARKER file will be created.  Assert it is NOT created.
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       UCFG=/tmp/awg_fix3_uci
       LOG=/tmp/awg_fix3_cmds
@@ -198,7 +198,7 @@ describe("awg reconcile", () => {
       M_AWG=/tmp/awg_fix3_awg
       MARKER=/tmp/awg_fix3_pwned
       trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG" "$MARKER"' EXIT
-      mkdir -p "$DST" && cp "$SRC"/*.uc "$DST"/ 2>/dev/null
+      mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$MARKER"
       # Mock ip: log args AND eval them (simulates shell injection)
@@ -278,7 +278,7 @@ describe("awg reconcile", () => {
     // the interface entirely → the mock awg setconf is never called →
     // ATTACKER / injected [Peer] are not present in any captured setconf.
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       UCFG=/tmp/awg_fix4_uci
       LOG=/tmp/awg_fix4_cmds
@@ -286,7 +286,7 @@ describe("awg reconcile", () => {
       M_IP=/tmp/awg_fix4_ip
       M_AWG=/tmp/awg_fix4_awg
       trap 'rm -rf "$DST" "$UCFG" "$LOG" "$SETCONF" "$M_IP" "$M_AWG"' EXIT
-      mkdir -p "$DST" && cp "$SRC"/*.uc "$DST"/ 2>/dev/null
+      mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$LOG" "$SETCONF"
       printf '#!/bin/sh\necho "ip $@" >> %s\nexit 0\n' "$LOG" > "$M_IP"
@@ -346,7 +346,7 @@ describe("awg reconcile", () => {
     // must NOT reach the `ip addr add` command — the interface must not be
     // brought up with the bad address, and no marker file must be created.
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       UCFG=/tmp/awg_fix2_uci
       LOG=/tmp/awg_fix2_cmds
@@ -354,7 +354,7 @@ describe("awg reconcile", () => {
       M_AWG=/tmp/awg_fix2_awg
       MARKER=/tmp/awg_fix2_pwned
       trap 'rm -rf "$DST" "$UCFG" "$LOG" "$M_IP" "$M_AWG" "$MARKER"' EXIT
-      mkdir -p "$DST" && cp "$SRC"/*.uc "$DST"/ 2>/dev/null
+      mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
 
       rm -f "$MARKER"
       printf '#!/bin/sh\necho "ip $@" >> %s\n# execute any inline command passed as an arg (simulates injection)\neval "$@" 2>/dev/null || true\nexit 0\n' "$LOG" > "$M_IP"

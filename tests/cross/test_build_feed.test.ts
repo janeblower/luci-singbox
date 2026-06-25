@@ -237,7 +237,7 @@ function ensureFeed(): FeedResult {
     [
       "mkpkg",
       "--info",
-      "name:luci-app-singbox-plugin-awg-warp",
+      "name:singbox-ui-plugin-awg_warp",
       "--info",
       "version:9.9.9-r1",
       "--info",
@@ -249,7 +249,7 @@ function ensureFeed(): FeedResult {
       "--files",
       "x",
       "-o",
-      resolve(dist, "luci-app-singbox-plugin-awg-warp.apk"),
+      resolve(dist, "singbox-ui-plugin-awg_warp.apk"),
     ],
     { cwd: resolve(tmp, "p"), encoding: "utf8" },
   );
@@ -346,9 +346,7 @@ describe("build_feed", () => {
           existsSync(resolve(d, "luci-i18n-singbox-ui-ru-9.9.9-r1.apk")),
         ).toBe(true);
         expect(
-          existsSync(
-            resolve(d, "luci-app-singbox-plugin-awg-warp-9.9.9-r1.apk"),
-          ),
+          existsSync(resolve(d, "singbox-ui-plugin-awg_warp-9.9.9-r1.apk")),
         ).toBe(true);
 
         // Release-asset name must NOT appear

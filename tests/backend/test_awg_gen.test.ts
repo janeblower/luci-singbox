@@ -12,10 +12,10 @@ describe("awggen", () => {
 
   it("target=warp forces S=0 and H=1,2,3,4 across 50 generations", async () => {
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       trap 'rm -rf "$DST"' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/ 2>/dev/null || true
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
 
       ucode -L '${LIB}' -e '
         let g = require("plugins.awg_warp.awggen");
@@ -35,10 +35,10 @@ describe("awggen", () => {
 
   it("selfhosted validation rejects S1+56==S2 and non-distinct H", async () => {
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       trap 'rm -rf "$DST"' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/ 2>/dev/null || true
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
 
       ucode -L '${LIB}' -e '
         let g = require("plugins.awg_warp.awggen");

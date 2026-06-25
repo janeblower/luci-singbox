@@ -11,7 +11,7 @@ let nft       = require("plugins.awg_warp.nft");
 let warp      = require("plugins.awg_warp.warp");
 let awggen    = require("plugins.awg_warp.awggen");
 let ifaceh    = require("plugins.awg_warp.iface");
-require("plugins.awg_warp.descriptor");   // self-registers the outbound type
+require("plugins.awg_warp.protocols.awg_warp");   // self-registers the outbound type
 
 // ── env-overridable seams (test + prod) ──────────────────────────────────────
 const FEED_KEY  = getenv("SB_AWG_FEED_KEY")

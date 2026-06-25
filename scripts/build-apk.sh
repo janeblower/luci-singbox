@@ -87,10 +87,10 @@ I18N_DESC="Translation for luci-app-singbox-ui — Русский (Russian)"
 I18N_DEPENDS="libc $LUCIAPP_NAME"
 I18N_DOMAIN="luci-singbox-ui"
 
-# 5) luci-app-singbox-plugin-awg-warp — noarch AWG/WARP plugin.
+# 5) singbox-ui-plugin-awg_warp — noarch AWG/WARP plugin.
 # Runtime components (amneziawg-tools, kmod-*, ip-full) are NOT listed here —
 # they are self-provisioned at runtime via the plugin's rpcd methods.
-AWGWARP_NAME="luci-app-singbox-plugin-awg-warp"
+AWGWARP_NAME="singbox-ui-plugin-awg_warp"
 AWGWARP_DESC="AWG WARP plugin for luci-app-singbox-ui (Cloudflare WARP + AmneziaWG)"
 AWGWARP_DEPENDS="libc $LUCIAPP_NAME"
 
@@ -241,7 +241,7 @@ LUCIAPP_SRC="$ROOT_DIR/luci-app-singbox-ui"
 LUCIAPP_MANIFEST="$SCRIPT_DIR/install-manifest-luci-app-singbox-ui.txt"
 [ -f "$LUCIAPP_MANIFEST" ] || { echo "install-manifest-luci-app-singbox-ui.txt missing at $LUCIAPP_MANIFEST" >&2; exit 1; }
 
-AWGWARP_SRC="$ROOT_DIR/luci-app-singbox-plugin-awg-warp"
+AWGWARP_SRC="$ROOT_DIR/plugins/awg_warp"
 
 # ---------------------------------------------------------------------------
 # Generic manifest installer: lay down a package root from a tab-separated
@@ -625,7 +625,7 @@ mkpkg_i18n() {
 }
 
 # ===========================================================================
-# 5) luci-app-singbox-plugin-awg-warp (noarch) — populate + mkpkg
+# 5) singbox-ui-plugin-awg_warp (noarch) — populate + mkpkg
 # ===========================================================================
 AWGWARP_ROOT="$WORK_DIR/pkg-root-awg-warp"
 AWGWARP_SCRIPTS="$WORK_DIR/scripts-awg-warp"
@@ -654,14 +654,20 @@ EOF
 }
 
 # populate_awgwarp_root
-#   Lay down the plugin file set (root/ subtree + htdocs->www mapping) + .list
+#   Lay down the plugin file set (lib/ subtree + root/ subtree + htdocs->www mapping) + .list
 #   + post-install script.
-#   root/ files (usr/) are copied directly; htdocs/ is remapped to www/ mirroring
-#   the luci-app-singbox-ui convention (LuCI serves from www/luci-static/...).
+#   lib/ maps to usr/share/singbox-ui/lib/plugins/awg_warp/ (includes protocols/ subdir).
+#   root/ files (usr/share/rpcd/acl.d/) are copied directly.
+#   htdocs/ is remapped to www/ mirroring the luci-app-singbox-ui convention.
 populate_awgwarp_root() {
     rm -rf "$AWGWARP_ROOT" "$AWGWARP_SCRIPTS"
     mkdir -p "$AWGWARP_ROOT"
-    # Copy the full root/ subtree from the plugin source package.
+    # Map lib/ -> usr/share/singbox-ui/lib/plugins/awg_warp/ (recursive, includes protocols/).
+    if [ -d "$AWGWARP_SRC/lib" ]; then
+        mkdir -p "$AWGWARP_ROOT/usr/share/singbox-ui/lib/plugins/awg_warp"
+        cp -a "$AWGWARP_SRC/lib/." "$AWGWARP_ROOT/usr/share/singbox-ui/lib/plugins/awg_warp/"
+    fi
+    # Copy the root/ subtree (acl.d and any other runtime files).
     if [ -d "$AWGWARP_SRC/root" ]; then
         cp -a "$AWGWARP_SRC/root/." "$AWGWARP_ROOT/"
     fi

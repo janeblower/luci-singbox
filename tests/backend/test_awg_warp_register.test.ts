@@ -12,10 +12,10 @@ describe("warp register/parse", () => {
   it("register_auto parses a mocked CF /reg response", async () => {
     const r = await exec(`
       set -e
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       trap 'rm -rf "$DST"' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/ 2>/dev/null || true
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
 
       cat > /tmp/m_awg <<'EOF'
 #!/bin/sh
@@ -46,10 +46,10 @@ EOF
 
   it("parse_conf extracts creds from a pasted .conf", async () => {
     const r = await exec(`
-      SRC="${WORK}/luci-app-singbox-plugin-awg-warp/root/usr/share/singbox-ui/lib/plugins/awg_warp"
+      SRC="${WORK}/plugins/awg_warp/lib"
       DST="${LIB}/plugins/awg_warp"
       trap 'rm -rf "$DST"' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/ 2>/dev/null || true
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
 
       ucode -L '${LIB}' -e '
         let w = require("plugins.awg_warp.warp");
