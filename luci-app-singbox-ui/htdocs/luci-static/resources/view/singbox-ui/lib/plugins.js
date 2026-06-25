@@ -10,6 +10,30 @@
 
 var callPlugins = rpc.declare({ object: 'singbox-ui', method: 'plugins' });
 
+// listAll() returns the RAW `plugins` rpcd list — every registered (installed
+// on disk) plugin, regardless of its enabled flag. The Plugins tab needs this
+// to keep the "Install" and "Enable" buttons independent. loadEnabled() below
+// filters to enabled-only and is for the contribution-merge path in main.js.
+function listAll() {
+	return L.resolveDefault(callPlugins(), null).then(function (r) {
+		if (!r || r.status !== 'ok' || !Array.isArray(r.plugins)) return [];
+		return r.plugins;
+	});
+}
+
+// pluginStatusMap() maps the raw list into name → { installed, enabled }.
+// Mirrored in tests/ui/_plugins_harness.ts. "installed" = present in the list
+// (the backend always sets installed:true for registered plugins); "enabled" =
+// the UCI flag. Deriving "installed" from the enabled-only list was the bug
+// that made the Enable button unreachable for a freshly installed plugin.
+function pluginStatusMap(rawPlugins) {
+	var m = {};
+	(rawPlugins || []).forEach(function (p) {
+		if (p && p.name) m[p.name] = { installed: p.installed !== false, enabled: !!p.enabled };
+	});
+	return m;
+}
+
 function loadEnabled() {
 	return L.resolveDefault(callPlugins(), null).then(function (r) {
 		if (!r || r.status !== 'ok' || !Array.isArray(r.plugins)) return [];
@@ -65,6 +89,8 @@ function formRendererFor(plugins, type) {
 
 return L.Class.extend({
 	loadEnabled: loadEnabled,
+	listAll: listAll,
+	pluginStatusMap: pluginStatusMap,
 	collectOutboundTypes: collectOutboundTypes,
 	collectInboundTypes: collectInboundTypes,
 	collectTabs: collectTabs,

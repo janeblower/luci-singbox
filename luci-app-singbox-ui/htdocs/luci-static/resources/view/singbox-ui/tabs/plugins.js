@@ -16,9 +16,13 @@ var KNOWN = [
 ];
 
 function buildPluginsMap() {
-	return SbPlugins.loadEnabled().then(function (loaded) {
-		var installed = {};
-		(loaded || []).forEach(function (p) { installed[p.name] = true; });
+	// Use the RAW plugins list (listAll), NOT loadEnabled(): "installed" must
+	// reflect that the package is on disk (present in the registry), independent
+	// of the "enabled" UCI flag. Driving "installed" off the enabled-only list
+	// made the Enable button permanently unreachable for a freshly installed
+	// plugin (it reports enabled:false until you enable it).
+	return SbPlugins.listAll().then(function (raw) {
+		var status = SbPlugins.pluginStatusMap(raw);
 
 		var m = new form.Map('singbox-ui', _('Plugins'),
 			_('Optional feature plugins. Each plugin is a separate package from this feed; ' +
@@ -27,7 +31,9 @@ function buildPluginsMap() {
 		s.anonymous = true;
 		s.render = function () {
 			var rows = KNOWN.map(function (k) {
-				var isInstalled = !!installed[k.name];
+				var st = status[k.name] || { installed: false, enabled: false };
+				var isInstalled = !!st.installed;
+				var isEnabled = !!st.enabled;
 				var installBtn = E('button', {
 					'class': 'cbi-button cbi-button-action',
 					'disabled': isInstalled ? 'disabled' : null,
@@ -37,15 +43,19 @@ function buildPluginsMap() {
 						});
 					}),
 				}, isInstalled ? _('Installed') : _('Install'));
+				// Enable is reachable once installed; it toggles the UCI flag so
+				// the plugin can also be disabled without removing the package.
 				var enableBtn = E('button', {
 					'class': 'cbi-button cbi-button-action',
 					'disabled': isInstalled ? null : 'disabled',
 					'click': ui.createHandlerFn(this, function () {
-						return callEnable(k.name, true).then(function () {
-							ui.addNotification(null, E('p', _('Enabled. Reload the page.')), 'info');
+						return callEnable(k.name, !isEnabled).then(function () {
+							ui.addNotification(null, E('p',
+								isEnabled ? _('Disabled. Reload the page.')
+								          : _('Enabled. Reload the page.')), 'info');
 						});
 					}),
-				}, _('Enable'));
+				}, isEnabled ? _('Disable') : _('Enable'));
 				return E('tr', { 'class': 'tr' }, [
 					E('td', { 'class': 'td' }, [ E('strong', {}, k.label), E('br'), k.description ]),
 					E('td', { 'class': 'td' }, [ installBtn, ' ', enableBtn ]),
