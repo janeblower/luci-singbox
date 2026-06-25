@@ -31,5 +31,6 @@ describe("awg-warp package shape", () => {
     expect(role.write.ubus["singbox-ui"]).toContain("awg_generate");
   });
 
-  // R2 TODO: test that the feed key is fetched dynamically (bundled .pem removed in R1).
+  // The feed key is NOT bundled — it is fetched dynamically by the provisioning
+  // script (awg-provision.sh); that flow is covered by tests/backend/test_awg_install.
 });
