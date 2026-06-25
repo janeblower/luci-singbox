@@ -6,7 +6,7 @@
 #
 # Trigger regexes (ERE, matched with `grep -qE`):
 #   bbolt:     ^bbolt-client/
-#   backend:   ^(singbox-ui/|plugins/awg_warp/lib/|tests/backend/|tests/parity/)
+#   backend:   ^(singbox-ui/|plugins/awg_warp/lib/|plugins/awg_warp/root/|tests/backend/|tests/parity/)
 #   ui:        ^(luci-app-singbox-ui/|plugins/awg_warp/htdocs/|tests/ui/|tests/browser/)
 #   packaging: ^(scripts/|install\.sh|feed/|.*/Makefile|tests/cross/)
 #   shared (=> all four true): ^(tests/lib/|tests/run|tests/docker/|tests/browser-container/|\.github/)
@@ -29,7 +29,7 @@ sb_classify_domains() {
 		_bbolt=true; _backend=true; _ui=true; _packaging=true
 	else
 		printf '%s\n' "$_in" | grep -qE '^bbolt-client/' && _bbolt=true
-		printf '%s\n' "$_in" | grep -qE '^(singbox-ui/|plugins/awg_warp/lib/|tests/backend/|tests/parity/)' && _backend=true
+		printf '%s\n' "$_in" | grep -qE '^(singbox-ui/|plugins/awg_warp/lib/|plugins/awg_warp/root/|tests/backend/|tests/parity/)' && _backend=true
 		printf '%s\n' "$_in" | grep -qE '^(luci-app-singbox-ui/|plugins/awg_warp/htdocs/|tests/ui/|tests/browser/)' && _ui=true
 		# (.*/)?Makefile matches a repo-ROOT bare `Makefile` as well as any nested
 		# one, mirroring dorny's `**/Makefile` (globstar matches zero segments).

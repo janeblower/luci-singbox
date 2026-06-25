@@ -224,6 +224,24 @@ describe("domain classifier: path -> domain mapping", () => {
       expectDomain("plugins/awg_warp/Makefile", "backend", "false"));
     it("plugin Makefile => ui=false", () =>
       expectDomain("plugins/awg_warp/Makefile", "ui", "false"));
+    it("plugin root/ (acl.d, provision script) => backend=true", () =>
+      expectDomain(
+        "plugins/awg_warp/root/usr/libexec/singbox-ui/awg-provision.sh",
+        "backend",
+        "true",
+      ));
+    it("plugin root/ => ui=false", () =>
+      expectDomain(
+        "plugins/awg_warp/root/usr/libexec/singbox-ui/awg-provision.sh",
+        "ui",
+        "false",
+      ));
+    it("plugin root/ => packaging=false", () =>
+      expectDomain(
+        "plugins/awg_warp/root/usr/libexec/singbox-ui/awg-provision.sh",
+        "packaging",
+        "false",
+      ));
   });
 
   // Goal-e isolation matrix
@@ -300,6 +318,16 @@ describe("domain classifier: path -> domain mapping", () => {
         packaging: "false",
       });
     });
+    it("plugin root/awg-provision.sh: bbolt=F backend=T ui=F packaging=F", () => {
+      const f = "plugins/awg_warp/root/usr/libexec/singbox-ui/awg-provision.sh";
+      const r = classify(f);
+      expect(r).toMatchObject({
+        bbolt: "false",
+        backend: "true",
+        ui: "false",
+        packaging: "false",
+      });
+    });
   });
 });
 
@@ -347,6 +375,11 @@ describe("static wiring guard: build.yml changes job (dorny/paths-filter)", () =
   it("build.yml backend filter includes plugin lib/", () => {
     const yml = readFileSync(BUILD_YML, "utf8");
     expect(yml).toContain("plugins/awg_warp/lib/**");
+  });
+
+  it("build.yml backend filter includes plugin root/", () => {
+    const yml = readFileSync(BUILD_YML, "utf8");
+    expect(yml).toContain("plugins/awg_warp/root/**");
   });
 
   it("build.yml ui filter includes plugin htdocs/", () => {

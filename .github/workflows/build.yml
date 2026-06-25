@@ -80,6 +80,7 @@ jobs:
             backend:
               - 'singbox-ui/**'
               - 'plugins/awg_warp/lib/**'
+              - 'plugins/awg_warp/root/**'
               - 'tests/backend/**'
               - 'tests/parity/**'
             ui:
@@ -180,7 +181,8 @@ jobs:
           # is linted automatically and this lint-coverage can't drift again
           # (90-singbox-ui-fwmark was previously unlinted by anything).
           docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.10.0 --shell=ash \
-            singbox-ui/root/etc/uci-defaults/*
+            singbox-ui/root/etc/uci-defaults/* \
+            plugins/awg_warp/root/usr/libexec/singbox-ui/awg-provision.sh
 
   typecheck:
     name: typecheck + biome

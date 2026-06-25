@@ -4,7 +4,6 @@
 
 let reg      = require("plugins.registry");
 let fs       = require("fs");
-let helpers  = require("helpers");
 
 let reconcile = require("plugins.awg_warp.reconcile");
 let nft       = require("plugins.awg_warp.nft");
@@ -14,13 +13,9 @@ let ifaceh    = require("plugins.awg_warp.iface");
 require("plugins.awg_warp.protocols.awg_warp");   // self-registers the outbound type
 
 // ── env-overridable seams (test + prod) ──────────────────────────────────────
-const FEED_KEY  = getenv("SB_AWG_FEED_KEY")
-                  || "/usr/share/singbox-ui/lib/plugins/awg_warp/awg-openwrt-feed.pem";
-const APK_CMD   = getenv("APK_CMD")      || "apk";
-const KEYS_DIR  = getenv("SB_APK_KEYS") || "/etc/apk/keys";
-const REPOS     = getenv("SB_APK_REPOS") || "/etc/apk/repositories";
-// SB_UBUS_BOARD overrides the board-query command (e.g. a stub script in tests).
-const BOARD_CMD = getenv("SB_UBUS_BOARD") || "ubus call system board";
+// SB_AWG_PROVISION overrides the provisioning script path (for tests).
+const PROVISION_SH = getenv("SB_AWG_PROVISION")
+                     || "/usr/libexec/singbox-ui/awg-provision.sh";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -48,78 +43,15 @@ function m_awg_status() {
 	       has_awg, has_ip, has_kmod });
 }
 
-// ── board helper ─────────────────────────────────────────────────────────────
-// _board: call `ubus call system board` (or SB_UBUS_BOARD stub) and return
-// parsed JSON, or {} on error.
-// Must be defined before m_awg_install (definition-order rule).
-function _board() {
-	let p = fs.popen(BOARD_CMD + " 2>/dev/null");
-	if (!p) return {};
-	let body = p.read("all") ?? "";
-	p.close();
-	let j;
-	try { j = json(body); } catch (e) { j = {}; }
-	return (type(j) === "object") ? j : {};
-}
-
 // ── rpcd method: awg_install ─────────────────────────────────────────────────
-// Self-provision: copy feed key, append awg repo, apk update + add packages.
-// Idempotent (duplicate repo line check; apk add is idempotent by design).
+// Thin wrapper: delegates all provisioning logic to awg-provision.sh.
+// The script is env-overridable (SB_AWG_PROVISION) for test injection.
 function m_awg_install() {
-	// 1) Copy the bundled feed public key into the apk key store.
-	system(sprintf("mkdir -p %s", helpers.sq(KEYS_DIR)));
-	let cp_rc = system(sprintf("cp %s %s/awg-openwrt-feed.pem 2>/dev/null",
-	                           helpers.sq(FEED_KEY), helpers.sq(KEYS_DIR)));
-	if (cp_rc !== 0) {
-		emit({ status: "error", message: sprintf("key copy failed (rc=%d); key: %s", cp_rc, FEED_KEY) });
-		return;
-	}
-
-	// 2) Resolve the board target from ubus and build the feed URL.
-	//    release.target is e.g. "x86/64"; fall back gracefully.
-	//    SECURITY: board JSON comes from root-local firmware data, but we
-	//    validate strictly to prevent a crafted target containing newlines or
-	//    URL metacharacters from injecting extra lines into /etc/apk/repositories.
-	//    Accepted pattern: "<subtarget>/<arch>" where each component is
-	//    lowercase alnum plus "_"/"-", at least one char each.
-	let board  = _board();
-	let target = "";
-	let rel = board.release;
-	if (type(rel) === "object" && length(`${rel.target ?? ""}`))
-		target = rel.target;
-	// Reject any target that does not match the strict OpenWrt target pattern.
-	// Non-capturing groups are not supported in ucode regex; use plain char classes.
-	if (!match(target, /^[a-z0-9][a-z0-9_-]*\/[a-z0-9][a-z0-9_-]*$/))
-		target = "x86/64";
-
-	// Pin the awg-openwrt train version published at time of plugin build.
-	let ver = "25.12.4";
-	let url  = sprintf("https://slava-shchipunov.github.io/awg-openwrt/%s/%s/packages.adb",
-	                   ver, target);
-	let line = sprintf("%s awg", url);
-
-	// Append repo line idempotently.
-	let cur_repos = "";
-	let rf = fs.open(REPOS, "r");
-	if (rf) { cur_repos = rf.read("all") ?? ""; rf.close(); }
-	if (index(cur_repos, url) < 0) {
-		let wf = fs.open(REPOS, "a");
-		if (wf) { wf.write("\n" + line + "\n"); wf.close(); }
-	}
-
-	// 3) apk update.
-	system(sprintf("%s update >/dev/null 2>&1", helpers.sq(APK_CMD)));
-
-	// 4) apk add the three required packages.
-	let rc = system(sprintf("%s add ip-full kmod-amneziawg amneziawg-tools >/dev/null 2>&1",
-	                        helpers.sq(APK_CMD)));
+	let rc = system(sprintf("%s 2>&1", PROVISION_SH));
 	if (rc !== 0) {
-		emit({ status: "error", message: sprintf("apk add failed (rc=%d)", rc) });
+		emit({ status: "error", message: sprintf("provision script failed (rc=%d)", rc) });
 		return;
 	}
-
-	// 5) Load the kernel module (best-effort; may already be loaded).
-	system("modprobe amneziawg >/dev/null 2>&1");
 	emit({ status: "ok" });
 }
 
