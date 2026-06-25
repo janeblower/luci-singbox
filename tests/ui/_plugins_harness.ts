@@ -26,3 +26,17 @@ export function collectModes(plugins: any[]) {
     }
   return out;
 }
+
+// Mirror of pluginStatusMap() in lib/plugins.js. Maps the RAW `plugins` rpcd
+// list (every registered/installed plugin, regardless of enabled flag) into a
+// name → { installed, enabled } lookup. The Plugins tab uses this to keep the
+// "Install" and "Enable" buttons independent: a plugin can be installed (present
+// on disk → in the list) but not yet enabled. Deriving "installed" from the
+// enabled-only loadEnabled() list (the old bug) made Enable unreachable.
+export function pluginStatusMap(rawPlugins: any[]) {
+  const m: Record<string, { installed: boolean; enabled: boolean }> = {};
+  for (const p of rawPlugins || [])
+    if (p?.name)
+      m[p.name] = { installed: p.installed !== false, enabled: !!p.enabled };
+  return m;
+}
