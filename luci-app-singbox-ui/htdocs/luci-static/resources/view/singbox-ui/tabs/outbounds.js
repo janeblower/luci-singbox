@@ -17,6 +17,22 @@ var openJsonImportModal = SbTabInbounds.openJsonImportModal;
 var _pluginTypes = [];
 function setPluginOutboundTypes(types) { _pluginTypes = types || []; }
 
+var _plugins = [];
+function setPluginFormRenderers(plugins) { _plugins = plugins || []; }
+
+// formRendererFor — returns the renderOutboundForm fn bound to the plugin api,
+// or null if no plugin owns this outbound type.
+function formRendererFor(type) {
+	for (var i = 0; i < _plugins.length; i++) {
+		var p = _plugins[i];
+		if (p.api && p.api.renderOutboundForm && p.api.outboundTypes) {
+			var has = p.api.outboundTypes().some(function (t) { return t[0] === type; });
+			if (has) return p.api.renderOutboundForm.bind(p.api);
+		}
+	}
+	return null;
+}
+
 var SB_OUTBOUND_PROTOCOLS = [
 	['direct',       'Direct (interface bind)'],
 	['socks',        'SOCKS'],
@@ -176,6 +192,14 @@ function buildOutboundsMap() {
 		if (mat) descriptor_form.applyMaterialized(s, 'outbound', protoName, mat);
 	});
 
+	// Plugin-contributed outbound types: delegate to the plugin's renderOutboundForm.
+	// ctx shape: { section: s, map: m } — the plugin adds options directly to s.
+	_pluginTypes.forEach(function (entry) {
+		var protoName = entry[0];
+		var renderer = formRendererFor(protoName);
+		if (renderer) renderer(protoName, null, { section: s, map: m });
+	});
+
 	// Basic-tab fields specific to subscription outbound type.
 	o = s.taboption('basic', form.Value, 'sub_url', _('Subscription URL'));
 	o.modalonly   = true;
@@ -241,4 +265,5 @@ return L.Class.extend({
 	openShareLinkModal:       openShareLinkModal,
 	buildOutboundsMap:        buildOutboundsMap,
 	setPluginOutboundTypes:   setPluginOutboundTypes,
+	setPluginFormRenderers:   setPluginFormRenderers,
 });

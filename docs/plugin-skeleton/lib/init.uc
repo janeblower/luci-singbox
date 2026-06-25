@@ -1,13 +1,24 @@
-// Skeleton plugin for luci-app-singbox-ui (Phase E).
+// lib/plugins/skeleton/init.uc — skeleton plugin registration entry.
 //
-// COPY THIS DIRECTORY and rename every occurrence of "skeleton" to your plugin
-// name.  Plugin names must be underscore-only (letters, digits, underscores).
-// Dashes break ucode's require() module resolution.
+// COPY docs/plugin-skeleton/ and rename every occurrence of "skeleton" to your
+// plugin name.  Plugin names must be underscore-only (letters, digits,
+// underscores).  Dashes break ucode's require() module resolution.
+//
+// This file is the framework discovery entry: build-apk maps lib/ to
+// /usr/share/singbox-ui/lib/plugins/skeleton/, and discovery.uc globs
+// /usr/share/singbox-ui/lib/plugins/*/init.uc — so this file is found
+// automatically when the package is installed.
 //
 // Only the hooks you actually implement need to be present in register().
 // The only required field is `name`.
 
 let reg = require("plugins.registry");
+
+// Optional: load your outbound/inbound descriptor so it self-registers with
+// the builder.  The descriptor module calls
+// builder.protocols.registry.try_register({...}).
+// Require it here so the registration runs when discovery loads this file.
+// require("plugins.skeleton.protocols.skeleton");
 
 reg.register({
 	// -------------------------------------------------------------------------
@@ -25,7 +36,6 @@ reg.register({
 	// framework does not read it); it signals intent to readers.
 	// -------------------------------------------------------------------------
 	// descriptors: true,
-	// try { require("plugins.skeleton.descriptor"); } catch (_) {}
 
 	// -------------------------------------------------------------------------
 	// rpcd methods — optional.
@@ -36,21 +46,38 @@ reg.register({
 	// function is invoked directly.
 	//
 	// Declare the same method names in your own acl.d JSON (see
-	// root/usr/share/rpcd/acl.d/luci-singbox-plugin-skeleton.json).
+	// root/usr/share/rpcd/acl.d/<pkg>.json).
 	// The ACL-sync guard unions all acl.d files, so your file is checked
 	// automatically when the plugin is installed alongside the core package.
 	//
 	// Method name collisions with core methods: the core method wins and a
 	// warning is logged.  Use a plugin-specific prefix to avoid collisions.
+	//
+	// Self-provisioning rpcd method: if your plugin needs to install external
+	// components at runtime, expose a write-ACL method that runs a bash script
+	// from root/usr/libexec/singbox-ui/.  The wrapper MUST suppress the
+	// script's stdout so the rpcd JSON response stays clean — redirect to
+	// /dev/null or capture it.  See docs/plugins.md: Self-provisioning pattern.
 	// -------------------------------------------------------------------------
 	rpcd: {
 		methods: {
 			skeleton_hello: function () {
 				printf("%J\n", { status: "ok", message: "hello from skeleton" });
 			},
+
+			// Example self-provisioning wrapper.  Uncomment and adapt.
+			// skeleton_install: function () {
+			//     let script = getenv("SB_SKELETON_PROVISION")
+			//                  || "/usr/libexec/singbox-ui/skeleton-provision.sh";
+			//     let rc = system(script + " >/dev/null");
+			//     printf("%J\n", rc === 0
+			//         ? { status: "ok" }
+			//         : { status: "error", message: "provision exited " + rc });
+			// },
 		},
 		acl_read:  ["skeleton_hello"],
 		acl_write: [],
+		// acl_write: ["skeleton_install"],
 	},
 
 	// -------------------------------------------------------------------------

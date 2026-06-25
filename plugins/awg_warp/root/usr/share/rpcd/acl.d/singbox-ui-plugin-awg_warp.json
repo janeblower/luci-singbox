@@ -1,0 +1,17 @@
+{
+	"singbox-ui-plugin-awg_warp": {
+		"description": "AWG WARP plugin rpcd methods",
+		"read": {
+			"uci": [ "singbox-ui" ],
+			"ubus": {
+				"singbox-ui": [ "awg_status" ]
+			}
+		},
+		"write": {
+			"uci": [ "singbox-ui" ],
+			"ubus": {
+				"singbox-ui": [ "warp_register", "awg_install", "awg_generate" ]
+			}
+		}
+	}
+}
