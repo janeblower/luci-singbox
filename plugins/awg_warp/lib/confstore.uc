@@ -132,7 +132,7 @@ function ensure(cur, item, mtu, ipv6) {
 
 	// Записать артефакт 0600 (приватный ключ внутри).
 	let base = (storage == "flash") ? FLASH_BASE : RAM_BASE;
-	fs.mkdir(base, 0755);
+	fs.mkdir(base);
 	fs.writefile(path, render_conf(wg, mtu, ipv6));
 	fs.chmod(path, 384);   // 0600
 

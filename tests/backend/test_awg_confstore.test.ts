@@ -110,14 +110,17 @@ EOF
         ucode -L '${LIB}' -e '
         let c = require("plugins.awg_warp.confstore");
         let item = { sec: "warp_c", iface: "warp_c", s: { warp_storage: "ram" } };
-        c.ensure({}, item, 1280, false);
+        let wg = c.ensure({}, item, 1280, false); print(sprintf("%J", { ok: (wg != null) }));
       '
       ram_exists=0; [ -f "$RAM/warp_c.conf" ] && ram_exists=1
       flash_exists=0; [ -f "$FLASH/warp_c.conf" ] && flash_exists=1
-      printf '{"ram_exists":%d,"flash_exists":%d}\n' "$ram_exists" "$flash_exists"
+      printf '\n{"ram_exists":%d,"flash_exists":%d}\n' "$ram_exists" "$flash_exists"
     `);
     expect(r.exitCode).toBe(0);
-    const o = JSON.parse(r.stdout);
+    const lines = r.stdout.trim().split("\n");
+    const ensure = JSON.parse(lines[0]);
+    const o = JSON.parse(lines[1]);
+    expect(ensure.ok).toBe(true);
     expect(o.ram_exists).toBe(1);
     expect(o.flash_exists).toBe(0);
   });
