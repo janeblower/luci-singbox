@@ -10,7 +10,7 @@
 		"write": {
 			"uci": [ "singbox-ui" ],
 			"ubus": {
-				"singbox-ui": [ "warp_register", "awg_install", "awg_generate" ]
+				"singbox-ui": [ "awg_install" ]
 			}
 		}
 	}

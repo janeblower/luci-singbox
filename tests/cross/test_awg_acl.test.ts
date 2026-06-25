@@ -26,9 +26,9 @@ describe("awg-warp package shape", () => {
     const role = j["singbox-ui-plugin-awg_warp"];
     expect(role).toBeTruthy();
     expect(role.read.ubus["singbox-ui"]).toContain("awg_status");
-    expect(role.write.ubus["singbox-ui"]).toContain("warp_register");
     expect(role.write.ubus["singbox-ui"]).toContain("awg_install");
-    expect(role.write.ubus["singbox-ui"]).toContain("awg_generate");
+    expect(role.write.ubus["singbox-ui"]).not.toContain("warp_register");
+    expect(role.write.ubus["singbox-ui"]).not.toContain("awg_generate");
   });
 
   // The feed key is NOT bundled — it is fetched dynamically by the provisioning

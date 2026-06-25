@@ -9,6 +9,8 @@ reg.try_register({
 
 	// Backend-only + UI fields. json_key-less fields never reach sing-box JSON.
 	fields: [
+		{ name: "warp_storage", type: "enum", tab: "basic", ui_label: "Config storage (RAM/Flash)",
+		  values: ["ram","flash"], default: "ram" },
 		{ name: "awg_mimic", type: "enum", tab: "basic", ui_label: "Mimic protocol",
 		  values: ["auto","quic","dns","stun","dtls","sip","tls","static"] },
 		{ name: "ipv6_enabled", type: "bool", tab: "basic", ui_label: "Enable IPv6 (auto-masquerade)", default: 0 },
