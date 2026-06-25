@@ -14,10 +14,8 @@ import { runTest, openAddModal, setProtocolInModal,
 
 export const COVERS = [
     'plugin.awg_warp._install',
-    'plugin.awg_warp._register',
-    'plugin.awg_warp.warp_paste',
+    'plugin.awg_warp.warp_storage',
     'plugin.awg_warp.awg_mimic',
-    'plugin.awg_warp._regen',
     'plugin.awg_warp.ipv6_enabled',
     'plugin.awg_warp.mtu_override',
 ];
@@ -61,13 +59,12 @@ await runTest('plugin:awg_warp — outbound form controls render', async ({ page
 
     const fields = await visibleFieldsInActiveTab(page);
 
-    // Assert the core AWG-WARP controls are present.
+    // Assert the stable AWG-WARP controls are present.
+    // Note: _install button title becomes 'Installed' when AWG components are
+    // already installed; assert by stable field labels that don't change.
     const expected = [
-        'Install AWG + ip-full',
-        'Register (Cloudflare WARP)',
-        'Paste WARP .conf',
+        'Config storage',
         'Mimic protocol',
-        'Regenerate (WARP-safe)',
         'Enable IPv6',
         'MTU override',
     ];
