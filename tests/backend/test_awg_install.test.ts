@@ -269,7 +269,7 @@ describe("plugin ACL guard", () => {
 
   it("plugin acl.d read∪write set matches init.uc register() declaration", async () => {
     // Read the plugin's own acl.d file directly (no staging needed).
-    // Asserts exact match: read={awg_status}, write={warp_register,awg_install,awg_generate}.
+    // Asserts exact match: read={awg_status}, write={awg_install}.
     const r = await exec(`
       set -e
       ucode -e '
@@ -299,16 +299,12 @@ describe("plugin ACL guard", () => {
 
     // Exact match with what init.uc passes to reg.register().
     expect([...read].sort()).toEqual(["awg_status"]);
-    expect([...write].sort()).toEqual([
-      "awg_generate",
-      "awg_install",
-      "warp_register",
-    ]);
+    expect([...write].sort()).toEqual(["awg_install"]);
     // No overlap between read and write.
     for (const m of read) {
       expect(write.includes(m)).toBe(false);
     }
-    // All 4 methods present.
-    expect(all.length).toBe(4);
+    // All 2 methods present.
+    expect(all.length).toBe(2);
   });
 });

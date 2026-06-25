@@ -21,6 +21,7 @@ type OptionStub = {
   _dependsArgs: unknown[][];
   _values: [string, string][];
   modalonly: boolean | undefined;
+  readonly: unknown;
   inputtitle: unknown;
   inputstyle: unknown;
   rows: unknown;
@@ -42,6 +43,7 @@ function makeOptionStub(TypeName: string, id: string): OptionStub {
     _dependsArgs: [],
     _values: [],
     modalonly: undefined,
+    readonly: undefined,
     inputtitle: undefined,
     inputstyle: undefined,
     rows: undefined,
@@ -93,6 +95,8 @@ function makeFormType(name: string) {
 }
 
 // --- Load tab.js with mocked LuCI dependencies ---
+// rpc.declare always resolves { status: "ok", ready: false } — covers the
+// top-level callStatus() that tab.js fires on module load (whenReady).
 const { exports: mod } = loadLuciModule(TAB_JS, {
   _: (s: unknown) => s,
   E: (tag: unknown, _attrs?: unknown, ..._children: unknown[]) => ({ tag }),
@@ -104,7 +108,8 @@ const { exports: mod } = loadLuciModule(TAB_JS, {
     Value: makeFormType("Value"),
   },
   rpc: {
-    declare: (_cfg: unknown) => () => Promise.resolve({ status: "ok" }),
+    declare: (_cfg: unknown) => () =>
+      Promise.resolve({ status: "ok", ready: false }),
   },
   ui: {
     addNotification: () => {},
@@ -127,6 +132,37 @@ describe("awg_warp plugin tab.js", () => {
     });
   });
 
+  describe("installState()", () => {
+    type InstallStateFn = (r: boolean) => { readonly: boolean; title: string };
+    const installState = (mod as unknown as { installState: InstallStateFn })
+      .installState;
+
+    it("ready=true → readonly true", () => {
+      expect(installState(true).readonly).toBe(true);
+    });
+    it("ready=false → readonly false", () => {
+      expect(installState(false).readonly).toBe(false);
+    });
+    it("ready=true → title is 'Installed'", () => {
+      expect(installState(true).title).toBe("Installed");
+    });
+    it("ready=false → title contains 'Install'", () => {
+      expect(String(installState(false).title)).toContain("Install");
+    });
+  });
+
+  describe("whenReady", () => {
+    it("exports a Promise", () => {
+      const wr = (mod as unknown as { whenReady: unknown }).whenReady;
+      expect(wr).toBeInstanceOf(Promise);
+    });
+    it("resolves to a boolean", async () => {
+      const wr = (mod as unknown as { whenReady: Promise<unknown> }).whenReady;
+      const result = await wr;
+      expect(typeof result).toBe("boolean");
+    });
+  });
+
   describe("renderOutboundForm()", () => {
     // Run the form builder once; all assertions share the resulting section.
     const section = makeMockSection();
@@ -141,24 +177,18 @@ describe("awg_warp plugin tab.js", () => {
       return e;
     }
 
-    it("adds exactly 7 controls", () => {
-      expect(section._added).toHaveLength(7);
+    it("adds exactly 5 controls", () => {
+      expect(section._added).toHaveLength(5);
     });
 
     it("adds _install control", () => {
       expect(addedIds).toContain("_install");
     });
-    it("adds _register control", () => {
-      expect(addedIds).toContain("_register");
-    });
-    it("adds warp_paste control", () => {
-      expect(addedIds).toContain("warp_paste");
+    it("adds warp_storage control", () => {
+      expect(addedIds).toContain("warp_storage");
     });
     it("adds awg_mimic control", () => {
       expect(addedIds).toContain("awg_mimic");
-    });
-    it("adds _regen control", () => {
-      expect(addedIds).toContain("_regen");
     });
     it("adds ipv6_enabled control", () => {
       expect(addedIds).toContain("ipv6_enabled");
@@ -167,20 +197,26 @@ describe("awg_warp plugin tab.js", () => {
       expect(addedIds).toContain("mtu_override");
     });
 
+    it("does NOT add _register/warp_paste/_regen", () => {
+      expect(addedIds).not.toContain("_register");
+      expect(addedIds).not.toContain("warp_paste");
+      expect(addedIds).not.toContain("_regen");
+    });
+
     it("_install uses form.Button", () => {
       expect(get("_install").TypeName).toBe("Button");
     });
-    it("_register uses form.Button", () => {
-      expect(get("_register").TypeName).toBe("Button");
+    it("warp_storage uses form.ListValue", () => {
+      expect(get("warp_storage").TypeName).toBe("ListValue");
     });
-    it("warp_paste uses form.TextValue", () => {
-      expect(get("warp_paste").TypeName).toBe("TextValue");
+    it("warp_storage has ram/flash values", () => {
+      expect(get("warp_storage").stub._values.map((v) => v[0])).toEqual([
+        "ram",
+        "flash",
+      ]);
     });
     it("awg_mimic uses form.ListValue", () => {
       expect(get("awg_mimic").TypeName).toBe("ListValue");
-    });
-    it("_regen uses form.Button", () => {
-      expect(get("_regen").TypeName).toBe("Button");
     });
     it("ipv6_enabled uses form.Flag", () => {
       expect(get("ipv6_enabled").TypeName).toBe("Flag");
@@ -221,18 +257,8 @@ describe("awg_warp plugin tab.js", () => {
       }
     });
 
-    it("warp_paste has a write() function", () => {
-      expect(typeof get("warp_paste").stub.write).toBe("function");
-    });
-
     it("_install has an onclick handler", () => {
       expect(typeof get("_install").stub.onclick).toBe("function");
-    });
-    it("_register has an onclick handler", () => {
-      expect(typeof get("_register").stub.onclick).toBe("function");
-    });
-    it("_regen has an onclick handler", () => {
-      expect(typeof get("_regen").stub.onclick).toBe("function");
     });
 
     it("all controls have modalonly=true", () => {

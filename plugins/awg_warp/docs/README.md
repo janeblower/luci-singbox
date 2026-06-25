@@ -52,36 +52,36 @@ stays clean. Errors are printed to stderr and surfaced as `status: "error"`.
 
 You need network access and a compatible OpenWrt 25.12.x target/subtarget.
 
-### 3. Register with Cloudflare WARP
+### 3. Configure the outbound and select storage
 
-Two modes are supported:
+WARP registration is fully automatic — no manual button clicks needed. When you
+click **Save & Apply**, the backend (`warp.uc`) detects the `.conf`-as-source
+of truth and self-registers with Cloudflare WARP on the first apply.
 
-**Auto-register** — click "Register (Cloudflare WARP)" in the outbound form.
-The plugin calls the Cloudflare WARP API, creates a new device account, and
-stores the credentials (private key, public key, addresses, endpoint) in UCI.
+**Config storage** — choose where WARP credentials are persisted:
 
-**Paste mode** — if you have an existing `.conf` file exported from the
-Cloudflare WARP client, paste it into the "Paste WARP .conf" field. The plugin
-parses and stores the credentials.
+| Option | Behaviour |
+|---|---|
+| RAM (`/tmp`) — re-registers on reboot | Credentials live in `/tmp`; lost on power cycle. The backend re-registers automatically on the next boot (when sing-box starts). Avoids flash wear. |
+| Flash (`/etc`) — persists across reboot | Credentials are written to `/etc`; survive power cycles without re-registration. |
 
-Both modes write `warp_*` fields to the UCI `singbox-ui` config. These fields
-are never emitted to the sing-box JSON.
+The storage selector is available in the outbound form under the **Config storage**
+field. The default is RAM.
 
-### 4. Configure the outbound
-
-After registration, configure optional parameters in the outbound form:
+Configure optional parameters in the outbound form:
 
 | Field | Description |
 |---|---|
+| Config storage | RAM (ephemeral, re-registers on boot) or Flash (persists) |
 | Mimic protocol | UDP camouflage for AWG (`auto`, `quic`, `dns`, `stun`, …) |
 | Enable IPv6 | Enable IPv6 WARP (auto-masquerade via NAT66) |
 | MTU override | Interface MTU; default = WAN MTU − 80 |
 
-Click **"Regenerate (WARP-safe)"** to re-roll the AWG junk parameters
-(`Jc`/`Jmin`/`Jmax`/`I1`) without changing WARP credentials. WARP-safe mode
-forces `S=0`/`H=1234` (Cloudflare's reserved-byte values).
+AWG junk parameters (`Jc`/`Jmin`/`Jmax`/`I1`) are generated automatically
+with WARP-safe values (`S=0`/`H=1234`, Cloudflare's reserved-byte values) and
+do not require manual regeneration.
 
-### 5. Apply and verify
+### 4. Apply and verify
 
 Save and apply the sing-box configuration. The reconciler (`reconcile.uc`)
 creates the AWG interface via native `ip`/`awg` commands (not UCI network config)

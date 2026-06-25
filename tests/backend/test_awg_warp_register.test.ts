@@ -43,24 +43,4 @@ EOF
     expect(o.creds.address_v4).toContain("172.16.0.2");
     expect(o.creds.client_id).toBe("I0q+");
   });
-
-  it("parse_conf extracts creds from a pasted .conf", async () => {
-    const r = await exec(`
-      SRC="${WORK}/plugins/awg_warp/lib"
-      DST="${LIB}/plugins/awg_warp"
-      trap 'rm -rf "$DST"' EXIT
-      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
-
-      ucode -L '${LIB}' -e '
-        let w = require("plugins.awg_warp.warp");
-        let txt = "[Interface]\\nPrivateKey = ABCprivkeybase64==\\nAddress = 172.16.0.2/32, 2606:4700::2/128\\n[Peer]\\nPublicKey = PEERpub==\\nEndpoint = engage.cloudflareclient.com:2408\\n";
-        print(sprintf("%J", w.parse_conf(txt)));
-      '
-    `);
-    expect(r.exitCode).toBe(0);
-    const o = JSON.parse(r.stdout);
-    expect(o.ok).toBe(true);
-    expect(o.creds.private_key).toBe("ABCprivkeybase64==");
-    expect(o.creds.endpoint).toContain("engage.cloudflareclient.com:2408");
-  });
 });

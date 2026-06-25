@@ -2,12 +2,12 @@
 // No /etc/config/network. Builds interfaces with ip+awg directly (spec §11).
 // Idempotent; safe to re-run each apply. ip/awg via env seams for tests.
 // Definition order: callee must appear above caller (ucode top-level rule).
-let fs     = require("fs");
-let ifaceh = require("plugins.awg_warp.iface");
+let fs        = require("fs");
+let ifaceh    = require("plugins.awg_warp.iface");
+let confstore = require("plugins.awg_warp.confstore");
 
 const IP_BIN  = getenv("IP_BIN")  || "ip";
 const AWG_BIN = getenv("AWG_BIN") || "awg";
-const TMPDIR  = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 
 // --- shell helpers ---
 function sh(cmd)    { return system(cmd + " >/dev/null 2>&1"); }
@@ -16,7 +16,7 @@ function sh_ok(cmd) { return system(cmd + " >/dev/null 2>&1") === 0; }
 // --- input sanitizers (HIGH-severity injection guards) ---
 
 // safe_cidr — allow IPv4/IPv6 with optional /prefixlen; reject everything else.
-// warp_address_v4/v6 may be user-supplied on selfhosted targets.
+// warp_address_v4/v6 may come from stored .conf on selfhosted targets.
 // Note: ucode has no (?:...) non-capturing groups; /[0-9]+/ used for prefixlen
 // (an over-long prefix is rejected downstream by `ip` itself).
 function safe_cidr(s) {
@@ -40,73 +40,31 @@ function safe_endpoint(s) {
 	return "";
 }
 
-// --- setconf renderers ---
-
-// render_setconf — genl-only setconf for `awg setconf`.
-// Address and MTU are intentionally absent: awg setconf is genl-only and
-// rejects those fields; they are applied separately via `ip addr` / `ip link`.
-function render_setconf(creds, p) {
-	let s = "[Interface]\n";
-	s += sprintf("PrivateKey = %s\n", creds.private_key ?? "");
-	s += sprintf("Jc = %d\nJmin = %d\nJmax = %d\n", p.jc, p.jmin, p.jmax);
-	s += sprintf("S1 = %d\nS2 = %d\nS3 = %d\nS4 = %d\n", p.s1, p.s2, p.s3, p.s4);
-	s += sprintf("H1 = %d\nH2 = %d\nH3 = %d\nH4 = %d\n", p.h1, p.h2, p.h3, p.h4);
-	if (length(`${p.i1 ?? ""}`)) s += sprintf("I1 = %s\n", p.i1);
-	s += "[Peer]\n";
-	s += sprintf("PublicKey = %s\n", creds.peer_public_key ?? "");
-	s += sprintf("Endpoint = %s\n", creds.endpoint ?? "");
-	s += "AllowedIPs = 0.0.0.0/0, ::/0\n";
-	s += "PersistentKeepalive = 25\n";
-	return s;
-}
-
-// render_conf — human-readable conf for storage (NOT fed to awg setconf).
-// v6 Address is commented out (#) when ipv6_enabled is false (spec §2.5).
-// Address + MTU are inserted before [Peer] for readability.
-function render_conf(creds, p, ipv6_enabled) {
-	let setconf = render_setconf(creds, p);
-	let addr = sprintf("Address = %s", creds.address_v4 ?? "172.16.0.2/32");
-	if (length(`${creds.address_v6 ?? ""}`))
-		addr += "\n" + (ipv6_enabled ? "" : "#") + sprintf("Address = %s", creds.address_v6);
-	return replace(setconf, "[Peer]", sprintf("%s\nMTU = %d\n[Peer]", addr, p.mtu));
-}
-
 // --- UCI helpers ---
-
-// _params_from_section — derive genl params from a UCI outbound section.
-// For target=warp: S/H use WARP-safe defaults (spec §10).
-// For selfhosted: read stored awg_s*/awg_h* from UCI (expert-only, no product UI).
-function _params_from_section(s) {
-	function n(k, d) { let v = int(`${s[k] ?? ""}`); return (v != 0 || s[k] == "0") ? v : d; }
-	let target = (s.awg_target == "selfhosted") ? "selfhosted" : "warp";
-	let p = {
-		jc:   n("awg_jc",   8),
-		jmin: n("awg_jmin", 64),
-		jmax: n("awg_jmax", 900),
-		s1: 0, s2: 0, s3: 0, s4: 0,
-		h1: 1, h2: 2, h3: 3, h4: 4,
-		i1: s.awg_i1 ?? "",
-		mtu: 1280,
-	};
-	if (target == "selfhosted") {
-		p.s1 = n("awg_s1", 0); p.s2 = n("awg_s2", 0);
-		p.h1 = n("awg_h1", 1); p.h2 = n("awg_h2", 2);
-		p.h3 = n("awg_h3", 3); p.h4 = n("awg_h4", 4);
-	}
-	return p;
-}
 
 // _managed_names — enumerate awg_warp outbound sections from UCI.
 // Interface names are sanitized via iface_name() (HIGH-severity injection vector).
+// del_v6 is sourced from the stored .conf (NOT from UCI warp_address_v6) so that
+// addrlabel cleanup works even after UCI cred fields are removed.
 function _managed_names(cur) {
 	let names = [];
 	cur.foreach("singbox-ui", "outbound", function(s) {
 		if (s.type != "awg_warp") return;
+		let sec = s[".name"];
+		// v6 for addrlabel-del: read from stored .conf (if present), not from UCI.
+		let v6 = "";
+		let storage = (s.warp_storage == "flash") ? "flash" : "ram";
+		let raw = fs.readfile(confstore.conf_path(sec, storage));
+		if (raw != null && length(raw)) {
+			let wg = confstore.parse_full(raw);
+			if (wg != null) v6 = wg.address_v6 ?? "";
+		}
 		push(names, {
-			sec:     s[".name"],
-			iface:   ifaceh.iface_name(s[".name"]),
+			sec:     sec,
+			iface:   ifaceh.iface_name(sec),
 			s:       s,
 			enabled: (s.enabled != "0"),
+			del_v6:  v6,
 		});
 	});
 	return names;
@@ -128,18 +86,21 @@ function _create_link(dev) {
 
 // _apply_setconf — write genl-only tmpfile and load it via awg setconf.
 // Address/MTU must not appear in this file — awg setconf is genl-only.
-function _apply_setconf(dev, creds, p) {
+// Rendered via confstore.render_setconf (wg is the flat wgconf object).
+function _apply_setconf(dev, wg) {
+	let TMPDIR = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 	fs.mkdir(TMPDIR);
 	let path = sprintf("%s/%s.setconf", TMPDIR, dev);
 	let f = fs.open(path, "w");
-	if (f) { f.write(render_setconf(creds, p)); f.close(); }
+	if (f) { f.write(confstore.render_setconf(wg)); f.close(); }
 	sh(sprintf("%s setconf %s %s", AWG_BIN, dev, path));
 }
 
 // _assign_addresses — ip addr add for v4 (always) and v6 (when ipv6 enabled).
-function _assign_addresses(dev, creds, ipv6) {
-	sh(sprintf("%s -4 addr add %s dev %s", IP_BIN, creds.address_v4, dev));
-	if (ipv6) sh(sprintf("%s -6 addr add %s dev %s", IP_BIN, creds.address_v6, dev));
+// Takes pre-sanitized addresses (safe_cidr applied by caller).
+function _assign_addresses(dev, v4, v6, ipv6) {
+	sh(sprintf("%s -4 addr add %s dev %s", IP_BIN, v4, dev));
+	if (ipv6) sh(sprintf("%s -6 addr add %s dev %s", IP_BIN, v6, dev));
 }
 
 // _set_mtu_up — set MTU and bring the interface up in one step.
@@ -155,41 +116,43 @@ function _add_addrlabels(v6) {
 }
 
 // _bring_up — orchestrate bring-up for one amneziawg interface (spec §11).
-// Validates credentials, then delegates each step to a named helper.
+// Creds come from confstore.ensure (stored .conf is source of truth, NOT UCI).
+// Sanitizers safe_cidr/safe_endpoint are applied to wg.* after ensure() returns.
 // NO default routes — sing-box handles egress via bind_interface (spec §16).
 function _bring_up(cur, item) {
-	let s   = item.s;
-	let dev = item.iface;  // already sanitized by iface_name() in _managed_names
-	let p   = _params_from_section(s);
-	p.mtu   = ifaceh.effective_mtu(cur, s.mtu_override);
-	let creds = {
-		private_key:     s.warp_private_key      ?? "",
-		peer_public_key: s.warp_peer_public_key  ?? "",
-		address_v4:      safe_cidr(s.warp_address_v4 ?? "172.16.0.2/32"),
-		address_v6:      safe_cidr(s.warp_address_v6 ?? ""),
-		endpoint:        safe_endpoint(s.warp_endpoint ?? "engage.cloudflareclient.com:2408"),
-	};
-	// Abort if address or endpoint is malformed — tunnel cannot work without them.
-	if (length(creds.address_v4) == 0) {
+	let s        = item.s;
+	let dev      = item.iface;  // already sanitized by iface_name() in _managed_names
+	let mtu      = ifaceh.effective_mtu(cur, s.mtu_override);
+	let ipv6_want = (s.ipv6_enabled == "1");
+
+	let wg = confstore.ensure(cur, item, mtu, ipv6_want);
+	if (wg == null) return;  // register fail / selfhosted missing / parse fail
+
+	// Sanitize addresses and endpoint from wg (HIGH-severity injection guards).
+	let v4 = safe_cidr(wg.address_v4 ?? "172.16.0.2/32");
+	let v6 = safe_cidr(wg.address_v6 ?? "");
+	let ep = safe_endpoint(wg.endpoint ?? "");
+	if (length(v4) == 0) {
 		require("log").log_event("error", "awg.bad_address_v4", { iface: dev });
 		return;
 	}
-	if (length(creds.endpoint) == 0) {
+	if (length(ep) == 0) {
 		require("log").log_event("error", "awg.bad_endpoint", { iface: dev });
 		return;
 	}
-	let ipv6 = (s.ipv6_enabled == "1") && length(creds.address_v6);
+	wg.address_v4 = v4; wg.address_v6 = v6; wg.endpoint = ep;
+	let ipv6 = ipv6_want && length(v6);
 
 	if (!_create_link(dev)) return;
-	_apply_setconf(dev, creds, p);
-	_assign_addresses(dev, creds, ipv6);
-	_set_mtu_up(dev, p.mtu);
-	if (ipv6) _add_addrlabels(creds.address_v6);
+	_apply_setconf(dev, wg);
+	_assign_addresses(dev, v4, v6, ipv6);
+	_set_mtu_up(dev, mtu);
+	if (ipv6) _add_addrlabels(v6);
 }
 
 // _del_iface — remove one amneziawg interface and its addrlabel entries.
-// v6_addr is re-sanitized here — callers pass raw UCI values (HIGH-severity:
-// a crafted warp_address_v6 could inject into `ip addrlabel del`).
+// v6_addr is re-sanitized here — callers pass values from stored .conf (HIGH-severity:
+// a crafted address_v6 in .conf could inject into `ip addrlabel del`).
 // A malformed value sanitizes to "" → addrlabel del is skipped (safe, since
 // no valid label was added for a malformed address).
 function _del_iface(dev, v6_addr) {
@@ -215,7 +178,7 @@ function apply(cur) {
 	// IPv6 source-address selection corruption (FIX: addrlabel leak on disable).
 	for (let it in items) {
 		if (!it.enabled && !want[it.iface]) {
-			_del_iface(it.iface, it.s.warp_address_v6);
+			_del_iface(it.iface, it.del_v6);
 		}
 	}
 }
@@ -223,8 +186,8 @@ function apply(cur) {
 // teardown — remove all managed amneziawg ifaces + their addrlabel entries.
 function teardown(cur) {
 	for (let it in _managed_names(cur)) {
-		_del_iface(it.iface, it.s.warp_address_v6);
+		_del_iface(it.iface, it.del_v6);
 	}
 }
 
-return { apply, teardown, render_setconf, render_conf };
+return { apply, teardown };

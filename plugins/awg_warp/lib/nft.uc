@@ -4,8 +4,10 @@
 //
 // Emits:
 //   table ip singbox_ui_awg_nat    — ip4-only postrouting masquerade for each enabled iface
-//   table ip6 singbox_ui_awg_nat6  — NAT66 postrouting masquerade (ipv6_enabled + v6 addr)
-let ifaceh = require("plugins.awg_warp.iface");
+//   table ip6 singbox_ui_awg_nat6  — NAT66 postrouting masquerade (ipv6_enabled + v6 addr present in .conf)
+let ifaceh    = require("plugins.awg_warp.iface");
+let confstore = require("plugins.awg_warp.confstore");
+let fs        = require("fs");
 
 // _safe_iface: additional [a-z0-9_]-only filter (HIGH-severity injection guard).
 // iface_name already lowercases and filters, but an env-override seam could bypass
@@ -26,7 +28,14 @@ function fragment(cur) {
 		let dev = _safe_iface(ifaceh.iface_name(s[".name"]));
 		if (!length(dev)) return;
 		push(v4_rules, sprintf("\t\toifname \"%s\" masquerade", dev));
-		let v6addr = "" + (s.warp_address_v6 != null ? s.warp_address_v6 : "");
+		// v6addr sourced from stored .conf (NOT from UCI warp_address_v6 — field removed).
+		let v6addr = "";
+		let storage = (s.warp_storage == "flash") ? "flash" : "ram";
+		let raw = fs.readfile(confstore.conf_path(s[".name"], storage));
+		if (raw != null && length(raw)) {
+			let wg = confstore.parse_full(raw);
+			if (wg != null) v6addr = wg.address_v6 ?? "";
+		}
 		if (s.ipv6_enabled == "1" && length(v6addr))
 			push(v6_rules, sprintf("\t\toifname \"%s\" masquerade", dev));
 	});

@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: singbox-ui-plugin-awg_warp\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-06-25 00:00+0000\n"
+"POT-Creation-Date: 2026-06-25 17:04+0700\n"
 "PO-Revision-Date: 2026-06-25 00:00+0000\n"
 "Last-Translator: Jyn <iamnotjyn@gmail.com>\n"
 "Language-Team: Russian\n"
@@ -14,99 +14,69 @@ msgstr ""
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
+"Plural-Forms: nplurals=3; plural=(n%10==1 && n%100!=11 ? 0 : n%10>=2 && "
+"n%10<=4 && (n%100<10 || n%100>=20) ? 1 : 2);\n"
 
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:33
-msgid "AWG WARP"
-msgstr "AWG WARP"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:45
-msgid "AWG components"
-msgstr "Компоненты AWG"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:47
-msgid "Install AWG + ip-full"
-msgstr "Установить AWG + ip-full"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:55
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:48
 msgid "AWG + ip-full installed successfully."
 msgstr "AWG + ip-full успешно установлены."
 
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:55
-msgid "Install failed: "
-msgstr "Ошибка установки: "
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:28
+msgid "AWG WARP"
+msgstr "AWG WARP"
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:36
+msgid "AWG components"
+msgstr "Компоненты AWG"
 
 #: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:55
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:87
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:111
-msgid "unknown error"
-msgstr "неизвестная ошибка"
+msgid "Config storage"
+msgstr "Хранилище конфига"
 
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:61
-msgid "WARP account"
-msgstr "Аккаунт WARP"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:63
-msgid "Register (Cloudflare WARP)"
-msgstr "Зарегистрировать (Cloudflare WARP)"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:70
-msgid "WARP account registered."
-msgstr "Аккаунт WARP зарегистрирован."
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:70
-msgid "Registration failed: "
-msgstr "Ошибка регистрации: "
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:76
-msgid "Paste WARP .conf"
-msgstr "Вставить WARP .conf"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:81
-msgid "Paste the contents of a Cloudflare WARP .conf file to register via paste mode."
-msgstr "Вставьте содержимое файла Cloudflare WARP .conf для регистрации через режим вставки."
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:87
-msgid "WARP conf applied."
-msgstr "Конфигурация WARP применена."
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:87
-msgid "Paste registration failed: "
-msgstr "Ошибка регистрации через вставку: "
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:93
-msgid "Mimic protocol"
-msgstr "Протокол маскировки"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:102
-msgid "AWG parameters"
-msgstr "Параметры AWG"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:104
-msgid "Regenerate (WARP-safe)"
-msgstr "Перегенерировать (WARP-совместимо)"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:111
-msgid "Regenerate failed: "
-msgstr "Ошибка перегенерации: "
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:116
-#, javascript-format
-msgid "AWG parameters regenerated: Jc=%d Jmin=%d Jmax=%d"
-msgstr "Параметры AWG перегенерированы: Jc=%d Jmin=%d Jmax=%d"
-
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:122
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:73
 msgid "Enable IPv6"
 msgstr "Включить IPv6"
 
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:126
-msgid "Enable IPv6 auto-masquerade for WARP."
-msgstr "Включить автоматическую маскировку IPv6 для WARP."
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:60
+msgid "Flash (/etc) — persists across reboot"
+msgstr "Flash (/etc) — сохраняется между перезагрузками"
 
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:129
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:25
+msgid "Install AWG + ip-full"
+msgstr "Установить AWG + ip-full"
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:49
+msgid "Install failed: "
+msgstr "Ошибка установки: "
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:24
+msgid "Installed"
+msgstr "Установлено"
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:79
 msgid "MTU override"
 msgstr "Переопределение MTU"
 
-#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:134
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:64
+msgid "Mimic protocol"
+msgstr "Протокол маскировки"
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:59
+msgid "RAM (/tmp) — re-registers on reboot"
+msgstr "RAM (/tmp) — перерегистрация при перезагрузке"
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:61
+msgid ""
+"Where the WARP config is stored. RAM is ephemeral (re-registers on each "
+"boot); Flash persists but wears flash memory."
+msgstr ""
+"Где хранится конфиг WARP. RAM эфемерный (перерегистрация при каждой "
+"загрузке); Flash сохраняется, но изнашивает флеш-память."
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:84
 msgid "empty = WAN−80"
 msgstr "пусто = WAN−80"
+
+#: htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js:49
+msgid "unknown error"
+msgstr "неизвестная ошибка"
