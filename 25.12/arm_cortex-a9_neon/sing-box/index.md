@@ -18,5 +18,5 @@ apk update && apk add sing-box-extended      # or sing-box-extended-upx
 
 ## Packages
 
-- [sing-box-extended-1.13.12_p002004001.apk](sing-box-extended-1.13.12_p002004001.apk)
-- [sing-box-extended-upx-1.13.12_p002004001.apk](sing-box-extended-upx-1.13.12_p002004001.apk)
+- [sing-box-extended-1.13.14_p002005000.apk](sing-box-extended-1.13.14_p002005000.apk)
+- [sing-box-extended-upx-1.13.14_p002005000.apk](sing-box-extended-upx-1.13.14_p002005000.apk)
