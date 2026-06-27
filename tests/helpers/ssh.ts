@@ -1,10 +1,16 @@
 import { spawn } from "node:child_process";
+import { writeFile } from "node:fs/promises";
 
 const HOST = process.env.SB_VM_HOST ?? "127.0.0.1";
 const PORT = process.env.SB_VM_PORT ?? "2222";
 const USER = process.env.SB_VM_USER ?? "root";
 const PASS = process.env.SB_VM_PASS ?? "admin";
 const SOCK = process.env.SB_VM_CTL ?? "/tmp/sb-cm.sock";
+
+// When bun runs INSIDE the OpenWrt guest (VM lane sets SINGBOX_TESTS_IN_VM=1),
+// the prod-path commands execute locally — no SSH. The exported API is
+// identical so no test file changes.
+const IN_GUEST = process.env.SINGBOX_TESTS_IN_VM === "1";
 
 // Persistent connection via ControlMaster: the first `ssh` spawns a master,
 // subsequent calls reuse the socket (near-zero handshake). ControlPersist
@@ -52,18 +58,24 @@ function sshpass(rest: string[]): string[] {
 }
 
 export function exec(remoteCmd: string): Promise<ExecResult> {
+  if (IN_GUEST) return run("sh", ["-c", remoteCmd]);
   return run("sshpass", sshpass([remoteCmd]));
 }
 
 // scp is unavailable on the guest (no sftp-server) — pipe via cat (CLAUDE.md).
-export function putFile(
+export async function putFile(
   content: string,
   remotePath: string,
 ): Promise<ExecResult> {
+  if (IN_GUEST) {
+    await writeFile(remotePath, content);
+    return { stdout: "", stderr: "", exitCode: 0 };
+  }
   return run("sshpass", sshpass([`cat > ${remotePath}`]), content);
 }
 
 export async function warmConnection(): Promise<void> {
+  if (IN_GUEST) return;
   const r = await exec("true");
   if (r.exitCode !== 0) {
     throw new Error(
@@ -73,6 +85,7 @@ export async function warmConnection(): Promise<void> {
 }
 
 export async function closeConnection(): Promise<void> {
+  if (IN_GUEST) return;
   await run("sshpass", [
     "-p",
     PASS,
