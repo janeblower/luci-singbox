@@ -42,7 +42,7 @@ qemu-system-x86_64 \
 	-enable-kvm \
 	-nodefaults \
 	-display none \
-	-m 512M \
+	-m 1G \
 	-smp 2 \
 	-drive "file=$QCOW,if=virtio,format=qcow2" \
 	-nic "user,model=virtio,hostfwd=tcp:127.0.0.1:2222-:22" \
@@ -70,6 +70,16 @@ echo "==> wait for SSH banner on :2222"
 
 # Settle: let dropbear finish its first-listen and procd quiesce.
 sleep 2
+
+echo "==> install libstdcpp6 (bun in-guest needs libstdc++.so.6)"
+SB_SSH="sshpass -p admin ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -p 2222 root@127.0.0.1"
+# shellcheck disable=SC2086  # SB_SSH intentionally word-splits into argv
+$SB_SSH 'udhcpc -i eth0 -n -q >/dev/null 2>&1 || true'
+# shellcheck disable=SC2086
+$SB_SSH 'apk update && apk add libstdcpp6'
+# shellcheck disable=SC2086
+$SB_SSH 'test -e /usr/lib/libstdc++.so.6' \
+	|| { echo "FAIL: libstdc++.so.6 absent after apk add libstdcpp6" >&2; exit 1; }
 
 echo "==> savevm via monitor"
 # Freeze the guest and snapshot. Do NOT quit yet — savevm is async-ish and
