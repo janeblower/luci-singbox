@@ -36,12 +36,15 @@ describe("test_rpcd_prod_path", () => {
   useGuest();
 
   beforeAll(async () => {
-    // Skip entirely when not in a VM (no live rpcd/ubus)
+    // Skip entirely when not in a VM (no live rpcd/ubus).
+    // Redirect command -v's stdout (the resolved path) to /dev/null, not just
+    // stderr — otherwise stdout is "<path>\nYES" and the === "YES" check below
+    // never matches, silently skipping the install and failing every assertion.
     const ubusCheck = await exec(
-      "command -v ubus 2>/dev/null && echo YES || echo NO",
+      "command -v ubus >/dev/null 2>&1 && echo YES || echo NO",
     );
     const rpdCheck = await exec(
-      "command -v rpcd 2>/dev/null && echo YES || echo NO",
+      "command -v rpcd >/dev/null 2>&1 && echo YES || echo NO",
     );
     if (
       !IN_VM ||
