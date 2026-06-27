@@ -148,6 +148,10 @@ echo "==> guest bun: $GUEST_BUN_VER (expected $(cat /opt/bun-guest/VERSION))"
 test "$GUEST_BUN_VER" = "$(cat /opt/bun-guest/VERSION)" \
 	|| { echo "FAIL: guest bun version mismatch" >&2; exit 1; }
 
+# No `bun install` here: the tree is injected without node_modules and the
+# backend/parity suites import only `bun:test` + local helpers (no third-party
+# runtime deps). If a backend test ever adds a third-party import, this in-guest
+# run will fail to resolve it — add a guest-side `bun install` at that point.
 echo "==> bun test (in-guest: backend+parity)"
 set +e
 # shellcheck disable=SC2086,SC2016  # SSH_OPTS word-splits; $PATH expands in guest
