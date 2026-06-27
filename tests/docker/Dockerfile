@@ -72,6 +72,19 @@ RUN curl -fsSL "$IMAGE_URL" -o "$IMAGE_FILE" \
 # The image-build workflow uses the buildkit form.
 RUN --security=insecure /opt/build-snapshot.sh
 
+# Guest-side bun — the musl-baseline build streamed into the OpenWrt guest's
+# /tmp (tmpfs) at run time by entrypoint.sh. Baseline is mandatory: the guest
+# qemu64 CPU lacks AVX2 and the non-baseline build SIGILLs. Placed AFTER the
+# snapshot bake so a BUN_VERSION bump rebuilds only this layer (no KVM).
+RUN mkdir -p /opt/bun-guest \
+ && curl -fsSL -o /tmp/bun-guest.zip \
+      "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/bun-linux-x64-musl-baseline.zip" \
+ && unzip -q /tmp/bun-guest.zip -d /tmp/bun-guest-unzip \
+ && cp /tmp/bun-guest-unzip/bun-linux-x64-musl-baseline/bun /opt/bun-guest/bun \
+ && chmod +x /opt/bun-guest/bun \
+ && printf '%s\n' "${BUN_VERSION}" > /opt/bun-guest/VERSION \
+ && rm -rf /tmp/bun-guest.zip /tmp/bun-guest-unzip
+
 # Per-run entrypoint. Image consumers must pass:
 #   docker run --device /dev/kvm -v <repo>:/work ...
 ENTRYPOINT ["/opt/entrypoint.sh"]

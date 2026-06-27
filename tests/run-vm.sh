@@ -46,7 +46,23 @@ pull_image() {
 		delay=$((delay * 2))
 	done
 }
-pull_image
+
+# A SINGBOX_TEST_IMAGE override means "use my locally-built tag" (dev workflow:
+# rebuild the image, then run-vm against it). Such a tag is not in any registry,
+# so a pull would fail — skip it and require the image to be present locally.
+# Without the override (CI default) pull the published image as before.
+if [ -n "${SINGBOX_TEST_IMAGE:-}" ]; then
+	echo "==> SINGBOX_TEST_IMAGE set; using local image $IMAGE (skipping pull)"
+	docker image inspect "$IMAGE" >/dev/null 2>&1 || {
+		echo "ERROR: local image '$IMAGE' not found. Build it first, e.g.:" >&2
+		echo "       docker buildx build --builder singbox-insecure --allow security.insecure \\" >&2
+		echo "         --build-arg OPENWRT_VERSION=\$(cat tests/docker/openwrt-version.txt) \\" >&2
+		echo "         -t $IMAGE --load tests/docker" >&2
+		exit 1
+	}
+else
+	pull_image
+fi
 
 echo "==> running tests inside $IMAGE"
 exec docker run --rm \

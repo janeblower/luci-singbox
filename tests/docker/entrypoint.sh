@@ -60,7 +60,7 @@ qemu-system-x86_64 \
 	-enable-kvm \
 	-nodefaults \
 	-display none \
-	-m 512M \
+	-m 1G \
 	-smp 2 \
 	-drive "file=$RUN_QCOW,if=virtio,format=qcow2" \
 	-nic "user,model=virtio,hostfwd=tcp:127.0.0.1:${SSH_PORT}-:22" \
@@ -138,11 +138,24 @@ tar -czf - \
 	-C "$WORK_DIR" . \
 	| $SSH 'mkdir -p /tmp/work && tar -xzf - -C /tmp/work'
 
-echo "==> bun test (host side: backend+parity via ssh into guest)"
+echo "==> stream guest bun into /tmp/bun (tmpfs)"
+test -x /opt/bun-guest/bun || { echo "FAIL: /opt/bun-guest/bun missing (image misbuilt)" >&2; exit 1; }
+# shellcheck disable=SC2086  # SSH_OPTS intentionally splits
+$SSH 'cat > /tmp/bun && chmod +x /tmp/bun' < /opt/bun-guest/bun
+# shellcheck disable=SC2086  # SSH_OPTS intentionally splits
+GUEST_BUN_VER=$($SSH '/tmp/bun --version' | tr -d '\r')
+echo "==> guest bun: $GUEST_BUN_VER (expected $(cat /opt/bun-guest/VERSION))"
+test "$GUEST_BUN_VER" = "$(cat /opt/bun-guest/VERSION)" \
+	|| { echo "FAIL: guest bun version mismatch" >&2; exit 1; }
+
+# No `bun install` here: the tree is injected without node_modules and the
+# backend/parity suites import only `bun:test` + local helpers (no third-party
+# runtime deps). If a backend test ever adds a third-party import, this in-guest
+# run will fail to resolve it — add a guest-side `bun install` at that point.
+echo "==> bun test (in-guest: backend+parity)"
 set +e
-( cd "$WORK_DIR/tests" && bun install --frozen-lockfile >/dev/null 2>&1 )
-( cd "$WORK_DIR" && SB_VM_HOST=127.0.0.1 SB_VM_PORT="$SSH_PORT" SB_VM_USER="$SSH_USER" \
-    SB_VM_PASS="$SSH_PASS" bun test tests/backend tests/parity )
+# shellcheck disable=SC2086,SC2016  # SSH_OPTS word-splits; $PATH expands in guest
+$SSH 'cd /tmp/work && SINGBOX_TESTS_IN_VM=1 PATH=/tmp:$PATH /tmp/bun test tests/backend tests/parity'
 BUN_RC=$?
 set -e
 
