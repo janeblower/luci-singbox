@@ -200,4 +200,99 @@ describe("publish_feed", () => {
       }
     },
   );
+
+  // Inverse ownership: sing-box-extended.yml reuses this same script with
+  // FEED_OWNED_DIR=sing-box. It must wipe stale 25.12/<arch>/sing-box/*.apk while
+  // leaving the sibling luci-singbox/ subtree (owned by the main feed) and the
+  // shared browse pages untouched — the mirror image of the default case above.
+  it.skipIf(!hasGit)(
+    "FEED_OWNED_DIR=sing-box wipes stale core apks, preserves luci-singbox sibling",
+    () => {
+      const base = mkdtempSync(resolve(tmpdir(), "publish-feed-core-"));
+      try {
+        const remote = resolve(base, "remote.git");
+        const seed = resolve(base, "seed");
+        const pub = resolve(base, "public");
+        const work = resolve(base, "work");
+
+        git(base, "init", "--bare", remote);
+
+        // Seed: an OLD sing-box core version, a sibling luci-singbox feed, and
+        // shared browse pages — all of which (except the old core apk) survive.
+        mkdirSync(seed, { recursive: true });
+        git(seed, "init", "-b", "gh-pages");
+        const sCore = resolve(seed, "25.12/x86_64/sing-box");
+        write(
+          resolve(sCore, "sing-box-extended-1.13.12_p002004001.apk"),
+          "old\n",
+        );
+        write(
+          resolve(sCore, "sing-box-extended-upx-1.13.12_p002004001.apk"),
+          "old-upx\n",
+        );
+        write(resolve(sCore, "packages.adb"), "old-core-index\n");
+        write(resolve(sCore, "index.md"), "old-core\n");
+        const sLuci = resolve(seed, "25.12/x86_64/luci-singbox");
+        write(resolve(sLuci, "luci-app-singbox-ui-0.0.0-r9.apk"), "app\n");
+        write(resolve(sLuci, "packages.adb"), "app-index\n");
+        write(resolve(seed, "25.12/x86_64/index.md"), "arch-page\n");
+        write(resolve(seed, "luci-singbox.pem"), "KEY\n");
+        git(seed, "add", "-A");
+        git(seed, "commit", "-m", "seed");
+        git(seed, "remote", "add", "origin", remote);
+        git(seed, "push", "origin", "gh-pages");
+
+        // Freshly built tree: NEW core version only (feed.sh output shape).
+        const pCore = resolve(pub, "25.12/x86_64/sing-box");
+        write(
+          resolve(pCore, "sing-box-extended-1.13.14_p002005000.apk"),
+          "new\n",
+        );
+        write(
+          resolve(pCore, "sing-box-extended-upx-1.13.14_p002005000.apk"),
+          "new-upx\n",
+        );
+        write(resolve(pCore, "packages.adb"), "new-core-index\n");
+        write(resolve(pCore, "index.md"), "new-core\n");
+
+        const r = spawnSync("sh", [SCRIPT, pub], {
+          cwd: base,
+          encoding: "utf8",
+          env: {
+            ...GIT_ENV,
+            FEED_GIT_REMOTE: remote,
+            FEED_OWNED_DIR: "sing-box",
+            FEED_WORK: work,
+            FEED_COMMIT_MSG: "deploy sing-box-extended feed: v1.13.14",
+          },
+        });
+        expect(r.stderr + r.stdout).toContain("published feed to gh-pages");
+        expect(r.status).toBe(0);
+
+        const verify = resolve(base, "verify");
+        git(base, "clone", "--branch", "gh-pages", remote, verify);
+
+        // Stale 1.13.12 core apks are GONE; only the current 1.13.14 remain.
+        const vCore = resolve(verify, "25.12/x86_64/sing-box");
+        const coreApks = readdirSync(vCore)
+          .filter((f) => f.endsWith(".apk"))
+          .sort();
+        expect(coreApks).toEqual([
+          "sing-box-extended-1.13.14_p002005000.apk",
+          "sing-box-extended-upx-1.13.14_p002005000.apk",
+        ]);
+
+        // Sibling luci-singbox feed + shared pages preserved byte-for-byte.
+        const vLuci = resolve(verify, "25.12/x86_64/luci-singbox");
+        expect(
+          existsSync(resolve(vLuci, "luci-app-singbox-ui-0.0.0-r9.apk")),
+        ).toBe(true);
+        expect(existsSync(resolve(vLuci, "packages.adb"))).toBe(true);
+        expect(existsSync(resolve(verify, "25.12/x86_64/index.md"))).toBe(true);
+        expect(existsSync(resolve(verify, "luci-singbox.pem"))).toBe(true);
+      } finally {
+        rmSync(base, { recursive: true, force: true });
+      }
+    },
+  );
 });

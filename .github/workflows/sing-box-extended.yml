@@ -142,16 +142,33 @@ jobs:
           PAGES_URL: ${{ env.PAGES_URL }}
         run: sh feed.sh "$OWRT_MINOR" "${{ steps.gate.outputs.ver }}" dist public
 
+      # Pull the publish helper from main (this workflow's tree is the orphan
+      # cores/ branch, which has no scripts/). Single source of truth — the same
+      # scripts/publish-feed.sh that the main luci-singbox feed uses.
+      - name: Fetch publish-feed.sh from main
+        if: steps.gate.outputs.build == 'true'
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          sparse-checkout: scripts/publish-feed.sh
+          sparse-checkout-cone-mode: false
+          path: _main
+
+      # Publish via scripts/publish-feed.sh (manual git merge), NOT peaceiris
+      # keep_files:true. keep_files NEVER deletes: packages.adb/index.md overwrite
+      # by name, but each upstream tag is a new sing-box-extended-<ver>.apk
+      # filename, so every past version's .apk piled up on gh-pages forever.
+      # publish-feed.sh clones gh-pages, wipes ONLY the dirs this feed owns
+      # (FEED_OWNED_DIR=sing-box, i.e. 25.12/<arch>/sing-box/), overlays the
+      # current-version tree, and pushes — old versions vanish while the sibling
+      # luci-singbox/ subtree and shared browse pages survive (symmetric to the
+      # main feed wiping only luci-singbox/). Shared concurrency group `pages`
+      # serializes against pages.yml; the script's retry loop covers any residual
+      # non-fast-forward race.
       - name: Publish to gh-pages (25.12/<arch>/sing-box)
         if: steps.gate.outputs.build == 'true'
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          # public/ contains the 25.12/<arch>/sing-box/ tree; publish it to the
-          # gh-pages ROOT with keep_files so it merges next to luci-singbox/
-          # without touching the main feed's shared browse pages / pubkey.
-          publish_dir: public
-          publish_branch: gh-pages
-          keep_files: true
-          enable_jekyll: true
-          commit_message: "deploy sing-box-extended feed: ${{ steps.tag.outputs.tag }}"
+        env:
+          FEED_GIT_REMOTE: https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          FEED_OWNED_DIR: sing-box
+          FEED_COMMIT_MSG: "deploy sing-box-extended feed: ${{ steps.tag.outputs.tag }}"
+        run: sh _main/scripts/publish-feed.sh public
