@@ -432,6 +432,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
 
         attachValidator(opt, f.validate);
         if (gate.mode === 'disable') disableWithNote(opt, gate.note);
+        tagField(opt, f.name, controlKindFor(widgetFor(f)));
         s._sbMatRegistry[key] = {
             opt: opt, values: values,
             // Track whether THIS first registration already carried an explicit
@@ -486,6 +487,7 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         if (f.virtual) makeVirtual(opt);
         attachValidator(opt, f.validate);
         if (gate.mode === 'disable') disableWithNote(opt, gate.note);
+        tagField(opt, f.name, controlKindFor(widgetFor(f)));
     });
 }
 
