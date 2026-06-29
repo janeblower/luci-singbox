@@ -208,6 +208,8 @@ jobs:
       # The browser harness (fixtures.ts) lives under tests/browser, which the
       # root tsconfig excludes; typecheck it under its own (DOM-lib) config so a
       # fixtures.ts regression is caught in CI, not only at the live browser run.
+      # Needs tests/browser deps installed so tsc can resolve @playwright/test.
+      - run: cd tests/browser && bun install --frozen-lockfile
       - run: cd tests && bun run typecheck:browser
       - run: cd tests && bun run lint
 
