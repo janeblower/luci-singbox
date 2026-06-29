@@ -10,7 +10,7 @@
  * Drives the REAL script against a throwaway tree via PKG/OUT/OVERRIDES
  * env hooks.
  */
-import { describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import {
   mkdirSync,
@@ -21,8 +21,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const GEN_SH = resolve(ROOT, "scripts/gen-manifest.sh");
 
 describe("gen_manifest_override", () => {

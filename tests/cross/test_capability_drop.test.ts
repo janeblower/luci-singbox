@@ -1,11 +1,11 @@
-import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_capability_drop.sh
 // Checks the sing-box capability file shape, init.d wiring, and manifest entry.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_BACKEND_ROOT = join(REPO, "singbox-ui/root");
 const CAP_FILE = join(SB_BACKEND_ROOT, "etc/capabilities/singbox-ui.json");
 const INITD = join(SB_BACKEND_ROOT, "etc/init.d/singbox-ui");

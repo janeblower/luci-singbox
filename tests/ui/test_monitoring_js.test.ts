@@ -1,13 +1,13 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
 // tests/test_monitoring_js.sh — Node harness for tabs/monitoring.js.
 // Asserts async-safety + DOM-stability of the connection monitor.
 
 const MONITORING_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js",
 );
 

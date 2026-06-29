@@ -1,9 +1,9 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_VIEW = join(
   REPO,
   "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",

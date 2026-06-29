@@ -3,15 +3,17 @@
  *
  * Package-shape smoke test for singbox-ui-plugin-awg_warp.
  * Verifies the ACL file is present and contains the expected read/write split.
- * Host-only (file-read shape test via Bun.file; no VM needed).
+ * Host-only (file-read shape test via node:fs; no VM needed).
  * Expanded by Task 9 to cover the full plugin backend surface.
  */
-import { describe, expect, it } from "bun:test";
+
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 const ROOT = process.env.SB_REPO
   ? resolve(process.env.SB_REPO)
-  : resolve(import.meta.dir, "../..");
+  : resolve(import.meta.dirname, "../..");
 
 const ACL = resolve(
   ROOT,
@@ -19,10 +21,9 @@ const ACL = resolve(
 );
 
 describe("awg-warp package shape", () => {
-  it("ships an acl.d file with a singbox-ui ubus section", async () => {
-    const f = Bun.file(ACL);
-    expect(await f.exists()).toBe(true);
-    const j = JSON.parse(await f.text());
+  it("ships an acl.d file with a singbox-ui ubus section", () => {
+    expect(existsSync(ACL)).toBe(true);
+    const j = JSON.parse(readFileSync(ACL, "utf8"));
     const role = j["singbox-ui-plugin-awg_warp"];
     expect(role).toBeTruthy();
     expect(role.read.ubus["singbox-ui"]).toContain("awg_status");

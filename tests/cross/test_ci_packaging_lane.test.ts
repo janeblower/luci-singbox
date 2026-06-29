@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_ci_packaging_lane.sh
 // Asserts build.yml has a `packaging` job that:
@@ -9,7 +9,7 @@ import { join, resolve } from "node:path";
 //       (so feed/i18n get real `apk mkpkg --info`),
 //   (c) does NOT delegate to the qemu VM.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const WF = join(REPO, ".github/workflows/build.yml");
 
 describe("CI packaging lane (build.yml)", () => {

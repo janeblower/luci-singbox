@@ -12,7 +12,7 @@
  * Runs through the real script against a local git remote (no apk/network).
  * Host-only (tests/cross never runs in the qemu VM); needs git on PATH.
  */
-import { describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -24,8 +24,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const SCRIPT = resolve(ROOT, "scripts/publish-feed.sh");
 
 const hasGit =

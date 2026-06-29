@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // tests/test_share_link_js.sh — exercises importers/outbound.shareLinkImport
 // from Node so the JS-side share-link parsing has regression coverage.
 
 const OUTBOUND_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js",
 );
 

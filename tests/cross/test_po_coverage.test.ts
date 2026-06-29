@@ -1,13 +1,13 @@
-import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_po_coverage.sh
 // Enforce that po/ru is roughly in sync with JS _('...') sources.
 // - Number of msgid entries in po should be within 5 of unique _('...') in JS.
 // - At most 5 entries may be untranslated (empty msgstr "").
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const JS_DIR = join(
   REPO,
   "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",

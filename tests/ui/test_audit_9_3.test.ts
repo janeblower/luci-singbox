@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // tests/test_audit_9_3.sh — regression for audit 9.3.
@@ -9,7 +9,7 @@ import { loadLuciModule } from "../helpers/luci.ts";
 // Exercises importers/outbound.shareLinkImport and asserts SIP002 plugin parsing.
 
 const VIEW_ROOT = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",
 );
 const OUTBOUND_JS = resolve(VIEW_ROOT, "importers/outbound.js");

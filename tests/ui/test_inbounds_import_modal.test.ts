@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // Regression test for uit-3: split-string i18n anti-pattern.
@@ -8,7 +8,7 @@ import { loadLuciModule } from "../helpers/luci.ts";
 // reorder components like kind (e.g., "inbound" or "outbound").
 
 const INBOUNDS_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js",
 );
 

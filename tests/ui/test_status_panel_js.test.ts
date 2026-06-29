@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
 // tests/test_status_panel_js.sh — asserts renderStatusPanel handles RPC failure
 // (S2-1): a rejected callStatus() must not reject the returned promise.
@@ -10,7 +10,7 @@ import vm from "node:vm";
 // default sandbox, so we build the sandbox manually (mirroring the original .sh).
 
 const STATUS_PANEL_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js",
 );
 

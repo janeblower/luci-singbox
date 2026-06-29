@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test";
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_rpcd_handler.sh
 // Shebang invariant: rpcd invokes the handler via its shebang on the target,
@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 // `-L` and its path must NOT be separated by a space — `-Lpath` form is the
 // only one getopt can parse out of a shebang.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_BACKEND_ROOT = join(REPO, "singbox-ui/root");
 const H = join(SB_BACKEND_ROOT, "usr/libexec/rpcd/singbox-ui");
 

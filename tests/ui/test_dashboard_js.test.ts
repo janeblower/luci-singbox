@@ -1,14 +1,14 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
 // tests/test_dashboard_js.sh — vm sandbox for tabs/dashboard.js.
 // Mirrors test_monitoring_js.sh approach: load fragment into vm context with
 // minimal DOM/LuCI/SbRpc stubs and assert rendering + behavior.
 
 const DASHBOARD_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js",
 );
 

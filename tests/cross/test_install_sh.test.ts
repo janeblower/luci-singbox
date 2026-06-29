@@ -16,7 +16,7 @@
  *   TEST 7: no-tty without SINGBOX_CORE falls back to default core
  *   TEST 8: pkg_version digit-anchoring — sing-box query does not match siblings
  */
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -29,8 +29,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const INSTALL_SH = resolve(ROOT, "install.sh");
 
 const PAGES_URL = "http://example.test/feed";

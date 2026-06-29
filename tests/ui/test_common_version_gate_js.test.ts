@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/test_common_version_gate_js.sh — node tests for applyVersionGate in common.js.
 // Exercises min_version gating (requires X.Y+) and max_version gating (removed in X.Y).
@@ -9,7 +9,7 @@ import { resolve } from "node:path";
 // match the way the shell test loads common.js (not via loadLuciModule / vm).
 
 const COMMON_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js",
 );
 

@@ -1,13 +1,13 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_grid_columns.sh
 // Static guard: every taboption('basic', ...) in tabs/outbounds.js and
 // tabs/inbounds.js must either be one of the whitelisted column names or
 // have modalonly=true on one of the next 5 lines.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_VIEW = join(
   REPO,
   "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",

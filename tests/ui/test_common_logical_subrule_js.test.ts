@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // Unit tests for common.js logicalSubRuleValidate — the shared validator that
 // the Route and DNS tabs both attach to a logical rule's sub-rule list. Code
@@ -10,7 +10,7 @@ import { resolve } from "node:path";
 // so the two tabs cannot drift again.
 
 const COMMON_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js",
 );
 

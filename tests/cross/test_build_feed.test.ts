@@ -7,7 +7,7 @@
  * SKIPs (or hard-fails) if apk-tools 3.0.5+ with mkpkg --info is unavailable;
  * the only escape is SINGBOX_FEED_TEST_ALLOW_SKIP=1.
  */
-import { describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -21,8 +21,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 
 // --- Skip / probe logic (mirrors the shell script exactly) ------------------
 

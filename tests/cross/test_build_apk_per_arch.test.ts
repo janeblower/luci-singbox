@@ -12,7 +12,7 @@
  * Driven via APK_MKPKG_STUB=1 (no SDK needed). SKIPs if bash is unavailable
  * (e.g. OpenWrt qemu guest has only BusyBox ash).
  */
-import { describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -24,8 +24,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const BUILDSH = resolve(ROOT, "scripts/build-apk.sh");
 
 // Skip guard: build-apk.sh is bash-only; reproduce the exact shell guard.

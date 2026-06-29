@@ -1,4 +1,3 @@
-import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -9,6 +8,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_audit_g6_build.sh
 // Regression coverage for audit group G6 (build scripts / packaging / i18n):
@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
 //   12.2 — build-apk.sh version derivation/validation
 //   12.4 — Makefile install loop hard-fails on unknown mode
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 
 const SB_PO_DIR = join(REPO, "luci-app-singbox-ui/po");
 const REGEN = join(REPO, "scripts/regen-po.sh");

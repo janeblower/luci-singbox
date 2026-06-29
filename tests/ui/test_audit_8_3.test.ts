@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
 // tests/test_audit_8_3.sh — regression for audit 8.3.
 // makeVirtual() must persist the virtual toggle value in a session-scoped store
@@ -9,7 +9,7 @@ import vm from "node:vm";
 // it on re-render; write/remove are no-ops w.r.t. UCI.
 
 const VIEW_ROOT = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",
 );
 const DESCRIPTOR_FORM_JS = resolve(VIEW_ROOT, "lib/descriptor_form.js");

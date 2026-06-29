@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_docker_scripts.sh
 // Lint the QEMU image scripts for two ordering/robustness invariants:
@@ -8,7 +8,7 @@ import { join, resolve } from "node:path";
 //   S5-7: build-snapshot.sh must poll `info snapshots` (no blind sleep
 //         deciding success) around savevm.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const ENTRY = join(REPO, "tests/docker/entrypoint.sh");
 const SNAP = join(REPO, "tests/docker/build-snapshot.sh");
 

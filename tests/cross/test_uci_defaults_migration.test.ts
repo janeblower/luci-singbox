@@ -30,12 +30,13 @@
  * at that path (refuses to clobber a real install).  Requires `uci` — SKIPs
  * on hosts without it (runs for real inside the OpenWrt qemu VM).
  */
-import { afterEach, beforeAll, describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_BACKEND_ROOT = join(REPO, "singbox-ui/root");
 const MIGRATION_SCRIPT = join(
   SB_BACKEND_ROOT,

@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_view_modules_layout.sh
 // Verifies the modularized view layout under htdocs/luci-static/resources/view/singbox-ui/.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_VIEW = join(
   REPO,
   "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",

@@ -1,14 +1,14 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
 // Mirrors the loader in test_descriptor_form_js.test.ts: descriptor_form.js is a
 // LuCI fragment, not an ES module — strip the fragment header and rewrite the
 // trailing `return L.Class.extend({...})` into a captured assignment, then eval
 // in a node:vm sandbox with the CBI globals stubbed.
 const VIEW_ROOT = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",
 );
 const DESCRIPTOR_FORM_JS = resolve(VIEW_ROOT, "lib/descriptor_form.js");

@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // tests/test_common_notify_js.sh — notify() must not TypeError when the
 // rejection reason is null/undefined (spec S2-7).
 
 const COMMON_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js",
 );
 

@@ -1,13 +1,13 @@
-import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_route_tab_structure_js.sh
 // Guards Bug 2: route.js must declare a tab and add base fields via taboption,
 // matching the working inbounds/outbounds pattern (untabbed s.option breaks the
 // GridSection modal once applyMaterialized injects match/action tabs).
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_VIEW = join(
   REPO,
   "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",

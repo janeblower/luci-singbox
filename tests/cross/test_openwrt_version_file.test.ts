@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_openwrt_version_file.sh
 // The single OpenWrt version source must exist and the Dockerfile must consume
 // it via a build ARG (not a hardcoded literal in IMAGE_URL/IMAGE_FILE).
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const VF = join(REPO, "tests/docker/openwrt-version.txt");
 const DF = join(REPO, "tests/docker/Dockerfile");
 

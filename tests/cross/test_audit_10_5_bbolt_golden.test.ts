@@ -14,12 +14,13 @@
  * Env override: BBOLT_TEST_BIN — path to the binary (mirrors the shell test's
  * RUN= / BBOLT_TEST_BIN= convention).
  */
-import { describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const BBOLT_DIR = join(REPO, "bbolt-client");
 const DEFAULT_BIN = join(BBOLT_DIR, "bbolt-client-rs");
 const GOLDEN_TESTDATA = join(BBOLT_DIR, "testdata", "cache.db");

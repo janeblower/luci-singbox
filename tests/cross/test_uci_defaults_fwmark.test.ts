@@ -10,13 +10,14 @@
  * Requires `uci` — SKIPs on hosts without it (runs for real inside the
  * OpenWrt qemu VM).
  */
-import { afterAll, beforeAll, describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_BACKEND_ROOT = join(REPO, "singbox-ui/root");
 const FWMARK_SCRIPT = join(
   SB_BACKEND_ROOT,

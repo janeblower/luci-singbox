@@ -1,14 +1,14 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
 // tests/test_audit_2_4.sh — regression for audit 2.4.
 // Shared (tab,name) fields collapse to ONE LuCI widget; explicit ui_label
 // beats a name-derived one regardless of registration order.
 
 const VIEW_ROOT = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",
 );
 const DESCRIPTOR_FORM_JS = resolve(VIEW_ROOT, "lib/descriptor_form.js");

@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import vm from "node:vm";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_json_import.sh — drives the JSON-import parser in main.js
 // through node. Skips when node is unavailable (node IS available in bun test context).
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const _SB_UI_ROOT = join(REPO, "luci-app-singbox-ui/root");
 const SB_UI_HTDOCS = join(REPO, "luci-app-singbox-ui/htdocs");
 const SB_VIEW = join(SB_UI_HTDOCS, "luci-static/resources/view/singbox-ui");

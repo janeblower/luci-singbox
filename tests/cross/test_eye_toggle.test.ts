@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_eye_toggle.sh
 // Static guards for the E1 eye-toggle replacement of D3 reveal tokens.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_VIEW = join(
   REPO,
   "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",

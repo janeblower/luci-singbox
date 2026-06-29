@@ -1,4 +1,3 @@
-import { describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -9,11 +8,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_main_js_syntax.sh — syntax check + keyword grep of main.js
 // and related modular tab files.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const SB_UI_HTDOCS = join(REPO, "luci-app-singbox-ui/htdocs");
 const SB_VIEW = join(SB_UI_HTDOCS, "luci-static/resources/view/singbox-ui");
 const SB_LIB = join(REPO, "singbox-ui/root/usr/share/singbox-ui/lib");

@@ -1,12 +1,12 @@
-import { describe, expect, it } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/ui/test_ui_surface_guard.sh — invariant guard for goal (a):
 // every interactive element in tests/ui/ui_surface.json MUST be exercised
 // by at least one tests/browser/*.spec.ts declaring it in `export const COVERS = [...]`.
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const BROWSER_DIR = resolve(ROOT, "tests/browser");
 const UI_SURFACE_JSON = resolve(ROOT, "tests/ui/ui_surface.json");
 

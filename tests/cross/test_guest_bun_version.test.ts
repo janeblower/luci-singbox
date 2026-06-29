@@ -1,11 +1,11 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // Single-source guard: the guest musl-baseline bun must derive from the SAME
 // BUN_VERSION that pins the host glibc bun, so the in-guest test runner and
 // the host CI lanes (setup-bun) never drift.
-const DOCKERFILE = resolve(import.meta.dir, "../docker/Dockerfile");
+const DOCKERFILE = resolve(import.meta.dirname, "../docker/Dockerfile");
 
 describe("guest bun version parity", () => {
   const src = readFileSync(DOCKERFILE, "utf8");

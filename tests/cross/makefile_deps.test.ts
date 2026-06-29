@@ -1,8 +1,8 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const SINGBOX_MK = resolve(ROOT, "singbox-ui/Makefile");
 const LUCIAPP_MK = resolve(ROOT, "luci-app-singbox-ui/Makefile");
 const BUILDSH = resolve(ROOT, "scripts/build-apk.sh");

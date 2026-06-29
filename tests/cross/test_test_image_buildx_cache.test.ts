@@ -1,11 +1,11 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_test_image_buildx_cache.sh
 // Guard: test-image.yml must use a buildx layer cache so re-runs are fast.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const TI = join(REPO, ".github/workflows/test-image.yml");
 
 describe("test-image.yml buildx cache config", () => {

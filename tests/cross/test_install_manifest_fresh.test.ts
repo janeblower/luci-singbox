@@ -12,7 +12,7 @@
  * Also enforces D4.5: exactly two files under lib/plugins/ in the backend
  * manifest — plugins/registry.uc + plugins/discovery.uc.
  */
-import { describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import {
   existsSync,
@@ -23,8 +23,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const GEN_SH = resolve(ROOT, "scripts/gen-manifest.sh");
 
 const MANIFESTS = [

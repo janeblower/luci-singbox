@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // tests/test_transport_helper_js.sh — the transport-parsing block is shared
@@ -8,7 +8,7 @@ import { loadLuciModule } from "../helpers/luci.ts";
 // transport fields through it identically.
 
 const VIEW_ROOT = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",
 );
 

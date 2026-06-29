@@ -1,11 +1,11 @@
-import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // Regression for uic-7: compareVersions must compare ALL components (not just
 // the first 3) and strip pre-release/build suffixes.
 const COMMON_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/lib/common.js",
 );
 

@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // uis-4: btn() must NOT re-translate an already-translated label. Callers pass
@@ -8,7 +8,7 @@ import { loadLuciModule } from "../helpers/luci.ts";
 // nested "T[T[...]]" — an identity mock (s => s) could never catch the bug.
 
 const ACTION_BAR_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js",
 );
 

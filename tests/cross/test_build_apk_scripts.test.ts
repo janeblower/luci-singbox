@@ -5,13 +5,14 @@
  * Verifies scripts/build-apk.sh emits the explicit init.d enable+start
  * invocations in its package lifecycle scripts.
  */
-import { describe, expect, it } from "bun:test";
+
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const BUILDSH = resolve(ROOT, "scripts/build-apk.sh");
 
 function readBuildApk(): string {

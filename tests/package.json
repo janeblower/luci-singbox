@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "bun test",
+    "test": "vitest run",
     "test:backend": "bun test tests/backend tests/parity",
-    "test:ui": "bun test tests/ui",
-    "test:cross": "bun test tests/cross",
+    "test:ui": "vitest run --project ui",
+    "test:cross": "vitest run --project cross",
     "typecheck": "tsc --noEmit -p ..",
     "typecheck:browser": "tsc --noEmit -p browser/tsconfig.json",
     "lint": "biome ci .."
@@ -14,6 +14,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.5.0",
     "@types/bun": "1.2.2",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "vitest": "^4.1.9"
   }
 }

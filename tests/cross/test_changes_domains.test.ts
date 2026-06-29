@@ -1,7 +1,7 @@
-import { describe, expect, it } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_changes_domains.sh
 // Exercises the pure path->domain classifier (tests/lib/domain_classify.sh)
@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 // NOTE: The classifier (domain_classify.sh) is a shell script sourced into sh.
 // We invoke it via sh subprocess to replicate the exact logic faithfully.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const CLASSIFY = join(REPO, "tests/lib/domain_classify.sh");
 const BUILD_YML = join(REPO, ".github/workflows/build.yml");
 

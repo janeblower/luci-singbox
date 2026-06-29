@@ -14,11 +14,12 @@
  *   5. Every mode is one of bin|conf|data.
  *   6. Every shippable file under the coverage dirs is covered by the manifest.
  */
-import { describe, expect, it } from "bun:test";
+
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { relative, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
-const ROOT = resolve(import.meta.dir, "../..");
+const ROOT = resolve(import.meta.dirname, "../..");
 const BUILDSH = resolve(ROOT, "scripts/build-apk.sh");
 
 /** Recursively list all files under dir. Returns paths relative to ROOT. */

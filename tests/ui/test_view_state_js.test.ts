@@ -1,13 +1,13 @@
-import { describe, expect, it } from "bun:test";
 import { execSync } from "node:child_process";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // tests/test_view_state_js.sh — the schema cache must live in a module
 // singleton (lib/view_state.js), not on window (spec S2-5).
 
 const VIEW_ROOT = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",
 );
 

@@ -1,6 +1,6 @@
-import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 
 // tests/cross/test_audit_g8_docs.sh
 // Regression guard for audit group G8 (docs / i18n). Pins the documentation
@@ -16,7 +16,7 @@ import { join, resolve } from "node:path";
 //          package rename (commit 3aa0ffe).
 //   13.4 — README.md carries an English summary section.
 
-const REPO = resolve(import.meta.dir, "../..");
+const REPO = resolve(import.meta.dirname, "../..");
 const DESC = join(REPO, "docs/protocol-descriptors.md");
 const SCHEMA = join(REPO, "docs/uci-schema.md");
 const CHANGELOG = join(REPO, "CHANGELOG.md");

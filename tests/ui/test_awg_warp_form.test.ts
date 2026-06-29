@@ -1,5 +1,5 @@
-import { describe, expect, it } from "bun:test";
 import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
 import { loadLuciModule } from "../helpers/luci.ts";
 
 // Host-side unit coverage for the AWG-WARP plugin form module.
@@ -9,7 +9,7 @@ import { loadLuciModule } from "../helpers/luci.ts";
 // runtime coverage of the form logic without a headless browser.
 
 const TAB_JS = resolve(
-  import.meta.dir,
+  import.meta.dirname,
   "../../plugins/awg_warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js",
 );
 
