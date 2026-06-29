@@ -1,11 +1,11 @@
-// 78-action-bar.mjs — action-bar buttons + status panel.
-import { runTest, assert, wait } from './_setup.mjs';
+// 78-action-bar.spec.ts — action-bar buttons + status panel.
+import { assert, test, wait } from './fixtures';
 
 export const COVERS = ["actionbar.refresh_subs", "actionbar.refresh_rulesets",
     "actionbar.restart", "actionbar.preview_generated", "actionbar.preview_config",
     "status.panel"];
 
-await runTest('action-bar: every button is present and Preview opens a JSON modal', async ({ page }) => {
+test('action-bar: every button is present and Preview opens a JSON modal', async ({ page }) => {
     const texts = await page.evaluate(() =>
         Array.from(document.querySelectorAll('.sb-actionbar button')).map(b => b.textContent.trim()));
     ['Refresh subscriptions','Refresh rule-sets','Restart service',

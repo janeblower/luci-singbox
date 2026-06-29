@@ -1,9 +1,9 @@
 // 63-outbound-vless.mjs — required + conditional + emit roundtrip.
-import { runTest, openAddModal, setProtocolInModal, fillField,
+import { test, openAddModal, setProtocolInModal, fillField,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('outbound:vless — required + conditional + emit', async ({ page }) => {
+test('outbound:vless — required + conditional + emit', async ({ page }) => {
     await openAddModal(page, 'outbound', 'vless_out');
     await setProtocolInModal(page, 'vless', 'Type');
     await wait(500);
@@ -31,7 +31,7 @@ await runTest('outbound:vless — required + conditional + emit', async ({ page 
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ob = (json.outbounds || []).find(o => o.tag === 'vless_out');
+    const ob = (json.outbounds || []).find((o: any) => o.tag === 'vless_out');
     assert('vless out emit present', ob != null, JSON.stringify(json.outbounds));
     assert('vless out emit uuid',
         ob?.uuid === '11111111-2222-3333-4444-555555555555');

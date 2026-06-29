@@ -5,8 +5,8 @@
 //
 // route.uc maps route_default action=route + outbound -> config.route.final;
 // action=reject -> a trailing { action: "reject" } rule (final stays null).
-import { runTest, assert, wait, clickTopTab, clickSubTab,
-         fetchPreviewConfig, containerExec } from './_setup.mjs';
+import { test, assert, wait, clickTopTab, clickSubTab,
+         fetchPreviewConfig, containerExec } from './fixtures';
 
 export const COVERS = ["subtab.routedef", "route.default.action", "route.default.outbound"];
 
@@ -14,7 +14,7 @@ export const COVERS = ["subtab.routedef", "route.default.action", "route.default
 // (route_default renders inline, not inside #modal_overlay). Matches the
 // .cbi-value row whose title text equals `label`, sets the <select> value and
 // dispatches change so LuCI's depends/visibility logic runs.
-async function setPageSelectByLabel(page, label, value) {
+async function setPageSelectByLabel(page: any, label: any, value: any) {
     const r = await page.evaluate(({ label, value }) => {
         const rows = Array.from(document.querySelectorAll('.cbi-value'))
             .filter(v => !v.closest('#modal_overlay'));
@@ -38,7 +38,7 @@ async function setPageSelectByLabel(page, label, value) {
 // A raw L.uci.save() alone would NOT capture the select edits because the form
 // widgets only commit on parse(). After clicking Save we apply(0) to finalise on
 // disk without the rollback-confirm dialog; a rollback-timer reject is benign.
-async function savePageUci(page) {
+async function savePageUci(page: any) {
     const clicked = await page.evaluate(() => {
         const btn = document.querySelector('.cbi-page-actions .cbi-button-save');
         if (!btn) return { ok: false, reason: 'no page Save button' };
@@ -59,7 +59,7 @@ async function savePageUci(page) {
     await wait(1200);
 }
 
-await runTest('route: default action/outbound emits route.final', async ({ page }) => {
+test('route: default action/outbound emits route.final', async ({ page }) => {
     await clickTopTab(page, 'route');
     await clickSubTab(page, 'routedef');
     await wait(400);

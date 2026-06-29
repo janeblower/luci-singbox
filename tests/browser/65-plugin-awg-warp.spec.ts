@@ -9,8 +9,8 @@
 // is not installed in the container (no awg_warp option in the Type picker) —
 // covering the unit-level surface requirement while remaining safe in CI
 // environments that do not have the plugin package installed.
-import { runTest, openAddModal, setProtocolInModal,
-         visibleFieldsInActiveTab, assert, wait, dismissModal } from './_setup.mjs';
+import { test, openAddModal, setProtocolInModal,
+         visibleFieldsInActiveTab, assert, wait, dismissModal } from './fixtures';
 
 export const COVERS = [
     'plugin.awg_warp._install',
@@ -20,7 +20,7 @@ export const COVERS = [
     'plugin.awg_warp.mtu_override',
 ];
 
-await runTest('plugin:awg_warp — outbound form controls render', async ({ page }) => {
+test('plugin:awg_warp — outbound form controls render', async ({ page }) => {
     // Check whether the awg_warp type is available in the picker.
     // If the plugin is not installed in this container we skip gracefully.
     const typeAvailable = await page.evaluate(() => {

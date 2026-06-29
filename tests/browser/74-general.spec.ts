@@ -33,7 +33,7 @@
 // json.experimental.clash_api (the descriptor `port` is UI-only, folded into
 // `external_controller` by clash_api.uc post()); cache -> json.experimental
 // .cache_file. ui_compat_only / auto_update are UI-only -> assert via UCI.
-import { runTest, assert, wait, clickTopTab, containerExec, fetchPreviewConfig } from './_setup.mjs';
+import { test, assert, wait, clickTopTab, containerExec, fetchPreviewConfig } from './fixtures';
 
 export const COVERS = ["tab.general",
     "general.ui_compat_only", "general.cache", "general.log_enabled",
@@ -55,7 +55,7 @@ function seedSingletons() {
 // Visibility matters because every tab's inline sections share one DOM and the
 // general tab hides the others via display:none — without the filter a hidden
 // Route "Action"/DNS "Strategy" could shadow a General field of the same name.
-async function withRow(page, label, op, arg) {
+async function withRow(page: any, label: any, op: any, arg: any) {
     await page.evaluate(({ label, op, arg }) => {
         const visible = (el) => {
             for (let n = el; n; n = n.parentElement)
@@ -87,14 +87,14 @@ async function withRow(page, label, op, arg) {
     await wait(250);
 }
 
-const setFlag = (page, label, on)  => withRow(page, label, 'flag', on);
-const setSel  = (page, label, val) => withRow(page, label, 'select', val);
-const setText = (page, label, val) => withRow(page, label, 'text', val);
+const setFlag = (page: any, label: any, on: any)  => withRow(page, label, 'flag', on);
+const setSel  = (page: any, label: any, val: any) => withRow(page, label, 'select', val);
+const setText = (page: any, label: any, val: any) => withRow(page, label, 'text', val);
 
 // Check the Clash API section's "Enable" (disambiguated from log's "Enable"
 // by a sibling "Port" title in the same section). Reveals Port via
 // parent_enabled.
-async function enableClashApi(page) {
+async function enableClashApi(page: any) {
     await page.evaluate(() => {
         const rows = Array.from(document.querySelectorAll('.cbi-value'))
             .filter(r => !r.closest('#modal_overlay'));
@@ -115,7 +115,7 @@ async function enableClashApi(page) {
 // Persist via the page Save button so form widgets stage their values in
 // m.parse() (a raw L.uci.save() would miss select/flag edits), then finalise
 // on disk. Mirrors 73-dns.mjs's DNS Settings save path.
-async function savePage(page) {
+async function savePage(page: any) {
     await page.evaluate(() => {
         const btn = document.querySelector('.cbi-page-actions .cbi-button-save')
                  || document.querySelector('.cbi-page-actions .cbi-button-apply');
@@ -127,14 +127,14 @@ async function savePage(page) {
     await wait(1200);
 }
 
-async function gotoGeneral(page) {
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+async function gotoGeneral(page: any) {
+    await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
     await wait(2500);
     await clickTopTab(page, 'general');
     await wait(400);
 }
 
-await runTest('general: log level/output + ui_compat_only persist to JSON/UCI', async ({ page }) => {
+test('general: log level/output + ui_compat_only persist to JSON/UCI', async ({ page }) => {
     seedSingletons();
     await gotoGeneral(page);
     await setFlag(page, 'Enable', true);          // log.enabled (reveals Level/Output)
@@ -159,7 +159,7 @@ await runTest('general: log level/output + ui_compat_only persist to JSON/UCI', 
         'uci commit singbox-ui');
 });
 
-await runTest('general: clash_api enable+port emits experimental.clash_api', async ({ page }) => {
+test('general: clash_api enable+port emits experimental.clash_api', async ({ page }) => {
     seedSingletons();
     await gotoGeneral(page);
     await enableClashApi(page);             // clash_api.enabled (reveals Port)
@@ -180,7 +180,7 @@ await runTest('general: clash_api enable+port emits experimental.clash_api', asy
         'uci commit singbox-ui');
 });
 
-await runTest('general: cache enable + auto_update toggle persist', async ({ page }) => {
+test('general: cache enable + auto_update toggle persist', async ({ page }) => {
     seedSingletons();
     await gotoGeneral(page);
     // Cache descriptor `enabled` (json_key) -> json.experimental.cache_file.

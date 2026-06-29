@@ -2,13 +2,13 @@
 // This is the canonical outbound Add flow: open the outbound grid's Add modal,
 // pick a Type, Save, and assert the section emits into preview_config — i.e. it
 // genuinely exercises grid.outbound.add.
-import { runTest, openAddModal, setProtocolInModal, toggleAdvanced,
+import { test, openAddModal, setProtocolInModal, toggleAdvanced,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
 export const COVERS = ["grid.outbound.add"];
 
-await runTest('outbound:direct — advanced surface + emit', async ({ page }) => {
+test('outbound:direct — advanced surface + emit', async ({ page }) => {
     await openAddModal(page, 'outbound', 'direct_out');
     await setProtocolInModal(page, 'direct', 'Type');
     await wait(500);
@@ -23,6 +23,6 @@ await runTest('outbound:direct — advanced surface + emit', async ({ page }) =>
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ob = (json.outbounds || []).find(o => o.tag === 'direct_out');
+    const ob = (json.outbounds || []).find((o: any) => o.tag === 'direct_out');
     assert('direct outbound emit present', ob != null, JSON.stringify(json.outbounds));
 });

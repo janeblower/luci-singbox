@@ -6,5 +6,5 @@
     "verbatimModuleSyntax": false
   },
   "include": ["**/*.ts", "globals.d.ts"],
-  "exclude": []
+  "exclude": ["**/*.spec.ts"]
 }

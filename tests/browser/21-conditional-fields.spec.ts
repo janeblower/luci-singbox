@@ -5,16 +5,16 @@
 //   * VLESS outbound: TLS advanced + Reality enabled surfaces public_key / short_id
 
 import {
-    runTest, assert, wait,
+    test, assert, wait,
     openEditModalBySid, clickTab, toggleAdvanced, visibleFieldsInActiveTab,
     containerExec,
-} from './_setup.mjs';
+} from './fixtures';
 
 const SID = '_e2bt_cond';
 
 containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci commit singbox-ui`);
 
-async function setSelectByLabel(page, label, value) {
+async function setSelectByLabel(page: any, label: any, value: any) {
     await page.evaluate(({ label, value }) => {
         const ov = document.getElementById('modal_overlay');
         const row = Array.from(ov.querySelectorAll('.cbi-value'))
@@ -28,7 +28,7 @@ async function setSelectByLabel(page, label, value) {
     await wait(500);
 }
 
-async function clickFlagByLabel(page, label) {
+async function clickFlagByLabel(page: any, label: any) {
     await page.evaluate((label) => {
         const ov = document.getElementById('modal_overlay');
         const row = Array.from(ov.querySelectorAll('.cbi-value'))
@@ -43,7 +43,7 @@ async function clickFlagByLabel(page, label) {
     await wait(500);
 }
 
-await runTest('VLESS outbound: network=udp → packet_encoding visible', async ({ page }) => {
+test('VLESS outbound: network=udp → packet_encoding visible', async ({ page }) => {
     await openEditModalBySid(page, 'outbound', SID);
 
     const before = await visibleFieldsInActiveTab(page);
@@ -56,7 +56,7 @@ await runTest('VLESS outbound: network=udp → packet_encoding visible', async (
         after.includes('Packet encoding'), { after });
 });
 
-await runTest('VLESS outbound: transport=ws surfaces Path + Host header', async ({ page }) => {
+test('VLESS outbound: transport=ws surfaces Path + Host header', async ({ page }) => {
     await openEditModalBySid(page, 'outbound', SID);
     await clickTab(page, 'transport');
 
@@ -81,7 +81,7 @@ await runTest('VLESS outbound: transport=ws surfaces Path + Host header', async 
         !grpcFields.includes('Path'), { grpcFields });
 });
 
-await runTest('VLESS outbound: reality_enabled → public_key + short_id', async ({ page }) => {
+test('VLESS outbound: reality_enabled → public_key + short_id', async ({ page }) => {
     await openEditModalBySid(page, 'outbound', SID);
     await clickTab(page, 'tls');
     await clickFlagByLabel(page, 'Enable TLS');

@@ -1,9 +1,9 @@
 // 54-inbound-vless.mjs — required + single-user UUID + emit.
-import { runTest, openAddModal, setProtocolInModal, fillField,
+import { test, openAddModal, setProtocolInModal, fillField,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('inbound:vless — required + single-user + emit', async ({ page }) => {
+test('inbound:vless — required + single-user + emit', async ({ page }) => {
     await openAddModal(page, 'inbound', 'vless_in');
     await setProtocolInModal(page, 'vless');
     await wait(500);
@@ -19,7 +19,7 @@ await runTest('inbound:vless — required + single-user + emit', async ({ page }
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ib = (json.inbounds || []).find(i => i.tag === 'vless_in');
+    const ib = (json.inbounds || []).find((i: any) => i.tag === 'vless_in');
     assert('vless emit present', ib != null, JSON.stringify(json.inbounds));
     assert('vless emit listen_port', ib?.listen_port === 11443);
     assert('vless emit user uuid',

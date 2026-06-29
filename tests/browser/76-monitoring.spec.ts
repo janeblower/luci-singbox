@@ -15,13 +15,13 @@
 //   select (device)         -> state.filterDevice (options incl. "All devices")
 //   per-row Close button     -> closeConn() -> clash_mutate DELETE /connections/<id>
 //   Close all button         -> closeAll()  -> clash_mutate DELETE /connections
-import { runTest, assert, wait, clickTopTab } from './_setup.mjs';
+import { test, assert, wait, clickTopTab } from './fixtures';
 
 export const COVERS = ["tab.monitoring",
     "monitoring.tab_active", "monitoring.tab_closed", "monitoring.search",
     "monitoring.device", "monitoring.close_conn", "monitoring.close_all"];
 
-await runTest('monitoring: active/closed/search/device/close/close-all drive clash RPCs', async ({ page }) => {
+test('monitoring: active/closed/search/device/close/close-all drive clash RPCs', async ({ page }) => {
     await page.evaluate(() => {
         const conns = { connections: [
             { id: 'c1', download: 100, upload: 10, chains: ['proxy'],
@@ -71,7 +71,7 @@ await runTest('monitoring: active/closed/search/device/close/close-all drive cla
     await wait(2500);   // let one poll cycle ingest + repaint the table
 
     // Helper: click a toolbar button whose text matches a regex.
-    const clickBtnByText = (re) => page.evaluate((reStr) => {
+    const clickBtnByText = (re: any) => page.evaluate((reStr) => {
         const rx = new RegExp(reStr);
         const b = Array.from(document.querySelectorAll('.sb-monitoring button'))
             .find(x => rx.test((x.textContent || '').trim()));

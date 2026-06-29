@@ -1,9 +1,9 @@
 // 62-outbound-trojan.mjs — required + emit roundtrip.
-import { runTest, openAddModal, setProtocolInModal, fillField,
+import { test, openAddModal, setProtocolInModal, fillField,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('outbound:trojan — required + emit', async ({ page }) => {
+test('outbound:trojan — required + emit', async ({ page }) => {
     await openAddModal(page, 'outbound', 'trojan_out');
     await setProtocolInModal(page, 'trojan', 'Type');
     await wait(500);
@@ -19,7 +19,7 @@ await runTest('outbound:trojan — required + emit', async ({ page }) => {
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ob = (json.outbounds || []).find(o => o.tag === 'trojan_out');
+    const ob = (json.outbounds || []).find((o: any) => o.tag === 'trojan_out');
     assert('trojan out emit present',  ob != null, JSON.stringify(json.outbounds));
     assert('trojan out emit server',   ob?.server === 'tj.example.com');
     assert('trojan out emit password', ob?.password === 'tj-pw');

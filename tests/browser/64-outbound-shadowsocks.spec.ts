@@ -1,9 +1,9 @@
 // 64-outbound-shadowsocks.mjs — required + advanced + emit roundtrip.
-import { runTest, openAddModal, setProtocolInModal, fillField, toggleAdvanced,
+import { test, openAddModal, setProtocolInModal, fillField, toggleAdvanced,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('outbound:shadowsocks — required + advanced + emit', async ({ page }) => {
+test('outbound:shadowsocks — required + advanced + emit', async ({ page }) => {
     await openAddModal(page, 'outbound', 'ss_out');
     await setProtocolInModal(page, 'shadowsocks', 'Type');
     await wait(500);
@@ -26,7 +26,7 @@ await runTest('outbound:shadowsocks — required + advanced + emit', async ({ pa
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ob = (json.outbounds || []).find(o => o.tag === 'ss_out');
+    const ob = (json.outbounds || []).find((o: any) => o.tag === 'ss_out');
     assert('ss out emit present',  ob != null, JSON.stringify(json.outbounds));
     assert('ss out emit method',   ob?.method === 'aes-256-gcm');
     assert('ss out emit password', ob?.password === 'ss-pw');

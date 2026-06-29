@@ -1,10 +1,10 @@
-// 31-share-link.mjs — Import share-link button + modal + JS parser.
+// 31-share-link.spec.ts — Import share-link button + modal + JS parser.
 
 import {
-    runTest, assert, wait, dismissModal,
-} from './_setup.mjs';
+    test, assert, wait, dismissModal,
+} from './fixtures';
 
-await runTest('share-link: button opens modal', async ({ page }) => {
+test('share-link: button opens modal', async ({ page }) => {
     const clicked = await page.evaluate(() => {
         const btn = Array.from(document.querySelectorAll('button'))
             .find(b => /import share-link/i.test(b.textContent));
@@ -33,7 +33,7 @@ await runTest('share-link: button opens modal', async ({ page }) => {
     await dismissModal(page);
 });
 
-await runTest('share-link: VLESS URL parsed into JS fields', async ({ page }) => {
+test('share-link: VLESS URL parsed into JS fields', async ({ page }) => {
     const parsed = await page.evaluate(async () => {
         // Pull the JS module directly via fetch to verify shareLinkImport
         // contract without round-tripping through the UI.
@@ -58,7 +58,7 @@ await runTest('share-link: VLESS URL parsed into JS fields', async ({ page }) =>
     assert('VLESS uuid', parsed.fields.server_uuid === '11111111-2222-3333-4444-555555555555', parsed);
 });
 
-await runTest('share-link: hysteria2 with obfs uses obfs_type/obfs_password keys', async ({ page }) => {
+test('share-link: hysteria2 with obfs uses obfs_type/obfs_password keys', async ({ page }) => {
     const parsed = await page.evaluate(async () => {
         const src = await fetch('/luci-static/resources/view/singbox-ui/importers/outbound.js').then(r => r.text());
         const stub = `const _ = s => s; const L = { Class: { extend: o => o } }; const atob = window.atob;`;
@@ -75,5 +75,3 @@ await runTest('share-link: hysteria2 with obfs uses obfs_type/obfs_password keys
     assert('hy2 type key (not hysteria2_obfs_type)',
         parsed.fields.obfs_type === 'salamander' && !('hysteria2_obfs_type' in parsed.fields), parsed);
 });
-
-console.log('\ndone: 31-share-link');

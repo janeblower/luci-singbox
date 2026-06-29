@@ -20,12 +20,12 @@
 //   .sb-dashboard-test      -> testGroup() -> clash_delay   (renderGroups)
 //   .sb-dashboard-node-sel  -> chooseNode() -> clash_mutate (nodeRow, selector)
 //   .sb-dashboard-sub-update-> updateSub()  -> refresh      (renderSubscriptions)
-import { runTest, assert, wait, clickTopTab } from './_setup.mjs';
+import { test, assert, wait, clickTopTab } from './fixtures';
 
 export const COVERS = ["tab.dashboard",
     "dashboard.sort", "dashboard.test", "dashboard.update_sub", "dashboard.choose_node"];
 
-await runTest('dashboard: sort/test/update/choose-node buttons fire RPCs', async ({ page }) => {
+test('dashboard: sort/test/update/choose-node buttons fire RPCs', async ({ page }) => {
     // Install the XHR stub BEFORE clicking the tab (which calls start()/poll()).
     await page.evaluate(() => {
         const proxies = { proxies: {

@@ -1,9 +1,9 @@
 // 61-outbound-hysteria2.mjs — required + advanced + emit roundtrip.
-import { runTest, openAddModal, setProtocolInModal, fillField, toggleAdvanced,
+import { test, openAddModal, setProtocolInModal, fillField, toggleAdvanced,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('outbound:hysteria2 — required + advanced + emit', async ({ page }) => {
+test('outbound:hysteria2 — required + advanced + emit', async ({ page }) => {
     await openAddModal(page, 'outbound', 'hy2_out');
     await setProtocolInModal(page, 'hysteria2', 'Type');
     await wait(500);
@@ -23,7 +23,7 @@ await runTest('outbound:hysteria2 — required + advanced + emit', async ({ page
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ob = (json.outbounds || []).find(o => o.tag === 'hy2_out');
+    const ob = (json.outbounds || []).find((o: any) => o.tag === 'hy2_out');
     assert('hy2 out emit present',  ob != null, JSON.stringify(json.outbounds));
     assert('hy2 out emit server',   ob?.server === 'hy2.example.com');
     assert('hy2 out emit port',     ob?.server_port === 443);

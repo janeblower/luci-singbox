@@ -3,10 +3,10 @@
 // expected basic-tab fields surface plus the right set of shared tabs.
 
 import {
-    runTest, assert, wait,
-    openEditModalBySid, setProtocolInModal, listTabs, visibleFieldsInActiveTab,
+    test, assert,
+    openEditModalBySid, listTabs, visibleFieldsInActiveTab,
     containerExec,
-} from './_setup.mjs';
+} from './fixtures';
 
 const SID = '_e2bt_in';  // unique per-run section name; cleaned by snapshot/restore
 
@@ -24,7 +24,7 @@ for (const p of PROTOCOLS) {
     // Seed via UCI so the modal opens with the right protocol selected.
     containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=inbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.protocol=${p.proto}; uci set singbox-ui.${SID}.listen_port=12345; uci commit singbox-ui`);
 
-    await runTest(`inbound modal — ${p.proto}`, async ({ page }) => {
+    test(`inbound modal — ${p.proto}`, async ({ page }) => {
         await openEditModalBySid(page, 'inbound', SID);
 
         const tabs = await listTabs(page);

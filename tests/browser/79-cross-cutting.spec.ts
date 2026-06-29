@@ -1,7 +1,7 @@
 // 79-cross-cutting.mjs — validation, modal Cancel, DynamicList, version-gate,
 // RPC-error surfaces (each via the appropriate stub/seam).
-import { runTest, assert, wait, openAddModal, setProtocolInModal,
-         fillField, clickTab, dismissModal, containerExec } from './_setup.mjs';
+import { test, assert, wait, openAddModal, setProtocolInModal,
+         fillField, clickTab, dismissModal, containerExec } from './fixtures';
 
 export const COVERS = ["xcut.validation_port", "xcut.validation_uuid",
     "xcut.validation_required", "xcut.modal_cancel", "xcut.dynamiclist",
@@ -13,7 +13,7 @@ export const COVERS = ["xcut.validation_port", "xcut.validation_uuid",
 // marks the input cbi-input-invalid / records validationError. fillField()
 // fires input+change which LuCI's Textfield does NOT validate on, so this
 // dedicated writer is used for the validation path.
-function setAndValidate(page, label, val) {
+function setAndValidate(page: any, label: any, val: any) {
     return page.evaluate(({ label, val }) => {
         const ov = document.getElementById('modal_overlay');
         const row = Array.from(ov.querySelectorAll('.cbi-value'))
@@ -31,7 +31,7 @@ function setAndValidate(page, label, val) {
 // Returns the validation error for a labeled field, or null if it validates.
 // Reads BOTH the rendered cbi-input-invalid marker and the LuCI ui-instance's
 // validationError string (the canonical signal the widget records).
-function fieldError(page, label) {
+function fieldError(page: any, label: any) {
     return page.evaluate((label) => {
         const ov = document.getElementById('modal_overlay');
         const row = Array.from(ov.querySelectorAll('.cbi-value'))
@@ -47,7 +47,7 @@ function fieldError(page, label) {
     }, label);
 }
 
-await runTest('xcut: bad port + bad UUID + empty required are flagged', async ({ page }) => {
+test('xcut: bad port + bad UUID + empty required are flagged', async ({ page }) => {
     await openAddModal(page, 'outbound', '_xc_vl');
     await setProtocolInModal(page, 'vless', 'Type');
     await setAndValidate(page, 'Server', 'example.com');   // valid host so only port/uuid flag
@@ -63,7 +63,7 @@ await runTest('xcut: bad port + bad UUID + empty required are flagged', async ({
     await dismissModal(page);
 });
 
-await runTest('xcut: modal Cancel discards (no UCI section written)', async ({ page }) => {
+test('xcut: modal Cancel discards (no UCI section written)', async ({ page }) => {
     await openAddModal(page, 'outbound', '_xc_cancel');
     await setProtocolInModal(page, 'direct', 'Type');
     await dismissModal(page);                              // Cancel
@@ -72,7 +72,7 @@ await runTest('xcut: modal Cancel discards (no UCI section written)', async ({ p
     assert('Cancel wrote no section', got === 'NONE', got);
 });
 
-await runTest('xcut: DynamicList add/remove (ALPN)', async ({ page }) => {
+test('xcut: DynamicList add/remove (ALPN)', async ({ page }) => {
     await openAddModal(page, 'outbound', '_xc_dl');
     await setProtocolInModal(page, 'vless', 'Type');
     // ALPN is a list+values DynamicList on the TLS tab, gated by tls_enabled
@@ -95,7 +95,7 @@ await runTest('xcut: DynamicList add/remove (ALPN)', async ({ page }) => {
     await dismissModal(page);
 });
 
-await runTest('xcut: version-gate disables a too-new field with a note', async ({ page }) => {
+test('xcut: version-gate disables a too-new field with a note', async ({ page }) => {
     // The container ships a fixed sing-box version; descriptor_form's
     // versionGate() appends "(requires X.Y+)" / "(removed in X.Y)" to a field
     // title and disables the widget when a field's min/max_version falls
@@ -113,7 +113,7 @@ await runTest('xcut: version-gate disables a too-new field with a note', async (
         notes.every(n => /\((requires \d+\.\d+\+|removed in \d+\.\d+)\)/.test(n)), notes);
 });
 
-await runTest('xcut: RPC errors (timeout / generate-fail / ACL-denied) surface notifications', async ({ page }) => {
+test('xcut: RPC errors (timeout / generate-fail / ACL-denied) surface notifications', async ({ page }) => {
     // Stub the rpcd JSON-RPC fetch to return each error class; assert the UI
     // surfaces a notification rather than throwing a pageerror.
     await page.evaluate(() => {

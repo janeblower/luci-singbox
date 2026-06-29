@@ -3,10 +3,10 @@
 // open the modal, verify tabs + basic fields.
 
 import {
-    runTest, assert,
+    test, assert,
     openEditModalBySid, listTabs, visibleFieldsInActiveTab,
     containerExec,
-} from './_setup.mjs';
+} from './fixtures';
 
 const SID = '_e2bt_out';
 
@@ -21,7 +21,7 @@ const PROTOCOLS = [
 for (const p of PROTOCOLS) {
     containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=${p.type}; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci commit singbox-ui`);
 
-    await runTest(`outbound modal — ${p.type}`, async ({ page }) => {
+    test(`outbound modal — ${p.type}`, async ({ page }) => {
         await openEditModalBySid(page, 'outbound', SID);
 
         const tabs = await listTabs(page);

@@ -8,8 +8,6 @@
     "test": "playwright test"
   },
   "dependencies": {
-    "@playwright/test": "^1.49.0",
-    "puppeteer": "^24.0.0"
-  },
-  "trustedDependencies": ["puppeteer"]
+    "@playwright/test": "^1.49.0"
+  }
 }

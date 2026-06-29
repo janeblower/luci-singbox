@@ -1,4 +1,4 @@
-// 71-rule-sets.mjs — Rule-Sets grid: add a remote rule-set through the modal
+// 71-rule-sets.spec.ts — Rule-Sets grid: add a remote rule-set through the modal
 // and assert it persists to UCI; edit a rule-set that the seed config already
 // references and assert it surfaces in preview_config's route.rule_set by tag.
 //
@@ -9,13 +9,13 @@
 // asserted against that tag in the live preview.
 //
 // Grid kind = `ruleset`; discriminator `Type` = remote | local | inline.
-import { runTest, assert, wait, clickTopTab, clickSubTab,
+import { test, assert, wait, clickTopTab, clickSubTab,
          openAddModal, openEditModalBySid, setProtocolInModal, fillField,
-         saveAndReload, fetchPreviewConfig, containerExec } from './_setup.mjs';
+         saveAndReload, fetchPreviewConfig, containerExec } from './fixtures';
 
 export const COVERS = ["subtab.rulesets", "grid.ruleset.add", "grid.ruleset.edit"];
 
-await runTest('route: add remote rule-set + edit a referenced one', async ({ page }) => {
+test('route: add remote rule-set + edit a referenced one', async ({ page }) => {
     await clickTopTab(page, 'route');
     await clickSubTab(page, 'rulesets');
 
@@ -48,7 +48,7 @@ await runTest('route: add remote rule-set + edit a referenced one', async ({ pag
     const rsArr = (json.route && json.route.rule_set) || [];
     assert('route.rule_set non-empty (referenced rule-sets emit)',
         rsArr.length >= 1, JSON.stringify(rsArr));
-    const edited = rsArr.find(r => r.tag === 'russia_inside');
+    const edited = rsArr.find((r: any) => r.tag === 'russia_inside');
     assert('edited referenced rule-set present by tag',
         edited != null, JSON.stringify(rsArr));
 

@@ -1,9 +1,9 @@
 // 55-inbound-shadowsocks.mjs — required + advanced + emit roundtrip.
-import { runTest, openAddModal, setProtocolInModal, fillField, toggleAdvanced,
+import { test, openAddModal, setProtocolInModal, fillField, toggleAdvanced,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('inbound:shadowsocks — required + advanced + emit', async ({ page }) => {
+test('inbound:shadowsocks — required + advanced + emit', async ({ page }) => {
     await openAddModal(page, 'inbound', 'ss_in');
     await setProtocolInModal(page, 'shadowsocks');
     await wait(500);
@@ -23,7 +23,7 @@ await runTest('inbound:shadowsocks — required + advanced + emit', async ({ pag
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ib = (json.inbounds || []).find(i => i.tag === 'ss_in');
+    const ib = (json.inbounds || []).find((i: any) => i.tag === 'ss_in');
     assert('ss emit present', ib != null, JSON.stringify(json.inbounds));
     assert('ss emit listen_port', ib?.listen_port === 18388);
     assert('ss emit method',     ib?.method === '2022-blake3-aes-128-gcm');

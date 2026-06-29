@@ -24,10 +24,10 @@
 // The DNS Settings Strategy select label is `Strategy` (tabs/dns.js). The seed
 // config ships dns_server `google`, which the dns_rule routes to (a default
 // dns_rule whose `server` is dangling is dropped by dns.uc).
-import { runTest, assert, wait, clickTopTab,
+import { test, assert, wait, clickTopTab,
          openAddModal, openEditModalBySid, dismissModal, listTabs,
          setProtocolInModal, fillField,
-         saveAndReload, fetchPreviewConfig, containerExec } from './_setup.mjs';
+         saveAndReload, fetchPreviewConfig, containerExec } from './fixtures';
 
 export const COVERS = ["tab.dns",
     "grid.dns_server.add", "grid.dns_server.edit",
@@ -35,7 +35,7 @@ export const COVERS = ["tab.dns",
     "dns.settings.final", "dns.settings.default_resolver",
     "dns.settings.strategy", "dns.settings.independent_cache"];
 
-await runTest('dns: add a DoH server and assert dns.servers emit', async ({ page }) => {
+test('dns: add a DoH server and assert dns.servers emit', async ({ page }) => {
     await clickTopTab(page, 'dns');
     await openAddModal(page, 'dns_server', 'doh1');
     await setProtocolInModal(page, 'https', 'Type');
@@ -43,7 +43,7 @@ await runTest('dns: add a DoH server and assert dns.servers emit', async ({ page
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
     const srv = (json.dns && json.dns.servers) || [];
-    assert('dns.servers has doh1', srv.some(s => s.tag === 'doh1'), JSON.stringify(srv));
+    assert('dns.servers has doh1', srv.some((s: any) => s.tag === 'doh1'), JSON.stringify(srv));
 
     // grid.dns_server.edit: now that doh1 is a persisted row, opening its Edit
     // modal must render the basic tab without a pageerror (runTest asserts no
@@ -60,7 +60,7 @@ await runTest('dns: add a DoH server and assert dns.servers emit', async ({ page
     containerExec('uci -q delete singbox-ui.doh1; uci commit singbox-ui');
 });
 
-await runTest('dns: dns_rule grid renders + emits in dns.rules', async ({ page }) => {
+test('dns: dns_rule grid renders + emits in dns.rules', async ({ page }) => {
     // Seed a default dns_rule routing to the seed-config server `google`. A
     // default dns_rule with action=route but a dangling `server` is dropped by
     // dns.uc, so we route to an existing server (google ships in baseline.uci).
@@ -73,7 +73,7 @@ await runTest('dns: dns_rule grid renders + emits in dns.rules', async ({ page }
         'uci set singbox-ui.dnr1.action=route; ' +
         'uci set singbox-ui.dnr1.server=google; ' +
         'uci commit singbox-ui');
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+    await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
     await wait(2500);
     await clickTopTab(page, 'dns');
     await wait(400);
@@ -123,7 +123,7 @@ await runTest('dns: dns_rule grid renders + emits in dns.rules', async ({ page }
     const json = await fetchPreviewConfig(page);
     const rules = (json.dns && json.dns.rules) || [];
     assert('dns.rules present after seeding a default rule', rules.length >= 1, JSON.stringify(rules));
-    const ours = rules.find(r => Array.isArray(r.domain)
+    const ours = rules.find((r: any) => Array.isArray(r.domain)
         ? r.domain.includes('example.org')
         : r.domain === 'example.org');
     assert('dns rule emits our domain matcher', ours != null, JSON.stringify(rules));
@@ -133,7 +133,7 @@ await runTest('dns: dns_rule grid renders + emits in dns.rules', async ({ page }
     containerExec('uci -q delete singbox-ui.dnr1; uci commit singbox-ui');
 });
 
-await runTest('dns: settings strategy persists to dns.strategy', async ({ page }) => {
+test('dns: settings strategy persists to dns.strategy', async ({ page }) => {
     await clickTopTab(page, 'dns');
     // DNS Settings render inline on the page (NamedSection 'dns'); set page-level.
     await page.evaluate(() => {

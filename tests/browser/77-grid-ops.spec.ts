@@ -4,8 +4,8 @@
 // Enable/Disable toggle. The inbound and outbound grids are structurally
 // identical (form.GridSection, sortable, editable enable Flag, per-row Export
 // button), so the same DOM-driven operations apply to both.
-import { runTest, assert, wait, clickTopTab, openEditModalBySid, fillField,
-         saveAndReload, containerExec } from './_setup.mjs';
+import { test, assert, wait, clickTopTab, openEditModalBySid, fillField,
+         saveAndReload, containerExec } from './fixtures';
 
 export const COVERS = [
     "grid.inbound.edit", "grid.inbound.delete", "grid.inbound.reorder",
@@ -16,10 +16,10 @@ export const COVERS = [
 
 const A = '_go_a', B = '_go_b';
 
-await runTest('grid: inline enable toggle flips UCI enabled', async ({ page }) => {
+test('grid: inline enable toggle flips UCI enabled', async ({ page }) => {
     containerExec(`uci set singbox-ui.${A}=inbound; uci set singbox-ui.${A}.protocol=mixed; uci set singbox-ui.${A}.enabled=1; uci set singbox-ui.${A}.listen_port=11080; uci commit singbox-ui`);
     await clickTopTab(page, 'inbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     // Inline editable Flag in the row: a checkbox in the row's enabled cell.
     // Clicking the checkbox flips the live widget, but LuCI's editable GridSection
     // only stages the change into L.uci when the section's form parse() runs (the
@@ -44,10 +44,10 @@ await runTest('grid: inline enable toggle flips UCI enabled', async ({ page }) =
     assert('enabled flipped to 0 via inline toggle', en === '0', en);
 });
 
-await runTest('grid: Edit opens existing inbound row, changes a field, saves', async ({ page }) => {
+test('grid: Edit opens existing inbound row, changes a field, saves', async ({ page }) => {
     containerExec(`uci -q delete singbox-ui.${A}; uci set singbox-ui.${A}=inbound; uci set singbox-ui.${A}.protocol=mixed; uci set singbox-ui.${A}.enabled=1; uci set singbox-ui.${A}.listen_port=11080; uci commit singbox-ui`);
     await clickTopTab(page, 'inbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     // Open the existing row's Edit modal (proves grid Edit button + descriptor
     // render), change the listen port, Save, and assert the new value is on disk.
     await openEditModalBySid(page, 'inbound', A);
@@ -58,10 +58,10 @@ await runTest('grid: Edit opens existing inbound row, changes a field, saves', a
     containerExec(`uci -q delete singbox-ui.${A}; uci commit singbox-ui`);
 });
 
-await runTest('grid: per-row Export JSON opens modal with section JSON', async ({ page }) => {
+test('grid: per-row Export JSON opens modal with section JSON', async ({ page }) => {
     containerExec(`uci set singbox-ui.${A}=inbound; uci set singbox-ui.${A}.protocol=mixed; uci set singbox-ui.${A}.enabled=1; uci set singbox-ui.${A}.listen_port=11080; uci commit singbox-ui`);
     await clickTopTab(page, 'inbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     const clicked = await page.evaluate((sid) => {
         const row = document.querySelector(`#cbi-singbox-ui-inbound tr[data-sid="${sid}"]`);
         if (!row) return false;
@@ -82,7 +82,7 @@ await runTest('grid: per-row Export JSON opens modal with section JSON', async (
     assert('Export modal shows the section JSON', hasJson);
 });
 
-await runTest('grid: Import JSON textarea creates a section', async ({ page }) => {
+test('grid: Import JSON textarea creates a section', async ({ page }) => {
     await clickTopTab(page, 'inbounds');
     await page.evaluate(() => {
         const btn = Array.from(document.querySelectorAll('button')).find(b => /import json/i.test(b.textContent));
@@ -104,10 +104,10 @@ await runTest('grid: Import JSON textarea creates a section', async ({ page }) =
     assert('Import JSON added an inbound section', Number(sec) >= 1, sec);
 });
 
-await runTest('grid: Delete removes the row + UCI section', async ({ page }) => {
+test('grid: Delete removes the row + UCI section', async ({ page }) => {
     containerExec(`uci set singbox-ui.${A}=inbound; uci set singbox-ui.${A}.protocol=mixed; uci set singbox-ui.${A}.enabled=1; uci commit singbox-ui`);
     await clickTopTab(page, 'inbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     const del = await page.evaluate((sid) => {
         const row = document.querySelector(`#cbi-singbox-ui-inbound tr[data-sid="${sid}"]`);
         if (!row) return false;
@@ -129,13 +129,13 @@ await runTest('grid: Delete removes the row + UCI section', async ({ page }) => 
     assert('deleted section absent from UCI', gone === 'GONE', gone);
 });
 
-await runTest('grid: Reorder (drag) is supported (sortable=true)', async ({ page }) => {
+test('grid: Reorder (drag) is supported (sortable=true)', async ({ page }) => {
     // Seed two rows; assert the grid exposes drag handles (sortable). Full DnD
     // simulation is brittle; we assert the sortable affordance + that LuCI's
     // reorder API moves a section, which is what the user-visible drag does.
     containerExec(`uci set singbox-ui.${A}=inbound; uci set singbox-ui.${A}.protocol=mixed; uci set singbox-ui.${B}=inbound; uci set singbox-ui.${B}.protocol=mixed; uci commit singbox-ui`);
     await clickTopTab(page, 'inbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     const hasHandle = await page.evaluate(() => {
         const t = document.getElementById('cbi-singbox-ui-inbound');
         return !!(t && t.querySelector('.cbi-section-table-row[draggable], .drag-handle, [data-sortable]'));
@@ -147,7 +147,7 @@ await runTest('grid: Reorder (drag) is supported (sortable=true)', async ({ page
 containerExec(`for s in ${A} ${B} _go_imp; do uci -q delete singbox-ui.$s; done; uci commit singbox-ui`);
 
 // Outbound-only: Import JSON + share-link buttons exist on the outbound grid.
-await runTest('outbound grid: Import JSON + Import share-link buttons present', async ({ page }) => {
+test('outbound grid: Import JSON + Import share-link buttons present', async ({ page }) => {
     await clickTopTab(page, 'outbounds');
     const btns = await page.evaluate(() => Array.from(document.querySelectorAll('button')).map(b => b.textContent.trim()));
     assert('outbound Import JSON button', btns.some(t => /import json/i.test(t)), btns);
@@ -160,10 +160,10 @@ await runTest('outbound grid: Import JSON + Import share-link buttons present', 
 // below genuinely drives the live DOM against an existing outbound row, mirroring
 // the inbound coverage above so the outbound grid-ops are exercised for real.
 
-await runTest('grid: Edit opens existing outbound row, changes a field, saves', async ({ page }) => {
+test('grid: Edit opens existing outbound row, changes a field, saves', async ({ page }) => {
     containerExec(`uci -q delete singbox-ui.${A}; uci set singbox-ui.${A}=outbound; uci set singbox-ui.${A}.type=direct; uci set singbox-ui.${A}.enabled=1; uci commit singbox-ui`);
     await clickTopTab(page, 'outbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     await openEditModalBySid(page, 'outbound', A);
     // `direct` outbound: set the override destination address (advanced field,
     // shown immediately for outbound — no advanced toggle). UCI key = override_address.
@@ -174,10 +174,10 @@ await runTest('grid: Edit opens existing outbound row, changes a field, saves', 
     containerExec(`uci -q delete singbox-ui.${A}; uci commit singbox-ui`);
 });
 
-await runTest('grid: inline enable toggle flips UCI enabled (outbound)', async ({ page }) => {
+test('grid: inline enable toggle flips UCI enabled (outbound)', async ({ page }) => {
     containerExec(`uci -q delete singbox-ui.${A}; uci set singbox-ui.${A}=outbound; uci set singbox-ui.${A}.type=direct; uci set singbox-ui.${A}.enabled=1; uci commit singbox-ui`);
     await clickTopTab(page, 'outbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     const toggled = await page.evaluate(async (sid) => {
         const row = document.querySelector(`#cbi-singbox-ui-outbound tr[data-sid="${sid}"]`);
         if (!row) return false;
@@ -198,13 +198,13 @@ await runTest('grid: inline enable toggle flips UCI enabled (outbound)', async (
     containerExec(`uci -q delete singbox-ui.${A}; uci commit singbox-ui`);
 });
 
-await runTest('grid: per-row Export JSON opens modal with outbound section JSON', async ({ page }) => {
+test('grid: per-row Export JSON opens modal with outbound section JSON', async ({ page }) => {
     // Use a proxy outbound (trojan): export_section only builds the proxy-protocol
     // kinds — `direct`/`interface`/`url`/`subscription` are refused by design
     // (export_section.uc: "unknown outbound type" / "does not support type").
     containerExec(`uci -q delete singbox-ui.${A}; uci set singbox-ui.${A}=outbound; uci set singbox-ui.${A}.type=trojan; uci set singbox-ui.${A}.enabled=1; uci set singbox-ui.${A}.server=t.example.com; uci set singbox-ui.${A}.server_port=443; uci set singbox-ui.${A}.password=secret; uci commit singbox-ui`);
     await clickTopTab(page, 'outbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     const clicked = await page.evaluate((sid) => {
         const row = document.querySelector(`#cbi-singbox-ui-outbound tr[data-sid="${sid}"]`);
         if (!row) return false;
@@ -224,10 +224,10 @@ await runTest('grid: per-row Export JSON opens modal with outbound section JSON'
     containerExec(`uci -q delete singbox-ui.${A}; uci commit singbox-ui`);
 });
 
-await runTest('grid: Delete removes the outbound row + UCI section', async ({ page }) => {
+test('grid: Delete removes the outbound row + UCI section', async ({ page }) => {
     containerExec(`uci -q delete singbox-ui.${A}; uci set singbox-ui.${A}=outbound; uci set singbox-ui.${A}.type=direct; uci set singbox-ui.${A}.enabled=1; uci commit singbox-ui`);
     await clickTopTab(page, 'outbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     const del = await page.evaluate((sid) => {
         const row = document.querySelector(`#cbi-singbox-ui-outbound tr[data-sid="${sid}"]`);
         if (!row) return false;
@@ -244,10 +244,10 @@ await runTest('grid: Delete removes the outbound row + UCI section', async ({ pa
     assert('deleted outbound section absent from UCI', gone === 'GONE', gone);
 });
 
-await runTest('grid: Reorder (drag) is supported on outbound (sortable=true)', async ({ page }) => {
+test('grid: Reorder (drag) is supported on outbound (sortable=true)', async ({ page }) => {
     containerExec(`uci set singbox-ui.${A}=outbound; uci set singbox-ui.${A}.type=direct; uci set singbox-ui.${B}=outbound; uci set singbox-ui.${B}.type=direct; uci commit singbox-ui`);
     await clickTopTab(page, 'outbounds');
-    await page.reload({ waitUntil: 'networkidle2' }); await wait(2500);
+    await page.reload({ waitUntil: 'networkidle' }); await wait(2500);
     const hasHandle = await page.evaluate(() => {
         const t = document.getElementById('cbi-singbox-ui-outbound');
         return !!(t && t.querySelector('.cbi-section-table-row[draggable], .drag-handle, [data-sortable]'));

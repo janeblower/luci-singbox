@@ -1,9 +1,9 @@
 // 53-inbound-trojan.mjs — required + emit roundtrip.
-import { runTest, openAddModal, setProtocolInModal, fillField,
+import { test, openAddModal, setProtocolInModal, fillField,
          visibleFieldsInActiveTab, saveAndReload, fetchPreviewConfig,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('inbound:trojan — required + emit', async ({ page }) => {
+test('inbound:trojan — required + emit', async ({ page }) => {
     await openAddModal(page, 'inbound', 'trojan_in');
     await setProtocolInModal(page, 'trojan');
     await wait(500);
@@ -17,7 +17,7 @@ await runTest('inbound:trojan — required + emit', async ({ page }) => {
 
     await saveAndReload(page);
     const json = await fetchPreviewConfig(page);
-    const ib = (json.inbounds || []).find(i => i.tag === 'trojan_in');
+    const ib = (json.inbounds || []).find((i: any) => i.tag === 'trojan_in');
     assert('trojan emit present', ib != null, JSON.stringify(json.inbounds));
     assert('trojan emit listen_port', ib?.listen_port === 14443);
     assert('trojan emit users',

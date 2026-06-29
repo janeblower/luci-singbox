@@ -1,11 +1,11 @@
-// 51-inbound-tproxy.mjs — UI-only check. tproxy requires CAP_NET_ADMIN
+// 51-inbound-tproxy.spec.ts — UI-only check. tproxy requires CAP_NET_ADMIN
 // for the nft emit path which the default docker container does NOT have.
 // Save-roundtrip is intentionally out of scope; see Task 9 in the plan.
-import { runTest, openAddModal, setProtocolInModal,
+import { test, openAddModal, setProtocolInModal,
          visibleFieldsInActiveTab, toggleAdvanced,
-         assert, wait } from './_setup.mjs';
+         assert, wait } from './fixtures';
 
-await runTest('inbound:tproxy — UI surface (no roundtrip)', async ({ page }) => {
+test('inbound:tproxy — UI surface (no roundtrip)', async ({ page }) => {
     await openAddModal(page, 'inbound', 'tproxy_in2');
     await setProtocolInModal(page, 'tproxy');
     await wait(500);

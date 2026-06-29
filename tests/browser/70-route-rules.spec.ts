@@ -8,14 +8,14 @@
 // action=route but no outbound is DROPPED by route.uc (action_ok), so the
 // default rule MUST route to a defined outbound — the seed config ships
 // `direct_wan`, which we use.
-import { runTest, assert, wait, clickTopTab, clickSubTab,
+import { test, assert, wait, clickTopTab, clickSubTab,
          openAddModal, openEditModalBySid, setProtocolInModal, fillField,
-         clickTab, saveAndReload, fetchPreviewConfig, containerExec } from './_setup.mjs';
+         clickTab, saveAndReload, fetchPreviewConfig, containerExec } from './fixtures';
 
 export const COVERS = ["tab.route", "subtab.routerules",
     "grid.route_rule.add", "grid.route_rule.edit", "grid.route_rule.logical"];
 
-await runTest('route: add default rule + logical rule, emit route.rules', async ({ page }) => {
+test('route: add default rule + logical rule, emit route.rules', async ({ page }) => {
     await clickTopTab(page, 'route');
     await clickSubTab(page, 'routerules');
 
@@ -35,7 +35,7 @@ await runTest('route: add default rule + logical rule, emit route.rules', async 
     let json = await fetchPreviewConfig(page);
     let rr = (json.route && json.route.rules) || [];
     assert('route.rules present after default-rule add', rr.length >= 1, JSON.stringify(rr));
-    const ours = rr.find(r => Array.isArray(r.domain)
+    const ours = rr.find((r: any) => Array.isArray(r.domain)
         ? r.domain.includes('example.com')
         : r.domain === 'example.com');
     assert('default rule emits our domain matcher', ours != null, JSON.stringify(rr));
@@ -59,7 +59,7 @@ await runTest('route: add default rule + logical rule, emit route.rules', async 
         'uci commit singbox-ui');
 
     // Reload so the freshly-seeded logical row renders in the grid.
-    await page.reload({ waitUntil: 'networkidle2', timeout: 60000 });
+    await page.reload({ waitUntil: 'networkidle', timeout: 60000 });
     await wait(2500);
     await clickTopTab(page, 'route');
     await clickSubTab(page, 'routerules');
@@ -69,7 +69,7 @@ await runTest('route: add default rule + logical rule, emit route.rules', async 
 
     json = await fetchPreviewConfig(page);
     rr = (json.route && json.route.rules) || [];
-    const logical = rr.find(r => r.type === 'logical');
+    const logical = rr.find((r: any) => r.type === 'logical');
     assert('logical rule emits with type=logical', logical != null, JSON.stringify(rr));
     assert('logical rule inlines its sub-rules',
         logical && Array.isArray(logical.rules) && logical.rules.length >= 1,

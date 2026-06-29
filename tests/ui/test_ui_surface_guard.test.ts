@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 
 // tests/ui/test_ui_surface_guard.sh — invariant guard for goal (a):
 // every interactive element in tests/ui/ui_surface.json MUST be exercised
-// by at least one tests/browser/*.mjs declaring it in `export const COVERS = [...]`.
+// by at least one tests/browser/*.spec.ts declaring it in `export const COVERS = [...]`.
 
 const ROOT = resolve(import.meta.dir, "../..");
 const BROWSER_DIR = resolve(ROOT, "tests/browser");
@@ -27,9 +27,7 @@ const unknown: string[] = [];
 // SAME file which CLAIMS a grid surface also actually opens its modal.
 const files: Array<{ name: string; src: string; covers: string[] }> = [];
 
-for (const f of readdirSync(BROWSER_DIR).filter((n) =>
-  /\.(mjs|spec\.ts)$/.test(n),
-)) {
+for (const f of readdirSync(BROWSER_DIR).filter((n) => /\.spec\.ts$/.test(n))) {
   const src = readFileSync(resolve(BROWSER_DIR, f), "utf8");
   const fileCovers = extractCovers(src);
   files.push({ name: f, src, covers: fileCovers });

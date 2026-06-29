@@ -5,16 +5,16 @@
 // DNS/Route — covered separately by the ucode test_advanced_scope.sh.)
 
 import {
-    runTest, assert, wait,
+    test, assert, wait,
     openEditModalBySid, clickTab, visibleFieldsInActiveTab,
     containerExec,
-} from './_setup.mjs';
+} from './fixtures';
 
 const SID = '_e2bt_adv';
 
 containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci set singbox-ui.${SID}.tls_enabled=1; uci commit singbox-ui`);
 
-await runTest('TLS tab shows advanced fields immediately, no toggle (VLESS outbound)', async ({ page }) => {
+test('TLS tab shows advanced fields immediately, no toggle (VLESS outbound)', async ({ page }) => {
     await openEditModalBySid(page, 'outbound', SID);
     await clickTab(page, 'tls');
     await wait(300);
@@ -29,7 +29,7 @@ await runTest('TLS tab shows advanced fields immediately, no toggle (VLESS outbo
     assert('No advanced toggle present', !fields.includes('Show advanced fields'), { fields });
 });
 
-await runTest('Dial tab shows advanced fields immediately, no toggle (VLESS outbound)', async ({ page }) => {
+test('Dial tab shows advanced fields immediately, no toggle (VLESS outbound)', async ({ page }) => {
     await openEditModalBySid(page, 'outbound', SID);
     await clickTab(page, 'dial');
     await wait(300);
