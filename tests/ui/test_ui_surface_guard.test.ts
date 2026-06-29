@@ -27,7 +27,9 @@ const unknown: string[] = [];
 // SAME file which CLAIMS a grid surface also actually opens its modal.
 const files: Array<{ name: string; src: string; covers: string[] }> = [];
 
-for (const f of readdirSync(BROWSER_DIR).filter((n) => /\.mjs$/.test(n))) {
+for (const f of readdirSync(BROWSER_DIR).filter((n) =>
+  /\.(mjs|spec\.ts)$/.test(n),
+)) {
   const src = readFileSync(resolve(BROWSER_DIR, f), "utf8");
   const fileCovers = extractCovers(src);
   files.push({ name: f, src, covers: fileCovers });

@@ -5,9 +5,10 @@
   "version": "0.0.0",
   "description": "Headless-Chrome integration tests for the LuCI singbox-ui modal builder.",
   "scripts": {
-    "test": "bun run-all.mjs"
+    "test": "playwright test"
   },
   "dependencies": {
+    "@playwright/test": "^1.49.0",
     "puppeteer": "^24.0.0"
   },
   "trustedDependencies": ["puppeteer"]
