@@ -52,6 +52,38 @@ function widgetFor(field) {
     return form.Value;
 }
 
+// Map a LuCI CBI widget constructor to a stable, lowercase control kind for the
+// data-sb-control hook. Identity comparison works both against real LuCI classes
+// and the unit-test string stub. form.Value (single-line input) is the default.
+function controlKindFor(widget) {
+    if (widget === form.Flag)        return 'checkbox';
+    if (widget === form.ListValue)   return 'list';
+    if (widget === form.DynamicList) return 'dynamic';
+    if (widget === form.TextValue)   return 'textarea';
+    return 'text';
+}
+
+// Stamp a stable, i18n-independent test hook onto a field's widget node so the
+// e2e/matrix suites can select it by descriptor name instead of label text.
+// Mirrors the renderWidget-wrap idiom of disableWithNote/makeExclusive: guarded,
+// sync node return. The marker props are set unconditionally so materialize-level
+// unit tests can assert hook coverage without a DOM.
+function tagField(opt, name, control) {
+    opt._sbField = name;
+    if (control) opt._sbControl = control;
+    var orig = opt.renderWidget;
+    if (typeof orig === 'function') {
+        opt.renderWidget = function (section_id, option_index, cfgvalue) {
+            var node = orig.call(this, section_id, option_index, cfgvalue);
+            if (node && typeof node.setAttribute === 'function') {
+                node.setAttribute('data-sb-field', name);
+                if (control) node.setAttribute('data-sb-control', control);
+            }
+            return node;
+        };
+    }
+}
+
 // Dynamic selectors: options are populated from live UCI / network state at
 // .load() time instead of a static `values` array. Generalises the
 // loadOutboundList() pattern from tabs/common.js over a `source` discriminator.
@@ -460,4 +492,5 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
 return L.Class.extend({
     applyMaterialized:      applyMaterialized,
     applyMaterializedNamed: applyMaterializedNamed,
+    tagField:               tagField,
 });
