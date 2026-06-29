@@ -205,6 +205,10 @@ jobs:
       # <tool>` which floats to the latest published version and made CI
       # non-deterministic (a new biome release silently broke the build).
       - run: cd tests && bun run typecheck
+      # The browser harness (fixtures.ts) lives under tests/browser, which the
+      # root tsconfig excludes; typecheck it under its own (DOM-lib) config so a
+      # fixtures.ts regression is caught in CI, not only at the live browser run.
+      - run: cd tests && bun run typecheck:browser
       - run: cd tests && bun run lint
 
   js-unit:
@@ -324,23 +328,21 @@ jobs:
           key: browser-img-${{ hashFiles('tests/browser-container/**') }}
           restore-keys: browser-img-
 
-      # Cache puppeteer's Chrome download (~200MB). Pinned to the
-      # puppeteer major in tests/browser/package.json. restore-keys lets a
-      # package.json bump warm-start from the prior Chrome download instead of
-      # a full ~200MB cold fetch (puppeteer skips re-download when the pinned
-      # Chrome revision is already present).
-      - name: Cache puppeteer Chrome
+      # Cache Playwright's browser download (chromium). Pinned to the
+      # @playwright/test version in tests/browser/package.json. restore-keys
+      # lets a version bump warm-start from the prior download.
+      - name: Cache Playwright browsers
         uses: actions/cache@v5
         with:
-          path: ~/.cache/puppeteer
-          key: puppeteer-${{ hashFiles('tests/browser/package.json') }}
-          restore-keys: puppeteer-
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ hashFiles('tests/browser/package.json') }}
+          restore-keys: playwright-
 
       - name: Install browser test deps
         working-directory: tests/browser
         run: |
           bun install --frozen-lockfile
-          bunx puppeteer browsers install chrome
+          npx playwright install --with-deps chromium
 
       - name: Run browser suite
         env:
@@ -358,6 +360,8 @@ jobs:
           path: |
             /tmp/singbox-ui-browser-*.log
             /tmp/singbox-ui-browser-screenshots/
+            tests/browser/playwright-report/
+            tests/browser/test-results/
           retention-days: 7
           if-no-files-found: ignore
 
