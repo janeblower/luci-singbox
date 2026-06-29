@@ -7,12 +7,14 @@
 import {
     test, assert, wait,
     openEditModalBySid, clickTab, toggleAdvanced, visibleFieldsInActiveTab,
-    containerExec,
 } from './fixtures';
 
 const SID = '_e2bt_cond';
 
-containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci commit singbox-ui`);
+// Seed the section before the page loads (per test) via the uciSeed fixture.
+test.use({
+    uciSeed: `uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci commit singbox-ui`,
+});
 
 async function setSelectByLabel(page: any, label: any, value: any) {
     await page.evaluate(({ label, value }) => {
@@ -95,6 +97,3 @@ test('VLESS outbound: reality_enabled → public_key + short_id', async ({ page 
     assert('Reality client: short_id visible',
         fields.includes('Reality short ID'), { fields });
 });
-
-containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
-console.log('\ndone: 21-conditional-fields');

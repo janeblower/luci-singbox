@@ -7,12 +7,14 @@
 import {
     test, assert, wait,
     openEditModalBySid, clickTab, visibleFieldsInActiveTab,
-    containerExec,
 } from './fixtures';
 
 const SID = '_e2bt_adv';
 
-containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci set singbox-ui.${SID}.tls_enabled=1; uci commit singbox-ui`);
+// Seed the section before the page loads (per test) via the uciSeed fixture.
+test.use({
+    uciSeed: `uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=vless; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci set singbox-ui.${SID}.server_uuid=00000000-0000-0000-0000-000000000001; uci set singbox-ui.${SID}.tls_enabled=1; uci commit singbox-ui`,
+});
 
 test('TLS tab shows advanced fields immediately, no toggle (VLESS outbound)', async ({ page }) => {
     await openEditModalBySid(page, 'outbound', SID);
@@ -40,6 +42,3 @@ test('Dial tab shows advanced fields immediately, no toggle (VLESS outbound)', a
     assert('Dial advanced shown immediately — Connect timeout', fields.includes('Connect timeout'), { fields });
     assert('No advanced toggle present', !fields.includes('Show advanced fields'), { fields });
 });
-
-containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
-console.log('\ndone: 20-advanced-toggle');

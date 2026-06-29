@@ -5,7 +5,6 @@
 import {
     test, assert,
     openEditModalBySid, listTabs, visibleFieldsInActiveTab,
-    containerExec,
 } from './fixtures';
 
 const SID = '_e2bt_in';  // unique per-run section name; cleaned by snapshot/restore
@@ -21,25 +20,25 @@ const PROTOCOLS = [
 ];
 
 for (const p of PROTOCOLS) {
-    // Seed via UCI so the modal opens with the right protocol selected.
-    containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=inbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.protocol=${p.proto}; uci set singbox-ui.${SID}.listen_port=12345; uci commit singbox-ui`);
+    test.describe(p.proto, () => {
+        // Seed via UCI (before page load) so the modal opens with the right protocol.
+        test.use({
+            uciSeed: `uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=inbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.protocol=${p.proto}; uci set singbox-ui.${SID}.listen_port=12345; uci commit singbox-ui`,
+        });
 
-    test(`inbound modal — ${p.proto}`, async ({ page }) => {
-        await openEditModalBySid(page, 'inbound', SID);
+        test(`inbound modal — ${p.proto}`, async ({ page }) => {
+            await openEditModalBySid(page, 'inbound', SID);
 
-        const tabs = await listTabs(page);
-        const tabNames = tabs.filter(t => !t.hidden).map(t => t.name);
-        for (const expected of p.mustHaveTabs) {
-            assert(`${p.proto}: tab "${expected}" present and not hidden`, tabNames.includes(expected), { tabNames });
-        }
+            const tabs = await listTabs(page);
+            const tabNames = tabs.filter(t => !t.hidden).map(t => t.name);
+            for (const expected of p.mustHaveTabs) {
+                assert(`${p.proto}: tab "${expected}" present and not hidden`, tabNames.includes(expected), { tabNames });
+            }
 
-        const fields = await visibleFieldsInActiveTab(page);
-        for (const expected of p.mustHaveBasic) {
-            assert(`${p.proto}: basic field "${expected}" visible`, fields.includes(expected), { fields });
-        }
+            const fields = await visibleFieldsInActiveTab(page);
+            for (const expected of p.mustHaveBasic) {
+                assert(`${p.proto}: basic field "${expected}" visible`, fields.includes(expected), { fields });
+            }
+        });
     });
 }
-
-// Cleanup at the end.
-containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
-console.log('\ndone: 10-inbound-modals');

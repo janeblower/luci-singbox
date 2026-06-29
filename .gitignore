@@ -10,3 +10,7 @@ ruvector.db
 docs/superpowers
 node_modules/
 tests/browser/node_modules
+
+# Playwright run outputs (browser e2e)
+tests/browser/playwright-report/
+tests/browser/test-results/

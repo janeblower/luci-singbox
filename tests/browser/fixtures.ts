@@ -16,6 +16,7 @@ export const DOCKER_NAME = process.env.DOCKER_NAME || "";
 
 interface Fixtures {
   restoreUci: undefined;
+  uciSeed: string;
   pageerrors: string[];
   page: import("@playwright/test").Page;
 }
@@ -38,6 +39,14 @@ export const test = base.extend<Fixtures>({
     { auto: true },
   ],
 
+  // Per-test UCI seed applied AFTER restoreUci's baseline restore and BEFORE the
+  // page navigates, so the grid renders rows a spec needs (e.g. openEditModalBySid).
+  // Specs set it via test.use({ uciSeed: "<uci cmds>" }). Replaces the old
+  // module-level containerExec seed, which under @playwright/test ran at import
+  // (test() only registers — unlike the old blocking runTest), so the seed was
+  // gone before any test executed.
+  uciSeed: ["", { option: true }],
+
   // auto fixture: owns the error array; asserts empty on teardown for EVERY test.
   pageerrors: [
     // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture, no deps
@@ -51,11 +60,20 @@ export const test = base.extend<Fixtures>({
 
   // replaces newPage(): node-side login -> addCookies(httpOnly) -> goto -> readiness.
   // Depends on pageerrors so the listener is attached BEFORE goto (FIX 3/4/5).
-  page: async ({ context, pageerrors }, use) => {
+  // Depends on restoreUci so the baseline restore runs FIRST; then this test's
+  // uciSeed (if any) is applied BEFORE navigation so the grid renders its rows.
+  page: async ({ context, pageerrors, uciSeed, restoreUci }, use) => {
+    void restoreUci; // ordering-only dep: baseline restored before the seed below
+    if (DOCKER_NAME && uciSeed) {
+      containerExec(uciSeed);
+    }
     const root = BROWSER_URL;
     let value = "";
-    for (let i = 0; i < 3; i++) {
-      // keep 3x ECONNRESET retry
+    // The first HTTP request to a freshly-launched uhttpd is sometimes RST'd
+    // (ECONNRESET) or answered before auth is wired. Retry 3x with 500/1000ms
+    // exponential backoff (matches the original _setup.mjs newPage) — WITHOUT the
+    // delay the cold-container first-spec login fails ("no sysauth_http").
+    for (let attempt = 0, delay = 500; attempt < 3; attempt++, delay *= 2) {
       try {
         const res = await fetch(root, {
           method: "POST",
@@ -73,6 +91,7 @@ export const test = base.extend<Fixtures>({
       } catch {
         /* ECONNRESET — retry */
       }
+      if (attempt < 2) await new Promise((r) => setTimeout(r, delay));
     }
     if (!value) throw new Error("LuCI login failed (no sysauth_http)");
     await context.addCookies([

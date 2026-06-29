@@ -5,7 +5,6 @@
 import {
     test, assert,
     openEditModalBySid, listTabs, visibleFieldsInActiveTab,
-    containerExec,
 } from './fixtures';
 
 const SID = '_e2bt_out';
@@ -19,23 +18,24 @@ const PROTOCOLS = [
 ];
 
 for (const p of PROTOCOLS) {
-    containerExec(`uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=${p.type}; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci commit singbox-ui`);
+    test.describe(p.type, () => {
+        test.use({
+            uciSeed: `uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=${p.type}; uci set singbox-ui.${SID}.server=203.0.113.1; uci set singbox-ui.${SID}.server_port=443; uci commit singbox-ui`,
+        });
 
-    test(`outbound modal — ${p.type}`, async ({ page }) => {
-        await openEditModalBySid(page, 'outbound', SID);
+        test(`outbound modal — ${p.type}`, async ({ page }) => {
+            await openEditModalBySid(page, 'outbound', SID);
 
-        const tabs = await listTabs(page);
-        const tabNames = tabs.filter(t => !t.hidden).map(t => t.name);
-        for (const expected of p.mustHaveTabs) {
-            assert(`${p.type}: tab "${expected}" present`, tabNames.includes(expected), { tabNames });
-        }
+            const tabs = await listTabs(page);
+            const tabNames = tabs.filter(t => !t.hidden).map(t => t.name);
+            for (const expected of p.mustHaveTabs) {
+                assert(`${p.type}: tab "${expected}" present`, tabNames.includes(expected), { tabNames });
+            }
 
-        const fields = await visibleFieldsInActiveTab(page);
-        for (const expected of p.mustHaveBasic) {
-            assert(`${p.type}: basic field "${expected}" visible`, fields.includes(expected), { fields });
-        }
+            const fields = await visibleFieldsInActiveTab(page);
+            for (const expected of p.mustHaveBasic) {
+                assert(`${p.type}: basic field "${expected}" visible`, fields.includes(expected), { fields });
+            }
+        });
     });
 }
-
-containerExec(`uci -q delete singbox-ui.${SID}; uci commit singbox-ui`);
-console.log('\ndone: 11-outbound-modals');
