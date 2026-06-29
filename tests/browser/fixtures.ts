@@ -21,9 +21,18 @@ interface Fixtures {
 }
 
 export const test = base.extend<Fixtures>({
-  // T1: no-op placeholder; T2 replaces the body with the real per-test UCI restore.
+  // Per-test UCI restore: resets singbox-ui UCI to the captured baseline so
+  // Playwright specs at workers:1 don't cross-contaminate each other.
+  // No-op when DOCKER_NAME is unset (non-browser environments).
   restoreUci: [
-    async (_, use) => {
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture, no deps
+    async ({}, use) => {
+      if (DOCKER_NAME) {
+        containerExec(
+          "cp /tmp/uci.baseline /etc/config/singbox-ui 2>/dev/null || true",
+        );
+        containerExec("/etc/init.d/rpcd reload 2>/dev/null || true");
+      }
       await use(undefined);
     },
     { auto: true },
