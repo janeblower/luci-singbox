@@ -23,11 +23,11 @@ describe("CI packaging lane (build.yml)", () => {
     expect(yml).toMatch(/needs\.changes\.outputs\.packaging/);
   });
 
-  it("packaging job runs the cross suite via bun (bun test tests/cross)", () => {
+  it("packaging job runs the cross suite via vitest (bun run test:cross)", () => {
     const yml = readFileSync(WF, "utf8");
-    // The legacy `SB_SUITE=cross sh tests/run.sh` shell lane was removed in the
-    // bun migration; the packaging job now runs the cross suite via bun.
-    expect(yml).toMatch(/bun test tests\/cross/);
+    // The cross suite migrated bun:test -> vitest (Plan 4); the packaging job now
+    // runs it via `cd tests && bun run test:cross` (vitest run --project cross).
+    expect(yml).toMatch(/bun run test:cross/);
   });
 
   it("packaging job has an apk-tools 3.0.5+ source (mkpkg --info / apk-tools / APK_BIN etc.)", () => {

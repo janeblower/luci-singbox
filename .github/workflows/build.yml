@@ -223,7 +223,7 @@ jobs:
     # All UI/JS tests now live in tests/ui/*.test.ts and run via `bun test
     # tests/ui`. ucode is absent on this host; json_import's ucode-half
     # gracefully SKIPs while its node-side assertions still execute.
-    # PO coverage and main.js syntax are now covered by bun test tests/cross.
+    # PO coverage and main.js syntax are now covered by the tests/cross vitest lane.
     steps:
       - uses: actions/checkout@v6
 
@@ -251,7 +251,7 @@ jobs:
         with:
           bun-version: '1.2.21'
       - run: cd tests && bun install --frozen-lockfile
-      - run: bun test tests/ui
+      - run: cd tests && bun run test:ui
 
   test:
     name: Test suite (OpenWrt VM)
@@ -556,7 +556,7 @@ jobs:
         with:
           bun-version: '1.2.21'
       - run: cd tests && bun install --frozen-lockfile
-      - run: bun test tests/cross
+      - run: cd tests && bun run test:cross
 
   build:
     name: Build OpenWrt packages (apk)
