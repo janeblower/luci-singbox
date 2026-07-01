@@ -4,9 +4,9 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 // tests/cross/test_changes_domains.sh
-// Exercises the pure path->domain classifier (tests/lib/domain_classify.sh)
-// used by tests/run.sh's SB_DOMAIN filter. Also guards the static wiring of
-// the CI `changes` job (dorny/paths-filter in build.yml).
+// Exercises the pure path->domain classifier (tests/lib/domain_classify.sh),
+// the hand-maintained mirror of the CI `changes` job's dorny/paths-filter
+// globs (build.yml) whose static wiring this test guards.
 //
 // Directory-based 4-domain model:
 //   bbolt / backend / ui / packaging, plus a shared fan-out that sets all four.

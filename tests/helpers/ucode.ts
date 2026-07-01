@@ -42,13 +42,3 @@ export async function runUcodeJSON<T = unknown>(
   }
   return JSON.parse(r.stdout) as T;
 }
-
-// Prod-path tests (shebang-sensitive): run an in-tree file directly so the
-// shebang `-L` resolution is exercised, NOT inline `ucode -L`.
-export function runUcodeFile(
-  remoteRelPath: string,
-  args: string[] = [],
-): Promise<ExecResult> {
-  const argstr = args.map(shquote).join(" ");
-  return exec(`cd ${WORK} && ucode -L ${LIB} ${remoteRelPath} ${argstr}`);
-}

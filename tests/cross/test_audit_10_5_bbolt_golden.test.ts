@@ -7,9 +7,9 @@
  * been built locally (i.e. `bbolt-client/bbolt-client-rs` exists and is
  * executable).  This matches the original shell test's behaviour exactly.
  *
- * The bbolt-client.yml CI workflow still runs the full cross-arch matrix;
- * this is the integration-pass smoke that catches real-vs-stub drift when a
- * developer happens to have a local build.
+ * The build.yml `bbolt` job still runs the full cross-arch matrix under
+ * qemu-user; this is the integration-pass smoke that catches real-vs-stub
+ * drift when a developer happens to have a local build.
  *
  * Env override: BBOLT_TEST_BIN — path to the binary (mirrors the shell test's
  * RUN= / BBOLT_TEST_BIN= convention).

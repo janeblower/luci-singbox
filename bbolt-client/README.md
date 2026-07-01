@@ -15,7 +15,7 @@
 ## Сборка (нужен nightly)
 
     ./build.sh        # -> ./bbolt-client-rs-{x86_64,aarch64,armv7,mipsel,mips}  (+ ./bbolt-client-rs = native)
-    make test         # сборка + самодостаточные golden-регрессы
+    ./test.sh         # сборка + самодостаточные golden-регрессы
 
 Нужен nightly-тулчейн с `rust-src` (запинен в `rust-toolchain.toml`) и компонентом
 `llvm-tools` (даёт `rust-objcopy`, которым `build.sh` срезает `.pdr` на mips). Сборка
@@ -24,7 +24,7 @@
 Кросс-таргеты линкуются встроенным в тулчейн `rust-lld` — cross-gcc не требуется.
 
 CI собирает все пять архитектур и гоняет тесты (кросс-арки под `qemu-user`)
-на каждый push — см. [`.github/workflows/bbolt-client.yml`](../.github/workflows/bbolt-client.yml).
+на каждый push — джоб `bbolt` в [`.github/workflows/build.yml`](../.github/workflows/build.yml).
 Бинарники выкладываются как артефакты (только бинарь; apk-упаковки пока нет).
 
 **Поддерживаемые арки: x86_64, aarch64, armv7, mipsel (LE), mips (BE) Linux.**

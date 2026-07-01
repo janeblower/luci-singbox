@@ -18,8 +18,11 @@ carries:
   (`{ tls: {}, transport: {}, multiplex: {}, dial: true }`) — the registry
   merges each block's fields in at `materialize()` time
 - `fields[]`: declarative field list (see the field vocabulary below)
-- `emit(section)`: function that takes a UCI section and returns the sing-box
-  JSON object (or `null` to skip the section)
+- per-field emission metadata (`json_key`, plus `coerce` / `omit_when` /
+  `groups` / `users`): `builder/_filler.uc` assembles the sing-box JSON object
+  from this and the declared shared blocks. An `emit(section)` function is an
+  **optional** escape-hatch that overrides the filler for the few descriptors
+  needing bespoke logic (returning `null` skips the section)
 
 ## How dispatch works
 
@@ -27,12 +30,15 @@ After Phase E2 there is no hand-coded switch-by-type fallback at all.
 `lib/outbound.uc` and `lib/inbound.uc` dispatch purely through the registry:
 
 - `lib/outbound.uc::build_constructor_for(s, proto)` calls `reg.get("outbound",
-  proto)` and returns `descriptor.emit(s)`. If no descriptor is registered for
-  the pair it logs `no descriptor for '<proto>'` and returns `null` — there is
-  no hand-coded fallback.
+  proto)` and builds the section via
+  `type(d.emit) === "function" ? d.emit(s) : filler.build(d, s)` — i.e. the
+  declarative `builder/_filler.uc`, unless the descriptor carries an escape-hatch
+  `emit()`. If no descriptor is registered for the pair it logs `no descriptor
+  for '<proto>'` and returns `null` — there is no hand-coded fallback.
 - `lib/inbound.uc::build_one` is the same: it looks the descriptor up via
-  `reg.get("inbound", s.protocol)` and returns `emit(s)`, or logs `no
-  descriptor for '<proto>'` and returns `null`. The infrastructure inbound
+  `reg.get("inbound", s.protocol)` and builds it the same way (`filler.build(d,
+  s)` unless the descriptor sets `emit`), or logs `no descriptor for '<proto>'`
+  and returns `null`. The infrastructure inbound
   types (`tproxy`, `mixed`, `direct`) are themselves descriptors
   (`lib/builder/protocols/{tproxy,mixed,direct}.uc`), not hand-coded branches.
 
@@ -62,21 +68,16 @@ descriptors, plus `builder.protocols.redirect` and `builder.protocols.cloudflare
 
 ## Writing a descriptor
 
-Use a shipped descriptor as a template. The Trojan outbound
-(`lib/builder/protocols/trojan.uc`) is a compact example that exercises the shared
-blocks:
+Use a shipped descriptor as a template. Descriptors are now **fully
+declarative**: there is no hand-written `emit()` — `builder/_filler.uc` assembles
+the sing-box JSON from each field's emission metadata (`json_key` + `coerce` /
+`omit_when` / `skip_value` / `requires` / `groups` / `users`) plus the declared
+shared blocks. The Trojan outbound (`lib/builder/protocols/trojan.uc`) is a
+compact example:
 
 ```ucode
 // lib/builder/protocols/trojan.uc
-let reg     = require("builder.protocols.registry");
-let helpers = require("helpers");
-let tls_blk = require("builder.protocols._shared.tls");
-let tr_blk  = require("builder.protocols._shared.transport");
-let mux_blk = require("builder.protocols._shared.multiplex");
-let dial_blk = require("builder.protocols._shared.dial");
-
-const s_opt = helpers.s_opt;
-const s_num = helpers.s_num;
+let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "outbound", type: "trojan", sing_box_type: "trojan",
@@ -84,31 +85,44 @@ reg.register({
 
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
-          validate: "host", ui_label: "Server" },
+          validate: "host", ui_label: "Server",
+          json_key: "server", omit_when: "never" },
         { name: "server_port", type: "number", tab: "basic", required: true,
-          validate: "port", ui_label: "Server port", default: 443 },
+          validate: "port", ui_label: "Server port", default: 443,
+          json_key: "server_port", coerce: "num", omit_when: "never" },
         { name: "server_password", type: "string", tab: "basic", required: true,
-          secret: true, ui_label: "Password" },
+          secret: true, ui_label: "Password",
+          json_key: "password" },
     ],
-
-    emit: function(s) {
-        let out = {
-            type: "trojan",
-            tag:  s[".name"],
-            server:      s_opt(s, "server"),
-            server_port: s_num(s.server_port),
-        };
-        if (length(s_opt(s, "server_password"))) out.password = s.server_password;
-        let t = tls_blk.emit_outbound(s);  if (t) out.tls = t;
-        let r = tr_blk.emit(s);            if (r) out.transport = r;
-        let m = mux_blk.emit(s);           if (m) out.multiplex = m;
-        dial_blk.merge_dial(out, s);
-        return out;
-    },
+    // No emit(): builder._filler builds {type,tag} + the three fields above +
+    // the declared tls/transport/multiplex/dial shared blocks, byte-identical to
+    // the former hand-written emit().
 });
 
 return {};
 ```
+
+The emission props on each scalar field drive the filler:
+
+- `json_key` — opt-in write key. A field **without** `json_key` is UI-only and
+  never reaches the generated config.
+- `coerce: str|num|bool|array|num_array` — value type in the emitted JSON.
+- `omit_when: empty|never` — `never` always writes the key; the default omits it
+  when the value is empty. `skip_value` / `requires` / `default_when_empty` gate
+  conditional emission.
+- `groups: [{ json_key, gate, fields }]` — nested JSON objects.
+- `users: { from?, columns[], single_fallback? }` — the multi-user builder
+  (`builder/_shared/users.uc`). The Trojan **inbound** register uses a
+  `single_fallback` to fold `server_password` into a one-element `users` array.
+- Shared blocks (`tls`/`transport`/`multiplex`/`dial`/`quic`) each export an
+  `emit_spec` the filler consumes; declaring them in `shared` is all that is
+  needed.
+
+An `emit(section)` function survives only as an **optional escape-hatch** for the
+few descriptors that still need bespoke logic; the dispatcher runs it only when
+present (`type(d.emit) === "function" ? d.emit(s) : filler.build(d, s)`),
+otherwise the filler builds the section. A descriptor may also carry an optional
+`post(out, s)` for a final tweak.
 
 To add a new protocol:
 
@@ -189,13 +203,13 @@ side renders the projection via `htdocs/.../lib/descriptor_form.js`.
 
 ## Tests
 
-- `tests/test_descriptor_materialize.sh` — descriptor registration +
+- `tests/backend/test_descriptor_materialize.test.ts` — descriptor registration +
   `materialize()` (shared-block merge, advanced-flag injection).
-- `tests/test_descriptor_resilience.sh` — a broken descriptor is logged and
+- `tests/backend/test_descriptor_resilience.test.ts` — a broken descriptor is logged and
   skipped (`try_register`) instead of aborting the eager-require chain.
-- `tests/test_registry_robustness.sh` — strict `register()` validation
+- `tests/backend/test_registry_robustness.test.ts` — strict `register()` validation
   (enum↔values↔default, list/string+values, unknown `dynamic` source rejected).
-- `tests/test_protocol_schema_rpc.sh` — the `protocol_schema` RPC projection
+- `tests/backend/test_protocol_schema_rpc.test.ts` — the `protocol_schema` RPC projection
   (including `dynamic` surviving the projection).
-- `tests/test_descriptor_form_dynamic_js.sh` — frontend dynamic-selector wiring
+- `tests/ui/test_descriptor_form_dynamic_js.test.ts` — frontend dynamic-selector wiring
   (node).

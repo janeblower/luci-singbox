@@ -254,18 +254,18 @@ prerouting. По умолчанию выключено — процессы ро
 ## Запуск тестов
 
 ```sh
-sh tests/run.sh
+sh tests/run-vm.sh
 ```
 
 Поднимает реальный OpenWrt 25.12.3 под QEMU/KVM из заранее собранного
 Docker-образа (`ghcr.io/<owner>/luci-singbox/openwrt-test`) и гоняет
-полный набор ucode- и shell-тестов внутри гостя. На хосте нужны `docker`
+backend- и parity-тесты (bun) внутри гостя. На хосте нужны `docker`
 и доступный на запись `/dev/kvm` (на GitHub Actions есть из коробки).
 
 Переопределить образ (например, локальный dev-тег из `tests/docker/`):
 
 ```sh
-SINGBOX_TEST_IMAGE=singbox-test:dev sh tests/run.sh
+SINGBOX_TEST_IMAGE=singbox-test:dev sh tests/run-vm.sh
 ```
 
 ## Документация

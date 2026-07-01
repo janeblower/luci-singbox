@@ -2,7 +2,7 @@
 # Build the singbox-ui .apk package set directly via the OpenWrt SDK's host
 # `apk` tool, skipping the full SDK build orchestration.
 #
-# Produces FOUR packages (dependency chain bbolt-client <- singbox-ui <-
+# Produces FIVE packages (dependency chain bbolt-client <- singbox-ui <-
 # luci-app-singbox-ui <- luci-i18n-singbox-ui-ru):
 #   - bbolt-client_<version>_<exact-arch>.apk   one per covered OpenWrt arch
 #     (20 arches total), each embedding the correct bbolt-client binary at
@@ -12,6 +12,8 @@
 #   - luci-app-singbox-ui_<version>.apk         noarch LuCI frontend (htdocs JS,
 #     menu, acl). depends on singbox-ui + luci-base.
 #   - luci-i18n-singbox-ui-ru_<version>.apk     noarch Russian translation.
+#     depends on luci-app-singbox-ui.
+#   - singbox-ui-plugin-awg_warp_<version>.apk  noarch AWG/WARP plugin.
 #     depends on luci-app-singbox-ui.
 #
 # Usage: build-apk.sh [version] [output_dir]
@@ -23,9 +25,9 @@
 #   SINGBOX_SKIP_BBOLT=1 allow a binary-less local build — no BBOLT_BIN_DIR
 #                        required. The bbolt-client binary cannot be embedded,
 #                        so the per-arch bbolt-client apks are SKIPPED entirely;
-#                        the three noarch packages (singbox-ui,
-#                        luci-app-singbox-ui, luci-i18n-singbox-ui-ru) are
-#                        still built.
+#                        the four noarch packages (singbox-ui,
+#                        luci-app-singbox-ui, luci-i18n-singbox-ui-ru,
+#                        singbox-ui-plugin-awg_warp) are still built.
 #   APK_MKPKG_STUB=1     replace real `apk mkpkg` with a touch stub (CI unit
 #                        tests). Also skips SDK download/extract/po2lmo and
 #                        the verify_root_owner check.
@@ -193,7 +195,7 @@ APK_MKPKG_STUB="${APK_MKPKG_STUB:-0}"
 SINGBOX_SKIP_BBOLT="${SINGBOX_SKIP_BBOLT:-0}"
 
 # When the bbolt binary cannot be embedded (SINGBOX_SKIP_BBOLT=1) we skip the
-# per-arch bbolt-client apks entirely but still build the three noarch packages.
+# per-arch bbolt-client apks entirely but still build the four noarch packages.
 BUILD_BBOLT=1
 if [ "$SINGBOX_SKIP_BBOLT" = "1" ]; then
     BUILD_BBOLT=0

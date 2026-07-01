@@ -76,16 +76,6 @@ function collectModes(plugins) {
 function applySettingsSections(plugins, m) {
 	plugins.forEach(function (p) { if (p.api && p.api.settingsSections) p.api.settingsSections(m); });
 }
-function formRendererFor(plugins, type) {
-	for (var i = 0; i < plugins.length; i++) {
-		var p = plugins[i];
-		if (p.api && p.api.renderOutboundForm && p.api.outboundTypes) {
-			var has = p.api.outboundTypes().some(function (t) { return t[0] === type; });
-			if (has) return p.api.renderOutboundForm.bind(p.api);
-		}
-	}
-	return null;
-}
 
 return L.Class.extend({
 	loadEnabled: loadEnabled,
@@ -96,5 +86,4 @@ return L.Class.extend({
 	collectTabs: collectTabs,
 	collectModes: collectModes,
 	applySettingsSections: applySettingsSections,
-	formRendererFor: formRendererFor,
 });

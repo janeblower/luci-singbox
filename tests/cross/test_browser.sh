@@ -6,11 +6,10 @@
 set -eu
 cd "$(dirname "$0")/../.."
 
-# tests/run.sh globs the test files and runs each one inside whichever
-# environment is active. This suite runs for real ONLY in the dedicated
-# browser-test CI lane (a host with bun + docker). It must skip gracefully
-# everywhere else it gets swept up by run.sh: the OpenWrt qemu VM (sentinel
-# below) and the packaging lane (ubuntu, apk-tools but no bun → skip below).
+# This suite runs for real ONLY in the dedicated browser-test CI lane (a host
+# with bun + docker). It must skip gracefully in the other environments where it
+# can be invoked: the OpenWrt qemu VM (SINGBOX_TESTS_IN_VM sentinel below) and
+# the packaging lane (ubuntu, apk-tools but no bun → skip below).
 if [ "${SINGBOX_TESTS_IN_VM:-0}" = "1" ]; then
     echo "SKIP test_browser: not runnable inside the OpenWrt qemu VM"
     exit 0

@@ -15,8 +15,10 @@ reg.try_register({
 		  values: ["auto","quic","dns","stun","dtls","sip","tls","static"] },
 		{ name: "ipv6_enabled", type: "bool", tab: "basic", ui_label: "Enable IPv6 (auto-masquerade)", default: 0 },
 		{ name: "mtu_override", type: "number", tab: "basic", ui_label: "MTU (empty = WAN-80)", advanced: true },
-		// warp_* creds + awg_jc/jmin/jmax are written by rpcd (register/generate),
-		// surfaced read-only in the form; not declared as writable JSON fields.
+		// WARP creds + AWG params (jc/jmin/jmax etc.) are provisioned by the
+		// reconciler (confstore.ensure -> warp.register_auto / awggen.generate)
+		// during lifecycle apply, NOT by rpcd; the .conf is the source of truth,
+		// not UCI. They are not declared as writable JSON fields here.
 	],
 
 	// escape-hatch emit: produce {type:direct, tag, bind_interface}. No listen base.
