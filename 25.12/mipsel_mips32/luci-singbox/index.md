@@ -5,9 +5,9 @@ title: luci-singbox - mipsel_mips32 - OpenWrt 25.12
 
 # luci-singbox - mipsel_mips32 - OpenWrt 25.12
 
-- [bbolt-client-0.1.0-r39.apk](bbolt-client-0.1.0-r39.apk)
-- [luci-app-singbox-ui-0.1.0-r389.apk](luci-app-singbox-ui-0.1.0-r389.apk)
-- [luci-i18n-singbox-ui-ru-0.1.0-r47.apk](luci-i18n-singbox-ui-ru-0.1.0-r47.apk)
+- [bbolt-client-0.1.0-r40.apk](bbolt-client-0.1.0-r40.apk)
+- [luci-app-singbox-ui-0.1.0-r390.apk](luci-app-singbox-ui-0.1.0-r390.apk)
+- [luci-i18n-singbox-ui-ru-0.1.0-r48.apk](luci-i18n-singbox-ui-ru-0.1.0-r48.apk)
 - [packages.adb](packages.adb)
-- [singbox-ui-0.1.0-r30.apk](singbox-ui-0.1.0-r30.apk)
-- [singbox-ui-plugin-awg_warp-0.1.0-r27.apk](singbox-ui-plugin-awg_warp-0.1.0-r27.apk)
+- [singbox-ui-0.1.0-r31.apk](singbox-ui-0.1.0-r31.apk)
+- [singbox-ui-plugin-awg_warp-0.1.0-r28.apk](singbox-ui-plugin-awg_warp-0.1.0-r28.apk)
