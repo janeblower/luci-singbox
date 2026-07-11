@@ -336,14 +336,14 @@ populate_singbox_root() {
 #   apk mkpkg for the noarch backend.  Must run after populate_singbox_root and
 #   after ownership is correct.
 #
-# The package conflicts with `firewall` (it manages its own nft ruleset).
-# `conflicts:` is passed unconditionally: the apk-tools version is pinned with the
-# SDK, and it supports the field. The old code probed `mkpkg --help` for the word
-# and carried a SECOND, near-identical mkpkg invocation for the "unsupported"
-# case — a fallback for a version we never build with, duplicated again inside the
-# unshare branch. If a future SDK ever drops the field, the build fails loudly
-# here, which is what you want from a lost conflict marker.
-mkpkg_singbox() {
+# The package conflicts with `firewall` (it manages its own nft ruleset), but the
+# pinned SDK's apk mkpkg REJECTS the field ("invalid info field: conflicts"), so
+# we attempt it and fall back. The two attempts share ONE command: the earlier
+# version duplicated the whole invocation for the with/without case (and again
+# inside the unshare branch), which is how they drifted apart. The buildroot path
+# carries PKG_CONFLICTS:=firewall regardless.
+_mkpkg_singbox() {   # $1: extra -I args, possibly empty (deliberately word-split)
+    # shellcheck disable=SC2086
     "$APK_BIN" mkpkg \
         --files "$SINGBOX_ROOT" \
         --output "$SINGBOX_OUT" \
@@ -357,10 +357,18 @@ mkpkg_singbox() {
         -I "url:$PKG_URL" \
         -I "depends:$SINGBOX_DEPENDS" \
         -I "provides:${SINGBOX_NAME}-any" \
-        -I "conflicts:firewall" \
+        $1 \
         -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
         -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
         -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh"
+}
+
+mkpkg_singbox() {
+    if _mkpkg_singbox '-I conflicts:firewall' 2>/dev/null; then
+        return 0
+    fi
+    echo ">>> apk mkpkg rejected 'conflicts:firewall' — building without it" >&2
+    _mkpkg_singbox ''
 }
 
 # ===========================================================================
