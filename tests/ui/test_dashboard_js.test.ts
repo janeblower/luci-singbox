@@ -19,6 +19,7 @@ function makeEl(tag: string): any {
     tag,
     children: [] as any[],
     attrs: {} as Record<string, any>,
+    style: {} as Record<string, string>,
     _text: "",
     isConnected: true,
     appendChild(c: any) {

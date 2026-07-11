@@ -17,16 +17,31 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:239
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:79
 #, javascript-format
-msgid "%d nodes"
+msgid "%dd ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:78
+#, javascript-format
+msgid "%dh ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:77
+#, javascript-format
+msgid "%dm ago"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:76
+#, javascript-format
+msgid "%ds ago"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:10
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:121
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:355
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:378
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:451
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:153
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:387
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:410
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:484
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr ""
@@ -50,7 +65,7 @@ msgstr ""
 msgid "Active"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:210
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:230
 msgid "Active connections"
 msgstr ""
 
@@ -63,7 +78,7 @@ msgstr ""
 msgid "Adds a Cloudflare WARP egress obfuscated with AmneziaWG."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/main.js:142
+#: htdocs/luci-static/resources/view/singbox-ui/main.js:179
 msgid "Advanced"
 msgstr ""
 
@@ -83,7 +98,7 @@ msgstr ""
 msgid "Basic"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:229
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:238
 msgid "Browser (Chrome)"
 msgstr ""
 
@@ -129,7 +144,7 @@ msgstr ""
 msgid "Clash API"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:191
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:211
 msgid ""
 "Clash API unreachable — enable it in General settings and restart the "
 "service."
@@ -139,7 +154,6 @@ msgstr ""
 msgid "Clash API unreachable — enable it in settings and restart."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:174
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:157
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:140
 msgid "Close"
@@ -158,7 +172,6 @@ msgstr ""
 msgid "Copied to clipboard."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:177
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:160
 msgid "Copy"
 msgstr ""
@@ -271,13 +284,17 @@ msgid ""
 "Restart the service after changing."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:183
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:154
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:167
 msgid "Error: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:243
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:252
 msgid "Expand to selector"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:277
+msgid "Expires"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:151
@@ -285,7 +302,7 @@ msgstr ""
 msgid "Export"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:171
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:160
 #, javascript-format
 msgid "Export JSON — %s %s"
 msgstr ""
@@ -296,7 +313,7 @@ msgid ""
 "or reinstall package."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:103
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:120
 msgid "Failed to switch node"
 msgstr ""
 
@@ -313,7 +330,7 @@ msgstr ""
 msgid "General"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:71
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:62
 msgid "Generating…"
 msgstr ""
 
@@ -321,7 +338,7 @@ msgstr ""
 msgid "Global sing-box settings: cache file, log."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:197
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
 msgid "Hide"
 msgstr ""
 
@@ -441,9 +458,8 @@ msgstr ""
 msgid "Level"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:155
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:139
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:57
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:48
 msgid "Loading…"
 msgstr ""
 
@@ -524,8 +540,12 @@ msgstr ""
 msgid "No connections"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:330
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:355
 msgid "No proxy groups. Configure selector/urltest outbounds."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:275
+msgid "Nodes"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:21
@@ -583,16 +603,16 @@ msgstr ""
 msgid "Port must be an integer between 1 and 65535"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:71
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:62
 msgid "Preview config"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:79
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:70
 msgid "Preview config (dry-run)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:57
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:65
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:48
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:56
 msgid "Preview generated config"
 msgstr ""
 
@@ -600,29 +620,33 @@ msgstr ""
 msgid "Protocol"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:188
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:250
+msgid "Proxy groups"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:157
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:181
 msgid "RPC failed: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:47
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:38
 msgid "Refresh rule-sets"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:48
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:39
 msgid "Refresh rule-sets failed"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:44
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:35
 msgid "Refresh subscriptions"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:45
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:36
 msgid "Refresh subscriptions failed"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:44
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:47
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:35
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:38
 msgid "Refreshing…"
 msgstr ""
 
@@ -639,15 +663,15 @@ msgid ""
 "Remote (.srs/.json), local, or inline rule-sets referenced by route rules."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:51
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:42
 msgid "Restart failed"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:50
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:41
 msgid "Restart service"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:50
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:41
 msgid "Restarting…"
 msgstr ""
 
@@ -679,7 +703,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:248
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:257
 msgid "Selector type"
 msgstr ""
 
@@ -695,8 +719,8 @@ msgstr ""
 msgid "Shadowsocks link is missing method/password"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:197
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:199
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:231
 msgid "Show"
 msgstr ""
 
@@ -704,11 +728,11 @@ msgstr ""
 msgid "Show only parameters compatible with the installed sing-box version"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:222
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:242
 msgid "Sort by latency"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:206
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:226
 msgid "Speed"
 msgstr ""
 
@@ -729,15 +753,19 @@ msgstr ""
 msgid "Sub-rules must be Default rules: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:204
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:275
+msgid "Subscription"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:213
 msgid "Subscription URL"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:90
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:99
 msgid "Subscription update failed"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:278
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:244
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:52
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:48
 msgid "Subscriptions"
@@ -747,20 +775,24 @@ msgstr ""
 msgid "TLS"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:349
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:374
 msgid "Test"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:349
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:374
 msgid "Testing…"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:192
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:224
 msgid "Toggle visibility"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:208
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:228
 msgid "Total traffic"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:276
+msgid "Traffic"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:26
@@ -769,7 +801,7 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:62
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:98
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:177
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:186
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:45
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:102
 msgid "Type"
@@ -783,7 +815,7 @@ msgstr ""
 msgid "URL must not be empty"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:255
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:264
 msgid "URL-test URL"
 msgstr ""
 
@@ -807,24 +839,27 @@ msgstr ""
 msgid "Up"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:272
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:361
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:302
 msgid "Update"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:237
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:246
 msgid "Update interval (s)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:276
+msgid "Updated"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:56
 msgid "Used by"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:222
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:231
 msgid "User-Agent"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:225
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:234
 msgid ""
 "User-Agent header sent when fetching the subscription. Pick a preset or type "
 "a custom value."
@@ -836,7 +871,7 @@ msgid ""
 "Takes effect after save/reload."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:348
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:373
 msgid "auto"
 msgstr ""
 
@@ -844,59 +879,51 @@ msgstr ""
 msgid "expected http/1.1, h2, or h3"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:83
-#, javascript-format
-msgid "expires %s"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:170
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:179
 msgid "group"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:70
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:10
 msgid "never"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:67
-msgid "never updated"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:274
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:306
 #, javascript-format
 msgid "nftables rules already active on inbound \"%s\""
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:60
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:51
 msgid "not generated"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:74
+#: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:65
 msgid "preview failed"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:215
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:144
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:176
 msgid "removed in"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:213
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:141
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:173
 msgid "requires"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:212
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:232
 msgid "running"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:348
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:373
 msgid "selector"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:211
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:231
 msgid "sing-box"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:212
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:232
 msgid "stopped"
 msgstr ""
 
@@ -904,30 +931,10 @@ msgstr ""
 msgid "total"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:183
+#: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:154
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:245
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:253
 msgid "unknown error"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:76
-#, javascript-format
-msgid "updated %dd ago"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:75
-#, javascript-format
-msgid "updated %dh ago"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:74
-#, javascript-format
-msgid "updated %dm ago"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:73
-#, javascript-format
-msgid "updated %ds ago"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:149

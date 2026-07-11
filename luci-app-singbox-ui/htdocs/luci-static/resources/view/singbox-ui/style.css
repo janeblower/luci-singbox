@@ -60,40 +60,56 @@ button.cbi-button.busy {
 .sb-secret-wrap > input { flex: 1; }
 .sb-eye-toggle { min-width: 5em; }
 
-/* Dashboard (clash-api) */
-.sb-dashboard-toolbar { margin: .5em 0; display: flex; gap: .5em; flex-wrap: wrap; }
-.sb-dashboard-widgets { display: flex; gap: 1em; flex-wrap: wrap; margin: .5em 0 1em; }
-.sb-dashboard-widget { flex: 1 1 180px; border: 1px solid var(--border-color-medium, #ccc);
-	border-radius: 6px; padding: .6em .8em; min-height: 64px; }
+/* Dashboard (clash-api).
+ *
+ * Structure is LuCI-native: every block is a `.cbi-section` with an `<h3>`, the
+ * subscription list is a LuCI div-table (`.table`/`.tr`/`.td`) and the traffic
+ * bar is `.cbi-progressbar`. Only the layout below is ours — colours, borders
+ * and spacing come from the theme's CSS variables, so this follows dark mode. */
+
+/* Section heading with a right-aligned control (Proxy groups + sort). */
+.sb-dashboard-head { display: flex; align-items: center; gap: .5em; }
+.sb-dashboard-head h3 { flex: 1; margin: 0; }
+
+/* Stat cards. auto-fit keeps them evenly sized instead of one stretching. */
+.sb-dashboard-widgets { display: grid; gap: 1em;
+	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.sb-dashboard-widget { border: 1px solid var(--border-color-medium, #ccc);
+	border-radius: 4px; padding: .6em .8em; }
 .sb-dashboard-widget-title { display: block; font-size: .85em; opacity: .7; }
-.sb-dashboard-widget-body { margin-top: .3em; font-size: 1.05em; }
-.sb-dashboard-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-	gap: 1em; }
-.sb-dashboard-group { border: 1px solid var(--border-color-medium, #ccc); border-radius: 6px;
-	padding: .5em .6em; }
-.sb-dashboard-grp-head { display: flex; align-items: center; gap: .5em; margin-bottom: .4em; }
-.sb-dashboard-grp-type { font-size: .8em; opacity: .6; }
-.sb-dashboard-grp-head button { margin-left: auto; }
-.sb-dashboard-node { display: flex; align-items: center; gap: .5em; padding: .25em .4em;
-	border-radius: 4px; }
+.sb-dashboard-widget-body { margin-top: .3em; font-size: 1.1em;
+	white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Subscriptions table. The action column hugs its button; the rest share the row. */
+.sb-dashboard-subs .td { vertical-align: middle; }
+.sb-dashboard-subs .cbi-section-actions { width: 1%; white-space: nowrap; }
+.sb-dashboard-subs .cbi-progressbar { min-width: 8em; margin: 0; }
+.sb-dashboard-sub-name { white-space: nowrap; }
+
+/* Proxy groups. 340px is the narrowest a card can get before the header row
+ * (name + type + Test button) starts wrapping. */
+.sb-dashboard-groups { display: grid; gap: 1em;
+	grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.sb-dashboard-group { border: 1px solid var(--border-color-medium, #ccc);
+	border-radius: 4px; display: flex; flex-direction: column; }
+.sb-dashboard-grp-head { display: flex; align-items: center; gap: .5em;
+	padding: .5em .6em; border-bottom: 1px solid var(--border-color-medium, #ccc); }
+.sb-dashboard-grp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-dashboard-grp-type { font-size: .8em; opacity: .6; flex: 1; }
+.sb-dashboard-grp-head button { margin: 0; }
+.sb-dashboard-nodes { padding: .3em; max-height: 22em; overflow-y: auto; }
+
+/* Node row: name grows, type and latency keep fixed columns so they line up
+ * across every card. */
+.sb-dashboard-node { display: grid; align-items: center; gap: .5em;
+	grid-template-columns: 1fr auto 4em; padding: .3em .4em; border-radius: 3px; }
 .sb-dashboard-node-sel { cursor: pointer; }
 .sb-dashboard-node-sel:hover { background: var(--background-color-medium, #f0f0f0); }
-.sb-dashboard-node-current { background: var(--accent, #e3f2fd); font-weight: bold; }
-.sb-dashboard-node-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-dashboard-node-current { background: var(--background-color-medium, #e3f2fd);
+	box-shadow: inset 3px 0 0 var(--primary-color-medium, #2e7d32); font-weight: bold; }
+.sb-dashboard-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sb-dashboard-node-type { font-size: .8em; opacity: .6; }
-.sb-dashboard-lat { font-size: .8em; min-width: 3.5em; text-align: right; }
+.sb-dashboard-lat { font-size: .85em; text-align: right; font-variant-numeric: tabular-nums; }
 .sb-lat-good { color: #2e7d32; } .sb-lat-mid { color: #f9a825; }
 .sb-lat-bad { color: #c62828; } .sb-lat-none { opacity: .5; }
 .sb-dashboard-unavailable { display: block; margin: 1em 0; }
-.sb-dashboard-sub { font-size: .8em; opacity: .75; margin-top: .3em; display: flex;
-	gap: .6em; align-items: center; }
-.sb-dashboard-sub-update, .sb-sort-btn { margin-left: auto; }
-
-/* Dedicated Subscriptions section (DASH-3) — shows every subscription's
- * traffic/expiry/title regardless of whether it was expanded to a proxy group. */
-.sb-dashboard-subs { margin: .5em 0 1em; }
-.sb-dashboard-sub-row { display: flex; align-items: center; gap: .6em; flex-wrap: wrap;
-	border: 1px solid var(--border-color-medium, #ccc); border-radius: 6px;
-	padding: .4em .6em; margin-top: .4em; }
-.sb-dashboard-sub-row .sb-dashboard-sub { margin-top: 0; flex: 1; }
-.sb-dashboard-sub-name { white-space: nowrap; }

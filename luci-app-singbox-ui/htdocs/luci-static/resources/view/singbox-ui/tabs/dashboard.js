@@ -67,16 +67,16 @@ function buildDashboard() {
 	function refreshSubs() { return fetchSubs().then(repaint); }
 
 	function agoText(ts) {
-		if (!ts) return _('never updated');
+		if (!ts) return _('never');
 		// Use the server clock when the backend supplied one (state.subsNow),
 		// else fall back to the browser clock (DASH-2).
 		var now = state.subsNow || Math.floor(Date.now() / 1000);
 		var secs = now - ts;
 		if (secs < 0) secs = 0;
-		if (secs < 60)   return _('updated %ds ago').format(secs);
-		if (secs < 3600) return _('updated %dm ago').format(Math.floor(secs / 60));
-		if (secs < 86400)return _('updated %dh ago').format(Math.floor(secs / 3600));
-		return _('updated %dd ago').format(Math.floor(secs / 86400));
+		if (secs < 60)   return _('%ds ago').format(secs);
+		if (secs < 3600) return _('%dm ago').format(Math.floor(secs / 60));
+		if (secs < 86400)return _('%dh ago').format(Math.floor(secs / 3600));
+		return _('%dd ago').format(Math.floor(secs / 86400));
 	}
 
 	function fmtExpire(sec) {
@@ -89,7 +89,7 @@ function buildDashboard() {
 		// poll()'s .catch(showUnreachable), which wiped the dashboard and blamed the
 		// Clash API instead. One bad header line bricked the tab until reload.
 		if (!isFinite(d.getTime())) return '';
-		return _('expires %s').format(d.toISOString().slice(0, 10));
+		return d.toISOString().slice(0, 10);
 	}
 
 	function updateSub(name) {
@@ -100,7 +100,15 @@ function buildDashboard() {
 		});
 	}
 
-	function setSortByLatency(on) { state.sortByLatency = !!on; repaint(); }
+	function setSortByLatency(on) {
+		state.sortByLatency = !!on;
+		// The button is the only affordance telling the user which order is live,
+		// so it carries the state (LuCI's -positive = "on").
+		if (state.ui && state.ui.sortBtn)
+			state.ui.sortBtn.className = 'cbi-button sb-sort-btn ' +
+				(state.sortByLatency ? 'cbi-button-positive' : 'cbi-button-neutral');
+		repaint();
+	}
 	function chooseNode(groupName, member) {
 		// optimistic: reflect selection immediately, then resync from /proxies
 		if (state.proxies[groupName]) state.proxies[groupName].now = member;
@@ -227,68 +235,73 @@ function buildDashboard() {
 
 	function mountChrome() {
 		var widgets = E('div', { 'class': 'sb-dashboard-widgets' });
-		var subs    = E('div', { 'class': 'sb-dashboard-subs' });
+		var subs    = E('div', { 'class': 'table sb-dashboard-subs' });
 		var groups  = E('div', { 'class': 'sb-dashboard-groups' });
-		var sortBtn = E('button', { 'class': 'btn cbi-button sb-sort-btn',
+		var sortBtn = E('button', { 'class': 'cbi-button cbi-button-neutral sb-sort-btn',
 			'click': function () { setSortByLatency(!state.sortByLatency); } },
 			_('Sort by latency'));
-		var toolbar = E('div', { 'class': 'sb-dashboard-toolbar' }, [ sortBtn ]);
+		var subsSection = E('div', { 'class': 'cbi-section' }, [
+			E('h3', {}, _('Subscriptions')), subs ]);
 		root.innerHTML = '';
-		root.appendChild(widgets);
-		root.appendChild(subs);
-		root.appendChild(toolbar);
-		root.appendChild(groups);
-		state.ui = { widgets: widgets, subs: subs, groups: groups };
+		root.appendChild(E('div', { 'class': 'cbi-section' }, widgets));
+		root.appendChild(subsSection);
+		root.appendChild(E('div', { 'class': 'cbi-section' }, [
+			E('div', { 'class': 'sb-dashboard-head' }, [
+				E('h3', {}, _('Proxy groups')), sortBtn ]),
+			groups ]));
+		state.ui = { widgets: widgets, subs: subs, groups: groups,
+		             sortBtn: sortBtn, subsSection: subsSection };
 	}
 
-	// DASH-3: build the meta spans (title / nodes / ago / traffic / expire) for
-	// a subscription record. Shared by the dedicated Subscriptions section and
-	// the per-group inline echo so both stay consistent. `withTitle` prepends
-	// the subscription title (the dedicated section uses its own heading row).
-	function subMetaSpans(subInfo, withTitle) {
-		var ui_ = subInfo.userinfo || null;
-		var meta = [
-			E('span', {}, _('%d nodes').format(subInfo.node_count || 0)),
-			E('span', {}, agoText(subInfo.last_update))
-		];
-		if (withTitle && subInfo.title)
-			meta.unshift(E('span', { 'class': 'sb-dashboard-sub-title' }, subInfo.title));
-		if (ui_ && (ui_.total || ui_.download || ui_.upload)) {
-			var used = (+ui_.upload || 0) + (+ui_.download || 0);
-			meta.push(E('span', {}, fmtBytes(used) +
-				(ui_.total ? ' / ' + fmtBytes(ui_.total) : '')));
-		}
-		if (ui_ && ui_.expire)
-			meta.push(E('span', {}, fmtExpire(ui_.expire)));
-		return meta;
-	}
+	// LuCI's div-table (`.table` / `.tr` / `.td`) — same markup the stock status
+	// pages use, so column alignment and theming come from the theme, not from us.
+	function td(cls, content) { return E('div', { 'class': 'td ' + cls }, content); }
 
-	// DASH-3: render every subscription (keyed by UCI section name) into a
-	// dedicated panel, independent of whether it was expanded into a proxy
-	// group. A non-expanded subscription (sub_multi='0', the default) produces
-	// no clash-api group, so its traffic cap / expiry would otherwise never
-	// surface — even though sub_status returns the userinfo.
+	// DASH-3: render every subscription (keyed by UCI section name) as a row,
+	// independent of whether it was expanded into a proxy group. A non-expanded
+	// subscription (sub_multi='0', the default) produces no clash-api group, so
+	// its traffic cap / expiry would otherwise never surface — even though
+	// sub_status returns the userinfo.
 	function renderSubscriptions() {
 		if (!state.ui) return;
 		var box = state.ui.subs;
 		box.innerHTML = '';
-		var names = Object.keys(state.subs || {});
+		var names = Object.keys(state.subs || {}).sort();
+		// Hide the whole section (heading included) when there is nothing to show.
+		state.ui.subsSection.style.display = names.length ? '' : 'none';
 		if (!names.length) return;
-		names.sort();
-		var rows = names.map(function (name) {
-			var subInfo = state.subs[name] || {};
-			var meta = subMetaSpans(subInfo, false);
-			meta.push(E('button', { 'class': 'btn cbi-button sb-dashboard-sub-update',
-				'click': ui.createHandlerFn(this, (function (n) {
-					return function () { return updateSub(n); };
-				})(name)) }, _('Update')));
-			return E('div', { 'class': 'sb-dashboard-sub-row', 'data-sub': name }, [
-				E('b', { 'class': 'sb-dashboard-sub-name' }, subInfo.title || name),
-				E('div', { 'class': 'sb-dashboard-sub' }, meta)
-			]);
+
+		box.appendChild(E('div', { 'class': 'tr table-titles' }, [
+			td('left', _('Subscription')), td('center', _('Nodes')),
+			td('left', _('Updated')), td('left', _('Traffic')),
+			td('center', _('Expires')), td('right cbi-section-actions', ' ')
+		]));
+		names.forEach(function (name) {
+			var s = state.subs[name] || {};
+			var ui_ = s.userinfo || {};
+			var used  = (+ui_.upload || 0) + (+ui_.download || 0);
+			var total = +ui_.total || 0;
+			// Native LuCI progressbar (as on the Overview page) instead of a
+			// hand-rolled "12MB / 30GB" span.
+			var traffic = total
+				? E('div', { 'class': 'cbi-progressbar',
+				             'title': fmtBytes(used) + ' / ' + fmtBytes(total) },
+					E('div', { 'style': 'width:' +
+						Math.min(100, Math.round(used / total * 100)) + '%' }))
+				: (used ? fmtBytes(used) : '—');
+			box.appendChild(E('div', { 'class': 'tr sb-dashboard-sub-row', 'data-sub': name }, [
+				td('left', E('b', { 'class': 'sb-dashboard-sub-name' }, s.title || name)),
+				td('center', '' + (s.node_count || 0)),
+				td('left', agoText(s.last_update)),
+				td('left', traffic),
+				td('center', fmtExpire(ui_.expire) || '—'),
+				td('right cbi-section-actions',
+					E('button', { 'class': 'cbi-button cbi-button-action sb-dashboard-sub-update',
+						'click': ui.createHandlerFn(this, (function (n) {
+							return function () { return updateSub(n); };
+						})(name)) }, _('Update')))
+			]));
 		});
-		box.appendChild(E('div', { 'class': 'sb-dashboard-widget-title' }, _('Subscriptions')));
-		rows.forEach(function (r) { box.appendChild(r); });
 	}
 
 	function ingestConnections(data) {
@@ -306,7 +319,7 @@ function buildDashboard() {
 		var p = proxies[member] || {};
 		var ms = memberDelay(p);
 		var attrs = { 'class': 'sb-dashboard-node', 'data-group': groupName,
-		              'data-name': member };
+		              'data-name': member, 'title': member };
 		if (member === currentNow) attrs['class'] += ' sb-dashboard-node-current';
 		if (isSelector) {
 			attrs['class'] += ' sb-dashboard-node-sel';
@@ -348,36 +361,23 @@ function buildDashboard() {
 			var members = sortMembers(grp.all || [], proxies);
 			var busy = !!state.testing[gname];
 			var testBtnAttrs = {
-				'class': 'btn cbi-button sb-dashboard-test' + (busy ? ' busy' : ''),
+				'class': 'cbi-button cbi-button-action sb-dashboard-test' + (busy ? ' busy' : ''),
 				'click': ui.createHandlerFn(this, (function (g) {
 					return function () { return testGroup(g); };
 				})(gname))
 			};
 			if (busy) testBtnAttrs.disabled = '';
 			var header = E('div', { 'class': 'sb-dashboard-grp-head' }, [
-				E('b', {}, gname),
+				E('b', { 'class': 'sb-dashboard-grp-name' }, gname),
 				E('span', { 'class': 'sb-dashboard-grp-type' },
 					isSel ? _('selector') : _('auto')),
 				E('button', testBtnAttrs, busy ? _('Testing…') : _('Test'))
 			]);
-			var subInfo = state.subs[gname];
-			var children = [ header ];
-			if (subInfo) {
-				// Per-group inline echo (convenience). The authoritative,
-				// always-present view of every subscription lives in the
-				// dedicated Subscriptions section (renderSubscriptions, DASH-3).
-				var meta = subMetaSpans(subInfo, true);
-				meta.push(E('button', { 'class': 'btn cbi-button sb-dashboard-sub-update',
-					'click': ui.createHandlerFn(this, (function (n) {
-						return function () { return updateSub(n); };
-					})(gname)) }, _('Update')));
-				children.push(E('div', { 'class': 'sb-dashboard-sub' }, meta));
-			}
 			var rows = members.map(function (m) {
 				return nodeRow(gname, isSel, m, proxies, grp.now);
 			});
 			box.appendChild(E('div', { 'class': 'sb-dashboard-group', 'data-group': gname },
-				children.concat(rows)));
+				[ header, E('div', { 'class': 'sb-dashboard-nodes' }, rows) ]));
 		});
 	}
 

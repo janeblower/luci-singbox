@@ -134,7 +134,7 @@ export LUCI_PASS="admin"
 # Playwright owns spec discovery (testMatch **/*.spec.ts), serialization
 # (workers:1), and the per-test UCI restore — the `restoreUci` auto-fixture in
 # tests/browser/fixtures.ts replaces the old per-spec `docker cp` + rpcd reload.
-if ! ( cd tests/browser && npx playwright test ); then
+if ! ( cd tests/browser && npx playwright test "$@" ); then
     echo "FAIL: playwright test"
     docker logs --tail 60 "$CNAME" >&2 || true
     exit 1
