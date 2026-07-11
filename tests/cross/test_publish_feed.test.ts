@@ -33,6 +33,11 @@ const hasGit =
   spawnSync("git", ["--version"], { encoding: "utf8" }).status === 0;
 
 // Deterministic identity for the seed commits (the script sets its own).
+// receive.autogc=false: a push into the bare remote otherwise forks `git gc
+// --auto` in the BACKGROUND, which was still writing into remote.git while the
+// finally-block rmSync'd the tmpdir out from under it — rmdir then failed with
+// ENOTEMPTY and reddened CI at random (the objects were repacked mid-delete).
+// GIT_CONFIG_* propagates into the git calls publish-feed.sh makes too.
 const GIT_ENV = {
   ...process.env,
   GIT_AUTHOR_NAME: "t",
@@ -41,6 +46,9 @@ const GIT_ENV = {
   GIT_COMMITTER_EMAIL: "t@t",
   GIT_CONFIG_GLOBAL: "/dev/null",
   GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_CONFIG_COUNT: "1",
+  GIT_CONFIG_KEY_0: "receive.autogc",
+  GIT_CONFIG_VALUE_0: "false",
 };
 
 function git(cwd: string, ...args: string[]): void {
@@ -155,7 +163,14 @@ describe("publish_feed", () => {
         ).stdout.trim();
         expect(log).toBe("deploy feed: testsha");
       } finally {
-        rmSync(base, { recursive: true, force: true });
+        // maxRetries: belt-and-braces against any other git child still holding
+        // the tree open (the autogc fix above removes the known one).
+        rmSync(base, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 100,
+        });
       }
     },
   );
@@ -197,7 +212,14 @@ describe("publish_feed", () => {
         expect(r.status).toBe(0);
         expect(r.stdout + r.stderr).toContain("nothing to commit");
       } finally {
-        rmSync(base, { recursive: true, force: true });
+        // maxRetries: belt-and-braces against any other git child still holding
+        // the tree open (the autogc fix above removes the known one).
+        rmSync(base, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 100,
+        });
       }
     },
   );
@@ -292,7 +314,14 @@ describe("publish_feed", () => {
         expect(existsSync(resolve(verify, "25.12/x86_64/index.md"))).toBe(true);
         expect(existsSync(resolve(verify, "luci-singbox.pem"))).toBe(true);
       } finally {
-        rmSync(base, { recursive: true, force: true });
+        // maxRetries: belt-and-braces against any other git child still holding
+        // the tree open (the autogc fix above removes the known one).
+        rmSync(base, {
+          recursive: true,
+          force: true,
+          maxRetries: 3,
+          retryDelay: 100,
+        });
       }
     },
   );
