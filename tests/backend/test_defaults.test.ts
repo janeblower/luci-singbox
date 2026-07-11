@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_defaults.sh
 // Runs generate.uc over the SHIPPED default config on the guest, then asserts
 // the produced sing-box JSON contains the expected structural elements.
 

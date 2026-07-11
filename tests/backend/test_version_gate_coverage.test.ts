@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_version_gate_coverage.sh
 // Schema-level coverage: representative min_version and max_version tags must
 // survive dump_all() projection (catches a regression that strips version metadata).
 

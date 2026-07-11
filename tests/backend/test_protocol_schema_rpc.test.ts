@@ -3,7 +3,6 @@ import { useGuest } from "../helpers/guest.ts";
 import { exec } from "../helpers/ssh.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_protocol_schema_rpc.sh
 // Validates singbox-ui::protocol_schema RPC:
 //   1. status ok
 //   2. version:1 + schema key

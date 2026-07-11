@@ -280,7 +280,6 @@ return L.Class.extend({
     notify:            notify,
     showJsonModal:     showJsonModal,
     copyToClipboard:   copyToClipboard,
-    fallbackCopy:      fallbackCopy,
     withBusy:          withBusy,
     compareVersions:   compareVersions,
     applyVersionGate:  applyVersionGate,

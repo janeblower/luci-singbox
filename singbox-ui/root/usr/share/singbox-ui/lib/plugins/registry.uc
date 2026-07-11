@@ -10,6 +10,39 @@
 
 let _plugins = [];
 
+// The UI's enable toggle (UCI singbox-ui.plugins.<name>_enabled) used to be read
+// ONLY by the frontend and the `plugins` status method: discovery loaded every
+// plugin unconditionally and every hook ran, so a plugin switched off in the UI
+// kept creating its interface and NAT table on the next restart. The flag is
+// enforced here, at the point where hooks take EFFECT, rather than in discovery —
+// get_all() must keep listing installed-but-disabled plugins, otherwise the
+// Plugins tab has nothing to offer the user to switch back on.
+// Unset == disabled: a freshly installed plugin stays inert until enabled, which
+// is what the frontend already assumed.
+// Cached per NAME, not as one snapshot of the plugin list: plugins register at
+// require() time, so a snapshot taken on the first lookup would treat everything
+// registered afterwards as disabled.
+let _enabled_cache = {};
+function is_enabled(name) {
+    if (_enabled_cache[name] == null) {
+        let on = false;
+        try {
+            let uci = require("uci");
+            let dir = getenv("UCI_CONFIG_DIR");
+            let cur = dir ? uci.cursor(dir) : uci.cursor();
+            on = (cur.get("singbox-ui", "plugins", name + "_enabled") === "1");
+        } catch (_) {}
+        _enabled_cache[name] = on;
+    }
+    return _enabled_cache[name] === true;
+}
+
+function _enabled_plugins() {
+    let out = [];
+    for (let p in _plugins) if (is_enabled(p.name)) push(out, p);
+    return out;
+}
+
 function register(plugin) {
     assert(plugin.name != null, "plugin.name required");
     if (plugin.on_generate_post != null)
@@ -25,7 +58,7 @@ function get_all() { return _plugins; }
 
 function get_rpcd_methods() {
     let out = {};
-    for (let p in _plugins) {
+    for (let p in _enabled_plugins()) {
         if (p.rpcd == null || type(p.rpcd.methods) !== "object") continue;
         for (let name, fn in p.rpcd.methods) {
             if (out[name] != null)
@@ -36,19 +69,9 @@ function get_rpcd_methods() {
     return out;
 }
 
-function get_rpcd_acl() {
-    let read = [], write = [];
-    for (let p in _plugins) {
-        if (p.rpcd == null) continue;
-        for (let m in (p.rpcd.acl_read ?? []))  push(read, m);
-        for (let m in (p.rpcd.acl_write ?? [])) push(write, m);
-    }
-    return { read, write };
-}
-
 function get_lifecycle() {
     let out = [];
-    for (let p in _plugins)
+    for (let p in _enabled_plugins())
         if (p.lifecycle != null) push(out, { name: p.name,
             apply: p.lifecycle.apply, teardown: p.lifecycle.teardown });
     return out;
@@ -56,14 +79,14 @@ function get_lifecycle() {
 
 function get_nft_fragments() {
     let out = [];
-    for (let p in _plugins)
+    for (let p in _enabled_plugins())
         if (p.nft != null && type(p.nft.fragment) === "function")
             push(out, { name: p.name, fragment: p.nft.fragment });
     return out;
 }
 
 function invoke_on_generate_post(config, ctx) {
-    for (let p in _plugins) {
+    for (let p in _enabled_plugins()) {
         if (type(p.on_generate_post) !== "function") continue;
         try { p.on_generate_post(config, ctx); }
         catch (e) {
@@ -75,5 +98,8 @@ function invoke_on_generate_post(config, ctx) {
     }
 }
 
-return { register, get_all, get_rpcd_methods, get_rpcd_acl,
+// No get_rpcd_acl(): it aggregated plugin acl_read/acl_write lists that nothing
+// ever consumed — plugins ship their own acl.d/*.json, which is what rpcd reads.
+
+return { register, get_all, is_enabled, get_rpcd_methods,
          get_lifecycle, get_nft_fragments, invoke_on_generate_post };

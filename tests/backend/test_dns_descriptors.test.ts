@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_dns_descriptors.sh
 // Verifies that builder.dns.registry eager-loads all 14 DNS server descriptors
 // and registers them under the "dns" kind.
 describe("dns descriptors (builder.dns.registry)", () => {

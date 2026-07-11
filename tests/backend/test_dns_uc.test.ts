@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_dns_uc.sh
 // Tests generate.uc DNS block from dns_server/dns_rule/dns sections via UCI.
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";

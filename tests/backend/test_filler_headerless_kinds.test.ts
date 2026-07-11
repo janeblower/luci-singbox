@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_filler_headerless_kinds.sh
 describe("filler_headerless_kinds (filler.build for cache/clash_api/dns_rule have no type/tag)", () => {
   useGuest();
 

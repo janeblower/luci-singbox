@@ -144,49 +144,20 @@ function jsonImportInbound(o) {
 }
 
 // openJsonExportModal(kind, name) — shared between inbound/outbound export.
-// Fetches the section's sing-box JSON via the export_section RPC and shows it
-// in a modal with a Copy button. On RPC error the modal renders the error
-// message instead.
+// Fetches the section's sing-box JSON via the export_section RPC and shows it in
+// SbCommon.showJsonModal, which already renders the pre/status/Copy/Close markup
+// and accepts a promise of a string or an { error } — this used to hand-rebuild
+// all of it, drifting from the very modal it was meant to match.
 function openJsonExportModal(kind, name) {
-	var pre = E('pre', {
-		'class': 'cbi-input-textarea sb-json-modal-pre',
-		'style': 'max-height:50vh;overflow:auto;white-space:pre-wrap;' +
-		         'font-family:monospace;font-size:90%;'
-	}, _('Loading…'));
-	var status = E('div', { 'class': 'sb-json-modal-status',
-		'style': 'margin-top:8px;color:#555;font-size:90%;' });
-
-	// Clipboard helpers now live in lib/common.js (C2.2.6 dedup). showCopyResult
-	// stays inline because the status node is local to this modal — the helper
-	// just calls back into it.
-	function showCopyResult(msg, isErr) {
-		status.textContent = msg;
-		status.classList.remove('sb-error', 'sb-ok');
-		status.classList.add(isErr ? 'sb-error' : 'sb-ok');
-	}
-	function onCopyClick() {
-		SbCommon.copyToClipboard(pre.textContent || '', showCopyResult);
-	}
-
-	ui.showModal(_('Export JSON — %s %s').format(kind, name), [
-		pre, status,
-		E('div', { 'class': 'right', 'style': 'margin-top:12px;' }, [
-			E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, _('Close')),
-			' ',
-			E('button', { 'class': 'cbi-button cbi-button-action', 'click': onCopyClick },
-				_('Copy'))
-		])
-	]);
-
-	SbRpc.callExportSection(kind, name).then(function (res) {
-		if (!res || res.status !== 'ok') {
-			pre.textContent = _('Error: ') + ((res && res.message) || _('unknown error'));
-			return;
-		}
-		pre.textContent = JSON.stringify(res.section, null, 2);
+	var body = SbRpc.callExportSection(kind, name).then(function (res) {
+		if (!res || res.status !== 'ok')
+			return { error: _('Error: ') + ((res && res.message) || _('unknown error')) };
+		return JSON.stringify(res.section, null, 2);
 	}, function (err) {
-		pre.textContent = _('RPC failed: ') + (err && err.message ? err.message : String(err));
+		return { error: _('RPC failed: ') + (err && err.message ? err.message : String(err)) };
 	});
+
+	SbCommon.showJsonModal(_('Export JSON — %s %s').format(kind, name), body);
 }
 
 function jsonExportInbound(name)  { openJsonExportModal('inbound',  name); }

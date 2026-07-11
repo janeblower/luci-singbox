@@ -471,7 +471,7 @@ Subscription URL and update policy are stored on the outbound UCI section itself
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `sub_url` | string | HTTPS URL | yes | `type=subscription` | Subscription feed URL. Read by `subscription.uc` (`cmd_fetch_subs`) to download the proxy list; **not read by `outbound.uc`**. |
-| `sub_update_via` | string | `direct` or outbound section name | no | `type=subscription` | Route through which the subscription is fetched. `direct` = default WAN; an `interface`-type outbound section name = that WAN device. Read by `subscription.uc`; **not read by `outbound.uc`**. |
+| `sub_user_agent` | string | any UA string | no | `type=subscription` | `User-Agent` sent when fetching the feed (combobox with common browser UAs). Empty → a Chrome default. Read by `subscription.uc`; **not read by `outbound.uc`**. |
 | `sub_interval` | integer | seconds | no | `type=subscription` | Auto-refresh interval in seconds. Read by `subscription.uc` scheduler; **not read by `outbound.uc`**. |
 | `sub_multi` | bool | `0`/`1` | no | `type=subscription` | When `1`, all parsed proxy URLs are expanded into individual child outbounds grouped under a selector or urltest group. When `0`, only the first parseable URL is used. Read by `outbound.uc`. |
 | `sub_selector_type` | enum | `selector`, `urltest` | no | `sub_multi=1` | Group type for expanded proxies. Defaults to `selector`. Read by `outbound.uc`. |
@@ -641,9 +641,47 @@ UI write: **none** — there is no UI tab or form for `clash_api`. The section a
 
 ## `subscription`
 
-This is **not a distinct UCI section type**. Subscription configuration lives on `outbound` sections of type `subscription` (see the [`outbound` Subscription subsection](#subscription-outbound-typesubscription) above). The `subscription.uc` script reads `sub_url`, `sub_update_via`, and `sub_interval` from those outbound sections.
+This is **not a distinct UCI section type**. Subscription configuration lives on `outbound` sections of type `subscription` (see the [`outbound` Subscription subsection](#subscription-outbound-typesubscription) above). The `subscription.uc` script reads `sub_url`, `sub_user_agent` and `sub_interval` from those outbound sections.
 
 There is no separate UCI section named or typed `subscription`.
+
+There IS a named `subscriptions` section carrying the auto-update toggle:
+
+| Field | Type | Values | Required | Description |
+|---|---|---|---|---|
+| `auto_update` | bool | `0`/`1` | no | Gates the cron refresh path only (the UI's Refresh button always forces a fetch). |
+
+**Note:** subscriptions are fetched with `curl` straight over the WAN — never through an outbound. A `sub_update_via` field is documented in older revisions of this file; it does not exist and was never read.
+
+---
+
+## `global`
+
+Named section `singbox-ui.@global[0]`, seeded by `90-singbox-ui-fwmark`. Security-relevant: these drive the transparent-proxy nft ruleset.
+
+| Field | Type | Values | Required | Description |
+|---|---|---|---|---|
+| `fwmark` | string | hex | no | Packet mark for tproxy'd flows. Default `0x40000000` (bit 30 — outside the mwan3 mask). |
+| `fwmark_mask` | string | hex | no | Mask applied with the mark. Default `0x40000000`. |
+| `redirect_router_traffic` | bool | `0`/`1` | no | Also hijack traffic originating on the router itself (output chain), not just forwarded traffic. Default `0`. |
+
+---
+
+## `main`
+
+| Field | Type | Values | Required | Description |
+|---|---|---|---|---|
+| `ui_compat_only` | bool | `0`/`1` | no | UI-only. When `1`, fields outside the running core's version window are HIDDEN instead of shown disabled. `generate.uc` ignores it. |
+
+---
+
+## `plugins`
+
+Plugin manager section. Per-plugin enable flags live here as `<name>_enabled`.
+
+| Field | Type | Values | Required | Description |
+|---|---|---|---|---|
+| `<name>_enabled` | bool | `0`/`1` | no | Enables plugin `<name>`. **Unset means off.** A disabled plugin registers no rpcd methods, no nft fragment, no lifecycle hook and no generate hook. |
 
 ---
 

@@ -1,6 +1,5 @@
 /**
  * tests/cross/install_lists_match.test.ts
- * Port of tests/cross/test_install_lists_match.sh
  *
  * Architectural invariant: each package's install manifest is the SINGLE source
  * of truth for its install file set. Both the buildroot Makefile and

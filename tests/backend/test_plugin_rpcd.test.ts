@@ -38,8 +38,9 @@ EOF
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_rpcd"
-      trap 'rm -rf "$PLUG"' EXIT
-      mkdir -p "$PLUG"
+      D=/tmp/plrpcd-$$
+      trap 'rm -rf "$PLUG" "$D"' EXIT
+      mkdir -p "$PLUG" "$D/uci"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
 reg.register({ name: "zz_rpcd",
@@ -47,8 +48,10 @@ reg.register({ name: "zz_rpcd",
           acl_read: ["zz_echo"], acl_write: [] } });
 return {};
 EOF
-      list_has=$(UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' list | ucode -e 'let fs=require("fs"); let d=json(fs.stdin.read("all")||"{}"); print(d.zz_echo != null ? "yes" : "no");')
-      call_out=$(echo '{}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call zz_echo)
+      # A plugin's rpcd methods are only surfaced while the plugin is enabled.
+      printf "config singbox-ui 'plugins'\n\toption zz_rpcd_enabled '1'\n" > "$D/uci/singbox-ui"
+      list_has=$(UCI_CONFIG_DIR="$D/uci" UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' list | ucode -e 'let fs=require("fs"); let d=json(fs.stdin.read("all")||"{}"); print(d.zz_echo != null ? "yes" : "no");')
+      call_out=$(echo '{}' | UCI_CONFIG_DIR="$D/uci" UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call zz_echo)
       print(){ :; }
       echo "{\\"list_has\\":\\"$list_has\\",\\"call_out\\":$call_out}"
     `);

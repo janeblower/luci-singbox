@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_rpcd_prod_path.sh
 //
 // Production-path regression: installs the handler + lib into the guest's
 // REAL system paths, restarts rpcd, and calls `ubus call singbox-ui ...`.

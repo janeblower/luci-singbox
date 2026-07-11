@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_parity_coverage_guard.sh
 // COVERAGE GUARD: every declared json_key (descriptor fields + groups +
 // shared-block emit_spec + *_action fields, INCLUDING version-gated min/max
 // fields read straight from the raw registry) and every emit-only descriptor
@@ -68,10 +67,15 @@ describe("parity coverage guard", () => {
   // 1a. descriptor own fields + groups + emit-only marker
   let kinds = [ "outbound", "inbound", "dns", "route_rule", "rule_set",
                 "dns_rule", "cache", "clash_api" ];
+  let all_types = {};   // "<kind>:<type>" -> 1 (every registered descriptor)
   for (let k in kinds)
     for (let t in reg.types_for_kind(k)) {
       let d = reg._registry[sprintf("%s:%s", k, t)];
       if (d == null) continue;
+      // Only the protocol kinds: they are the ones tests/parity/corpus.uc builds.
+      // dns / route_rule / rule_set / dns_rule / settings have their own corpora
+      // and golden sets in the dedicated parity suites.
+      if (k === "outbound" || k === "inbound") all_types[sprintf("%s:%s", k, t)] = 1;
       let has_jk = false;
       for (let f in (d.fields || [])) if (f.json_key != null) { note(f.json_key); has_jk = true; }
       if (d.groups != null) { walk_groups(d.groups); has_jk = true; }
@@ -145,6 +149,15 @@ describe("parity coverage guard", () => {
   // the "<kind>:<type>" key if a fixture is structurally impossible.
   for (let kt in keys(emit_only))
     if (!corpus_kt[kt] && !allow[kt]) push(missing, sprintf("emit-only:%s", kt));
+  // EVERY registered PROTOCOL descriptor needs a corpus fixture whose golden is
+  // on disk.
+  // Matching json_keys by LEAF NAME across all goldens was too weak: a brand-new
+  // protocol built only from common keys (server / server_port / password / tag /
+  // type) satisfied the guard without a single golden of its own, and
+  // protocol_parity never built it (no fixture) — so a wrong key or a wrong coerce
+  // in its builder shipped uncovered. Allowlistable by "<kind>:<type>".
+  for (let kt in keys(all_types))
+    if (!corpus_kt[kt] && !allow[kt]) push(missing, sprintf("no-golden:%s", kt));
   if (length(missing)) {
     for (let k in sort(missing)) print(sprintf("UNCOVERED %s\\n", k));
     print(sprintf("FAILS=%d\\n", length(missing)));

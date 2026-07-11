@@ -10,6 +10,14 @@
 
 const CONFIG_OUT = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 
+// last_state.json describes the state of the PRODUCTION config, so only a run
+// that writes the production config may touch it. SINGBOX_CONFIG is set solely by
+// the rpcd preview path (and by tests): preview is a read-ACL method, yet it used
+// to overwrite last_state.json unconditionally — faking Monitoring's "generated
+// ok" and erasing a write_failed_stale marker that says the daemon is running an
+// out-of-date config.
+const IS_PROD_OUT = (getenv("SINGBOX_CONFIG") == null);
+
 let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 let fs  = require("fs");
@@ -43,22 +51,10 @@ let out_block = outbound_mod.build_outbounds(uci);
 // route.uc emits `action: "reject"` rules instead, so nothing to inject here.
 let post_process = require("post_process");
 
-// D4: eagerly load any plugins present under /usr/share/singbox-ui/lib/plugins/*.uc.
-// Each plugin's register() call fires on require. Failures are logged but never
-// fatal — a broken plugin file must not stop config generation.
-let plugin_files = fs.glob("/usr/share/singbox-ui/lib/plugins/*.uc") || [];
-for (let path in plugin_files) {
-	if (match(path, /\/registry\.uc$/)) continue;
-	let m = match(path, /\/([^\/]+)\.uc$/);
-	if (!m) continue;
-	let modname = "plugins." + m[1];
-	try { require(modname); }
-	catch (e) {
-		try { log_mod.log_event("warn", "plugin.load_failed",
-		                        { module: modname, err: ""+e }); }
-		catch (_) {}
-	}
-}
+// Plugin descriptors are loaded by require("outbound") above, which calls
+// plugins.discovery.load_all(). The loop that used to live here globbed the old
+// FLAT lib/plugins/*.uc layout; plugins ship as plugins/<name>/init.uc dirs now,
+// so it never matched anything and was dead code.
 
 let have_direct = false;
 for (let o in out_block) {
@@ -239,7 +235,7 @@ if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 	if (stale) {
 		warn("generate.uc: config write FAILED — CONTINUING ON PREVIOUS config (running stale)\n");
 		try { log_mod.log_event("error", "config.write_failed_stale", {}); } catch (_) {}
-		try {
+		if (IS_PROD_OUT) try {
 			fs.mkdir("/var/lib/singbox-ui", 0755);
 			publish_atomic("/var/lib/singbox-ui/last_state.json",
 				sprintf("{\"last_generate_ts\":%d,\"last_generate_result\":\"write_failed_stale\",\"config_hash\":\"unknown\"}", time()));
@@ -257,7 +253,7 @@ if (!publish_atomic(CONFIG_OUT, sprintf("%.4J\n", config))) {
 // accepted and is running it; hence `last_generate_result`. The real apply
 // outcome is written by the init.d start path to apply_state.json
 // (last_apply_result) after a successful `sing-box check`.
-try {
+if (IS_PROD_OUT) try {
 	fs.mkdir("/var/lib/singbox-ui", 0755);
 	publish_atomic("/var/lib/singbox-ui/last_state.json",
 		sprintf("{\"last_generate_ts\":%d,\"last_generate_result\":\"ok\",\"config_hash\":\"unknown\"}", time()));

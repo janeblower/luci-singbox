@@ -19,7 +19,7 @@ let helpers = require("helpers");
 
 function log_err(msg) { warn(msg + "\n"); }
 
-// fnv1a32 — shared with lib/outbound.uc::safe_tag, exported from helpers.uc
+// fnv1a32 — shared with lib/sharelink.uc::safe_tag, exported from helpers.uc
 // so there is exactly one implementation. See lib/helpers.uc for the body.
 const fnv1a32 = helpers.fnv1a32;
 
@@ -375,7 +375,10 @@ function fwmark_pair(mark_raw, mask_raw) {
 // validate_port(p) — return integer in 1..65535 or null. Accepts strings
 // ("7893"), bare ints (7893), and rejects "", null, "abc", "99999", "0",
 // negative numbers. Callers must treat null as "skip tproxy emission".
-// Mirrors lib/outbound.uc::safe_port so both code paths agree on the rule.
+// Mirrors lib/sharelink.uc::safe_port so both code paths agree on the rule.
+// (Four port validators exist in total — this one, sharelink.uc::safe_port,
+// clash_safe_port in the rpcd handler, and isPort in lib/validators.js. Changing
+// the accepted range means changing all four.)
 function validate_port(p) {
 	if (p == null || p === "") return null;
 	let n = (type(p) === "int") ? p : +p;
@@ -524,7 +527,8 @@ function nft_delete_table_quiet() {
 	system(["nft", "delete", "table", "inet", TABLE]);
 }
 
-function cmd_remove() { nft_delete_table_quiet(); }
+// cmd_remove lives further down, next to cmd_apply: it takes the same apply-lock,
+// and ucode resolves a top-level function only if it is defined ABOVE the caller.
 
 // first_nft_tproxy(cur) — first enabled inbound with protocol=tproxy and
 // nft_rules not explicitly "0". Returns the section object or null.
@@ -959,6 +963,21 @@ function cmd_apply(cur) {
 	let rc = _cmd_apply_locked(cur);
 	release_apply_lock();
 	return rc;
+}
+
+// cmd_remove — drop our table. Takes the SAME apply-lock as cmd_apply: `stop`
+// (init.d, holding only the lifecycle lock) could otherwise interleave with a
+// cron apply (holding only the apply lock), and the apply's atomic add would land
+// AFTER this delete — leaving an orphan table tproxy'ing to a dead port until the
+// next start. The locks were disjoint, so nothing serialised the two.
+function cmd_remove() {
+	if (!acquire_apply_lock()) {
+		log_err("nftables: another apply is in progress (lock held); skipping remove");
+		return 1;
+	}
+	nft_delete_table_quiet();
+	release_apply_lock();
+	return 0;
 }
 
 let uci_dir = getenv("UCI_CONFIG_DIR");

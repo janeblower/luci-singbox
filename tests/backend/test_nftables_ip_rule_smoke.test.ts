@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_nftables_ip_rule_smoke.sh
 // PATH-stub `ip` to feed canned `ip rule show` output to nftables.uc,
 // assert a warning fires when no matching fwmark is present and stays
 // silent when one is.

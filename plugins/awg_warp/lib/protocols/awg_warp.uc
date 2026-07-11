@@ -11,8 +11,6 @@ reg.try_register({
 	fields: [
 		{ name: "warp_storage", type: "enum", tab: "basic", ui_label: "Config storage (RAM/Flash)",
 		  values: ["ram","flash"], default: "ram" },
-		{ name: "awg_mimic", type: "enum", tab: "basic", ui_label: "Mimic protocol",
-		  values: ["auto","quic","dns","stun","dtls","sip","tls","static"] },
 		{ name: "ipv6_enabled", type: "bool", tab: "basic", ui_label: "Enable IPv6 (auto-masquerade)", default: 0 },
 		{ name: "mtu_override", type: "number", tab: "basic", ui_label: "MTU (empty = WAN-80)", advanced: true },
 		// WARP creds + AWG params (jc/jmin/jmax etc.) are provisioned by the

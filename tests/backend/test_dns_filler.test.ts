@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_dns_filler.sh
 // Registers a minimal "tls" DNS-server descriptor and verifies the declarative
 // filler emits the expected sing-box JSON fields.
 describe("dns filler (declarative DoT server)", () => {

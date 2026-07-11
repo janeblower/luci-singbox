@@ -29,12 +29,6 @@ let cache_mod = require("cache");
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn("error: " + msg + "\n"); }
 
-// SEC-9: best-effort unlink that never throws. ucode's fs.unlink can throw on
-// some error conditions; an unguarded throw inside a per-job loop would abort
-// processing of every REMAINING rule-set in the refresh cycle. Several in-loop
-// unlinks here were bare while adjacent ones were try-wrapped — route them all
-// through this helper so a single failure stays local (mirrors subscription.uc).
-function unlink_quiet(p) { try { fs.unlink(p); } catch (_) {} }
 
 // Local rule-set sources must live under a known prefix to keep a hostile
 // (or accidental) UCI value from copying /etc/shadow or similar into the
@@ -131,12 +125,12 @@ function cache_extract_srs(db, tag, out_path) {
 	let tmp = sprintf("%s.tmp.%d", out_path, time());
 	let cmd = helpers.sq(bin) + " -r " + helpers.sq(db) + " rule_set " +
 	          helpers.sq(tag) + " > " + helpers.sq(tmp) + " 2>/dev/null";
-	if (system(["/bin/sh", "-c", cmd]) !== 0) { unlink_quiet(tmp); return false; }
+	if (system(["/bin/sh", "-c", cmd]) !== 0) { helpers.unlink_quiet(tmp); return false; }
 	let st = fs.stat(tmp);
-	if (!st || st.size === 0) { unlink_quiet(tmp); return false; }
+	if (!st || st.size === 0) { helpers.unlink_quiet(tmp); return false; }
 	let renamed = false;
 	try { renamed = fs.rename(tmp, out_path); } catch (_) { renamed = false; }
-	if (!renamed) { unlink_quiet(tmp); return false; }
+	if (!renamed) { helpers.unlink_quiet(tmp); return false; }
 	return true;
 }
 
@@ -295,7 +289,7 @@ function cmd_fetch_rulesets(cur) {
 				log_err(`fetch_rulesets: cannot read: ${target}`);
 				// cp may have left a partial file behind; remove it so
 				// stale content never reaches sing-box rule-set decompile.
-				unlink_quiet(raw_path);
+				helpers.unlink_quiet(raw_path);
 				continue;
 			}
 			push(jobs, { name: name, raw_path: raw_path, out_path: out_path, rs_type: rs_type, target: target });
@@ -314,12 +308,12 @@ function cmd_fetch_rulesets(cur) {
 		let st = fs.stat(m.raw_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_rulesets: download failed for ${m.name} (${m.target})`);
-			unlink_quiet(m.raw_path);
+			helpers.unlink_quiet(m.raw_path);
 			continue;
 		}
 		if (st.size > MAX_BODY) {
 			log_err(`fetch_rulesets: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
-			unlink_quiet(m.raw_path);
+			helpers.unlink_quiet(m.raw_path);
 			continue;
 		}
 		// Cache-extracted remote rule-sets are always compiled .srs (force
@@ -329,38 +323,28 @@ function cmd_fetch_rulesets(cur) {
 		if (fmt === "binary") {
 			if (system([SINGBOX, "rule-set", "decompile", m.raw_path, "-o", m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: decompile failed for ${m.name}`);
-				unlink_quiet(m.raw_path);
+				helpers.unlink_quiet(m.raw_path);
 				continue;
 			}
 		} else {
 			if (system(["cp", "--", m.raw_path, m.out_path]) !== 0) {
 				log_err(`fetch_rulesets: cannot copy source for ${m.name}`);
-				unlink_quiet(m.raw_path);
+				helpers.unlink_quiet(m.raw_path);
 				continue;
 			}
 		}
-		unlink_quiet(m.raw_path);
+		helpers.unlink_quiet(m.raw_path);
 		log(`fetch_rulesets: ${m.name} -> ${m.out_path}`);
 	}
 	return 0;
 }
-// is_stale(path, interval_s, force) -> bool. Missing file / zero interval / no
-// interval => stale.
-function is_stale(path, interval_s, force) {
-	if (force) return true;
-	let st = fs.stat(path);
-	if (!st) return true;
-	if (interval_s == null || interval_s === 0) return true;
-	return (time() - st.mtime) >= interval_s;
-}
-
 function any_rulesets_stale(cur, force) {
 	for (let name in helpers.sections_of_kind(cur, "ruleset", "nft_rules", "1")) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		let iv = +helpers.uci_get_or_empty(cur, name, "update_interval");
 		// !(iv > 0) catches NaN/0/negatives — see any_subs_stale for the bug.
 		if (!(iv > 0)) iv = 86400;
-		if (is_stale(`${TMPDIR}/rs_${name}.json`, iv, force)) return true;
+		if (helpers.is_stale(`${TMPDIR}/rs_${name}.json`, iv, force)) return true;
 	}
 	return false;
 }

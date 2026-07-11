@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode, runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_protocol_descriptors_fixes.sh
 // Regression tests for protocol-descriptor correctness bugs:
 //   S4-1  hysteria2 obfs with empty password must NOT emit obfs{}
 //   S4-6  direct proxy_protocol enum at build time: "0" coerces to 0 (the

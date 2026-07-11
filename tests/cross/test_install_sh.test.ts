@@ -1,6 +1,5 @@
 /**
  * tests/cross/install_sh.test.ts
- * Port of tests/cross/test_install_sh.sh
  *
  * Unit test for the FEED-based install.sh. Drives the flow WITHOUT network:
  * stubs `apk` (--print-arch / update / add / list) and `wget` via PATH + temp dir;

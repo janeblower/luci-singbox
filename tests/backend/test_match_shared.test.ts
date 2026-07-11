@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_match_shared.sh
 // match.fields(ctx) returns clean field copies and excludes
 // rule_set/inbound/auth_user/clash_mode from the headless context.
 describe("match shared block (fields by context)", () => {

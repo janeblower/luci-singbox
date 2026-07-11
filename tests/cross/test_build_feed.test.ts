@@ -1,6 +1,5 @@
 /**
  * tests/cross/build_feed.test.ts
- * Port of tests/cross/test_build_feed.sh
  *
  * Tests scripts/build-feed.sh against REAL apk-tools 3 (apk mkpkg --info).
  * SKIPs inside the OpenWrt qemu VM (SINGBOX_TESTS_IN_VM=1).

@@ -296,8 +296,8 @@ return [
       section: { ".name": "shlink",
                  raw_link: "vless://11111111-1111-1111-1111-111111111111@ex.com:443?security=tls&sni=ex.com#node" } },
     // AWG-WARP plugin: emits {type:direct, tag, bind_interface}. UCI-only fields
-    // (awg_mimic, ipv6_enabled, mtu_override, warp_*/awg_*) never reach the JSON.
+    // (ipv6_enabled, mtu_override, warp_*/awg_*) never reach the JSON.
     { name: "awg_warp_basic", kind: "outbound", type: "awg_warp",
       section: { ".name": "warp_p", type: "awg_warp", enabled: "1",
-                 awg_mimic: "auto", ipv6_enabled: "0" } },
+                 ipv6_enabled: "0" } },
 ];

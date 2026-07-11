@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_audit_1_6.sh
 // Regression for audit 1.6: descriptor input validation / UX hardening.
 //   - shadowsocks ss_user: warn()+skip entries with unknown method or empty pw
 //   - vless inbound_user: warn()+skip structurally-malformed uuid tokens

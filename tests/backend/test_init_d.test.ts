@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_init_d.sh
 // Drives /etc/init.d/singbox-ui start_service/stop_service via stubbed
 // ucode/uci/logger/procd helpers and verifies lifecycle, fetch, locks.
 // STATEFUL — must run serially (not concurrent).

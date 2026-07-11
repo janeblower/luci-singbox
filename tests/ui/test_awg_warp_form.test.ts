@@ -177,8 +177,10 @@ describe("awg_warp plugin tab.js", () => {
       return e;
     }
 
-    it("adds exactly 5 controls", () => {
-      expect(section._added).toHaveLength(5);
+    // 4, not 5: the awg_mimic dropdown is gone (it selected nothing — i1_for()
+    // ignored the value and emitted random hex regardless).
+    it("adds exactly 4 controls", () => {
+      expect(section._added).toHaveLength(4);
     });
 
     it("adds _install control", () => {
@@ -187,9 +189,6 @@ describe("awg_warp plugin tab.js", () => {
     it("adds warp_storage control", () => {
       expect(addedIds).toContain("warp_storage");
     });
-    it("adds awg_mimic control", () => {
-      expect(addedIds).toContain("awg_mimic");
-    });
     it("adds ipv6_enabled control", () => {
       expect(addedIds).toContain("ipv6_enabled");
     });
@@ -197,10 +196,13 @@ describe("awg_warp plugin tab.js", () => {
       expect(addedIds).toContain("mtu_override");
     });
 
-    it("does NOT add _register/warp_paste/_regen", () => {
+    // awg_mimic is gone: i1_for() never read the selected value, so the dropdown
+    // shaped nothing. Guard against it coming back by accident.
+    it("does NOT add _register/warp_paste/_regen/awg_mimic", () => {
       expect(addedIds).not.toContain("_register");
       expect(addedIds).not.toContain("warp_paste");
       expect(addedIds).not.toContain("_regen");
+      expect(addedIds).not.toContain("awg_mimic");
     });
 
     it("_install uses form.Button", () => {
@@ -215,32 +217,11 @@ describe("awg_warp plugin tab.js", () => {
         "flash",
       ]);
     });
-    it("awg_mimic uses form.ListValue", () => {
-      expect(get("awg_mimic").TypeName).toBe("ListValue");
-    });
     it("ipv6_enabled uses form.Flag", () => {
       expect(get("ipv6_enabled").TypeName).toBe("Flag");
     });
     it("mtu_override uses form.Value", () => {
       expect(get("mtu_override").TypeName).toBe("Value");
-    });
-
-    it("awg_mimic has the expected mimic values", () => {
-      const values = get("awg_mimic").stub._values.map((v) => v[0]);
-      expect(values).toEqual([
-        "auto",
-        "quic",
-        "dns",
-        "stun",
-        "dtls",
-        "sip",
-        "tls",
-        "static",
-      ]);
-    });
-
-    it("ipv6_enabled has default '0'", () => {
-      expect(get("ipv6_enabled").stub.default).toBe("0");
     });
 
     it("mtu_override is optional with datatype uinteger", () => {

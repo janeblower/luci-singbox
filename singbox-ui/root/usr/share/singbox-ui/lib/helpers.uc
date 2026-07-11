@@ -1,5 +1,9 @@
 // lib/helpers.uc — shared helpers used by generate.uc, subscription.uc, nftables.uc.
-// All functions are pure (no I/O) and take a uci cursor explicitly.
+// Everything here takes its inputs explicitly (a uci cursor, a path) — no globals.
+// All of it is pure EXCEPT the two filesystem helpers at the bottom
+// (unlink_quiet / is_stale), which the two refresh entry points share.
+
+let fs = require("fs");
 
 // uci_get_or_empty(cur, section, opt) — never throws, returns "" on missing.
 // Array form (list option) collapses to the first element. Cursor-based
@@ -102,6 +106,24 @@ function b64_decode(s) {
 	return dec;
 }
 
+// unlink_quiet(p) — best-effort unlink. Both entry points (subscription.uc and
+// nft-rulesets.uc) call this inside per-job loops, where an unguarded throw would
+// abort every REMAINING job in the refresh cycle: one bad subscription must not
+// poison the rest.
+function unlink_quiet(p) { try { fs.unlink(p); } catch (_) {} }
+
+// is_stale(path, interval_s, force) -> bool. Missing file / zero interval / no
+// interval => stale. Shared by the subscription and rule-set refresh paths, which
+// each carried a byte-identical copy — staleness semantics drifting apart between
+// the two cron jobs is exactly the kind of thing nobody notices.
+function is_stale(path, interval_s, force) {
+	if (force) return true;
+	let st = fs.stat(path);
+	if (!st) return true;
+	if (interval_s == null || interval_s === 0) return true;
+	return (time() - st.mtime) >= interval_s;
+}
+
 return {
 	uci_get_or_empty,
 	s_opt,
@@ -114,4 +136,6 @@ return {
 	detect_rs_format,
 	fnv1a32,
 	b64_decode,
+	unlink_quiet,
+	is_stale,
 };

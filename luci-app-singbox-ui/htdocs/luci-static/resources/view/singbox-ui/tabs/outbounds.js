@@ -162,7 +162,16 @@ function buildOutboundsMap() {
 	o.editable  = false;
 	o.cfgvalue  = function (section_id) {
 		var t = uci.get('singbox-ui', section_id, 'type') || '';
-		if (t === 'subscription') return uci.get('singbox-ui', section_id, 'sub_url') || '—';
+		if (t === 'subscription') {
+			// The subscription URL usually carries the account token in its path or
+			// query. The edit modal masks it; this column is always on screen, so it
+			// showed the secret to anyone glancing at (or screenshotting) the page.
+			// Host only — enough to tell subscriptions apart, nothing to steal.
+			var u = uci.get('singbox-ui', section_id, 'sub_url') || '';
+			if (!u) return '—';
+			var m = u.match(/^[a-z][a-z0-9+.-]*:\/\/([^/?#]+)/i);
+			return m ? m[1] + '/…' : '…';
+		}
 		if (t === 'direct')       return uci.get('singbox-ui', section_id, 'bind_interface') || '(default)';
 		if (t === 'selector' || t === 'urltest') {
 			var members = uci.get('singbox-ui', section_id, 'group_outbounds');

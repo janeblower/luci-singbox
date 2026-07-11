@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
-import { runUcode } from "../helpers/ucode.ts";
+import { pluginsEnabledUci, runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_plugins_registry.sh
 // Tests lib/plugins/registry.uc: register/get_all/invoke order;
 // hook exceptions logged not propagated.
 
@@ -66,7 +65,16 @@ assert(bad_caught, "register with non-function on_generate_post must throw");
 
 print("PASS test_plugins_registry\\n");
 `;
-    const r = await runUcode(src);
+    // Hooks only fire for plugins the UI has switched on (unset == off), so the
+    // fixtures registered above must be enabled for invoke_on_generate_post to run.
+    const env = await pluginsEnabledUci([
+      "a",
+      "b",
+      "boom",
+      "after_boom",
+      "no_hook",
+    ]);
+    const r = await runUcode(src, [], [], env);
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain("PASS test_plugins_registry");
   });

@@ -3,7 +3,6 @@ import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_inbounds_uc.sh
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB = `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
 const PARITY_LIB = `${WORK}/tests/parity`;

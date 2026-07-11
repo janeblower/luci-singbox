@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_match_dns_ctx.sh
 // Verifies builder._shared.match.fields() returns correct sets for dns /
 // dns_headless / route contexts: DNS-only matchers, exclusions from headless,
 // route-only matchers, and per-field version gates.

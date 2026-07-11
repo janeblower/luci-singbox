@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_audit_4_1_cold_backoff.sh
 // Regression for audit S4-1 / S4-5 / S4-6 (nft-rulesets.uc cold rule-set reload):
 //   4.1 HIGH — dead remote rule-set backoff sentinel prevents reload on every cron cycle
 //   4.5 LOW  — wait_for_tags must bail (not busy-spin) when 'sleep' is unforkable

@@ -3,7 +3,6 @@ import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_registry_robustness.sh
 // S4-3 try_register: a malformed descriptor logs+skips instead of aborting.
 // S4-4 _shared_module: a broken shared module surfaces a warn(), not silence.
 // S4-5 validate_field: enum/values/default consistency is enforced.

@@ -49,8 +49,10 @@ jobs:
   # `startsWith(refs/tags/)` / workflow_dispatch), so the release path is never
   # accidentally skipped. Directory-based 3-domain model
   # (backend/ui/packaging) with a `shared` fan-out (test harness / CI infra
-  # -> all three). The domain names mirror tests/lib/domain_classify.sh (kept as
-  # the local classifier + its unit test tests/cross/test_changes_domains.test.ts).
+  # -> all three). These filters are the ONE source of truth for path gating: a
+  # hand-written mirror of them used to live in tests/lib/domain_classify.sh, kept
+  # in sync by eye, and it drifted — the ACL file was gated to `ui` while its
+  # guards ran in `backend`, and the mirror's test happily passed. Deleted.
   changes:
     name: Detect changed domains
     runs-on: ubuntu-24.04
@@ -85,6 +87,13 @@ jobs:
               - 'tests/backend/**'
               - 'tests/parity/**'
               - 'bbolt-client/**'
+              # The ACL file lives in the UI package but the two guards that police
+              # it (test_acl_coverage, test_rpcd_acl_sync) live in tests/backend, so
+              # it must trigger the backend lane too. Otherwise a commit touching
+              # ONLY the ACL — say, moving a mutating method into read.ubus — ran no
+              # guard at all and shipped straight to the feed.
+              - 'luci-app-singbox-ui/root/usr/share/rpcd/acl.d/**'
+              - 'plugins/*/root/usr/share/rpcd/acl.d/**'
             ui:
               - 'luci-app-singbox-ui/**'
               - 'plugins/awg_warp/htdocs/**'
@@ -668,39 +677,35 @@ jobs:
 
       - name: Publish rolling "latest" release
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # Same action the tagged-release step below uses. It creates the release on
+        # first run and updates it in place afterwards, retargeting the tag to the
+        # current SHA and overwriting the assets — which is exactly what the ~25
+        # lines of hand-rolled `gh release view/create/edit/upload --clobber` did.
+        uses: softprops/action-gh-release@6da8fa9354ddfdc4aeace5fc48d7f679b5214090 # v2.4.1
+        with:
+          tag_name: latest
+          target_commitish: ${{ github.sha }}
+          name: Latest build (${{ steps.version.outputs.version }})
+          body: >-
+            Auto-built from `main` @ `${{ github.sha }}` — dev version
+            `${{ steps.version.outputs.version }}`. Replaced on every push to main.
+            Package set (all noarch): `singbox-ui.apk` (backend, includes the
+            pure-ucode bbolt cache.db reader), `luci-app-singbox-ui.apk` (LuCI UI),
+            `luci-i18n-singbox-ui-ru.apk` (RU translation),
+            `singbox-ui-plugin-awg_warp.apk` (AWG/WARP plugin). These feed the signed
+            apk feed (GitHub Pages); end users install via that feed — see install.sh
+            / the Pages landing. `sha256sums.txt` covers every published asset.
+          prerelease: true
+          files: |
+            dist/singbox-ui.apk
+            dist/luci-app-singbox-ui.apk
+            dist/luci-i18n-singbox-ui-ru.apk
+            dist/singbox-ui-plugin-awg_warp.apk
+            dist/sha256sums.txt
+            dist/versions.txt
+          fail_on_unmatched_files: true
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          # Update the persistent `latest` release in place via `upload --clobber`
-          # instead of delete-then-create. The old pattern left the release/tag
-          # deleted in the window between delete and create — if the runner died
-          # there, install.sh's asset 404'd until the next push. `upload --clobber`
-          # overwrites assets atomically on an already-existing release; we only
-          # `create` it the first time (guarded by `release view`), and retarget
-          # the tag to the current SHA via `release edit` so the asset reflects
-          # the tip of main.
-          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. Replaced on every push to main. Package set (all noarch): \`singbox-ui.apk\` (backend, includes the pure-ucode bbolt cache.db reader), \`luci-app-singbox-ui.apk\` (LuCI UI), \`luci-i18n-singbox-ui-ru.apk\` (RU translation), \`singbox-ui-plugin-awg_warp.apk\` (AWG/WARP plugin). These feed the signed apk feed (GitHub Pages); end users install via that feed — see install.sh / the Pages landing. \`sha256sums.txt\` covers every published asset."
-          if ! gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create latest \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "Latest build (${{ steps.version.outputs.version }})" \
-              --notes "$notes" \
-              --prerelease
-          else
-            gh release edit latest \
-              --repo "$GITHUB_REPOSITORY" \
-              --target "$GITHUB_SHA" \
-              --title "Latest build (${{ steps.version.outputs.version }})" \
-              --notes "$notes" \
-              --prerelease
-          fi
-          gh release upload latest \
-            dist/singbox-ui.apk dist/luci-app-singbox-ui.apk \
-            dist/luci-i18n-singbox-ui-ru.apk dist/singbox-ui-plugin-awg_warp.apk \
-            dist/sha256sums.txt dist/versions.txt \
-            --repo "$GITHUB_REPOSITORY" --clobber
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       # Tag push (v*) → permanent, non-prerelease GitHub Release.
       - name: Publish tagged release

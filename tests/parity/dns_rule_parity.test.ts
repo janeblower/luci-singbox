@@ -1,10 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { canon } from "../helpers/canon.ts";
 import { useGuest } from "../helpers/guest.ts";
+import { goldenDrift } from "../helpers/parity.ts";
 import { runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_dns_rule_parity.sh
 // Builds every dns_rule_corpus fixture via reg.get("dns_rule", type) +
 // filler.build(d, section), returns {name: built} map.
 // A fixture with no golden is a HARD FAILURE (not a skip).
@@ -33,35 +32,6 @@ describe("dns rule parity", () => {
       ["tests/parity"],
     );
 
-    const drift: string[] = [];
-    for (const [name, got] of Object.entries(built)) {
-      const goldenPath = `tests/parity/golden/${name}.json`;
-      // Missing golden = hard FAILURE (mirrors shell driver behaviour).
-      if (!existsSync(goldenPath)) {
-        drift.push(`MISSING golden ${name}`);
-        continue;
-      }
-
-      let want: unknown;
-      try {
-        want = JSON.parse(readFileSync(goldenPath, "utf8"));
-      } catch {
-        drift.push(`UNREADABLE golden ${name}`);
-        continue;
-      }
-
-      if (got === null || got === undefined) {
-        drift.push(`NULL output for ${name}`);
-        continue;
-      }
-
-      const a = JSON.stringify(canon(got));
-      const b = JSON.stringify(canon(want));
-      if (a !== b) {
-        drift.push(`DRIFT ${name}\n  got=${a}\n  want=${b}`);
-      }
-    }
-
-    expect(drift).toEqual([]);
+    expect(goldenDrift(built)).toEqual([]);
   });
 });

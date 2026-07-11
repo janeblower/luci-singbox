@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_sharelink_coverage.sh
 // COVERAGE GUARD: guards that the declarative share-link map can never silently
 // drop a parameter:
 //   (1) every INVENTORY param has a SPEC disposition and vice-versa (completeness)

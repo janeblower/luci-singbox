@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_audit_g3_clash.sh
 // Regression for GROUP G3 Clash-API findings in the rpcd handler:
 //   6.2 — bearer secret must NOT appear in curl argv; goes through 0600 tmpfile
 //   6.3 — crafted listen/bad-port falls back to loopback defaults (SSRF guard)

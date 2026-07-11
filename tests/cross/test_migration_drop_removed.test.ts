@@ -1,6 +1,5 @@
 /**
  * tests/cross/test_migration_drop_removed.test.ts
- * Port of tests/cross/test_migration_drop_removed.sh
  *
  * Exercises migrate_drop_removed_protocols on a fixture config with one of
  * every removed type plus one survivor.  Requires `uci` — SKIPs on hosts

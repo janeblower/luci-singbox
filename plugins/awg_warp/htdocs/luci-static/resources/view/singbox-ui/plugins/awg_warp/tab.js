@@ -60,15 +60,6 @@ function renderOutboundForm(type, sectionId, ctx) {
 	o.value('flash', _('Flash (/etc) — persists across reboot'));
 	o.description = _('Where the WARP config is stored. RAM is ephemeral (re-registers on each boot); Flash persists but wears flash memory.');
 
-	// Mimic protocol — controls the outer UDP camouflage.
-	o = s.taboption('basic', form.ListValue, 'awg_mimic', _('Mimic protocol'));
-	o.modalonly = true;
-	o.depends('type', 'awg_warp');
-	o.default   = 'auto';
-	['auto', 'quic', 'dns', 'stun', 'dtls', 'sip', 'tls', 'static'].forEach(function (v) {
-		o.value(v, v);
-	});
-
 	// IPv6 — enable IPv6 WARP masquerade.
 	o = s.taboption('basic', form.Flag, 'ipv6_enabled', _('Enable IPv6'));
 	o.modalonly = true;

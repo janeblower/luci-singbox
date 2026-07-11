@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_acl_coverage.sh
 // Every method in read.ubus must be on the SAFE_READ_METHODS whitelist.
 // Every method in write.ubus must be on EXPECTED_WRITE_METHODS.
 // No method may appear in both lists.

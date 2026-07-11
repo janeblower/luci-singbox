@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_rpcd_acl_sync.sh
 // Single-source guard: handler `list` keys MUST equal ACL read∪write.
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";

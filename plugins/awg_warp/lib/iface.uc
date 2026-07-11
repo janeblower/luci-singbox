@@ -16,16 +16,28 @@ function _read_int(path) {
 
 // iface_name: sanitize a UCI section name to a valid Linux interface name.
 // Keeps only [a-z0-9_], lowercases, truncates to 15 chars, falls back to "awg".
+//
+// The transform is lossy, and two sections that differ only in case or past the
+// 15th character used to collapse onto the SAME device name — one interface, one
+// .conf, one set of WARP credentials, and the second section's settings silently
+// gone (warp_home_primary_us / warp_home_primary_eu both became warp_home_prima).
+// Whenever anything is lost, a hash of the ORIGINAL section name is appended, so
+// distinct sections keep distinct devices. Names that survive untouched (the
+// common case: short, lowercase) are unchanged, so existing deployments keep
+// their device names.
 function iface_name(section) {
-	let s = lc(`${section ?? ""}`);
+	let raw = `${section ?? ""}`;
+	let s = lc(raw);
 	let out = "";
 	for (let i = 0; i < length(s); i++) {
 		let c = substr(s, i, 1);
 		if (match(c, /[a-z0-9_]/)) out += c;
 	}
-	if (length(out) > 15) out = substr(out, 0, 15);
-	if (!length(out)) out = "awg";
-	return out;
+	if (!length(out)) return "awg";                    // nothing usable in the name
+	if (out === raw && length(out) <= 15) return out;   // nothing lost
+	if (length(out) > 10) out = substr(out, 0, 10);
+	// 10 + "_" + 4 hex = 15, the kernel's IFNAMSIZ limit.
+	return out + "_" + substr(require("helpers").fnv1a32(raw), 0, 4);
 }
 
 // wan_mtu: read the WAN device MTU from sysfs. Falls back to 1500.

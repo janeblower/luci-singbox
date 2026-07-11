@@ -166,12 +166,18 @@ function _bring_up(cur, item) {
 // a crafted address_v6 in .conf could inject into `ip addrlabel del`).
 // A malformed value sanitizes to "" → addrlabel del is skipped (safe, since
 // no valid label was added for a malformed address).
-function _del_iface(dev, v6_addr) {
+// del_default: the `::/0 label 100` entry is PROCESS-GLOBAL, not per-interface —
+// every IPv6 WARP iface needs it. Deleting it while tearing down one iface broke
+// RFC 6724 source-address selection for the others still up (native ISP IPv6
+// could win over the WARP address). Only the caller knows whether any IPv6 iface
+// survives, so it decides.
+function _del_iface(dev, v6_addr, del_default) {
 	sh(sprintf("%s link del dev %s", IP_BIN, dev));
 	let v6 = safe_cidr(v6_addr);
 	if (length(v6)) {
 		sh(sprintf("%s addrlabel del prefix %s label 100", IP_BIN, v6));
-		sh(sprintf("%s addrlabel del prefix ::/0 label 100", IP_BIN));
+		if (del_default)
+			sh(sprintf("%s addrlabel del prefix ::/0 label 100", IP_BIN));
 	}
 }
 
@@ -185,20 +191,31 @@ function apply(cur) {
 			_bring_up(cur, it);
 		}
 	}
+	// Does any surviving iface still need the shared ::/0 label? If so, the
+	// disable path below must not delete it (it is not per-interface state).
+	let v6_survives = false;
+	for (let it in items)
+		if (it.enabled && length(it.del_v6 ?? "")) v6_survives = true;
+
 	// Remove disabled sections; also clean up addrlabel entries to avoid
 	// IPv6 source-address selection corruption (FIX: addrlabel leak on disable).
 	for (let it in items) {
 		if (!it.enabled && !want[it.iface]) {
-			_del_iface(it.iface, it.del_v6);
+			_del_iface(it.iface, it.del_v6, !v6_survives);
 		}
 	}
 }
 
-// teardown — remove all managed amneziawg ifaces + their addrlabel entries.
+// teardown — remove all managed amneziawg ifaces + their addrlabel entries, and
+// the NAT tables. The nft fragment can only clean the tables up while the plugin
+// is still enabled; teardown is what runs when it is switched off or removed, so
+// without this the masquerade tables outlived the interfaces they NAT'd for.
 function teardown(cur) {
+	// Everything goes, so the shared ::/0 label goes with it.
 	for (let it in _managed_names(cur)) {
-		_del_iface(it.iface, it.del_v6);
+		_del_iface(it.iface, it.del_v6, true);
 	}
+	try { require("plugins.awg_warp.nft").remove_tables(); } catch (_) {}
 }
 
 return { apply, teardown };

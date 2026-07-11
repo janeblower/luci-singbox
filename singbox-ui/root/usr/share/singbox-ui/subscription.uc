@@ -12,8 +12,11 @@
 //   SINGBOX_INITD  (default /etc/init.d/singbox-ui) — init.d path for reload (tests)
 
 const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
-// Cap subscription bodies so a hostile or runaway source cannot OOM a 128–256 MB
-// router. cmd_fetch_subs enforces MAX_BODY via a post-download fs.stat() guard.
+// Cap subscription bodies so a hostile or runaway source cannot fill a 128–256 MB
+// router's tmpfs. Enforced in TWO places: curl aborts the transfer at
+// --max-filesize (so a huge body never lands on disk at all), and cmd_fetch_subs
+// keeps its post-download fs.stat() guard for the case curl cannot know the size
+// up front (no Content-Length -> curl only stops once it exceeds the cap).
 const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
 
 // init.d reload seam. reload is stop+start (sing-box has no signal reload) —
@@ -53,13 +56,6 @@ let helpers = require("helpers");
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn("error: " + msg + "\n"); }
 
-// SEC-9: best-effort unlink that never throws. ucode's fs.unlink can throw on
-// some error conditions; an unguarded throw inside a per-job loop would abort
-// processing of every REMAINING job in the refresh cycle (one bad subscription
-// poisons the rest). Several in-loop unlinks here were bare while adjacent ones
-// were already try-wrapped — that ad-hoc asymmetry is the latent footgun. Route
-// every in-loop unlink through this helper so a single failure stays local.
-function unlink_quiet(p) { try { fs.unlink(p); } catch (_) {} }
 
 // I/O seams — overridable for tests, mirroring log._set_logger_for_test.
 // _reader(path) returns the raw body string (or null); _fetcher(jobs) runs
@@ -86,6 +82,7 @@ let _fetcher = function(jobs) {
 		let ua = (j.ua != null && j.ua !== "") ? j.ua : DEFAULT_UA;
 		let to = (j.opts && j.opts.timeout) ? j.opts.timeout : 15;
 		let argv = [ CURL, "-fsSL", "--max-time", sprintf("%d", to),
+		             "--max-filesize", sprintf("%d", MAX_BODY),
 		             "-A", ua, "-D", j.hdr_path, "-o", j.body_path, j.url ];
 		let quoted = [];
 		for (let a in argv) push(quoted, helpers.sq(a));
@@ -176,7 +173,16 @@ function parse_headers(hdr) {
 			info = {};
 			for (let kv in split(ui[1], ";")) {
 				let p = match(trim(kv), /^([A-Za-z_]+)=([0-9]+)$/);
-				if (p) info[lc(p[1])] = +p[2];
+				if (!p) continue;
+				// The header is attacker-controlled. An absurd `expire` used to reach
+				// the Dashboard verbatim, where new Date(sec*1000).toISOString() threw
+				// and bricked the tab. The frontend guards too, but clamp at the trust
+				// boundary: anything past year ~2286 (or a nonsense byte count) is
+				// simply not a value we can render, so drop it.
+				let v = +p[2];
+				const MAX_UI_INT = 10000000000000;   // 1e13
+				if (v < 0 || v > MAX_UI_INT) continue;
+				info[lc(p[1])] = v;
 			}
 		}
 		if (index(lc(l), "content-disposition") === 0) {
@@ -270,25 +276,25 @@ function cmd_fetch_subs(cur, only) {
 		let st = fs.stat(m.body_path);
 		if (!st || st.size === 0) {
 			log_err(`fetch_subs: download failed for ${m.name}`);
-			unlink_quiet(m.body_path);
-			unlink_quiet(m.hdr_path);
-			unlink_quiet(meta_path);
+			helpers.unlink_quiet(m.body_path);
+			helpers.unlink_quiet(m.hdr_path);
+			helpers.unlink_quiet(meta_path);
 			continue;
 		}
 		if (st.size > MAX_BODY) {
 			log_err(`fetch_subs: ${m.name} body ${st.size} bytes exceeds ${MAX_BODY}, rejecting`);
-			unlink_quiet(m.body_path);
-			unlink_quiet(m.hdr_path);
-			unlink_quiet(meta_path);
+			helpers.unlink_quiet(m.body_path);
+			helpers.unlink_quiet(m.hdr_path);
+			helpers.unlink_quiet(meta_path);
 			continue;
 		}
 
 		let raw = _reader(m.body_path) ?? "";
-		unlink_quiet(m.body_path);
+		helpers.unlink_quiet(m.body_path);
 		if (length(raw) === 0) {
 			log_err(`fetch_subs: empty body for ${m.name}`);
-			unlink_quiet(m.hdr_path);
-			unlink_quiet(meta_path);
+			helpers.unlink_quiet(m.hdr_path);
+			helpers.unlink_quiet(meta_path);
 			continue;
 		}
 
@@ -309,15 +315,15 @@ function cmd_fetch_subs(cur, only) {
 			let sample = trim(substr(body, 0, 120));
 			sample = replace(sample, /[\r\n]+/g, " ");
 			log_err(`fetch_subs: no valid proxy URL in response for ${m.name} (body starts: ${sample})`);
-			unlink_quiet(m.hdr_path);
-			unlink_quiet(meta_path);
+			helpers.unlink_quiet(m.hdr_path);
+			helpers.unlink_quiet(meta_path);
 			continue;
 		}
 
 		if (!write_atomic(m.out_path, join("\n", urls) + "\n")) {
 			log_err(`fetch_subs: cannot write ${m.out_path}`);
-			unlink_quiet(m.hdr_path);
-			unlink_quiet(meta_path);
+			helpers.unlink_quiet(m.hdr_path);
+			helpers.unlink_quiet(meta_path);
 			continue;
 		}
 		log(`fetch_subs: ${m.name} -> ${m.out_path} (${length(urls)} urls)`);
@@ -332,21 +338,11 @@ function cmd_fetch_subs(cur, only) {
 			// dashboard reflects the current response instead of indefinitely
 			// showing an expiry/quota that no longer applies. Mirrors the
 			// unconditional .hdr cleanup just below.
-			unlink_quiet(meta_path);
+			helpers.unlink_quiet(meta_path);
 		}
-		unlink_quiet(m.hdr_path);
+		helpers.unlink_quiet(m.hdr_path);
 	}
 	return 0;
-}
-
-// is_stale(path, interval_s, force) -> bool. Missing file / zero interval / no
-// interval => stale.
-function is_stale(path, interval_s, force) {
-	if (force) return true;
-	let st = fs.stat(path);
-	if (!st) return true;
-	if (interval_s == null || interval_s === 0) return true;
-	return (time() - st.mtime) >= interval_s;
 }
 
 function any_subs_stale(cur, force, only) {
@@ -358,7 +354,7 @@ function any_subs_stale(cur, force, only) {
 		// was false, so iv stayed NaN and is_stale's `>= NaN` was always false,
 		// silently disabling refresh.
 		if (!(iv > 0)) iv = 3600;
-		if (is_stale(`${TMPDIR}/sub_${name}.txt`, iv, force)) return true;
+		if (helpers.is_stale(`${TMPDIR}/sub_${name}.txt`, iv, force)) return true;
 	}
 	return false;
 }

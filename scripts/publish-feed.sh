@@ -27,10 +27,6 @@
 #                     (default: luci-singbox)
 #   FEED_COMMIT_MSG   commit subject (default: "deploy feed")
 #   FEED_WORK         working clone dir (default: a fresh mktemp dir)
-#   FEED_PUSH_RETRIES retries on a non-fast-forward push, since the
-#                     sing-box-extended workflow pushes to the same branch and is
-#                     NOT covered by this workflow's concurrency group
-#                     (default: 5; each retry re-clones the new tip and re-applies)
 #   FEED_NO_PUSH      if non-empty: commit into FEED_WORK but do not push
 #                     (used by the regression test to inspect the merged tree)
 set -eu
@@ -40,7 +36,6 @@ PUB="${1:?usage: publish-feed.sh <public_dir>}"
 BRANCH="${FEED_BRANCH:-gh-pages}"
 OWNED="${FEED_OWNED_DIR:-luci-singbox}"
 MSG="${FEED_COMMIT_MSG:-deploy feed}"
-RETRIES="${FEED_PUSH_RETRIES:-5}"
 
 [ -d "$PUB" ] || { echo "public dir not found: $PUB" >&2; exit 1; }
 # Absolute path — we cd into / operate from the working clone below.
@@ -48,67 +43,51 @@ PUB="$(cd -- "$PUB" && pwd)"
 
 WORK="${FEED_WORK:-$(mktemp -d "${TMPDIR:-/tmp}/publish-feed.XXXXXX")}"
 
-attempt=0
-while :; do
-  rm -rf "$WORK"
-  git clone --quiet --depth 1 --branch "$BRANCH" "$FEED_GIT_REMOTE" "$WORK"
+# Single attempt, no retry loop. The two workflows that publish this branch
+# (pages.yml and sing-box-extended.yml) both sit in `concurrency: group: pages`,
+# so GitHub already serialises them — the re-clone/jitter/backoff loop guarded a
+# race that cannot happen. A non-fast-forward now means something OUTSIDE CI wrote
+# to the branch, which should fail loudly and be re-run, not be papered over.
+rm -rf "$WORK"
+git clone --quiet --depth 1 --branch "$BRANCH" "$FEED_GIT_REMOTE" "$WORK"
 
-  # Wipe every directory THIS feed owns so stale versioned .apk files do not
-  # accumulate. -prune stops descent into the matched dir; rm removes it whole.
-  # Sibling subtrees (e.g. <ver>/<arch>/sing-box/) are never named OWNED, so they
-  # are left exactly as the other workflow published them.
-  find "$WORK" -type d -name "$OWNED" -prune -exec rm -rf {} +
+# Wipe every directory THIS feed owns so stale versioned .apk files do not
+# accumulate. -prune stops descent into the matched dir; rm removes it whole.
+# Sibling subtrees (e.g. <ver>/<arch>/sing-box/) are never named OWNED, so they
+# are left exactly as the other workflow published them.
+find "$WORK" -type d -name "$OWNED" -prune -exec rm -rf {} +
 
-  # Overlay the freshly built tree: current-version apks + freshly regenerated
-  # packages.adb / index.md / root files. cp -a keeps build-feed.sh's layout and
-  # never touches "$WORK/.git" (public has no .git of its own).
-  cp -a "$PUB"/. "$WORK"/
+# Overlay the freshly built tree: current-version apks + freshly regenerated
+# packages.adb / index.md / root files. cp -a keeps build-feed.sh's layout and
+# never touches "$WORK/.git" (public has no .git of its own).
+cp -a "$PUB"/. "$WORK"/
 
-  git -C "$WORK" \
-    -c user.name='github-actions[bot]' \
-    -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-    add -A
-  if git -C "$WORK" diff --cached --quiet; then
-    echo "feed already up to date -> nothing to commit"
-    exit 0
-  fi
-  git -C "$WORK" \
-    -c user.name='github-actions[bot]' \
-    -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
-    commit --quiet -m "$MSG"
+git -C "$WORK" \
+  -c user.name='github-actions[bot]' \
+  -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+  add -A
+if git -C "$WORK" diff --cached --quiet; then
+  echo "feed already up to date -> nothing to commit"
+  exit 0
+fi
+git -C "$WORK" \
+  -c user.name='github-actions[bot]' \
+  -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+  commit --quiet -m "$MSG"
 
-  if [ -n "${FEED_NO_PUSH:-}" ]; then
-    echo "FEED_NO_PUSH set -> committed to $WORK, not pushing"
-    exit 0
-  fi
+if [ -n "${FEED_NO_PUSH:-}" ]; then
+  echo "FEED_NO_PUSH set -> committed to $WORK, not pushing"
+  exit 0
+fi
 
-  push_err="$WORK/.push_err"
-  if git -C "$WORK" push origin "HEAD:$BRANCH" 2>"$push_err"; then
-    rm -f "$push_err"
-    echo "published feed to $BRANCH"
-    exit 0
-  fi
-
-  # Only a non-fast-forward / fetch-first rejection is a retryable concurrent
-  # update (the sibling sing-box-extended.yml pushes the same branch). Auth,
-  # network and branch-protection failures surface immediately instead of
-  # burning every retry behind a generic message.
-  if ! grep -qiE 'non-fast-forward|fetch first|\[rejected\]' "$push_err"; then
-    echo "push to $BRANCH failed (not a non-fast-forward conflict):" >&2
-    cat "$push_err" >&2
-    rm -f "$push_err"
-    exit 1
-  fi
+push_err="$WORK/.push_err"
+if git -C "$WORK" push origin "HEAD:$BRANCH" 2>"$push_err"; then
   rm -f "$push_err"
+  echo "published feed to $BRANCH"
+  exit 0
+fi
 
-  attempt=$((attempt + 1))
-  if [ "$attempt" -ge "$RETRIES" ]; then
-    echo "failed to push $BRANCH after $attempt attempts" >&2
-    exit 1
-  fi
-  echo "push rejected (non-fast-forward; concurrent $BRANCH update) -> re-clone and retry $attempt/$RETRIES" >&2
-  # Jitter (0-2s, /dev/urandom) decorrelates the backoff from the sibling
-  # workflow retries so they do not livelock in lockstep.
-  jitter=$(( $(od -An -N1 -tu1 /dev/urandom 2>/dev/null || echo 0) % 3 ))
-  sleep "$(( attempt + jitter ))"
-done
+echo "push to $BRANCH failed:" >&2
+cat "$push_err" >&2
+rm -f "$push_err"
+exit 1

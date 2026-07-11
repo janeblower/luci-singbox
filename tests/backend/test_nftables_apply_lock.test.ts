@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_nftables_apply_lock.sh
 // S1-4: concurrent applies serialize on the mkdir-based lock; stale/SEC-3 guards.
 // STATEFUL: manipulates /tmp/singbox-ui/.apply.lock in the guest.
 

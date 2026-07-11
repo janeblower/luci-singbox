@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode, runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_shared_dial.sh
 // Declarative emit_spec path via filler for the shared dial block.
 // Dial uses merge mode: its keys fold directly into the outbound object
 // (no got.dial sub-key).

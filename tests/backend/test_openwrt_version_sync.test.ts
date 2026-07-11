@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 
-// Port of tests/backend/test_openwrt_version_sync.sh
 // Single-source-of-truth guard: every OpenWrt version reference across the
 // repo must equal tests/docker/openwrt-version.txt.
 // Host-only file parsing — no guest needed.

@@ -1,10 +1,9 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
-import { canon } from "../helpers/canon.ts";
 import { useGuest } from "../helpers/guest.ts";
+import { goldenDrift } from "../helpers/parity.ts";
 import { runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_dns_parity.sh
 // Builds every dns_corpus fixture via write_uci_config + uci.cursor +
 // dns.build_dns, returns {name: servers[0]} map.
 // A fixture with no golden is SKIPPED (not a failure).
@@ -60,32 +59,6 @@ describe("dns parity", () => {
       ["tests/parity"],
     );
 
-    const drift: string[] = [];
-    for (const [name, got] of Object.entries(built)) {
-      const goldenPath = `tests/parity/golden/${name}.json`;
-      // No golden yet — skip until one is added (mirrors shell SKIP behaviour).
-      if (!existsSync(goldenPath)) continue;
-
-      let want: unknown;
-      try {
-        want = JSON.parse(readFileSync(goldenPath, "utf8"));
-      } catch {
-        drift.push(`UNREADABLE golden ${name}`);
-        continue;
-      }
-
-      if (got === null || got === undefined) {
-        drift.push(`MISSING output for ${name}`);
-        continue;
-      }
-
-      const a = JSON.stringify(canon(got));
-      const b = JSON.stringify(canon(want));
-      if (a !== b) {
-        drift.push(`DRIFT ${name}\n  got=${a}\n  want=${b}`);
-      }
-    }
-
-    expect(drift).toEqual([]);
+    expect(goldenDrift(built)).toEqual([]);
   });
 });

@@ -1,7 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
-import { readFileSync } from "node:fs";
-import { canon } from "../helpers/canon.ts";
 import { useGuest } from "../helpers/guest.ts";
+import { goldenDrift } from "../helpers/parity.ts";
 import { exec } from "../helpers/ssh.ts";
 import { runUcodeJSON } from "../helpers/ucode.ts";
 
@@ -16,9 +15,8 @@ const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const PLUGIN_LIB_ROOT = ".awg-parity-lib";
 const PLUGIN_SRC = `${WORK}/plugins/awg_warp/lib`;
 
-// Port of tests/backend/test_protocol_parity.sh
 // One ucode round-trip builds every corpus fixture into a {name: built} map;
-// the host canon-compares each against its golden JSON file.
+// the host deep-compares each against its golden JSON file (helpers/parity.ts).
 
 // The driver requires "corpus" from tests/parity (extra lib dir) and runs
 // outbound/inbound builder for every fixture, returning a flat map.
@@ -69,23 +67,6 @@ describe("protocol parity", () => {
       ["tests/parity", PLUGIN_LIB_ROOT],
     );
 
-    const drift: string[] = [];
-    for (const [name, got] of Object.entries(built)) {
-      const goldenPath = `tests/parity/golden/${name}.json`;
-      let want: unknown;
-      try {
-        want = JSON.parse(readFileSync(goldenPath, "utf8"));
-      } catch {
-        drift.push(`MISSING golden ${name}`);
-        continue;
-      }
-      const a = JSON.stringify(canon(got));
-      const b = JSON.stringify(canon(want));
-      if (a !== b) {
-        drift.push(`DRIFT ${name}\n  got=${a}\n  want=${b}`);
-      }
-    }
-
-    expect(drift).toEqual([]);
+    expect(goldenDrift(built)).toEqual([]);
   });
 });

@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode, runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_protocol_filler.sh
 // Declarative protocol filler (lib/protocols/_filler.uc): field coercion,
 // omit rules, json_key rename, UI-only skip, post hook, shared-block dispatch,
 // and golden parity for the converted trojan/direct outbound descriptors.

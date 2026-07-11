@@ -186,8 +186,11 @@ __do_start() {
 	# first whitespace-delimited token even on a single-token line with no
 	# trailing space — matching the rpcd split(line," ")[0] behaviour. The old
 	# ` .*` form required a trailing space and would emit nothing on such a line.
-	apk list --installed luci-singbox-ui 2>/dev/null \
-		| sed -n 's/^luci-singbox-ui-\([^ ]*\).*/\1/p;q' \
+	# The installed name is luci-app-singbox-ui; luci-singbox-ui is only the
+	# pre-split provides/replaces alias, so the old query matched nothing and the
+	# version was always "unknown". Mirror of the PKG constant in the rpcd handler.
+	apk list --installed luci-app-singbox-ui 2>/dev/null \
+		| sed -n 's/^luci-app-singbox-ui-\([^ ]*\).*/\1/p;q' \
 		> /var/lib/singbox-ui/pkg_version || true
 }
 

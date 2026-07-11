@@ -45,8 +45,13 @@ exit 0
 PROV
       chmod +x /tmp/fake_provision.sh
 
+      # awg_install is a plugin rpcd method: only surfaced while awg_warp is on.
+      mkdir -p /tmp/awg_inst_uci
+      printf "config singbox-ui 'plugins'\n\toption awg_warp_enabled '1'\n" > /tmp/awg_inst_uci/singbox-ui
+
       out=$(echo '{}' | \
         SB_AWG_PROVISION=/tmp/fake_provision.sh \
+        UCI_CONFIG_DIR=/tmp/awg_inst_uci \
         UCODE_APP_LIB_DIR="${LIB}" \
         ucode -L "${LIB}" "${HANDLER}" call awg_install)
 
@@ -90,8 +95,12 @@ exit 1
 PROV
       chmod +x /tmp/fail_provision.sh
 
+      mkdir -p /tmp/awg_inst_uci
+      printf "config singbox-ui 'plugins'\n\toption awg_warp_enabled '1'\n" > /tmp/awg_inst_uci/singbox-ui
+
       out=$(echo '{}' | \
         SB_AWG_PROVISION=/tmp/fail_provision.sh \
+        UCI_CONFIG_DIR=/tmp/awg_inst_uci \
         UCODE_APP_LIB_DIR="${LIB}" \
         ucode -L "${LIB}" "${HANDLER}" call awg_install)
 
@@ -122,23 +131,17 @@ describe("awg-provision.sh", () => {
       TREL=$(mktemp)
       cleanup() {
         rm -rf "$TKEYS" "$TREPOS" "$TREL"
-        rm -f /tmp/fake_wget_ok /tmp/fake_apk_ok /tmp/prov_apk_log /tmp/prov_wget_log
+        rm -f /tmp/fake_key.pem /tmp/fake_apk_ok /tmp/prov_apk_log
       }
       trap cleanup EXIT
 
       printf "DISTRIB_RELEASE='25.12.4'\\nDISTRIB_TARGET='x86/64'\\n" > "$TREL"
       : > /tmp/prov_apk_log
-      : > /tmp/prov_wget_log
 
-      cat > /tmp/fake_wget_ok <<'STUB'
-#!/bin/sh
-printf '%s\n' "$*" >> /tmp/prov_wget_log
-shift          # skip -O
-dest="$1"      # dest path
-printf '-----BEGIN PUBLIC KEY-----\nstub\n-----END PUBLIC KEY-----\n' > "$dest"
-exit 0
-STUB
-      chmod +x /tmp/fake_wget_ok
+      # The signing key ships with the package — provisioning no longer downloads
+      # it (a fetched key would be a permanent, unverified system-wide apk trust
+      # anchor). Point AWG_KEY_SRC at a stand-in PEM.
+      printf -- '-----BEGIN PUBLIC KEY-----\nstub\n-----END PUBLIC KEY-----\n' > /tmp/fake_key.pem
 
       cat > /tmp/fake_apk_ok <<'STUB'
 #!/bin/sh
@@ -150,7 +153,7 @@ STUB
       AWG_OWRT_RELEASE="$TREL" \
       AWG_KEYS_DIR="$TKEYS" \
       AWG_REPOS_D="$TREPOS" \
-      WGET_CMD=/tmp/fake_wget_ok \
+      AWG_KEY_SRC=/tmp/fake_key.pem \
       APK_CMD=/tmp/fake_apk_ok \
       sh "${PROVISION_SH}"
 
@@ -177,19 +180,12 @@ STUB
       TKEYS=$(mktemp -d)
       TREPOS=$(mktemp -d)
       TREL=$(mktemp)
-      cleanup() { rm -rf "$TKEYS" "$TREPOS" "$TREL" /tmp/fake_wget_idem /tmp/fake_apk_idem; }
+      cleanup() { rm -rf "$TKEYS" "$TREPOS" "$TREL" /tmp/fake_key.pem /tmp/fake_apk_idem; }
       trap cleanup EXIT
 
       printf "DISTRIB_RELEASE='25.12.4'\\nDISTRIB_TARGET='x86/64'\\n" > "$TREL"
 
-      cat > /tmp/fake_wget_idem <<'STUB'
-#!/bin/sh
-shift          # skip -O
-dest="$1"
-printf '-----BEGIN PUBLIC KEY-----\nstub\n-----END PUBLIC KEY-----\n' > "$dest"
-exit 0
-STUB
-      chmod +x /tmp/fake_wget_idem
+      printf -- '-----BEGIN PUBLIC KEY-----\nstub\n-----END PUBLIC KEY-----\n' > /tmp/fake_key.pem
 
       cat > /tmp/fake_apk_idem <<'STUB'
 #!/bin/sh
@@ -198,10 +194,10 @@ STUB
       chmod +x /tmp/fake_apk_idem
 
       AWG_OWRT_RELEASE="$TREL" AWG_KEYS_DIR="$TKEYS" AWG_REPOS_D="$TREPOS" \
-        WGET_CMD=/tmp/fake_wget_idem APK_CMD=/tmp/fake_apk_idem \
+        AWG_KEY_SRC=/tmp/fake_key.pem APK_CMD=/tmp/fake_apk_idem \
         sh "${PROVISION_SH}"
       AWG_OWRT_RELEASE="$TREL" AWG_KEYS_DIR="$TKEYS" AWG_REPOS_D="$TREPOS" \
-        WGET_CMD=/tmp/fake_wget_idem APK_CMD=/tmp/fake_apk_idem \
+        AWG_KEY_SRC=/tmp/fake_key.pem APK_CMD=/tmp/fake_apk_idem \
         sh "${PROVISION_SH}"
 
       line_count=$(grep -c "slava-shchipunov" "$TREPOS/awg.list" 2>/dev/null || echo 0)
@@ -214,27 +210,56 @@ STUB
     expect(lineCount).toBe(1);
   });
 
+  // F-11: the key used to be wget'd from a third-party URL and dropped into
+  // /etc/apk/keys unverified — apk-tools 3 then trusts it, by fingerprint, for
+  // EVERY repository. It ships with the package now, and provisioning refuses to
+  // proceed if that file is missing or is not a PEM public key.
+  it("F-11: refuses to provision without a valid bundled signing key", async () => {
+    const r = await exec(`
+      TKEYS=$(mktemp -d)
+      TREPOS=$(mktemp -d)
+      TREL=$(mktemp)
+      cleanup() { rm -rf "$TKEYS" "$TREPOS" "$TREL" /tmp/awg_notpem /tmp/fake_apk_key; }
+      trap cleanup EXIT
+
+      printf "DISTRIB_RELEASE='25.12.4'\\nDISTRIB_TARGET='x86/64'\\n" > "$TREL"
+      printf '#!/bin/sh\\nexit 0\\n' > /tmp/fake_apk_key; chmod +x /tmp/fake_apk_key
+      printf 'not a key at all\\n' > /tmp/awg_notpem
+
+      missing_rc=0
+      AWG_OWRT_RELEASE="$TREL" AWG_KEYS_DIR="$TKEYS" AWG_REPOS_D="$TREPOS" \
+        AWG_KEY_SRC=/tmp/definitely_absent.pem APK_CMD=/tmp/fake_apk_key \
+        sh "${PROVISION_SH}" >/dev/null 2>&1 || missing_rc=$?
+
+      notpem_rc=0
+      AWG_OWRT_RELEASE="$TREL" AWG_KEYS_DIR="$TKEYS" AWG_REPOS_D="$TREPOS" \
+        AWG_KEY_SRC=/tmp/awg_notpem APK_CMD=/tmp/fake_apk_key \
+        sh "${PROVISION_SH}" >/dev/null 2>&1 || notpem_rc=$?
+
+      keyc=$(ls "$TKEYS" | wc -l | tr -d ' ')
+      echo "missing_rc=$missing_rc notpem_rc=$notpem_rc keyc=$keyc"
+    `);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("missing_rc=1");
+    expect(r.stdout).toContain("notpem_rc=1");
+    // Nothing was installed into the trusted key directory.
+    expect(r.stdout).toContain("keyc=0");
+  });
+
   it("aborts on malicious DISTRIB_TARGET with injection attempt", async () => {
     const r = await exec(`
       TKEYS=$(mktemp -d)
       TREPOS=$(mktemp -d)
       TREL=$(mktemp)
       DAMAGE_FILE=$(mktemp)
-      cleanup() { rm -rf "$TKEYS" "$TREPOS" "$TREL" "$DAMAGE_FILE" /tmp/fake_wget_inj /tmp/fake_apk_inj; }
+      cleanup() { rm -rf "$TKEYS" "$TREPOS" "$TREL" "$DAMAGE_FILE" /tmp/fake_key.pem /tmp/fake_apk_inj; }
       trap cleanup EXIT
 
       # Malicious release file: DISTRIB_TARGET contains semicolon + shell injection.
       printf "DISTRIB_RELEASE='25.12.4'\\nDISTRIB_TARGET='x86/64; echo INJECTED > %s'\\n" \
         "$DAMAGE_FILE" > "$TREL"
 
-      cat > /tmp/fake_wget_inj <<'STUB'
-#!/bin/sh
-shift          # skip -O
-dest="$1"
-printf '-----BEGIN PUBLIC KEY-----\nstub\n-----END PUBLIC KEY-----\n' > "$dest"
-exit 0
-STUB
-      chmod +x /tmp/fake_wget_inj
+      printf -- '-----BEGIN PUBLIC KEY-----\nstub\n-----END PUBLIC KEY-----\n' > /tmp/fake_key.pem
 
       cat > /tmp/fake_apk_inj <<'STUB'
 #!/bin/sh
@@ -244,7 +269,7 @@ STUB
 
       rc=0
       AWG_OWRT_RELEASE="$TREL" AWG_KEYS_DIR="$TKEYS" AWG_REPOS_D="$TREPOS" \
-        WGET_CMD=/tmp/fake_wget_inj APK_CMD=/tmp/fake_apk_inj \
+        AWG_KEY_SRC=/tmp/fake_key.pem APK_CMD=/tmp/fake_apk_inj \
         sh "${PROVISION_SH}" 2>&1 || rc=$?
 
       dmg=$(cat "$DAMAGE_FILE" 2>/dev/null | tr -d '\\n' || echo "")

@@ -15,9 +15,14 @@ describe("test_plugin_integration", () => {
       set -e
       SRC="${WORK}/tests/fixtures/plugins/fixture_plugin"
       DST="${LIB}/plugins/fixture_plugin"
-      trap 'rm -rf "$DST"; rm -f /tmp/fixture_applied /tmp/fixture_torndown' EXIT
-      mkdir -p "$DST"; cp "$SRC"/*.uc "$DST"/
+      D=/tmp/plint-$$
+      trap 'rm -rf "$DST" "$D"; rm -f /tmp/fixture_applied /tmp/fixture_torndown' EXIT
+      mkdir -p "$DST" "$D/uci"; cp "$SRC"/*.uc "$DST"/
       rm -f /tmp/fixture_applied /tmp/fixture_torndown
+      # Hooks (rpcd methods, lifecycle, nft fragment) only fire for an enabled
+      # plugin — unset means off, same as the UI reports.
+      printf "config singbox-ui 'plugins'\n\toption fixture_plugin_enabled '1'\n" > "$D/uci/singbox-ui"
+      export UCI_CONFIG_DIR="$D/uci"
 
       in_list=$(UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' list | ucode -e 'let fs=require("fs");let d=json(fs.stdin.read("all")||"{}");print((d.fixture_ping!=null && d.plugins!=null)?"yes":"no");')
       ping=$(echo '{}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call fixture_ping)

@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_registry_new_kinds.sh
 // New kinds (cache, clash_api, dns_rule) must register without throwing.
 // max_version must be accepted and round-trip as a valid 2-part string.
 

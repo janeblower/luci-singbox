@@ -2,27 +2,25 @@
 # awg-provision.sh — Self-provision AmneziaWG kernel module + tools on OpenWrt.
 #
 # 1. Detect OpenWrt version + target from /etc/openwrt_release (or ubus fallback).
-# 2. Fetch the AWG feed signing key (wget).
+# 2. Install the bundled AWG feed signing key (no network trust).
 # 3. Idempotently add the AWG feed to /etc/apk/repositories.d/awg.list.
 # 4. apk update + apk add ip-full kmod-amneziawg amneziawg-tools.
 # 5. modprobe amneziawg (best-effort).
 #
 # Env seams for tests (all have production defaults):
 #   APK_CMD         – apk binary (default: apk)
-#   WGET_CMD        – wget binary (default: wget)
 #   AWG_KEYS_DIR    – destination for the signing key (default: /etc/apk/keys)
 #   AWG_REPOS_D     – directory for the feed repo file (default: /etc/apk/repositories.d)
-#   AWG_KEY_URL     – URL of the signing key PEM (default: slava-shchipunov GitHub Pages)
+#   AWG_KEY_SRC     – bundled signing key PEM shipped with this package
 #   AWG_FEED_BASE   – base URL of the feed (default: slava-shchipunov GitHub Pages)
 #   AWG_OWRT_RELEASE – path to /etc/openwrt_release (default: /etc/openwrt_release)
 
 set -eu
 
 APK_CMD="${APK_CMD:-apk}"
-WGET_CMD="${WGET_CMD:-wget}"
 AWG_KEYS_DIR="${AWG_KEYS_DIR:-/etc/apk/keys}"
 AWG_REPOS_D="${AWG_REPOS_D:-/etc/apk/repositories.d}"
-AWG_KEY_URL="${AWG_KEY_URL:-https://slava-shchipunov.github.io/awg-openwrt/keys/awg-openwrt-feed.pem}"
+AWG_KEY_SRC="${AWG_KEY_SRC:-/usr/share/singbox-ui/awg-openwrt-feed.pem}"
 AWG_FEED_BASE="${AWG_FEED_BASE:-https://slava-shchipunov.github.io/awg-openwrt}"
 AWG_OWRT_RELEASE="${AWG_OWRT_RELEASE:-/etc/openwrt_release}"
 
@@ -67,15 +65,29 @@ if ! printf '%s' "$owrt_target" | grep -qE '^[a-z0-9][a-z0-9_-]*/[a-z0-9][a-z0-9
 	exit 1
 fi
 
-# ── 3. Fetch the AWG feed signing key ───────────────────────────────────────
+# ── 3. Install the AWG feed signing key (shipped in this package) ───────────
+#
+# The key is INSTALLED FROM DISK, not downloaded. apk-tools 3 trusts a key in
+# /etc/apk/keys system-wide, by fingerprint, for every repository — so fetching
+# one over the network and trusting whatever came back (no pin, no checksum, no
+# validation) handed a permanent signing anchor to whoever could answer that URL
+# or MITM it. Shipping the key in the package means it is reviewed and updated
+# the same way as the rest of the code, and provisioning needs no trust in the
+# network at all.
 
-mkdir -p "$AWG_KEYS_DIR"
-echo "awg-provision: fetching feed key from $AWG_KEY_URL"
-if ! "$WGET_CMD" -O "$AWG_KEYS_DIR/awg-openwrt-feed.pem" "$AWG_KEY_URL"; then
-	echo "awg-provision: ERROR: failed to fetch signing key" >&2
+if [ ! -f "$AWG_KEY_SRC" ]; then
+	echo "awg-provision: ERROR: bundled feed key missing at $AWG_KEY_SRC" >&2
 	exit 1
 fi
-echo "awg-provision: key written to $AWG_KEYS_DIR/awg-openwrt-feed.pem"
+if ! grep -q '^-----BEGIN PUBLIC KEY-----$' "$AWG_KEY_SRC"; then
+	echo "awg-provision: ERROR: bundled feed key is not a PEM public key" >&2
+	exit 1
+fi
+
+mkdir -p "$AWG_KEYS_DIR"
+cp "$AWG_KEY_SRC" "$AWG_KEYS_DIR/awg-openwrt-feed.pem"
+chmod 0644 "$AWG_KEYS_DIR/awg-openwrt-feed.pem"
+echo "awg-provision: key installed to $AWG_KEYS_DIR/awg-openwrt-feed.pem"
 
 # ── 4. Idempotently add the AWG feed ────────────────────────────────────────
 

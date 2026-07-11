@@ -271,7 +271,11 @@ function cached_pkg_version() {
 	} catch (_) {}
 	if (pkg_ver !== "unknown" && length(pkg_ver)) return pkg_ver;
 
-	const PKG = "luci-singbox-ui";
+	// The installed package is luci-app-singbox-ui; "luci-singbox-ui" is only the
+	// pre-split name kept in provides/replaces, so `apk list --installed` returned
+	// nothing and the prefix strip never matched — package_version was ALWAYS
+	// "unknown". Keep in sync with the identical query in etc/init.d/singbox-ui.
+	const PKG = "luci-app-singbox-ui";
 	try {
 		let line = trim(run_capture(["apk", "list", "--installed", PKG]) ?? "");
 		if (length(line)) {
@@ -737,12 +741,21 @@ function call_plugin_enable() {
 
 // call_plugin_install — `apk add <package>` for a plugin from our feed. No feed
 // or key handling here: plugins self-provision external components themselves.
+//
+// The name is restricted to OUR plugin namespace, and the first character must be
+// alphanumeric. The old pattern allowed a leading dash, and sq() quotes but does
+// not stop apk from reading the argument as an option — `apk add '--initdb'` ran
+// as root. `--` ends option parsing as a second line of defence. Without the
+// namespace bound this method was "install any package from any repo, as root".
+const PLUGIN_PKG_PREFIX = "luci-app-singbox-plugin-";
 function call_plugin_install() {
 	let a = parse_args();
 	let pkg = a.package;
-	if (type(pkg) !== "string" || !match(pkg, /^[a-zA-Z0-9._+-]+$/))
+	if (type(pkg) !== "string" || !match(pkg, /^[a-zA-Z0-9][a-zA-Z0-9._+-]*$/))
 		return emit_err("invalid package");
-	let rc = system(sprintf("%s add %s >/dev/null 2>&1", APK_CMD, sq(pkg)));
+	if (substr(pkg, 0, length(PLUGIN_PKG_PREFIX)) !== PLUGIN_PKG_PREFIX)
+		return emit_err("package outside the plugin namespace");
+	let rc = system(sprintf("%s add -- %s >/dev/null 2>&1", APK_CMD, sq(pkg)));
 	if (rc === 0) emit_ok(); else emit_err(sprintf("apk add failed (rc=%d)", rc));
 }
 

@@ -39,8 +39,18 @@ function fragment(cur) {
 		if (s.ipv6_enabled == "1" && length(v6addr))
 			push(v6_rules, sprintf("\t\toifname \"%s\" masquerade", dev));
 	});
-	if (!length(v4_rules) && !length(v6_rules)) return "";
+	// Reset both tables on EVERY apply, exactly like the core table does
+	// (`add table` creates it if missing so `delete table` cannot fail, then the
+	// definition below re-creates it). Without this the fragment only ever
+	// APPENDED, so each apply added another `oifname ... masquerade` rule and the
+	// ruleset grew without bound — and a table whose outbounds were all removed or
+	// disabled was never torn down at all.
 	let out = "";
+	out += "add table ip singbox_ui_awg_nat\n";
+	out += "delete table ip singbox_ui_awg_nat\n";
+	out += "add table ip6 singbox_ui_awg_nat6\n";
+	out += "delete table ip6 singbox_ui_awg_nat6\n";
+
 	if (length(v4_rules)) {
 		out += "table ip singbox_ui_awg_nat {\n";
 		out += "\tchain postrouting {\n\t\ttype nat hook postrouting priority srcnat; policy accept;\n";
@@ -56,4 +66,13 @@ function fragment(cur) {
 	return out;
 }
 
-return { fragment };
+// remove_tables — drop both NAT tables outright. The fragment above can only tear
+// them down while the plugin is still enabled; once it is switched off (or the
+// package removed) the registry stops handing out its nft hook, so the lifecycle
+// teardown has to do it.
+function remove_tables() {
+	system(["nft", "delete", "table", "ip", "singbox_ui_awg_nat"]);
+	system(["nft", "delete", "table", "ip6", "singbox_ui_awg_nat6"]);
+}
+
+return { fragment, remove_tables };

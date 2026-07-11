@@ -34,6 +34,37 @@ describe("awg iface helpers", () => {
     expect(o.mtu_override).toBe(1380);
     expect(o.wan_mtu_positive).toBe(true);
   });
+
+  // F-09: lc() + truncate(15) is lossy, and two sections that differed only in
+  // case or past the 15th character collapsed onto ONE device — one interface,
+  // one .conf, shared WARP credentials, and the second section's settings gone.
+  it("F-09: sections that differ only by case or past char 15 get distinct devices", async () => {
+    const r = await exec(`
+      SRC="${WORK}/plugins/awg_warp/lib"
+      DST="${LIB}/plugins/awg_warp"
+      trap 'rm -rf "$DST"' EXIT
+      mkdir -p "$DST"; cp -r "$SRC"/. "$DST"/ 2>/dev/null || true
+
+      ucode -L '${LIB}' -e '
+        let h = require("plugins.awg_warp.iface");
+        print(sprintf("%J", {
+          long_us: h.iface_name("warp_home_primary_us"),
+          long_eu: h.iface_name("warp_home_primary_eu"),
+          lower:   h.iface_name("warp"),
+          upper:   h.iface_name("WARP"),
+        }));
+      '
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    expect(o.long_us).not.toBe(o.long_eu);
+    expect(o.upper).not.toBe(o.lower);
+    // still valid device names
+    for (const n of [o.long_us, o.long_eu, o.upper])
+      expect(n).toMatch(/^[a-z0-9_]{1,15}$/);
+    // an already-clean name is left exactly as it was (no churn for existing installs)
+    expect(o.lower).toBe("warp");
+  });
 });
 
 describe("awg reconcile", () => {
@@ -113,7 +144,7 @@ WGEOF
       has_v6=$(grep -c "addr add 2606:4700::2/128" "$LOG" 2>/dev/null || true); has_v6=$((has_v6+0))
       has_mtu=$(grep -c "mtu 1380" "$LOG" 2>/dev/null || true); has_mtu=$((has_mtu+0))
       has_label=$(grep -c "addrlabel add" "$LOG" 2>/dev/null || true); has_label=$((has_label+0))
-      bad_setconf=$(printf '%s' "$setconf" | grep -ci '^Address\|^MTU' 2>/dev/null || true); bad_setconf=$((bad_setconf+0))
+      bad_setconf=$(printf '%s' "$setconf" | grep -cEi '^(Address|MTU)' 2>/dev/null || true); bad_setconf=$((bad_setconf+0))
       printf '{"link":%d,"v6":%d,"mtu":%d,"label":%d,"bad_setconf":%d}\n' \
         "$has_link" "$has_v6" "$has_mtu" "$has_label" "$bad_setconf"
     `);
@@ -684,7 +715,7 @@ WGEOF
       # it was written with exactly one clean [Peer].
       awg_called=$(grep -c "awg setconf" "$LOG" 2>/dev/null || true); awg_called=$((awg_called+0))
       has_evil=$(printf '%s' "$setconf_content" | grep -c "EVIL" 2>/dev/null || true); has_evil=$((has_evil+0))
-      peer_count=$(printf '%s' "$setconf_content" | grep -c '^\[Peer\]' 2>/dev/null || true); peer_count=$((peer_count+0))
+      peer_count=$(printf '%s' "$setconf_content" | grep -cxF '[Peer]' 2>/dev/null || true); peer_count=$((peer_count+0))
       printf '{"awg_called":%d,"has_evil":%d,"peer_count":%d}\n' \
         "$awg_called" "$has_evil" "$peer_count"
     `);

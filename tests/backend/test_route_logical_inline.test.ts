@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_route_logical_inline.sh
 // A logical rule inlines its referenced default rules as headless (action
 // stripped, no rule_set/inbound), the consumed default rule is NOT emitted
 // top-level, and logical carries type+mode.

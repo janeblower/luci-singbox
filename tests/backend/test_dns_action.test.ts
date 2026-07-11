@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_dns_action.sh
 // Verifies builder._shared.dns_action fields(): action-gated emit of
 // route/reject/predefined/route-options actions and default_when_empty fallback.
 describe("dns_action shared block", () => {

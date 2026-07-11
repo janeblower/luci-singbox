@@ -1,6 +1,5 @@
 /**
  * tests/cross/i18n_package.test.ts
- * Port of tests/cross/test_i18n_package.sh
  *
  * i18n-package integration (goal d). Asserts the Russian translation package
  * is built correctly by scripts/build-apk.sh:

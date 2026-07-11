@@ -3,7 +3,6 @@ import { readFileSync } from "node:fs";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_protocol_field_coverage.sh
 // COVERAGE GUARD: every registered outbound descriptor's field set must be
 // documented in docs/protocol-coverage.md.
 //

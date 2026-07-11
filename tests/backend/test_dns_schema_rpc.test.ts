@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode, runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_dns_schema_rpc.sh
 // Validates that schema_dump.dump_all() includes a 'dns' key with all 14 DNS
 // types, each having a fields array and sing_box_type, and that backend-only
 // props do NOT leak through the FIELD_WHITELIST projection.

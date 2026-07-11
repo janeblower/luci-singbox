@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_descriptor_resilience.sh
 // S2.1: a broken built-in descriptor must log+skip, not abort ALL config generation.
 // outbound.uc / inbound.uc wrap their eager require() so one malformed descriptor
 // file degrades gracefully instead of throwing and killing generation for every

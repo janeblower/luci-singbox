@@ -1,6 +1,5 @@
 /**
  * tests/cross/test_uci_defaults_fwmark.test.ts
- * Port of tests/cross/test_uci_defaults_fwmark.sh
  *
  * Verifies the 90-singbox-ui-fwmark uci-defaults script:
  *   1. First run seeds three default values.

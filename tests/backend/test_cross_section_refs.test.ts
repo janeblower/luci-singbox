@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_cross_section_refs.sh
 // Behavioral cross-section reference validation against generate.uc output:
 //   - multi-hop detour chains resolve end-to-end
 //   - route resolve action -> dns_server tag resolves

@@ -12,15 +12,18 @@ describe("test_plugin_lifecycle", () => {
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_nft"
-      trap 'rm -rf "$PLUG"' EXIT
-      mkdir -p "$PLUG"
+      D=/tmp/plc-print-$$
+      trap 'rm -rf "$PLUG" "$D"' EXIT
+      mkdir -p "$PLUG" "$D/uci"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
 reg.register({ name: "zz_nft", nft: { fragment: function(cur){ return "table inet zz_nft_marker { }"; } } });
 return {};
 EOF
+      # A plugin only contributes hooks while it is switched on (unset == off).
+      printf "config singbox-ui 'plugins'\n\toption zz_nft_enabled '1'\n" > "$D/uci/singbox-ui"
       # Use the nftables.uc CLI 'print' path (no actual nft apply) with the stub apply seam.
-      out=$(UCODE_APP_LIB_DIR="${LIB}" SINGBOX_NFT_APPLY=/bin/true ucode -L '${LIB}' '${LIB}/../nftables.uc' print 2>/dev/null || true)
+      out=$(UCI_CONFIG_DIR="$D/uci" UCODE_APP_LIB_DIR="${LIB}" SINGBOX_NFT_APPLY=/bin/true ucode -L '${LIB}' '${LIB}/../nftables.uc' print 2>/dev/null || true)
       echo "$out" | grep -q "zz_nft_marker" && echo FOUND || echo MISSING
     `);
     expect(r.exitCode).toBe(0);
@@ -44,8 +47,9 @@ let reg = require("plugins.registry");
 reg.register({ name: "zz_apply_marker", nft: { fragment: function(cur){ return "table inet zz_apply_marker_table { }"; } } });
 return {};
 EOF
-      # Minimal UCI config: no tproxy/tun inbound — transparent=0.
-      printf '' > "$D/uci/singbox-ui"
+      # Minimal UCI config: no tproxy/tun inbound — transparent=0. The plugins
+      # section switches the fixture plugin on (unset == off).
+      printf "config singbox-ui 'plugins'\n\toption zz_apply_marker_enabled '1'\n" > "$D/uci/singbox-ui"
       # Run the apply path with SINGBOX_NFT_CAPTURE seam: captures the assembled
       # ruleset to $D/captured instead of invoking nft, returns 0.
       UCI_CONFIG_DIR="$D/uci" \
@@ -65,8 +69,9 @@ EOF
     const r = await exec(`
       set -e
       PLUG="${LIB}/plugins/zz_lc"
-      trap 'rm -rf "$PLUG"; rm -f /tmp/zz_lc_applied /tmp/zz_lc_torndown' EXIT
-      mkdir -p "$PLUG"
+      D=/tmp/plc-lc-$$
+      trap 'rm -rf "$PLUG" "$D"; rm -f /tmp/zz_lc_applied /tmp/zz_lc_torndown' EXIT
+      mkdir -p "$PLUG" "$D/uci"
       cat > "$PLUG/init.uc" <<'EOF'
 let reg = require("plugins.registry");
 let fs = require("fs");
@@ -76,8 +81,9 @@ reg.register({ name: "zz_lc", lifecycle: {
 return {};
 EOF
       rm -f /tmp/zz_lc_applied /tmp/zz_lc_torndown
-      UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' apply
-      UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' teardown
+      printf "config singbox-ui 'plugins'\n\toption zz_lc_enabled '1'\n" > "$D/uci/singbox-ui"
+      UCI_CONFIG_DIR="$D/uci" UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' apply
+      UCI_CONFIG_DIR="$D/uci" UCODE_APP_LIB_DIR="${LIB}" ucode -L '${LIB}' '${LIB}/../apply-plugins.uc' teardown
       a=$([ -f /tmp/zz_lc_applied ] && echo 1 || echo 0)
       t=$([ -f /tmp/zz_lc_torndown ] && echo 1 || echo 0)
       echo "{\\"applied\\":$a,\\"torndown\\":$t}"
@@ -109,6 +115,9 @@ EOF
       cat > "$D/uci/singbox-ui" <<'UCEOF'
 config singbox-ui main
 	option enabled 1
+
+config singbox-ui plugins
+	option zz_tproxy_frag_enabled 1
 
 config inbound tproxy_in
 	option type tproxy

@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_raw_types.sh
 describe("raw_types (json/sharelink outbound passthrough; json inbound passthrough)", () => {
   useGuest();
 

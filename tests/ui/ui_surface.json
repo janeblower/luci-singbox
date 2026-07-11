@@ -81,7 +81,6 @@
   { "id": "xcut.rpc_generate_fail","tab": "_top",   "kind": "rpc-error",  "label": "generate failure surfaced" },
   { "id": "xcut.rpc_acl_denied",   "tab": "_top",   "kind": "rpc-error",  "label": "ACL-denied surfaced" },
 
-  { "id": "vm.tproxy_save_roundtrip", "tab": "_vm", "kind": "vm", "label": "tproxy save-roundtrip installs nft (NET_ADMIN)" },
 
   { "id": "plugin.awg_warp._install",     "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Install AWG + ip-full button" },
   { "id": "plugin.awg_warp.warp_storage", "tab": "outbounds", "kind": "plugin-awg-warp", "label": "AWG WARP: Config storage (RAM/Flash) select" },

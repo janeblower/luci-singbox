@@ -483,7 +483,9 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         if (!f.dynamic && Array.isArray(f.values))
             f.values.forEach(function (v) { opt.value(v, v === '' ? _('(none)') : v); });
         if (f.dynamic) attachDynamic(opt, f);
-        if (f.secret) { opt.password = true; decorateSecretInput(opt); }
+        // Same rule as applyMaterialized: masking only works on a single-line
+        // input, so a multiline secret stays a plain textarea.
+        if (f.secret && !f.multiline) { opt.password = true; decorateSecretInput(opt); }
         if (f.virtual) makeVirtual(opt);
         attachValidator(opt, f.validate);
         if (gate.mode === 'disable') disableWithNote(opt, gate.note);

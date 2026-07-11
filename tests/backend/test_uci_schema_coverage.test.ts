@@ -1,7 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 
-// Port of tests/backend/test_uci_schema_coverage.sh
 // Verifies docs/uci-schema.md structure and field-level coverage.
 // Steps 1+2: host-side grep against the schema doc.
 // Steps C2.1.14 + C2.1.15: host-side grep against production source files.

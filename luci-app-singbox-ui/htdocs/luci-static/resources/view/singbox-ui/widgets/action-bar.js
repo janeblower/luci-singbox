@@ -1,6 +1,5 @@
 'use strict';
 'require ui';
-'require dom';
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
@@ -16,18 +15,10 @@ var renderStatusPanel = SbStatusPanel.renderStatusPanel;
 
 function renderActionBar(statusHolder) {
 	function refreshStatus() { renderStatusPanel(statusHolder); }
-	// btn(label, handler)            — back-compat 2-arg form (no busy label).
-	// btn(label, busyLabel, handler) — 3-arg form swaps the button text and
-	//   adds the .busy class for the duration of the RPC (C2.2.5).
-	function btn(label, busyOrHandler, maybeHandler) {
-		var handler, busyLabel;
-		if (typeof busyOrHandler === 'function') {
-			handler   = busyOrHandler;
-			busyLabel = null;
-		} else {
-			busyLabel = busyOrHandler;
-			handler   = maybeHandler;
-		}
+	// btn(label, busyLabel, handler) — swaps the button text and adds the .busy
+	// class for the duration of the RPC (C2.2.5). (The 2-arg back-compat form is
+	// gone: all five call sites pass three arguments.)
+	function btn(label, busyLabel, handler) {
 		return E('button', {
 			'class': 'btn cbi-button cbi-button-action',
 			'click': ui.createHandlerFn(this, function (ev) {

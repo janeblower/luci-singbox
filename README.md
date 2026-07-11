@@ -34,7 +34,7 @@ reference in `docs/` is mostly English.
 - Russian translation bundled. After install the page appears under
   **Services → Singbox-UI**.
 
-**Install** (OpenWrt 25.12+, apk). The project ships as four noarch packages —
+**Install** (OpenWrt 25.12+, apk). The project ships as four noarch packages (plus an optional AWG/WARP plugin) —
 `singbox-ui` (backend; bundles the pure-ucode bbolt cache.db reader),
 `luci-app-singbox-ui` (LuCI UI) and `luci-i18n-singbox-ui-ru` (translation).
 You install the UI; apk resolves the backend as a dependency. The easiest path
@@ -56,7 +56,7 @@ echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox/package
 apk update && apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru
 ```
 
-Or install the unsigned release assets manually — grab the four noarch packages
+Or install the unsigned release assets manually — grab the four noarch packages (plus `singbox-ui-plugin-awg_warp.apk` if you want the AWG/WARP plugin)
 from the [latest release](../../releases) and let apk resolve the order:
 
 ```sh

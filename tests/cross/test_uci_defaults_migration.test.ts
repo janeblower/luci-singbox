@@ -1,6 +1,5 @@
 /**
  * tests/cross/test_uci_defaults_migration.test.ts
- * Port of tests/cross/test_uci_defaults_migration.sh
  *
  * Verifies that 99-luci-singbox-ui migrates a range of legacy UCI shapes:
  *   - list inet4_range / inet6_range → scalar option

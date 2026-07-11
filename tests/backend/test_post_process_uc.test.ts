@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
-import { runUcode } from "../helpers/ucode.ts";
+import { pluginsEnabledUci, runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_post_process_uc.sh
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const FIXTURES_LIB = `${WORK}/tests/fixtures`;
 
@@ -79,6 +78,8 @@ print("PASS test_post_process_uc plugin invocation\\n");
       [],
       // extra lib dirs: tests/fixtures (noop plugin lives there)
       [FIXTURES_LIB],
+      // hooks only run for an enabled plugin (unset == off)
+      await pluginsEnabledUci(["noop"]),
     );
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("PASS test_post_process_uc plugin invocation");

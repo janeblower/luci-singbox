@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode, runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_shared_multiplex.sh
 // Declarative emit_spec path via filler for the shared multiplex block.
 
 describe("shared multiplex block", () => {

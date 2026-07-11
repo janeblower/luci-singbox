@@ -1,6 +1,5 @@
 /**
  * tests/cross/install_manifest_fresh.test.ts
- * Port of tests/cross/test_install_manifest_fresh.sh
  *
  * Verifies the per-package install manifests are in sync with what
  * gen-manifest.sh would produce — catches drift between manual edits and

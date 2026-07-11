@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_route_default_config.sh
 // Guard the SHIPPED default UCI config (etc/config/singbox-ui) against the
 // route schema. Runs route.uc/ruleset.uc against the real shipped config and
 // asserts the emitted route block uses only valid sing-box rule actions and

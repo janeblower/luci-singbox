@@ -15,8 +15,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **nft**: `socket transparent 1` fast-path for established flows
   (requires `kmod-nft-socket`, now an explicit package dependency).
 - **uci**: new options on `singbox-ui.@global[0]`: `fwmark` (hex, default
-  `0x1`), `fwmark_mask` (hex, default `0x1`), `redirect_router_traffic`
-  (`0`/`1`, default `0`).
+  `0x40000000` — bit 30, outside the mwan3 mask), `fwmark_mask` (hex, default
+  `0x40000000`), `redirect_router_traffic` (`0`/`1`, default `0`).
 - **uci-defaults**: new `90-singbox-ui-fwmark` seeds the three options on
   upgrade (defaults reproduce the prior behaviour).
 - **pkg**: depend on `+kmod-nft-socket` and explicit `+kmod-nft-tproxy`.

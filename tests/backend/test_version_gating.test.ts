@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_version_gating.sh
 // Schema carries min_version for gated protocols; checks anytls/naive/cloudflared.
 // naive inbound is intentionally ungated (empty string).
 

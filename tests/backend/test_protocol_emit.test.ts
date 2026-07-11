@@ -3,7 +3,6 @@ import { readdirSync, readFileSync } from "node:fs";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_protocol_emit.sh
 // Walks tests/fixtures/protocols/*.uci, runs generate.uc against each, then
 // evaluates the paired .expect expression against the resulting JSON (bound as `c`).
 

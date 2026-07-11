@@ -4,7 +4,6 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-// Port of tests/backend/test_cron_defaults.sh
 // Host-only: reads repo files via fs, runs the shell script under 'sh'.
 // No guest connection needed.
 

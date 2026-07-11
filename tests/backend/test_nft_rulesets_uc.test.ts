@@ -79,9 +79,14 @@ describe("nft_rulesets_uc", () => {
     expect(r.exitCode, "raw_path cleanup must be present").toBe(0);
   });
 
-  it("SEC-9: unlink_quiet helper exists; no bare fs.unlink(m.raw_path) in decompile loop", async () => {
-    const r1 = await exec(`grep -qE 'function unlink_quiet' ${SUB_UC}`);
-    expect(r1.exitCode, "unlink_quiet helper must exist").toBe(0);
+  it("SEC-9: unlink goes through the shared helper; no bare fs.unlink(m.raw_path) in decompile loop", async () => {
+    // The helper lives in lib/helpers.uc now (it was byte-identical here and in
+    // subscription.uc). What matters is that the in-loop unlinks route through it,
+    // so one failure cannot abort the remaining jobs in the refresh cycle.
+    const r1 = await exec(`grep -qF 'helpers.unlink_quiet(' ${SUB_UC}`);
+    expect(r1.exitCode, "in-loop unlinks must use helpers.unlink_quiet").toBe(
+      0,
+    );
     const r2 = await exec(`grep -qE 'fs\\.unlink\\(m\\.raw_path\\)' ${SUB_UC}`);
     expect(
       r2.exitCode,

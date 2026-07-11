@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_shared_tls.sh
 // Declarative emit_spec path via filler for the shared TLS block.
 // Covers: disabled (null), minimal enabled, Reality client, ECH, TLS fragment,
 // uTLS, hysteria2 force-enabled.

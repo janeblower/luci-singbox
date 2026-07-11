@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_advanced_scope.sh
 // Guards Bug 4: no _show_advanced_* toggle for inbound/outbound; kept for
 // dns/route_rule.
 describe("advanced_scope (no advanced toggles for in/out; kept for dns/route)", () => {

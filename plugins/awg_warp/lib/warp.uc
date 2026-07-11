@@ -30,11 +30,30 @@ function _b64_rand(n) {
 	return s;
 }
 
+// _pubkey_of(priv) — derive the public key WITHOUT putting the private key in a
+// command line. `printf %s '<key>' | awg pubkey` leaked it into /proc/<pid>/cmdline,
+// which is world-readable on stock OpenWrt (no hidepid), so any local process could
+// grab it during the window. Feed it through a 0600 tempfile on stdin instead, and
+// unlink immediately — the same discipline setconf and the stored .conf follow.
+function _pubkey_of(priv) {
+	let dir = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
+	fs.mkdir(dir);
+	let path = sprintf("%s/.awg_privkey.%d", dir, time());
+	let f = fs.open(path, "w");
+	if (!f) return "";
+	fs.chmod(path, 384);   // 0600 before the key is written
+	f.write(priv);
+	f.close();
+	let pub = trim(_run(sprintf("%s pubkey < %s", AWG_BIN, helpers.sq(path))) ?? "");
+	try { fs.unlink(path); } catch (_) {}
+	return pub;
+}
+
 function register_auto() {
 	let priv = trim(_run(sprintf("%s genkey", AWG_BIN)) ?? "");
 	if (!length(priv)) return { ok: false, error: "awg genkey failed" };
 
-	let pub = trim(_run(sprintf("printf %%s %s | %s pubkey", helpers.sq(priv), AWG_BIN)) ?? "");
+	let pub = _pubkey_of(priv);
 	if (!length(pub)) return { ok: false, error: "awg pubkey failed" };
 
 	let install_id = _b64_rand(22);

@@ -37,7 +37,7 @@ define Package/$(PKG_NAME)
   CATEGORY:=Network
   TITLE:=sing-box UI backend (config generator, rpcd, nftables driver)
   URL:=https://github.com/janeblower/luci-singbox
-  # CANON dep line — keep in sync with APP_DEPENDS in scripts/build-apk.sh.
+  # CANON dep line — keep in sync with SINGBOX_DEPENDS in scripts/build-apk.sh.
   # NB: 'nftables' (base/fw4) and 'jq' are deliberately excluded.
   DEPENDS:=+sing-box +curl +ucode +ucode-mod-fs +kmod-nft-socket +kmod-nft-tproxy
   PKGARCH:=all

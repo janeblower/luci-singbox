@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_route_schema_rpc.sh
 // dump_all() projects route_rule + rule_set with frontend-safe fields
 // (depends/values/dynamic/advanced/min_version present;
 // backend-only json_key/requires/coerce absent).

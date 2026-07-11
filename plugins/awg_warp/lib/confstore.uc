@@ -104,20 +104,15 @@ function ensure(cur, item, mtu, ipv6) {
 		return wg;
 	}
 
-	// 2) Нет файла. selfhosted — авто-CF недоступна (ждём заранее положенный .conf).
-	let target = (s.awg_target == "selfhosted") ? "selfhosted" : "warp";
-	if (target == "selfhosted") {
-		require("log").log_event("warn", "awg.selfhosted_conf_missing", { path });
-		return null;
-	}
-
-	// 3) warp — тихая авто-регистрация.
+	// 2) Нет файла — тихая авто-регистрация в WARP.
+	// (Прежняя ветка awg_target=selfhosted удалена: writer'а у поля не было, ветка
+	// недостижима. См. коммент в awggen.uc.)
 	let res = warp.register_auto();
 	if (!res.ok) {
 		require("log").log_event("error", "awg.register_failed", { error: res.error });
 		return null;
 	}
-	let p = awggen.generate({ target: "warp", mimic: s.awg_mimic, mtu });
+	let p = awggen.generate({ mtu });
 	let wg = {
 		private_key:     res.creds.private_key,
 		peer_public_key: res.creds.peer_public_key,

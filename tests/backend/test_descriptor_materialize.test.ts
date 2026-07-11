@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode, runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_descriptor_materialize.sh
 // Validates registry.materialize(kind, type):
 //   - field union (protocol + shared blocks gated by flags)
 //   - per-tab _show_advanced_<tab> injection for dns/route kinds

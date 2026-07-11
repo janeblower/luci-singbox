@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Port of tests/backend/test_status_detail.sh
 // status_detail key presence, apk-stub cache perf, and parser parity (audit 13.2).
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
@@ -13,7 +12,7 @@ const INITD = `${WORK}/singbox-ui/root/etc/init.d/singbox-ui`;
 
 // apk line the handler is expected to parse
 const APK_LINE =
-  "luci-singbox-ui-9.9.9-test noarch {luci-singbox-ui} (GPL-2.0-or-later) [installed]";
+  "luci-app-singbox-ui-9.9.9-test noarch {luci-app-singbox-ui} (GPL-2.0-or-later) [installed]";
 
 // Run status_detail with an apk stub installed into binDir and varlib isolated.
 // Double-quote PATH so $PATH expands in shell (not single-quoted).
@@ -107,11 +106,34 @@ STUBEOF
     expect(forksRaw.stdout.trim()).toBe("1");
   });
 
+  it("F-23: pkg_version queries the name that is actually installed", async () => {
+    // The apk stubs elsewhere in this file answer regardless of argv, so they pass
+    // even when the handler asks for a package that does not exist. It asked for
+    // "luci-singbox-ui" — only a provides/replaces alias since the 4-way split —
+    // so the query matched nothing and package_version was ALWAYS "unknown".
+    // This stub answers ONLY for the real installed name.
+    const binDir = `${TMPDIR}/bin_name`;
+    const varlib = `${TMPDIR}/varlib_name`;
+    await exec(
+      `rm -rf '${binDir}' '${varlib}'; mkdir -p '${binDir}' '${varlib}'`,
+    );
+    await putFile(
+      `#!/bin/sh\n[ "$3" = "luci-app-singbox-ui" ] && printf '%s\\n' '${APK_LINE}'\nexit 0\n`,
+      `${binDir}/apk`,
+    );
+    await exec(`chmod +x '${binDir}/apk'`);
+
+    const out = await exec(
+      `${runDetail(binDir, varlib)} | ucode -e 'let fs=require("fs");let d=json(fs.stdin.read("all")||"{}");print(d.package_version);'`,
+    );
+    expect(out.stdout.trim()).toBe("9.9.9-test");
+  });
+
   it("audit 13.2: init.d sed and rpcd pkg_version parsers are byte-identical", async () => {
     // Extract the live sed expression from init.d by having the guest do it.
-    // The line contains: sed -n 's/^luci-singbox-ui-...
+    // The line contains: sed -n 's/^luci-app-singbox-ui-...
     const sedExtract = await exec(
-      `grep -F "sed -n 's/^luci-singbox-ui" '${INITD}' | head -1 ` +
+      `grep -F "sed -n 's/^luci-app-singbox-ui" '${INITD}' | head -1 ` +
         `| sed -n "s/.*sed -n '\\([^']*\\)'.*/\\1/p"`,
     );
     expect(sedExtract.exitCode).toBe(0);
@@ -149,6 +171,6 @@ STUBEOF
     // Normal multi-field apk line
     await assertAgree(APK_LINE, "9.9.9-test");
     // Edge: single-token line with no trailing space
-    await assertAgree("luci-singbox-ui-1.2.3-r9", "1.2.3-r9");
+    await assertAgree("luci-app-singbox-ui-1.2.3-r9", "1.2.3-r9");
   });
 });

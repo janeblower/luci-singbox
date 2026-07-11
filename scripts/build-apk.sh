@@ -81,6 +81,9 @@ I18N_DOMAIN="luci-singbox-ui"
 AWGWARP_NAME="singbox-ui-plugin-awg_warp"
 AWGWARP_DESC="AWG WARP plugin for luci-app-singbox-ui (Cloudflare WARP + AmneziaWG)"
 AWGWARP_DEPENDS="libc $LUCIAPP_NAME"
+# Own i18n domain (NOT luci-singbox-ui): .po/.pot basename and the .lmo the
+# plugin's _() calls resolve against.
+AWGWARP_I18N_DOMAIN="singbox-ui-plugin-awg_warp"
 
 PKG_LICENSE="GPL-2.0-or-later"
 PKG_URL="https://github.com/janeblower/luci-singbox"
@@ -333,39 +336,14 @@ populate_singbox_root() {
 #   apk mkpkg for the noarch backend.  Must run after populate_singbox_root and
 #   after ownership is correct.
 #
-# The package conflicts with `firewall` (it manages its own nft ruleset). apk
-# mkpkg may reject a `conflicts:` install-info field; if so we OMIT it rather
-# than fail the build (the buildroot Makefile carries PKG_CONFLICTS:=firewall).
+# The package conflicts with `firewall` (it manages its own nft ruleset).
+# `conflicts:` is passed unconditionally: the apk-tools version is pinned with the
+# SDK, and it supports the field. The old code probed `mkpkg --help` for the word
+# and carried a SECOND, near-identical mkpkg invocation for the "unsupported"
+# case — a fallback for a version we never build with, duplicated again inside the
+# unshare branch. If a future SDK ever drops the field, the build fails loudly
+# here, which is what you want from a lost conflict marker.
 mkpkg_singbox() {
-    local conflicts_arg=""
-    if "$APK_BIN" mkpkg --help 2>&1 | grep -q 'conflicts'; then
-        conflicts_arg=1
-    fi
-    # Probe once whether mkpkg tolerates an -I "conflicts:..." field. If the
-    # help text doesn't mention it, omit it (don't fail the build).
-    if [ -n "$conflicts_arg" ]; then
-        "$APK_BIN" mkpkg \
-            --files "$SINGBOX_ROOT" \
-            --output "$SINGBOX_OUT" \
-            -I "name:$SINGBOX_NAME" \
-            -I "version:$V_SINGBOX" \
-            -I "description:$SINGBOX_DESC" \
-            -I "arch:noarch" \
-            -I "license:$PKG_LICENSE" \
-            -I "origin:$SINGBOX_NAME" \
-            -I "maintainer:$PKG_MAINTAINER" \
-            -I "url:$PKG_URL" \
-            -I "depends:$SINGBOX_DEPENDS" \
-            -I "provides:${SINGBOX_NAME}-any" \
-            -I "conflicts:firewall" \
-            -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
-            -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
-            -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh" \
-        && return 0
-        # If mkpkg rejected the conflicts field at runtime, fall through to the
-        # no-conflicts variant rather than failing the build.
-        echo ">>> apk mkpkg rejected 'conflicts:firewall' — retrying without it" >&2
-    fi
     "$APK_BIN" mkpkg \
         --files "$SINGBOX_ROOT" \
         --output "$SINGBOX_OUT" \
@@ -379,6 +357,7 @@ mkpkg_singbox() {
         -I "url:$PKG_URL" \
         -I "depends:$SINGBOX_DEPENDS" \
         -I "provides:${SINGBOX_NAME}-any" \
+        -I "conflicts:firewall" \
         -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
         -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
         -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh"
@@ -581,6 +560,21 @@ populate_awgwarp_root() {
         mkdir -p "$AWGWARP_ROOT/www"
         cp -a "$AWGWARP_SRC/htdocs/." "$AWGWARP_ROOT/www/"
     fi
+    # The plugin ships its own i18n domain (singbox-ui-plugin-awg_warp), and its
+    # tab.js calls _() 14 times — but nothing compiled the .po, so every string
+    # rendered in English on a Russian UI. Build the .lmo into the plugin package
+    # itself: one domain, one .po, no separate i18n subpackage to carry it.
+    awgwarp_po="$AWGWARP_SRC/po/ru/${AWGWARP_I18N_DOMAIN}.po"
+    if [ -f "$awgwarp_po" ]; then
+        install -d "$AWGWARP_ROOT/usr/lib/lua/luci/i18n"
+        if [ "$APK_MKPKG_STUB" = "1" ]; then
+            touch "$AWGWARP_ROOT/usr/lib/lua/luci/i18n/${AWGWARP_I18N_DOMAIN}.ru.lmo"
+        else
+            "$PO2LMO_BIN" "$awgwarp_po" \
+                "$AWGWARP_ROOT/usr/lib/lua/luci/i18n/${AWGWARP_I18N_DOMAIN}.ru.lmo"
+        fi
+    fi
+
     write_pkg_list "$AWGWARP_ROOT" "$AWGWARP_NAME"
     write_awgwarp_scripts "$AWGWARP_SCRIPTS"
 
@@ -637,123 +631,21 @@ elif [ "$(id -u)" -eq 0 ]; then
     populate_awgwarp_root
     chown -R 0:0 "$AWGWARP_ROOT" "$AWGWARP_SCRIPTS"
     mkpkg_awgwarp
-elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
-    # Unprivileged user namespace: populate roots as current user (no mkpkg yet),
-    # then chown+mkpkg exactly once inside the namespace where UID 0 is mapped to us.
-    populate_singbox_root
-    populate_luciapp_root
-    populate_i18n_root
-    populate_awgwarp_root
-
-    # Whether mkpkg tolerates -I "conflicts:..." — probed in parent (the inner
-    # shell can't run our bash functions), passed through to the namespaced sh.
-    SINGBOX_CONFLICTS_OK=0
-    if "$APK_BIN" mkpkg --help 2>&1 | grep -q 'conflicts'; then
-        SINGBOX_CONFLICTS_OK=1
-    fi
-
-    # Export everything the inline shell needs.
-    export SINGBOX_NAME SINGBOX_DESC SINGBOX_DEPENDS SINGBOX_CONFFILE \
-           SINGBOX_ROOT SINGBOX_SCRIPTS SINGBOX_OUT SINGBOX_CONFLICTS_OK \
-           LUCIAPP_NAME LUCIAPP_DESC LUCIAPP_DEPENDS \
-           LUCIAPP_ROOT LUCIAPP_SCRIPTS LUCIAPP_OUT \
-           I18N_NAME I18N_DESC I18N_DEPENDS \
-           I18N_ROOT I18N_SCRIPTS I18N_OUT \
-           AWGWARP_NAME AWGWARP_DESC AWGWARP_DEPENDS \
-           AWGWARP_ROOT AWGWARP_SCRIPTS AWGWARP_OUT \
-           APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER \
-           V_SINGBOX V_LUCIAPP V_I18N V_AWGWARP \
-           WORK_DIR OUTPUT_DIR
-    # shellcheck disable=SC2016
-    unshare -r sh -c '
-        chown -R 0:0 "$SINGBOX_ROOT" "$SINGBOX_SCRIPTS"
-        if [ "$SINGBOX_CONFLICTS_OK" = "1" ]; then
-            "$APK_BIN" mkpkg \
-                --files "$SINGBOX_ROOT" \
-                --output "$SINGBOX_OUT" \
-                -I "name:$SINGBOX_NAME" \
-                -I "version:$V_SINGBOX" \
-                -I "description:$SINGBOX_DESC" \
-                -I "arch:noarch" \
-                -I "license:$PKG_LICENSE" \
-                -I "origin:$SINGBOX_NAME" \
-                -I "maintainer:$PKG_MAINTAINER" \
-                -I "url:$PKG_URL" \
-                -I "depends:$SINGBOX_DEPENDS" \
-                -I "provides:${SINGBOX_NAME}-any" \
-                -I "conflicts:firewall" \
-                -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
-                -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
-                -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh"
-        else
-            "$APK_BIN" mkpkg \
-                --files "$SINGBOX_ROOT" \
-                --output "$SINGBOX_OUT" \
-                -I "name:$SINGBOX_NAME" \
-                -I "version:$V_SINGBOX" \
-                -I "description:$SINGBOX_DESC" \
-                -I "arch:noarch" \
-                -I "license:$PKG_LICENSE" \
-                -I "origin:$SINGBOX_NAME" \
-                -I "maintainer:$PKG_MAINTAINER" \
-                -I "url:$PKG_URL" \
-                -I "depends:$SINGBOX_DEPENDS" \
-                -I "provides:${SINGBOX_NAME}-any" \
-                -s "post-install:$SINGBOX_SCRIPTS/post-install.sh" \
-                -s "pre-deinstall:$SINGBOX_SCRIPTS/pre-deinstall.sh" \
-                -s "post-upgrade:$SINGBOX_SCRIPTS/post-upgrade.sh"
-        fi
-
-        chown -R 0:0 "$LUCIAPP_ROOT" "$LUCIAPP_SCRIPTS"
-        "$APK_BIN" mkpkg \
-            --files "$LUCIAPP_ROOT" \
-            --output "$LUCIAPP_OUT" \
-            -I "name:$LUCIAPP_NAME" \
-            -I "version:$V_LUCIAPP" \
-            -I "description:$LUCIAPP_DESC" \
-            -I "arch:noarch" \
-            -I "license:$PKG_LICENSE" \
-            -I "origin:$LUCIAPP_NAME" \
-            -I "maintainer:$PKG_MAINTAINER" \
-            -I "url:$PKG_URL" \
-            -I "depends:$LUCIAPP_DEPENDS" \
-            -I "provides:luci-singbox-ui" \
-            -I "provides:${LUCIAPP_NAME}-any" \
-            -I "replaces:luci-singbox-ui" \
-            -s "post-install:$LUCIAPP_SCRIPTS/post-install.sh"
-
-        chown -R 0:0 "$I18N_ROOT" "$I18N_SCRIPTS"
-        "$APK_BIN" mkpkg \
-            --files "$I18N_ROOT" \
-            --output "$I18N_OUT" \
-            -I "name:$I18N_NAME" \
-            -I "version:$V_I18N" \
-            -I "description:$I18N_DESC" \
-            -I "arch:noarch" \
-            -I "license:$PKG_LICENSE" \
-            -I "origin:$LUCIAPP_NAME" \
-            -I "maintainer:$PKG_MAINTAINER" \
-            -I "url:$PKG_URL" \
-            -I "depends:$I18N_DEPENDS" \
-            -I "provides:${I18N_NAME}-any" \
-            -s "post-install:$I18N_SCRIPTS/post-install.sh"
-
-        chown -R 0:0 "$AWGWARP_ROOT" "$AWGWARP_SCRIPTS"
-        "$APK_BIN" mkpkg \
-            --files "$AWGWARP_ROOT" \
-            --output "$AWGWARP_OUT" \
-            -I "name:$AWGWARP_NAME" \
-            -I "version:$V_AWGWARP" \
-            -I "description:$AWGWARP_DESC" \
-            -I "arch:noarch" \
-            -I "license:$PKG_LICENSE" \
-            -I "origin:$AWGWARP_NAME" \
-            -I "maintainer:$PKG_MAINTAINER" \
-            -I "url:$PKG_URL" \
-            -I "depends:$AWGWARP_DEPENDS" \
-            -I "provides:${AWGWARP_NAME}-any" \
-            -s "post-install:$AWGWARP_SCRIPTS/post-install.sh"
-    '
+elif [ "${SINGBOX_UNSHARED:-0}" != "1" ] \
+        && command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
+    # Unprivileged user namespace: re-exec THIS script inside it. `unshare -r` maps
+    # our uid to 0, so the re-executed run takes the `id -u -eq 0` branch above and
+    # reuses populate_*/mkpkg_* directly.
+    #
+    # The previous version ran `unshare -r sh -c '<heredoc>'` — the inner shell
+    # cannot see our bash functions, so every mkpkg invocation was re-inlined by
+    # hand (~145 lines), kept in sync with the real ones by eye, and needed a dozen
+    # variables exported to reach it. Re-exec keeps ONE definition of each package.
+    # SINGBOX_UNSHARED guards against an unshare that fails to map root, which would
+    # otherwise re-exec forever.
+    echo ">>> Re-executing under unshare -r (unprivileged user namespace)"
+    export SINGBOX_UNSHARED=1
+    exec unshare -r "$0" "$@"
 else
     cat >&2 <<EOF
 ERROR: cannot build a package whose files will install as root:root.

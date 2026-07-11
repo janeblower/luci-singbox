@@ -2,7 +2,6 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_route_descriptors.sh
 // Registry accepts route_rule/rule_set kinds and the new dynamic sources;
 // descriptors register and materialize; headless strips excluded fields.
 describe("route descriptors (registry + materialize + headless)", () => {

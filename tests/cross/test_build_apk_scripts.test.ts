@@ -1,6 +1,5 @@
 /**
  * tests/cross/build_apk_scripts.test.ts
- * Port of tests/cross/test_build_apk_scripts.sh
  *
  * Verifies scripts/build-apk.sh emits the explicit init.d enable+start
  * invocations in its package lifecycle scripts.
