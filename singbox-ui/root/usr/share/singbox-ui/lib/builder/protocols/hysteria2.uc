@@ -101,7 +101,7 @@ reg.register({
             { key: "name", required: true },
             { key: "password", always: true },
         ],
-        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
+        single_fallback: { fields: [ { key: "password", from: "server_password", credential: true } ] },
     },
 });
 

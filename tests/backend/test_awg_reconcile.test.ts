@@ -126,6 +126,81 @@ WGEOF
     expect(o.bad_setconf).toBe(0);
   });
 
+  it("F-02: setconf tempfile is 0600 while it exists and is unlinked afterwards", async () => {
+    // The setconf file's first line is PrivateKey. fs.open(path,"w") alone leaves it
+    // 0644 under the stock umask, in a world-traversable /tmp/singbox-ui, for the
+    // whole uptime — any local non-root process could read the WARP/self-hosted WG
+    // key. The mock awg records the mode at the moment it reads the file (the only
+    // window in which it exists); afterwards no .setconf may remain on disk.
+    const r = await exec(`
+      SRC="${WORK}/plugins/awg_warp/lib"
+      DST="${LIB}/plugins/awg_warp"
+      UCFG=/tmp/awg_sec_uci
+      MODE=/tmp/awg_sec_mode
+      M_IP=/tmp/awg_sec_ip
+      M_AWG=/tmp/awg_sec_awg
+      RAM=/tmp/awg_sec_ram
+      trap 'rm -rf "$DST" "$UCFG" "$MODE" "$M_IP" "$M_AWG" "$RAM"' EXIT
+      mkdir -p "$DST" && cp -r "$SRC"/. "$DST"/ 2>/dev/null
+
+      rm -f "$MODE"
+      printf '#!/bin/sh\nexit 0\n' > "$M_IP"
+      # BusyBox here has no stat(1) — read the mode off ls -l instead.
+      printf '#!/bin/sh\n[ "$1" = "setconf" ] && ls -l "$3" | cut -c1-10 > %s\nexit 0\n' "$MODE" > "$M_AWG"
+      chmod +x "$M_IP" "$M_AWG"
+
+      mkdir -p "$RAM"
+      cat > "$RAM/warp_sec.conf" << 'WGEOF'
+[Interface]
+PrivateKey = SUPERSECRETPRIVATEKEY==
+Jc = 8
+Jmin = 64
+Jmax = 900
+S1 = 0
+S2 = 0
+S3 = 0
+S4 = 0
+H1 = 1
+H2 = 2
+H3 = 3
+H4 = 4
+Address = 172.16.0.2/32
+MTU = 1380
+[Peer]
+PublicKey = PUB==
+Endpoint = engage.cloudflareclient.com:2408
+AllowedIPs = 0.0.0.0/0, ::/0
+PersistentKeepalive = 25
+WGEOF
+
+      mkdir -p "$UCFG"
+      printf '%s\n' \
+        "config outbound 'warp_sec'" \
+        "	option type 'awg_warp'" \
+        "	option enabled '1'" \
+        "	option warp_storage 'ram'" \
+        "	option ipv6_enabled '0'" \
+        > "$UCFG/singbox-ui"
+
+      IP_BIN="$M_IP" AWG_BIN="$M_AWG" UCI_CONFIG_DIR="$UCFG" SINGBOX_TMPDIR="$RAM" \
+        ucode -L '${LIB}' -e '
+          let rc = require("plugins.awg_warp.reconcile");
+          let uci_mod = require("uci");
+          let uci_dir = getenv("UCI_CONFIG_DIR");
+          let cur = uci_dir ? uci_mod.cursor(uci_dir) : uci_mod.cursor();
+          rc.apply(cur);
+        ' 2>/dev/null || true
+
+      mode=$(cat "$MODE" 2>/dev/null || true)
+      leftover=$(ls "$RAM"/*.setconf 2>/dev/null | wc -l); leftover=$((leftover+0))
+      printf '{"mode":"%s","leftover":%d}\n' "$mode" "$leftover"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    expect(o.mode).toBe("-rw-------");
+    expect(o.leftover).toBe(0);
+  });
+
   it("FIX-1: disabling a section (enabled=0) also removes addrlabel entries", async () => {
     // Prove the addrlabel leak fix: enable a section with ipv6 and a pre-placed .conf,
     // apply, then set enabled=0, apply again — the second apply must emit BOTH link del

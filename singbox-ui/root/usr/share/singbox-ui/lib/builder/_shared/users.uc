@@ -70,9 +70,18 @@ function _parse_row(entry, spec) {
 function _build_single(s, fb) {
     let u = { name: s[".name"] };
     let have_cred = false;
-    for (let f in (fb.fields || []))
-        if (length(s_opt(s, f.from))) { u[f.key] = s[f.from]; have_cred = true; }
-    // Drop a credential-less fallback: a single-user section whose source
+    for (let f in (fb.fields || [])) {
+        if (!length(s_opt(s, f.from))) continue;
+        u[f.key] = s[f.from];
+        // Only a field flagged `credential` counts as one. Any non-empty field
+        // used to flip this, so a vless section with a `flow` but no UUID emitted
+        // users:[{name, flow}] — no `id` — and sing-box rejected the config.
+        // Unflagged is fail-closed on purpose: a new descriptor that forgets the
+        // flag emits no users[] (a loud, obvious error) rather than a user object
+        // with no credential in it.
+        if (f.credential) have_cred = true;
+    }
+    // Drop a credential-less fallback: a single-user section whose credential
     // field(s) are all empty would otherwise emit users:[{name}] with no
     // password/uuid, which sing-box rejects. Returning null lets build() emit
     // no users[], so the missing credential surfaces as a clear error rather

@@ -580,25 +580,18 @@ printf("%s\\n", h.detect_rs_format("https://x/y.srs#frag", null));
     expect(r.stdout.trim()).toBe("binary\nsource\nbinary");
   });
 
-  it("C2.3.12: is_outbound_proxy_kind works for vless/interface", async () => {
+  // C2.3.12 used to assert helpers.is_outbound_proxy_kind(), a hand-kept second
+  // copy of the protocol list. It is gone: the registry is the one source, and
+  // outbound.uc/export_section.uc query it directly (see test_export_section).
+  it("C2.3.12: the registry knows every UI-creatable outbound kind", async () => {
     const r = await exec(
       `cd /tmp/work && ucode -L ${LIB} -e '
-let h = require("helpers");
-printf("%s\\n", h.is_outbound_proxy_kind("vless"));
-printf("%s\\n", h.is_outbound_proxy_kind("interface"));
-'`,
-    );
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout.trim()).toBe("true\nfalse");
-  });
-
-  it("C2.3.12: all active proxy kinds present in OUTBOUND_PROXY_KINDS", async () => {
-    const r = await exec(
-      `cd /tmp/work && ucode -L ${LIB} -e '
-let h = require("helpers");
-let want = ["vless","trojan","hysteria2","shadowsocks"];
+require("outbound");   // eagerly loads the descriptors
+let reg = require("builder.protocols.registry");
+let want = ["vless","trojan","hysteria2","shadowsocks","direct","selector"];
 let ok = true;
-for (let t in want) if (!h.is_outbound_proxy_kind(t)) ok = false;
+for (let t in want) if (!reg.get("outbound", t)) ok = false;
+if (reg.get("outbound", "interface")) ok = false;   // UI-only shape, not a descriptor
 printf("%s\\n", ok ? "all-covered" : "missing");
 '`,
     );

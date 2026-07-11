@@ -87,13 +87,24 @@ function _create_link(dev) {
 // _apply_setconf — write genl-only tmpfile and load it via awg setconf.
 // Address/MTU must not appear in this file — awg setconf is genl-only.
 // Rendered via confstore.render_setconf (wg is the flat wgconf object).
+// The file's FIRST line is PrivateKey, so it gets the same 0600-and-shred
+// discipline as confstore's .conf: fs.open() alone would leave it 0644 under
+// the stock umask, world-readable in a 0755 tmpdir for the whole uptime. chmod
+// lands before any secret is written; the file is unlinked once awg has read it.
 function _apply_setconf(dev, wg) {
 	let TMPDIR = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 	fs.mkdir(TMPDIR);
 	let path = sprintf("%s/%s.setconf", TMPDIR, dev);
 	let f = fs.open(path, "w");
-	if (f) { f.write(confstore.render_setconf(wg)); f.close(); }
+	if (!f) {
+		require("log").log_event("error", "awg.setconf_open_failed", { iface: dev });
+		return;
+	}
+	fs.chmod(path, 384);   // 0600, before the private key hits the disk
+	f.write(confstore.render_setconf(wg));
+	f.close();
 	sh(sprintf("%s setconf %s %s", AWG_BIN, dev, path));
+	try { fs.unlink(path); } catch (e) {}
 }
 
 // _assign_addresses — ip addr add for v4 (always) and v6 (when ipv6 enabled).

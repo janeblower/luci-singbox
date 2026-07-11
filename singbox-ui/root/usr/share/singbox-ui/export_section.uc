@@ -43,19 +43,23 @@ if (kind === "inbound") {
 	emit({ status: "ok", section: ob });
 } else {
 	let t = section.type;
-	// build_constructor_for() only handles the proxy-protocol kinds. The
-	// UI-only shapes (interface / url / subscription) need different inputs
-	// (a resolved netdev, a parsed share-link, a fetched file) that we don't
-	// have here — refuse them with a clear error rather than silently emit
-	// half a config.
+	// The UI-only shapes (interface / url / subscription) need inputs we don't
+	// have here (a resolved netdev, a parsed share-link, a fetched file) — refuse
+	// them with a clear error rather than silently emit half a config.
 	if (t === "interface" || t === "url" || t === "subscription")
 		fail("export_section does not support type=" + t);
-	let helpers;
-	try { helpers = require("helpers"); } catch (e) { fail("require(helpers) failed"); }
-	if (!helpers.is_outbound_proxy_kind(t))
-		fail("unknown outbound type: " + (length(t) ? t : "<empty>"));
 	let mod;
+	// require(outbound) first: it eagerly loads every descriptor (and the plugin
+	// ones), so the registry is only populated afterwards.
 	try { mod = require("outbound"); } catch (e) { fail("require(outbound) failed"); }
+	let reg;
+	try { reg = require("builder.protocols.registry"); } catch (e) { fail("require(registry) failed"); }
+	// Ask the registry what exists instead of a second hand-kept list. The old
+	// helpers.is_outbound_proxy_kind() covered only the proxy protocols, so
+	// "view JSON" on a direct/selector/urltest/json/sharelink section — all of
+	// which build_outbounds() happily builds — failed with "unknown outbound type".
+	if (!reg.get("outbound", t))
+		fail("unknown outbound type: " + (length(t) ? t : "<empty>"));
 	let ob = mod.build_constructor_for(section, t);
 	if (!ob) fail("build_constructor_for returned null");
 	emit({ status: "ok", section: ob });

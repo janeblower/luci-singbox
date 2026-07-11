@@ -111,6 +111,11 @@ return {
             { name: "tls_min_version",   json_key: "min_version" },
             { name: "tls_max_version",   json_key: "max_version" },
             { name: "tls_cipher_suites", json_key: "cipher_suites",  coerce: "array" },
+            // The field renders on outbound forms too (no direction scoping), and
+            // sing-box honours certificate_path client-side — pinning a self-signed
+            // CA. It was missing from this sequence, so the value was silently
+            // dropped and the connection then failed unless `insecure` was set.
+            { name: "tls_certificate_path", json_key: "certificate_path" },
             { json_key: "utls", gate: { flag: "utls_enabled" }, fields: [
                 { json_key: "enabled", const: true },
                 { name: "utls_fingerprint", json_key: "fingerprint",

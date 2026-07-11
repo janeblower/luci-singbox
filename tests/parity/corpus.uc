@@ -12,6 +12,13 @@ try { require("plugins.awg_warp.protocols.awg_warp"); } catch (_) {}
 return [
     { name: "trojan_out_min", kind: "outbound", type: "trojan",
       section: { ".name": "t1", server: "ex.com", server_port: "443", server_password: "p" } },
+    // F-15/U-10: a client-side pinned CA. The field renders on outbound forms, so
+    // the value must reach the JSON — it used to be missing from the outbound
+    // emit sequence and silently dropped.
+    { name: "trojan_out_certpath", kind: "outbound", type: "trojan",
+      section: { ".name": "tcp1", server: "ex.com", server_port: "443", server_password: "p",
+                 tls_enabled: "1", tls_server_name: "sni",
+                 tls_certificate_path: "/etc/ssl/my-ca.pem" } },
     { name: "trojan_out_tls_reality", kind: "outbound", type: "trojan",
       section: { ".name": "t2", server: "ex.com", server_port: "443", server_password: "p",
                  tls_enabled: "1", tls_server_name: "sni", tls_insecure: "1",
@@ -213,6 +220,14 @@ return [
                  shadowtls_version: "3", shadowtls_user: ["alice:secret"],
                  handshake_server: "google.com", handshake_server_port: "443",
                  strict_mode: "1", wildcard_sni: "all" } },
+    // F-03/U-03: the handshake port left at its (never-persisted) UI default 443.
+    // The fixture above hardcodes handshake_server_port, which is exactly what hid
+    // the bug — this one covers the shape a real "fill in only the server" save
+    // produces, and must still emit server_port: 443.
+    { name: "shadowtls_in_server_only", kind: "inbound", type: "shadowtls",
+      section: { ".name": "st_so", protocol: "shadowtls", listen_port: "443",
+                 shadowtls_version: "3", shadowtls_user: ["alice:secret"],
+                 handshake_server: "google.com" } },
     { name: "ssh_out", kind: "outbound", type: "ssh",
       section: { ".name": "ssh1", server: "ex.com", server_port: "22",
                  ssh_user: "root", server_password: "admin",

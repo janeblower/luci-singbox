@@ -2,11 +2,13 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcodeJSON } from "../helpers/ucode.ts";
 
-// Port of tests/backend/test_protocol_users.sh
 // Universal declarative users builder (_shared/users.uc):
 //   API: U.build(s, spec) → { users: [...], from_list: bool }
 //   spec = { from, columns, single_fallback? }
-//   single_fallback = { fields: [ { key, from } ] }
+//   single_fallback = { fields: [ { key, from, credential? } ] }
+//   Only a field flagged `credential` satisfies the "a single user must carry a
+//   credential" check — vless `flow` is a fallback field but NOT a credential
+//   (F-14: a flow-only section used to emit a user with no uuid).
 
 describe("protocol users builder", () => {
   useGuest();
@@ -103,7 +105,7 @@ describe("protocol users builder", () => {
           { key: "name", required: true },
           { key: "uuid", required: true, guard: "uuid" },
         ],
-        single_fallback: { fields: [ { key: "uuid", from: "server_uuid" } ] },
+        single_fallback: { fields: [ { key: "uuid", from: "server_uuid", credential: true } ] },
       };
       let s = { ".name": "v1", server_uuid: "11111111-2222-3333-4444-555555555555" };
       let r = U.build(s, spec);
@@ -149,7 +151,7 @@ describe("protocol users builder", () => {
       let U = require("builder._shared.users");
       let spec = { from: "inbound_user",
         columns: [ { key: "name", required: true }, { key: "password", tail: true } ],
-        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
+        single_fallback: { fields: [ { key: "password", from: "server_password", credential: true } ] },
       };
       let s = { ".name": "tj", server_password: "secret-pw" };
       let r = U.build(s, spec);
@@ -167,10 +169,36 @@ describe("protocol users builder", () => {
       let U = require("builder._shared.users");
       let spec = { from: "inbound_user",
         columns: [ { key: "name", required: true }, { key: "password", tail: true } ],
-        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
+        single_fallback: { fields: [ { key: "password", from: "server_password", credential: true } ] },
       };
       // server_password absent
       let s = { ".name": "tj" };
+      let r = U.build(s, spec);
+      print(sprintf("%J", r.users));
+    `;
+    const got = await runUcodeJSON<unknown>(src);
+    const arr = Array.isArray(got) ? got : [];
+    expect(arr).toHaveLength(0);
+  });
+
+  // ---- F-14: a non-credential fallback field alone must NOT emit a user ----
+  it("F-14: vless flow without a uuid emits no user (flow is not a credential)", async () => {
+    const src = `
+      let U = require("builder._shared.users");
+      let spec = { from: "inbound_user",
+        columns: [
+          { key: "name", required: true },
+          { key: "uuid", required: true, guard: "uuid" },
+          { key: "flow" },
+        ],
+        single_fallback: { fields: [
+          { key: "uuid", from: "server_uuid", credential: true },
+          { key: "flow", from: "vless_flow" },
+        ] },
+      };
+      // flow set, uuid empty — sing-box rejects users[] entries with no id, so we
+      // must emit none at all rather than {name, flow}.
+      let s = { ".name": "v1", vless_flow: "xtls-rprx-vision" };
       let r = U.build(s, spec);
       print(sprintf("%J", r.users));
     `;
@@ -218,7 +246,7 @@ describe("protocol users builder", () => {
       let U = require("builder._shared.users");
       let spec = { from: "inbound_user",
         columns: [ { key: "name", required: true }, { key: "password", tail: true } ],
-        single_fallback: { fields: [ { key: "password", from: "server_password" } ] },
+        single_fallback: { fields: [ { key: "password", from: "server_password", credential: true } ] },
       };
       // colon-less row is dropped; fallback provides the real password
       let s = { ".name": "h2", inbound_user: ["tokenonly"], server_password: "real-secret" };

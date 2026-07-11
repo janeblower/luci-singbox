@@ -248,6 +248,51 @@ config outbound 'later'
     expect(detour).toBe("later");
   });
 
+  // ---- F-04/U-04: nested groups pruned to a fixpoint ----
+  it("nested selector: dropping an emptied inner group also drops references to it", async () => {
+    // B's only member is a disabled outbound, so B prunes to empty and is dropped.
+    // A lists B. The valid-tag set used to be snapshotted BEFORE the prune pass, so
+    // it still contained B and A kept the member — sing-box then hard-fails at load
+    // with "outbound not found: B" and the daemon never starts.
+    await writeCfg(`config outbound 'dead'
+\toption enabled '0'
+\toption type 'socks'
+\toption server '10.0.0.9'
+\toption server_port '1080'
+
+config outbound 'live'
+\toption enabled '1'
+\toption type 'socks'
+\toption server '10.0.0.1'
+\toption server_port '1080'
+
+config outbound 'B'
+\toption enabled '1'
+\toption type 'selector'
+\tlist group_outbounds 'dead'
+
+config outbound 'A'
+\toption enabled '1'
+\toption type 'selector'
+\tlist group_outbounds 'B'
+\tlist group_outbounds 'live'
+`);
+    const g = await runGen();
+    expect(g.ok).toBe(true);
+
+    // B is gone entirely...
+    const hasB = await jeval(
+      '(function(){for(let o in d.outbounds)if(o.tag=="B")return true;return false;})()',
+    );
+    expect(hasB).toBe("false");
+
+    // ...and A must not still point at it.
+    const aMembers = await jeval(
+      '(function(){for(let o in d.outbounds)if(o.tag=="A")return join(",",o.outbounds);return "<none>";})()',
+    );
+    expect(aMembers).toBe("live");
+  });
+
   it("teardown", async () => {
     await teardown();
   });

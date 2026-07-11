@@ -44,7 +44,7 @@ reg.register({
     users: {
         from: "vmess_user",
         columns: [ { key: "name", required: true }, { key: "uuid", required: true, guard: "uuid" } ],
-        single_fallback: { fields: [ { key: "uuid", from: "server_uuid" } ] },
+        single_fallback: { fields: [ { key: "uuid", from: "server_uuid", credential: true } ] },
     },
 });
 

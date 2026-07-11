@@ -14,3 +14,4 @@ tests/browser/node_modules
 # Playwright run outputs (browser e2e)
 tests/browser/playwright-report/
 tests/browser/test-results/
+AUDIT_*.md

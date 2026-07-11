@@ -1,0 +1,1 @@
+{ "handshake": { "server": "google.com", "server_port": 443 }, "listen": "::", "listen_port": 443, "tag": "st_so", "type": "shadowtls", "users": [ { "name": "alice", "password": "secret" } ], "version": 3 }

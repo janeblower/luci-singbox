@@ -245,10 +245,17 @@ function port_expr(network, ports) {
 
 // emit_named_set(name, type_, body, with_interval) — write a named set
 // declaration. Used by wan_ifaces, fakeip4, fakeip6, rs_* paths and emit_set.
+// An EMPTY body must not produce `elements = {  }`: nft rejects that at parse
+// time, and since the whole ruleset is applied atomically via one `nft -f`, a
+// single empty declaration fails the entire transaction — the core table is
+// never installed and all proxied traffic blackholes (IPv4-only deploys, a
+// cleared IPv6 range, or every iface failing safe_iface all hit this). The set
+// itself is still declared so that rules referencing it keep loading.
 function emit_named_set(name, type_, body, with_interval) {
 	let lines = [`\tset ${name} {\n`, `\t\ttype ${type_}\n`];
 	if (with_interval) push(lines, "\t\tflags interval\n");
-	push(lines, `\t\telements = { ${body} }\n`, "\t}\n\n");
+	if (length(body)) push(lines, `\t\telements = { ${body} }\n`);
+	push(lines, "\t}\n\n");
 	return join("", lines);
 }
 
@@ -379,7 +386,8 @@ function validate_port(p) {
 // emit_named_sets(buf, ifaces, v4, v6, rules) — wan_ifaces + fakeip4/6 + one
 // set per rs_* rule×family. Pulled out of build_ruleset (S1-QUAL): pure string
 // assembly, no behaviour change. v4/v6 are the already-sanitised CIDR strings
-// (null → empty body). fakeip4/fakeip6 are always emitted (empty body OK).
+// (null → empty body); emit_named_set omits the elements line when the body is
+// empty, so an empty set declares cleanly instead of failing the whole ruleset.
 function emit_named_sets(buf, ifaces, v4, v6, rules) {
 	let iface_body = "";
 	if (length(ifaces)) {
@@ -389,7 +397,8 @@ function emit_named_sets(buf, ifaces, v4, v6, rules) {
 	}
 	push(buf, emit_named_set("wan_ifaces", "ifname", iface_body, false));
 
-	// fakeip4 / fakeip6 always emitted (empty body OK if no UCI value).
+	// fakeip4 / fakeip6 always declared; an absent UCI value yields an
+	// element-less (but syntactically valid) set — see emit_named_set.
 	push(buf, emit_named_set("fakeip4", "ipv4_addr", v4 != null ? v4 : "", true));
 	push(buf, emit_named_set("fakeip6", "ipv6_addr", v6 != null ? v6 : "", true));
 

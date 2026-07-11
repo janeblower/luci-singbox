@@ -43,7 +43,12 @@ reg.register({
         { json_key: "handshake", gate: { any_present: ["handshake_server", "handshake_server_port"] },
           fields: [
               { name: "handshake_server",      json_key: "server" },
-              { name: "handshake_server_port", json_key: "server_port", coerce: "num" },
+              // The UI `default: 443` is never persisted (LuCI does not write an
+              // unedited CBI default to UCI), so leaving the port alone used to emit
+              // handshake:{server} with no server_port -> sing-box dials host:0 and no
+              // relayed TLS handshake ever completes. Same fix Reality already carries.
+              { name: "handshake_server_port", json_key: "server_port", coerce: "num",
+                default_when_empty: 443, omit_when: "never" },
           ] },
     ],
     users: {

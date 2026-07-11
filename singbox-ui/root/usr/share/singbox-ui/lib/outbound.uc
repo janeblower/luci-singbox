@@ -106,20 +106,6 @@ function build_outbounds(cur) {
 		if (kind === "url") {
 			let parsed = parse_proxy_url(section.proxy_url ?? "");
 			if (parsed) { parsed.tag = name; outbound = parsed; }
-		} else if (kind === "direct") {
-			// E2: descriptor-owned direct outbound (type=direct in UCI). Binds an
-			// interface via the dial shared block (bind_interface, emitted verbatim
-			// as a netdev name) — replaced the removed legacy type=interface shorthand.
-			outbound = build_constructor_for(section, kind);
-		} else if (kind === "json" || kind === "sharelink") {
-			// Task 4: raw passthrough types. Their descriptor emit() parses the
-			// stored raw_json / raw_link and stamps the section tag. Own dispatch
-			// branch (like direct) — not in OUTBOUND_PROXY_KINDS.
-			outbound = build_constructor_for(section, kind);
-		} else if (kind === "selector" || kind === "urltest") {
-			outbound = build_constructor_for(section, kind);
-		} else if (helpers.is_outbound_proxy_kind(kind)) {
-			outbound = build_constructor_for(section, kind);
 		} else if (kind === "subscription") {
 			let urls = read_subscription_urls(name);
 			if (!length(urls)) return;
@@ -155,6 +141,12 @@ function build_outbounds(cur) {
 				let parsed = parse_proxy_url(u);
 				if (parsed) { parsed.tag = name; outbound = parsed; break; }
 			}
+		} else if (reg.get("outbound", kind)) {
+			// Every descriptor-backed kind — the proxy protocols, `direct`, the raw
+			// passthroughs (json/sharelink) and the groups (selector/urltest) — is
+			// built the same way. The registry IS the list of what exists; asking it
+			// beats keeping a second hand-written copy of the same set in helpers.uc.
+			outbound = build_constructor_for(section, kind);
 		} else {
 			warn(sprintf("outbound.uc: unknown type '%s' for '%s'; skipping\n", kind, name));
 			return;
@@ -175,28 +167,43 @@ function build_outbounds(cur) {
 	// that generate.uc injects post-build), drop the whole group if it ends up
 	// empty, and clear a `default` that doesn't resolve. NOTE: urltest's `url`
 	// is an HTTP probe URL, NOT an outbound tag — it must NOT be validated here.
-	let valid_tags = { direct: true };
-	for (let ob in outbounds) if (length(ob.tag)) valid_tags[ob.tag] = true;
-	let pruned = [];
-	for (let ob in outbounds) {
-		if (ob.type !== "selector" && ob.type !== "urltest") { push(pruned, ob); continue; }
-		if (type(ob.outbounds) === "array") {
-			let members = [];
-			for (let m in ob.outbounds) {
-				if (valid_tags[m]) { push(members, m); continue; }
-				warn(sprintf("outbound.uc: group '%s' member '%s' is not a defined outbound; dropping member\n", ob.tag, m));
+	// Groups can nest, so one pass is not enough: dropping an emptied group B
+	// invalidates every reference to B — including one held by another group A.
+	// A snapshot of valid_tags taken before the pass still contains B, so A kept a
+	// member sing-box cannot resolve ("outbound not found" -> the daemon refuses to
+	// start), which is the exact failure this prune exists to prevent. Re-derive
+	// the tag set and repeat until a pass drops nothing. Terminates: every pass but
+	// the last removes at least one group, and members only ever shrink.
+	let pruned = outbounds;
+	while (true) {
+		let valid_tags = { direct: true };
+		for (let ob in pruned) if (length(ob.tag)) valid_tags[ob.tag] = true;
+
+		let next = [];
+		for (let ob in pruned) {
+			if (ob.type !== "selector" && ob.type !== "urltest") { push(next, ob); continue; }
+			if (type(ob.outbounds) === "array") {
+				let members = [];
+				for (let m in ob.outbounds) {
+					if (valid_tags[m]) { push(members, m); continue; }
+					warn(sprintf("outbound.uc: group '%s' member '%s' is not a defined outbound; dropping member\n", ob.tag, m));
+				}
+				ob.outbounds = members;
 			}
-			ob.outbounds = members;
+			if (type(ob.outbounds) !== "array" || !length(ob.outbounds)) {
+				warn(sprintf("outbound.uc: group '%s' has no valid member outbounds; dropping group (would break sing-box load)\n", ob.tag));
+				continue;
+			}
+			if (length(ob.default ?? "") && !valid_tags[ob.default]) {
+				warn(sprintf("outbound.uc: group '%s' default '%s' is not a defined outbound; clearing\n", ob.tag, ob.default));
+				delete ob.default;
+			}
+			push(next, ob);
 		}
-		if (type(ob.outbounds) !== "array" || !length(ob.outbounds)) {
-			warn(sprintf("outbound.uc: group '%s' has no valid member outbounds; dropping group (would break sing-box load)\n", ob.tag));
-			continue;
-		}
-		if (length(ob.default ?? "") && !valid_tags[ob.default]) {
-			warn(sprintf("outbound.uc: group '%s' default '%s' is not a defined outbound; clearing\n", ob.tag, ob.default));
-			delete ob.default;
-		}
-		push(pruned, ob);
+
+		let stable = (length(next) === length(pruned));
+		pruned = next;
+		if (stable) break;
 	}
 
 	return pruned;

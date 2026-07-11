@@ -196,10 +196,15 @@ function emit_set(set_name, family, cidrs) {
 
 // emit_named_set(name, type_, body, with_interval) — write a named set
 // declaration. Used by wan_ifaces, fakeip4, fakeip6, and rs_* paths.
+// The empty-body branch was deliberately changed (F-01/U-01): the old
+// `elements = {  }` is a PARSE error that failed the whole atomic ruleset. This
+// baseline exists to catch *accidental* output drift from refactors, so it
+// tracks the intended behaviour here rather than freezing the bug.
 function emit_named_set(name, type_, body, with_interval) {
 	let lines = [`\tset ${name} {\n`, `\t\ttype ${type_}\n`];
 	if (with_interval) push(lines, "\t\tflags interval\n");
-	push(lines, `\t\telements = { ${body} }\n`, "\t}\n\n");
+	if (length(body)) push(lines, `\t\telements = { ${body} }\n`);
+	push(lines, "\t}\n\n");
 	return join("", lines);
 }
 

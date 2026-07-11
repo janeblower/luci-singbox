@@ -126,8 +126,12 @@ function build_route_rules(cur, valid_ob) {
             rule.rules = sub;
         }
 
-        let stripped = resolve_rulesets(rule);
+        // action_ok first: resolve_rulesets() marks the sets it sees as `referenced`,
+        // and a referenced set is emitted as a top-level (remote) rule_set that
+        // sing-box then fetches in the background. Running it on a rule that
+        // action_ok is about to drop made us fetch rule-sets nothing uses.
         if (!action_ok(rule, name)) return;
+        let stripped = resolve_rulesets(rule);
         // If a rule's only matcher was a rule_set that resolve_rulesets fully
         // stripped (all referenced sets disabled/missing) it is left with just an
         // action — and a matcher-less rule matches ALL traffic in sing-box,

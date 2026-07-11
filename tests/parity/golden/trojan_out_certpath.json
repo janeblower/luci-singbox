@@ -1,0 +1,1 @@
+{ "password": "p", "server": "ex.com", "server_port": 443, "tag": "tcp1", "tls": { "certificate_path": "/etc/ssl/my-ca.pem", "enabled": true, "server_name": "sni" }, "type": "trojan" }

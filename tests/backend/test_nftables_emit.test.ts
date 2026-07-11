@@ -150,6 +150,23 @@ describe("nftables_emit", () => {
     expect(nftResult.exitCode).toBe(0);
   });
 
+  // Regression (F-01/U-01): an empty set body used to emit `elements = {  }`,
+  // which nft rejects at PARSE time. The ruleset is applied atomically by a
+  // single `nft -f`, so that one line failed the whole transaction: the core
+  // table was never installed and proxied traffic blackholed. Reachable on an
+  // IPv4-only deploy, a cleared IPv6 range, or every iface failing safe_iface.
+  // Asserted on the emitted text rather than via `nft -c`, because the nft -c
+  // check above skips whenever tproxy/socket statements are unsupported — which
+  // is exactly where this bug hid.
+  it("empty set bodies declare an element-less set, never `elements = {  }`", async () => {
+    // no IPv6 range, and the only iface fails safe_iface -> both bodies empty
+    const r = await emit('7893 "198.18.0.0/15" "" "bad iface"');
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).not.toMatch(/elements\s*=\s*\{\s*\}/);
+    expect(r.stdout).toContain("set fakeip6 {");
+    expect(r.stdout).toContain("set wan_ifaces {");
+  });
+
   it("emit with custom port and interface", async () => {
     const r = await emit('1234 "10.0.0.0/8" "" "eth0"');
     expect(r.exitCode).toBe(0);

@@ -11,7 +11,7 @@ import { runUcode } from "../helpers/ucode.ts";
 describe("test_clash_route_helpers", () => {
   useGuest();
 
-  it("helpers.uc: detect_rs_format / csv_list / is_outbound_proxy_kind / fnv1a32", async () => {
+  it("helpers.uc: detect_rs_format / csv_list / fnv1a32", async () => {
     const src = `
 let h = require("helpers");
 function assert(c, m) { if (!c) { warn("ASSERT: " + m + "\\n"); exit(1); } }
@@ -22,9 +22,6 @@ assert(h.detect_rs_format("https://x/a.txt") === "binary", "unknown ext -> binar
 assert(length(h.csv_list("a, b ,c")) === 3, "csv 3 items");
 assert(h.csv_list("a, b ,c")[1] === "b", "csv trims");
 assert(length(h.csv_list("")) === 0, "empty csv -> []");
-assert(h.is_outbound_proxy_kind("vless") === true, "vless is proxy kind");
-assert(h.is_outbound_proxy_kind("vmess") === true, "vmess re-added as proxy kind (protocol matrix)");
-assert(h.is_outbound_proxy_kind("interface") === false, "interface not a proxy kind");
 assert(length(h.fnv1a32("")) === 8, "fnv1a32 is 8 hex");
 assert(h.fnv1a32("abc") === h.fnv1a32("abc"), "fnv1a32 deterministic");
 print("ok\\n");

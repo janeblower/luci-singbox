@@ -121,28 +121,23 @@ config outbound 'mygroup'
     expect(cfg.route).toBeUndefined();
   });
 
-  it("C2 dangling outbound refs pruned: rule dropped, final omitted, rule_set survives", async () => {
+  it("C2 dangling outbound refs pruned: rule dropped, final omitted, orphaned rule_set not emitted", async () => {
     const { base, cfgPath, subs } = await setup("c2");
     await writeCfg(base, FX_C2);
     const cfg = await runGen(base, cfgPath, subs);
     // r32's outbound 'ghostob' is dangling -> the whole rule is dropped; the
-    // route_default 'ghostfinal' is dangling -> no `final` emitted; the rs32
-    // rule_set still survives. No `rules`/`final` keys at all (generate.uc:80-110).
-    // ("binary" is the implicit format default for a remote rule-set.)
-    expect(cfg.route).toEqual({
-      rule_set: [
-        {
-          format: "binary",
-          tag: "rs32",
-          type: "remote",
-          url: "https://example.com/rs32.srs",
-        },
-      ],
-    });
+    // route_default 'ghostfinal' is dangling -> no `final` emitted. rs32 was
+    // referenced ONLY by that dropped rule, so it is no longer emitted either:
+    // it used to survive (F-17 — resolve_rulesets marked it referenced before
+    // action_ok dropped the rule), which made sing-box background-fetch a
+    // rule-set nothing uses. With no rules, no final and no rule_set left, the
+    // whole route section is omitted.
+    expect(cfg.route).toBeUndefined();
     // Complements the targeted S3.2 regression (test_generate.test.ts:407-408).
     const raw = JSON.stringify(cfg);
     expect(raw).not.toContain("ghostob");
     expect(raw).not.toContain("ghostfinal");
+    expect(raw).not.toContain("rs32");
   });
 
   it("C3 selector dangling member/default pruned, direct appended", async () => {

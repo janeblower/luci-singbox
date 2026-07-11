@@ -38,6 +38,9 @@ function buildDashboard() {
 				var d; try { d = JSON.parse(res.body); } catch (e) { d = {}; }
 				state.proxies = (d && d.proxies) || {};
 			}
+		}, function () {
+			// Keep the last known groups; a failed refresh must not reject onwards,
+			// or chooseNode()'s success-only .then never clears switchPending.
 		});
 	}
 	function refreshProxies() { return fetchProxies().then(repaint); }
@@ -80,6 +83,12 @@ function buildDashboard() {
 		sec = +sec || 0;
 		if (!sec) return '';
 		var d = new Date(sec * 1000);
+		// `sec` comes straight from the provider's Subscription-Userinfo header, which
+		// the threat model treats as hostile. A value past ~8.64e12 makes an Invalid
+		// Date, whose toISOString() THROWS — and the throw escaped repaint() into
+		// poll()'s .catch(showUnreachable), which wiped the dashboard and blamed the
+		// Clash API instead. One bad header line bricked the tab until reload.
+		if (!isFinite(d.getTime())) return '';
 		return _('expires %s').format(d.toISOString().slice(0, 10));
 	}
 
@@ -103,7 +112,10 @@ function buildDashboard() {
 				ui.addNotification(null, E('p', {}, _('Failed to switch node')));
 				return refreshProxies();
 			})
-			.then(function () { state.switchPending = false; });
+			// Clear on BOTH settle paths: a stuck switchPending freezes the panel on a
+			// stale value forever, because poll() then refuses to refetch the groups.
+			.then(function () { state.switchPending = false; },
+			      function () { state.switchPending = false; });
 	}
 
 	// DASH-1: probe at most TEST_POOL members concurrently and coalesce

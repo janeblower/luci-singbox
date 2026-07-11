@@ -107,9 +107,10 @@ function build_rules(cur, srv_tags, rs_enabled) {
 			rule.rules = sub;
 		}
 
-		resolve_rulesets(rule);
-
 		// S3.2: Drop a rule whose route-action server is dangling (sing-box hard-fails).
+		// Checked BEFORE resolve_rulesets, which marks the sets it sees as referenced
+		// (and a referenced set is emitted top-level and fetched): a rule that is
+		// about to be dropped must not keep a rule-set alive. Mirrors route.uc.
 		if (rule.action === "route") {
 			if (!length(rule.server ?? "")) {
 				warn(sprintf("dns.uc: dns_rule '%s' action=route without server; dropping\n", name));
@@ -120,6 +121,8 @@ function build_rules(cur, srv_tags, rs_enabled) {
 				return;
 			}
 		}
+
+		resolve_rulesets(rule);
 		push(rules, rule);
 	});
 	return rules;

@@ -60,7 +60,9 @@ reg.register({
         ],
         single_fallback: {
             fields: [
-                { key: "uuid", from: "server_uuid" },
+                // Only the UUID is a credential; `flow` is a transport modifier.
+                // Without the flag a flow-only section emitted a user with no id.
+                { key: "uuid", from: "server_uuid", credential: true },
                 { key: "flow", from: "vless_flow" },
             ],
         },

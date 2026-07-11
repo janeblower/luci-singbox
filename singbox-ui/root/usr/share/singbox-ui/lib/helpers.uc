@@ -82,32 +82,6 @@ function fnv1a32(s) {
 }
 
 
-// OUTBOUND_PROXY_KINDS — the set of outbound `type` values that are real
-// proxy protocols supported in E2 (as opposed to interface / url /
-// subscription / direct / block / dns / selector / urltest). This hand-kept
-// list MUST stay 1:1 with the registered `kind:"outbound"` descriptors
-// (minus `direct`, which has its own dispatch branch). The invariant is
-// enforced by tests/test_protocol_list_consistency.sh against the registry,
-// which is the single source of truth — add a protocol there (a new
-// lib/protocols/<x>.uc + require() in outbound.uc) AND here, and the test
-// keeps the two from drifting.
-const OUTBOUND_PROXY_KINDS = [
-	"vless", "trojan", "hysteria2", "hysteria", "tuic", "anytls", "shadowsocks", "shadowtls", "socks", "http", "vmess", "ssh", "naive",
-];
-
-// O(1) membership set built once from the list above. Was a linear scan
-// (S4-11); is_outbound_proxy_kind runs per outbound section in
-// build_outbounds() and once per export_section call.
-const _OUTBOUND_PROXY_SET = (function() {
-	let m = {};
-	for (let k in OUTBOUND_PROXY_KINDS) m[k] = true;
-	return m;
-})();
-
-function is_outbound_proxy_kind(t) {
-	return _OUTBOUND_PROXY_SET[t] === true;
-}
-
 // b64_decode(s) — tolerant base64 decoder for share-link / subscription
 // payloads. Accepts the url-safe alphabet, missing padding, and embedded
 // whitespace/newlines; returns the decoded string, or null on invalid input.
@@ -139,7 +113,5 @@ return {
 	sq,
 	detect_rs_format,
 	fnv1a32,
-	OUTBOUND_PROXY_KINDS,
-	is_outbound_proxy_kind,
 	b64_decode,
 };
