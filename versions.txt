@@ -1,5 +1,4 @@
-bbolt-client 0.1.0-r40
-singbox-ui 0.1.0-r31
-luci-app-singbox-ui 0.1.0-r390
-luci-i18n-singbox-ui-ru 0.1.0-r48
-singbox-ui-plugin-awg_warp 0.1.0-r28
+singbox-ui 0.1.0-r35
+luci-app-singbox-ui 0.1.0-r394
+luci-i18n-singbox-ui-ru 0.1.0-r51
+singbox-ui-plugin-awg_warp 0.1.0-r32
