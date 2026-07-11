@@ -152,7 +152,6 @@ describe("i18n_package", () => {
           encoding: "utf8",
           env: {
             ...process.env,
-            SINGBOX_SKIP_BBOLT: "1",
             WORK_DIR: realBuildDir,
           },
         });

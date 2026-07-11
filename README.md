@@ -34,11 +34,11 @@ reference in `docs/` is mostly English.
 - Russian translation bundled. After install the page appears under
   **Services → Singbox-UI**.
 
-**Install** (OpenWrt 25.12+, apk). The project ships as four packages —
-`bbolt-client` (the only per-arch one, ~20 arches), `singbox-ui` (noarch
-backend), `luci-app-singbox-ui` (noarch LuCI UI) and `luci-i18n-singbox-ui-ru`
-(noarch translation). You install the UI; apk resolves the backend + bbolt as
-dependencies. The easiest path is the installer, which detects the arch via
+**Install** (OpenWrt 25.12+, apk). The project ships as four noarch packages —
+`singbox-ui` (backend; bundles the pure-ucode bbolt cache.db reader),
+`luci-app-singbox-ui` (LuCI UI) and `luci-i18n-singbox-ui-ru` (translation).
+You install the UI; apk resolves the backend as a dependency. The easiest path
+is the installer, which detects the arch via
 `apk --print-arch`, adds the **signed** GitHub Pages apk feed (repo + signing
 key) and runs `apk add`:
 
@@ -56,14 +56,12 @@ echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox/package
 apk update && apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru
 ```
 
-Or install the unsigned release assets manually — grab the four packages from
-the [latest release](../../releases) (the per-arch `bbolt-client-<arch>.apk`
-plus the three noarch apks) and let apk resolve the order:
+Or install the unsigned release assets manually — grab the four noarch packages
+from the [latest release](../../releases) and let apk resolve the order:
 
 ```sh
-ARCH=$(apk --print-arch)
 apk add --allow-untrusted \
-  ./bbolt-client-${ARCH}.apk ./singbox-ui.apk \
+  ./singbox-ui.apk \
   ./luci-app-singbox-ui.apk ./luci-i18n-singbox-ui-ru.apk
 ```
 
@@ -144,10 +142,10 @@ apk add --allow-untrusted \
 
 ## Установка
 
-Проект ставится **четырьмя пакетами** (OpenWrt 25.12+, apk): `bbolt-client`
-(единственный per-arch, ~20 арок), `singbox-ui` (noarch-бэкенд),
-`luci-app-singbox-ui` (noarch LuCI-UI) и `luci-i18n-singbox-ui-ru` (noarch
-перевод). Ставишь UI — apk сам подтягивает бэкенд и bbolt как зависимости.
+Проект ставится **четырьмя noarch-пакетами** (OpenWrt 25.12+, apk):
+`singbox-ui` (бэкенд; включает bbolt-ридер cache.db на чистом ucode),
+`luci-app-singbox-ui` (LuCI-UI) и `luci-i18n-singbox-ui-ru` (перевод).
+Ставишь UI — apk сам подтягивает бэкенд как зависимость.
 Проще всего через установщик: он определяет арку (`apk --print-arch`),
 подключает **подписанный** apk-feed (репозиторий + ключ) и зовёт `apk add`:
 
@@ -165,14 +163,12 @@ echo "https://janeblower.github.io/luci-singbox/25.12/$ARCH/luci-singbox/package
 apk update && apk add luci-app-singbox-ui luci-i18n-singbox-ui-ru
 ```
 
-Или поставить неподписанные ассеты релиза вручную — скачай четыре пакета из
-[последнего релиза](../../releases) (per-arch `bbolt-client-<arch>.apk` плюс три
-noarch-apk) и дай apk разрулить порядок:
+Или поставить неподписанные ассеты релиза вручную — скачай четыре noarch-пакета
+из [последнего релиза](../../releases) и дай apk разрулить порядок:
 
 ```sh
-ARCH=$(apk --print-arch)
 apk add --allow-untrusted \
-  ./bbolt-client-${ARCH}.apk ./singbox-ui.apk \
+  ./singbox-ui.apk \
   ./luci-app-singbox-ui.apk ./luci-i18n-singbox-ui-ru.apk
 ```
 

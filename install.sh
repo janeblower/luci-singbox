@@ -2,8 +2,8 @@
 # luci-singbox-ui installer for OpenWrt 25.12.x (apk), FEED-based.
 # Adds the signed GitHub Pages apk feed (repository + signing key) for the
 # device's exact arch (via `apk --print-arch`) and installs the package by
-# name — apk resolves the full dependency stack (singbox-ui, bbolt-client,
-# curl, …) from the signed index.
+# name — apk resolves the full dependency stack (singbox-ui, sing-box, curl, …)
+# from the signed index.
 #
 #   wget -O- https://raw.githubusercontent.com/janeblower/luci-singbox/main/install.sh | sh
 #
@@ -31,8 +31,8 @@ command -v apk >/dev/null 2>&1 || die "apk not found (this installer targets Ope
 ARCH="$(apk --print-arch)"
 [ -n "$ARCH" ] || die "could not determine device architecture"
 
-# Covered arches — MUST stay in sync with the bbolt_arches_* variables in
-# scripts/build-apk.sh (the "bbolt-client arch map"). Update BOTH when arches change.
+# Covered arches — the arches the feed publishes a dir for. MUST stay in sync
+# with COVERED_ARCHES in scripts/build-feed.sh. Update BOTH when arches change.
 COVERED="x86_64 aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 arm_cortex-a8_vfpv3 arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 arm_cortex-a15_neon-vfpv4 mipsel_24kc mipsel_24kc_24kf mipsel_74kc mipsel_mips32 mips_24kc mips_mips32"
 case " $COVERED " in
   *" $ARCH "*) : ;;

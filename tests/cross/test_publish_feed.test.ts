@@ -75,7 +75,7 @@ describe("publish_feed", () => {
         git(seed, "init", "-b", "gh-pages");
         const sLuci = resolve(seed, "25.12/x86_64/luci-singbox");
         write(resolve(sLuci, "luci-app-singbox-ui-0.0.0-r1.apk"), "old-app\n");
-        write(resolve(sLuci, "bbolt-client-0.0.0-r1.apk"), "old-bbolt\n");
+        write(resolve(sLuci, "singbox-ui-0.0.0-r1.apk"), "old-core\n");
         write(resolve(sLuci, "packages.adb"), "old-index\n");
         write(resolve(sLuci, "index.md"), "old\n");
         const sCore = resolve(seed, "25.12/x86_64/sing-box");
@@ -92,7 +92,7 @@ describe("publish_feed", () => {
         // --- Freshly built "public" tree: NEW version (r2) only ------------
         const pLuci = resolve(pub, "25.12/x86_64/luci-singbox");
         write(resolve(pLuci, "luci-app-singbox-ui-0.0.0-r2.apk"), "new-app\n");
-        write(resolve(pLuci, "bbolt-client-0.0.0-r2.apk"), "new-bbolt\n");
+        write(resolve(pLuci, "singbox-ui-0.0.0-r2.apk"), "new-core\n");
         write(resolve(pLuci, "packages.adb"), "new-index\n");
         write(resolve(pLuci, "index.md"), "new\n");
         write(resolve(pub, "25.12/x86_64/index.md"), "arch-new\n");
@@ -123,8 +123,8 @@ describe("publish_feed", () => {
           .sort();
         // Stale r1 apks are GONE; only the current r2 apks remain.
         expect(apks).toEqual([
-          "bbolt-client-0.0.0-r2.apk",
           "luci-app-singbox-ui-0.0.0-r2.apk",
+          "singbox-ui-0.0.0-r2.apk",
         ]);
         expect(
           existsSync(resolve(vLuci, "luci-app-singbox-ui-0.0.0-r1.apk")),
@@ -173,7 +173,7 @@ describe("publish_feed", () => {
         mkdirSync(seed, { recursive: true });
         git(seed, "init", "-b", "gh-pages");
         const sLuci = resolve(seed, "25.12/x86_64/luci-singbox");
-        write(resolve(sLuci, "bbolt-client-0.0.0-r2.apk"), "same\n");
+        write(resolve(sLuci, "singbox-ui-0.0.0-r2.apk"), "same\n");
         write(resolve(sLuci, "packages.adb"), "same-index\n");
         git(seed, "add", "-A");
         git(seed, "commit", "-m", "seed");
@@ -182,7 +182,7 @@ describe("publish_feed", () => {
 
         // public identical to what's on the branch.
         const pLuci = resolve(pub, "25.12/x86_64/luci-singbox");
-        write(resolve(pLuci, "bbolt-client-0.0.0-r2.apk"), "same\n");
+        write(resolve(pLuci, "singbox-ui-0.0.0-r2.apk"), "same\n");
         write(resolve(pLuci, "packages.adb"), "same-index\n");
 
         const r = spawnSync("sh", [SCRIPT, pub], {

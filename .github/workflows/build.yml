@@ -47,19 +47,15 @@ jobs:
   # domain to run on every push, re-testing code that hadn't changed. Tags and
   # workflow_dispatch still run everything (downstream gates fall through on
   # `startsWith(refs/tags/)` / workflow_dispatch), so the release path is never
-  # accidentally skipped. The one exception is `bbolt`: it stays ungated on push
-  # because the release `build` job downloads its binary artifact — but its
-  # compile is content-hash cached, so an unchanged bbolt is a seconds-long
-  # cache-restore, not a rebuild. Directory-based 4-domain model
-  # (bbolt/backend/ui/packaging) with a `shared` fan-out (test harness / CI infra
-  # -> all four). The domain names mirror tests/lib/domain_classify.sh (kept as
+  # accidentally skipped. Directory-based 3-domain model
+  # (backend/ui/packaging) with a `shared` fan-out (test harness / CI infra
+  # -> all three). The domain names mirror tests/lib/domain_classify.sh (kept as
   # the local classifier + its unit test tests/cross/test_changes_domains.test.ts).
   changes:
     name: Detect changed domains
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      bbolt: ${{ steps.agg.outputs.bbolt }}
       backend: ${{ steps.agg.outputs.backend }}
       ui: ${{ steps.agg.outputs.ui }}
       packaging: ${{ steps.agg.outputs.packaging }}
@@ -82,14 +78,13 @@ jobs:
         with:
           list-files: shell
           filters: |
-            bbolt:
-              - 'bbolt-client/**'
             backend:
               - 'singbox-ui/**'
               - 'plugins/awg_warp/lib/**'
               - 'plugins/awg_warp/root/**'
               - 'tests/backend/**'
               - 'tests/parity/**'
+              - 'bbolt-client/**'
             ui:
               - 'luci-app-singbox-ui/**'
               - 'plugins/awg_warp/htdocs/**'
@@ -121,7 +116,6 @@ jobs:
       - name: Aggregate domains
         id: agg
         env:
-          F_BBOLT:       ${{ steps.f.outputs.bbolt }}
           F_BACKEND:     ${{ steps.f.outputs.backend }}
           F_UI:          ${{ steps.f.outputs.ui }}
           F_PKG:         ${{ steps.f.outputs.packaging }}
@@ -131,7 +125,7 @@ jobs:
         run: |
           set -eu
           on() { [ "${1:-}" = "true" ]; }
-          bbolt=false; backend=false; ui=false; packaging=false
+          backend=false; ui=false; packaging=false
 
           # .github is shared UNLESS the only changed github file is the
           # standalone sing-box-extended workflow.
@@ -146,18 +140,17 @@ jobs:
           fi
 
           if on "$F_SHARED_CORE" || [ "$gh_shared" = true ]; then
-            bbolt=true; backend=true; ui=true; packaging=true
+            backend=true; ui=true; packaging=true
           else
-            on "$F_BBOLT"   && bbolt=true     || true
             on "$F_BACKEND" && backend=true   || true
             on "$F_UI"      && ui=true        || true
             on "$F_PKG"     && packaging=true || true
           fi
-          for k in bbolt backend ui packaging; do
+          for k in backend ui packaging; do
             eval "v=\$$k"
             echo "$k=$v" >> "$GITHUB_OUTPUT"
           done
-          echo "resolved: bbolt=$bbolt backend=$backend ui=$ui packaging=$packaging (gh_shared=$gh_shared)"
+          echo "resolved: backend=$backend ui=$ui packaging=$packaging (gh_shared=$gh_shared)"
 
   lint:
     name: Lint (host)
@@ -367,127 +360,6 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-  # Builds the 5 static, libc-free bbolt-client-rs binaries (x86_64, aarch64,
-  # armv7, mipsel, mips) and runs the golden test suite under qemu-user for each
-  # cross arch. The resulting binaries are uploaded as a workflow artifact and
-  # consumed by the `build` job via download-artifact, replacing the standalone
-  # bbolt-client.yml workflow and the bbolt-latest rolling-release dependency.
-  bbolt:
-    name: Build bbolt-client (5 arches)
-    needs: [changes]
-    # Unlike the other domain jobs, bbolt keeps the broad non-PR escape: the
-    # release `build` job downloads this job's binary artifact, so bbolt MUST run
-    # on every push/tag/dispatch even when bbolt-client/ is unchanged. That is not
-    # a rebuild — the compile is content-hash cached (see the cache step below), so
-    # an unchanged push just restores and re-uploads the 5 binaries in seconds.
-    if: ${{ needs.changes.outputs.bbolt == 'true' || github.event_name != 'pull_request' }}
-    # Pinned (not floating ubuntu-latest) for reproducibility, matching the
-    # rest of the workflow's pinning philosophy (SHA-pinned actions, pinned
-    # shellcheck/bun). A cold build cross-compiles 5 arches + runs 5 qemu-user
-    # suites, so allow generous headroom; a warm bbolt-bin cache hit is seconds.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 40
-    defaults:
-      run:
-        working-directory: bbolt-client
-
-    steps:
-      - uses: actions/checkout@v6
-
-      # Short-circuit the whole expensive path (Rust cross-compile + 5 qemu test
-      # suites) when bbolt-client source is unchanged. The 5 output binaries are
-      # cached keyed on the source hash; on a hit the build/test steps below are
-      # skipped and the cached binaries are uploaded as the artifact verbatim, so
-      # a push that doesn't touch bbolt-client/ never rebuilds them. Cold cache =
-      # full build (no failure mode). Key lists source-relevant inputs only, so a
-      # docs-only edit under bbolt-client/ still hits.
-      - name: Restore prebuilt bbolt binaries
-        id: bbolt-cache
-        uses: actions/cache@v5
-        with:
-          path: |
-            bbolt-client/bbolt-client-rs-x86_64
-            bbolt-client/bbolt-client-rs-aarch64
-            bbolt-client/bbolt-client-rs-armv7
-            bbolt-client/bbolt-client-rs-mipsel
-            bbolt-client/bbolt-client-rs-mips
-          key: bbolt-bin-${{ runner.os }}-${{ hashFiles('bbolt-client/src/**', 'bbolt-client/build.sh', 'bbolt-client/Cargo.lock', 'bbolt-client/Cargo.toml', 'bbolt-client/rust-toolchain.toml') }}
-
-      # Nightly + rust-src are required for -Z build-std (the toolchain is also
-      # pinned in bbolt-client/rust-toolchain.toml). aarch64 cross-links with the
-      # bundled rust-lld, so no cross-gcc is needed. llvm-tools provides
-      # rust-objcopy, which build.sh uses to strip the MIPS .pdr section.
-      - name: Install nightly + rust-src + llvm-tools
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: |
-          rustup toolchain install nightly --profile minimal --component rust-src --component llvm-tools
-          rustc +nightly --version
-
-      # Cache Cargo registry, git sources, and the Rust target directory.
-      # cache `path:` is repo-root-relative (not affected by working-directory).
-      - name: Cache Cargo + build artifacts
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@v5
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            bbolt-client/target
-          key: bbolt-${{ runner.os }}-${{ hashFiles('bbolt-client/Cargo.lock', 'bbolt-client/build.sh', 'bbolt-client/rust-toolchain.toml') }}
-          # Broad restore-keys warm-starts the cargo/target cache across a
-          # toolchain bump. cargo invalidates `target/` by rustc fingerprint, so
-          # this is normally fine; on a rare ABI/std change it could leave a
-          # confusing incremental state — drop/narrow this if flakiness appears.
-          # The shipped BINARIES are gated by the separate exact-match
-          # bbolt-bin-* cache (no restore-keys), so a toolchain bump still
-          # produces fresh, qemu-verified binaries regardless of this cache.
-          restore-keys: bbolt-${{ runner.os }}-
-
-      # qemu-user lets us run cross-compiled binaries in the test steps below.
-      - name: Install qemu-user
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-user
-
-      - name: Build (all 5 arches)
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: ./build.sh
-
-      - name: Test x86_64 (native)
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: ./test.sh
-
-      - name: Test aarch64 (qemu)
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: RUN="qemu-aarch64 target/aarch64-unknown-linux-gnu/release/bbolt-client-rs" ./test.sh
-
-      - name: Test armv7 (qemu)
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: RUN="qemu-arm target/armv7-unknown-linux-gnueabihf/release/bbolt-client-rs" ./test.sh
-
-      - name: Test mipsel (qemu)
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: RUN="qemu-mipsel target/mipsel-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
-
-      - name: Test mips (qemu)
-        if: steps.bbolt-cache.outputs.cache-hit != 'true'
-        run: RUN="qemu-mips target/mips-unknown-linux-musl/release/bbolt-client-rs" ./test.sh
-
-      # Upload binaries as a workflow artifact for the `build` job to consume.
-      # upload-artifact `path:` is repo-root-relative (not affected by working-directory).
-      - name: Upload bbolt binaries
-        uses: actions/upload-artifact@v7
-        with:
-          name: bbolt-binaries
-          path: |
-            bbolt-client/bbolt-client-rs-x86_64
-            bbolt-client/bbolt-client-rs-aarch64
-            bbolt-client/bbolt-client-rs-armv7
-            bbolt-client/bbolt-client-rs-mipsel
-            bbolt-client/bbolt-client-rs-mips
-          if-no-files-found: error
-
   # Packaging/cross suite host-mode lane. The cross tests (feed index, i18n
   # .lmo, install.sh, manifest, ACL) need REAL apk-tools 3.0.5+: test_build_feed
   # builds fixtures with `apk mkpkg --info`, which the OpenWrt qemu VM's older
@@ -571,26 +443,20 @@ jobs:
     # the package without publishing — but a red lint/js-unit/test/browser-test
     # run now BLOCKS the rolling `latest` release instead of shipping a broken
     # apk to install.sh consumers.
-    needs: [lint, typecheck, js-unit, test, browser-test, bbolt, changes]
+    needs: [lint, typecheck, js-unit, test, browser-test, changes]
     # On a path-filtered PR some heavy jobs may be SKIPPED (not their domain).
     # Run build whenever nothing FAILED: lint always runs; the domain-gated jobs
-    # (including bbolt now) may be skipped, so accept anything that is not
-    # 'failure'. The build job embeds the bbolt binaries via download-artifact,
-    # which would error if bbolt was skipped — so additionally require bbolt to
-    # have actually run on PRs. On push/main/tags the safety-valve forces all
-    # domains true, so bbolt always runs and the publish path is unaffected; on a
-    # bbolt-skipped PR the build job is simply skipped (its package-validation is
-    # redundant with the domain that did change).
+    # may be skipped, so accept anything that is not 'failure'. The four noarch
+    # packages are assembled purely from the repo tree (no external binary
+    # artifact to download), so there is no per-arch job the build must wait on.
     if: >-
       ${{ !cancelled()
           && needs.changes.result == 'success'
           && needs.lint.result == 'success'
           && needs.typecheck.result != 'failure'
-          && needs.bbolt.result != 'failure'
           && needs.test.result != 'failure'
           && needs.js-unit.result != 'failure'
-          && needs.browser-test.result != 'failure'
-          && (needs.bbolt.result == 'success' || github.event_name != 'pull_request') }}
+          && needs.browser-test.result != 'failure' }}
     # Only this job publishes releases, so it is the only one that needs write.
     # Top-level permissions are read-only (see header) — this override is the
     # single place contents: write is granted.
@@ -676,7 +542,6 @@ jobs:
             if [[ "$RAW" == *-r* ]]; then VERSION="$RAW"; else VERSION="${RAW}-r1"; fi
             # Coordinated release: every package gets the tag version.
             emit version    "$VERSION"
-            emit v_bbolt     "$VERSION"
             emit v_singbox   "$VERSION"
             emit v_luciapp   "$VERSION"
             emit v_i18n      "$VERSION"
@@ -686,33 +551,11 @@ jobs:
             PKGR="scripts/build-apk.sh"
             count() { git rev-list --count HEAD -- "$@"; }
             emit version  "${BASE}-r$(git rev-list --count HEAD)"
-            emit v_bbolt   "${BASE}-r$(count bbolt-client/ "$PKGR")"
             emit v_singbox "${BASE}-r$(count singbox-ui/ scripts/install-manifest-singbox-ui.txt "$PKGR")"
             emit v_luciapp "${BASE}-r$(count luci-app-singbox-ui/ scripts/install-manifest-luci-app-singbox-ui.txt "$PKGR")"
             emit v_i18n    "${BASE}-r$(count luci-app-singbox-ui/po/ "$PKGR")"
             emit v_awgwarp "${BASE}-r$(count plugins/awg_warp/ "$PKGR")"
           fi
-
-      # Binaries built by the `bbolt` job above — no external release download needed.
-      - name: Download bbolt-client binaries
-        uses: actions/download-artifact@v7
-        with:
-          name: bbolt-binaries
-          path: .bbolt-bin
-
-      # upload-artifact@v4+ strips the longest common directory prefix, so the 5
-      # files uploaded as bbolt-client/bbolt-client-rs-* land at
-      # .bbolt-bin/bbolt-client-rs-* (the common bbolt-client/ prefix is removed).
-      # This step locates the actual directory robustly and exports it as a step
-      # output, protecting against any future change in artifact layout.
-      - name: Locate bbolt binaries
-        id: bbolt
-        run: |
-          set -euo pipefail
-          dir="$(dirname "$(find .bbolt-bin -name 'bbolt-client-rs-x86_64' | head -1)")"
-          [ -n "$dir" ] || { echo "bbolt binaries not found in artifact"; ls -R .bbolt-bin; exit 1; }
-          echo "dir=$dir" >> "$GITHUB_OUTPUT"
-          ls -la "$dir"
 
       - name: Build apk packages
         # sudo -E so the SDK cache (SDK_CACHE_DIR via $HOME) and ~/.cache
@@ -724,11 +567,10 @@ jobs:
         # (see scripts/build-apk.sh comments). Real root is the reliable
         # path.
         # PKG_VER_* drive per-package versions (see Derive version). The positional
-        # version is the fallback for any unset override; we set all five, so it is
+        # version is the fallback for any unset override; we set all four, so it is
         # only a belt-and-suspenders default.
         run: |
-          sudo -E env BBOLT_BIN_DIR="$PWD/${{ steps.bbolt.outputs.dir }}" \
-            PKG_VER_BBOLT="${{ steps.version.outputs.v_bbolt }}" \
+          sudo -E env \
             PKG_VER_SINGBOX="${{ steps.version.outputs.v_singbox }}" \
             PKG_VER_LUCIAPP="${{ steps.version.outputs.v_luciapp }}" \
             PKG_VER_I18N="${{ steps.version.outputs.v_i18n }}" \
@@ -775,31 +617,18 @@ jobs:
           set -euo pipefail
           # Each package now carries its OWN version in its built filename
           # (per-package versioning), so reference each one's version explicitly.
-          V_BBOLT="${{ steps.version.outputs.v_bbolt }}"
           V_SINGBOX="${{ steps.version.outputs.v_singbox }}"
           V_LUCIAPP="${{ steps.version.outputs.v_luciapp }}"
           V_I18N="${{ steps.version.outputs.v_i18n }}"
           V_AWGWARP="${{ steps.version.outputs.v_awgwarp }}"
           # dist/ is root-owned (build-apk.sh runs under sudo).
-          # bbolt-client is the ONLY per-arch package:
-          #   bbolt-client_<v_bbolt>_<exact-arch>.apk
-          # <exact-arch> may contain underscores (e.g. mipsel_24kc,
-          # arm_cortex-a7_neon-vfpv4), so strip the known prefix+version rather
-          # than splitting on the last underscore.
-          ls dist/bbolt-client_*.apk >/dev/null 2>&1 || { echo "no per-arch bbolt-client apks in dist/"; exit 1; }
-          for f in dist/bbolt-client_*.apk; do
-            base="${f##*/}"
-            arch="${base#bbolt-client_${V_BBOLT}_}"
-            arch="${arch%.apk}"
-            sudo cp "$f" "dist/bbolt-client-${arch}.apk"
-          done
-          # The four noarch packages -> fixed, version-less asset names.
+          # All four packages are noarch -> fixed, version-less asset names.
           sudo cp "dist/singbox-ui_${V_SINGBOX}.apk"               dist/singbox-ui.apk
           sudo cp "dist/luci-app-singbox-ui_${V_LUCIAPP}.apk"      dist/luci-app-singbox-ui.apk
           sudo cp "dist/luci-i18n-singbox-ui-ru_${V_I18N}.apk"     dist/luci-i18n-singbox-ui-ru.apk
           sudo cp "dist/singbox-ui-plugin-awg_warp_${V_AWGWARP}.apk" dist/singbox-ui-plugin-awg_warp.apk
           sudo chown "$(id -u):$(id -g)" \
-            dist/bbolt-client-*.apk dist/singbox-ui.apk \
+            dist/singbox-ui.apk \
             dist/luci-app-singbox-ui.apk dist/luci-i18n-singbox-ui-ru.apk \
             dist/singbox-ui-plugin-awg_warp.apk
           # Per-package version manifest. The Pages workflow (a separate workflow
@@ -810,7 +639,6 @@ jobs:
           # only move when content moves), unlike an apk byte-hash (mkpkg embeds
           # timestamps), so it is a stable skip/deploy signal.
           {
-            echo "bbolt-client ${V_BBOLT}"
             echo "singbox-ui ${V_SINGBOX}"
             echo "luci-app-singbox-ui ${V_LUCIAPP}"
             echo "luci-i18n-singbox-ui-ru ${V_I18N}"
@@ -831,9 +659,9 @@ jobs:
           set -euo pipefail
           cd dist
           if [ "${GITHUB_REF}" = "refs/heads/main" ]; then
-            sha256sum bbolt-client-*.apk singbox-ui.apk luci-app-singbox-ui.apk luci-i18n-singbox-ui-ru.apk singbox-ui-plugin-awg_warp.apk | sudo tee sha256sums.txt
+            sha256sum singbox-ui.apk luci-app-singbox-ui.apk luci-i18n-singbox-ui-ru.apk singbox-ui-plugin-awg_warp.apk | sudo tee sha256sums.txt
           else
-            sha256sum bbolt-client_*.apk singbox-ui_*.apk luci-app-singbox-ui_*.apk luci-i18n-singbox-ui-ru_*.apk singbox-ui-plugin-awg_warp_*.apk | sudo tee sha256sums.txt
+            sha256sum singbox-ui_*.apk luci-app-singbox-ui_*.apk luci-i18n-singbox-ui-ru_*.apk singbox-ui-plugin-awg_warp_*.apk | sudo tee sha256sums.txt
           fi
           sudo chown "$(id -u):$(id -g)" sha256sums.txt
           cat sha256sums.txt
@@ -852,7 +680,7 @@ jobs:
           # `create` it the first time (guarded by `release view`), and retarget
           # the tag to the current SHA via `release edit` so the asset reflects
           # the tip of main.
-          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. Replaced on every push to main. Package set: \`bbolt-client-<arch>.apk\` (per-arch, e.g. \`bbolt-client-x86_64.apk\`), \`singbox-ui.apk\` (noarch backend), \`luci-app-singbox-ui.apk\` (noarch LuCI UI), \`luci-i18n-singbox-ui-ru.apk\` (noarch RU translation), \`singbox-ui-plugin-awg_warp.apk\` (noarch AWG/WARP plugin). These feed the signed apk feed (GitHub Pages); end users install via that feed — see install.sh / the Pages landing. \`sha256sums.txt\` covers every published asset."
+          notes="Auto-built from \`main\` @ \`${GITHUB_SHA::7}\` — dev version \`${{ steps.version.outputs.version }}\`. Replaced on every push to main. Package set (all noarch): \`singbox-ui.apk\` (backend, includes the pure-ucode bbolt cache.db reader), \`luci-app-singbox-ui.apk\` (LuCI UI), \`luci-i18n-singbox-ui-ru.apk\` (RU translation), \`singbox-ui-plugin-awg_warp.apk\` (AWG/WARP plugin). These feed the signed apk feed (GitHub Pages); end users install via that feed — see install.sh / the Pages landing. \`sha256sums.txt\` covers every published asset."
           if ! gh release view latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             gh release create latest \
               --repo "$GITHUB_REPOSITORY" \
@@ -869,7 +697,7 @@ jobs:
               --prerelease
           fi
           gh release upload latest \
-            dist/bbolt-client-*.apk dist/singbox-ui.apk dist/luci-app-singbox-ui.apk \
+            dist/singbox-ui.apk dist/luci-app-singbox-ui.apk \
             dist/luci-i18n-singbox-ui-ru.apk dist/singbox-ui-plugin-awg_warp.apk \
             dist/sha256sums.txt dist/versions.txt \
             --repo "$GITHUB_REPOSITORY" --clobber

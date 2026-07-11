@@ -123,38 +123,6 @@ function ensureFeed(): FeedResult {
   const out = resolve(tmp, "out");
   mkdirSync(dist, { recursive: true });
 
-  // Per-arch bbolt-client apks
-  mkdirSync(resolve(tmp, "b/x"), { recursive: true });
-  writeFileSync(resolve(tmp, "b/x/a"), "a\n");
-  for (const arch of ARCHES_FROM_SH) {
-    const r = spawnSync(
-      apkBin,
-      [
-        "mkpkg",
-        "--info",
-        `name:bbolt-client`,
-        "--info",
-        `version:9.9.9-r1`,
-        "--info",
-        `arch:${arch}`,
-        "--info",
-        "description:t",
-        "--info",
-        "license:GPL-2.0-or-later",
-        "--files",
-        "x",
-        "-o",
-        resolve(dist, `bbolt-client-${arch}.apk`),
-      ],
-      { cwd: resolve(tmp, "b"), encoding: "utf8" },
-    );
-    if (r.status !== 0) {
-      feedError = `mkpkg bbolt-client-${arch} failed: ${r.stderr}`;
-      rmSync(tmp, { recursive: true, force: true });
-      throw new Error(feedError);
-    }
-  }
-
   // Noarch core
   mkdirSync(resolve(tmp, "c/x"), { recursive: true });
   writeFileSync(resolve(tmp, "c/x/b"), "b\n");
@@ -301,9 +269,9 @@ describe("build_feed", () => {
 
       // Crafted dump: decoy nested name/version after the real fields
       const dump =
-        "  name: bbolt-client\n" +
+        "  name: singbox-ui\n" +
         "  version: 9.9.9-r1\n" +
-        "  arch: x86_64\n" +
+        "  arch: all\n" +
         "  scripts:\n" +
         "    triggers:\n" +
         "      name: should-be-ignored\n" +
@@ -321,7 +289,7 @@ describe("build_feed", () => {
         writeFileSync(dumpFile, dump);
         const r = spawnSync("awk", [parser, dumpFile], { encoding: "utf8" });
         expect(r.status).toBe(0);
-        expect(r.stdout.trim()).toBe("bbolt-client-9.9.9-r1.apk");
+        expect(r.stdout.trim()).toBe("singbox-ui-9.9.9-r1.apk");
       } finally {
         rmSync(dumpTmp, { recursive: true, force: true });
       }
@@ -329,7 +297,7 @@ describe("build_feed", () => {
   );
 
   it.skipIf(skipAll)(
-    "per-arch: every arch dir holds five <name>-<version>.apk files + packages.adb",
+    "per-arch: every arch dir holds four <name>-<version>.apk files + packages.adb",
     () => {
       requireCapable();
       const { out } = ensureFeed();
@@ -338,7 +306,6 @@ describe("build_feed", () => {
         expect(existsSync(d)).toBe(true);
 
         // Named <name>-<version>.apk (not release-asset names)
-        expect(existsSync(resolve(d, "bbolt-client-9.9.9-r1.apk"))).toBe(true);
         expect(existsSync(resolve(d, "singbox-ui-9.9.9-r1.apk"))).toBe(true);
         expect(existsSync(resolve(d, "luci-app-singbox-ui-9.9.9-r1.apk"))).toBe(
           true,
@@ -350,15 +317,15 @@ describe("build_feed", () => {
           existsSync(resolve(d, "singbox-ui-plugin-awg_warp-9.9.9-r1.apk")),
         ).toBe(true);
 
-        // Release-asset name must NOT appear
+        // No per-arch bbolt package lingers in the feed (it is gone).
         expect(existsSync(resolve(d, `bbolt-client-${arch}.apk`))).toBe(false);
 
         // packages.adb index present
         expect(existsSync(resolve(d, "packages.adb"))).toBe(true);
 
-        // Exactly 5 apks
+        // Exactly 4 apks (all noarch)
         const napk = readdirSync(d).filter((f) => f.endsWith(".apk")).length;
-        expect(napk).toBe(5);
+        expect(napk).toBe(4);
 
         // Every package referenced by the index exists on disk
         const dump = spawnSync(

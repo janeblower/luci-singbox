@@ -1,6 +1,6 @@
 //go:build ignore
 
-// Stress-fixture generator for the Rust port's parity tests. Produces a bbolt db
+// Stress-fixture generator for the bbolt reader's golden tests. Produces a bbolt db
 // that exercises code paths the thin real cache.db does not: multiple buckets, an
 // empty bucket, a small (possibly inline) bucket, a large bucket forcing B+tree
 // branch pages, a value large enough to force overflow pages, a nested sub-bucket,
@@ -8,7 +8,7 @@
 //
 // Regenerate (from the bbolt-client/ Go module, which already requires bbolt):
 //
-//	go run rust/testdata/gen_stress.go rust/testdata/stress.db
+//	go run testdata/gen_stress.go testdata/stress.db
 package main
 
 import (

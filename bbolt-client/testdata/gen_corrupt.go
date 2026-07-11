@@ -1,12 +1,12 @@
 //go:build ignore
 
-// Crafted-malformed bbolt db generator for regression-testing the Rust port's
+// Crafted-malformed bbolt db generator for regression-testing the ucode reader's
 // corruption guards. These structures cannot be produced through the bbolt API
 // (cyclic page links, a wrapping pgid, a bogus overflow field), so the pages are
 // written by hand. Layout: pageSize 4096; meta0/meta1 -> root bucket on page 3;
 // page 3 holds one sub-bucket "x" pointing at page 4, which the variants corrupt.
 //
-//	go run rust/testdata/gen_corrupt.go <cyclic|wrap|overflow> <out.db>
+//	go run testdata/gen_corrupt.go <cyclic|wrap|overflow> <out.db>
 package main
 
 import (

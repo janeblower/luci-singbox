@@ -2,7 +2,7 @@
 # luci-app-singbox-ui — LuCI frontend for singbox-ui
 #
 # Front half of the three-way split:
-#   bbolt-client  <-  singbox-ui  <-  luci-app-singbox-ui  <-  luci-i18n-*-ru
+#   singbox-ui  <-  luci-app-singbox-ui  <-  luci-i18n-*-ru
 #
 # Ships only the web views (htdocs -> www), the LuCI menu entry and the rpcd
 # ACL. All backend logic lives in the separate `singbox-ui` package, which

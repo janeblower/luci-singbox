@@ -1,13 +1,16 @@
 /**
- * tests/cross/build_apk_per_arch.test.ts
- * Port of tests/cross/test_build_apk_per_arch.sh
+ * tests/cross/test_build_apk_per_arch.test.ts
  *
- * Asserts scripts/build-apk.sh produces the FIVE-package split:
- *   - bbolt-client_<ver>_<arch>.apk            one per covered OpenWrt arch (20 total)
- *   - singbox-ui_<ver>.apk                     noarch backend
+ * Asserts scripts/build-apk.sh produces the FOUR-package noarch split:
+ *   - singbox-ui_<ver>.apk                     noarch backend (bundles the
+ *     pure-ucode bbolt cache.db reader: lib/bbolt.uc + the
+ *     usr/libexec/singbox-ui/bbolt-client shim)
  *   - luci-app-singbox-ui_<ver>.apk            noarch LuCI frontend
  *   - luci-i18n-singbox-ui-ru_<ver>.apk        noarch Russian translation
- *   - singbox-ui-plugin-awg_warp_<ver>.apk        noarch AWG-WARP plugin
+ *   - singbox-ui-plugin-awg_warp_<ver>.apk     noarch AWG-WARP plugin
+ *
+ * The former per-arch Rust bbolt-client package (20 apks) is gone: the reader is
+ * now ucode shipped inside singbox-ui, so there is no per-arch matrix.
  *
  * Driven via APK_MKPKG_STUB=1 (no SDK needed). SKIPs if bash is unavailable
  * (e.g. OpenWrt qemu guest has only BusyBox ash).
@@ -19,6 +22,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -37,7 +41,6 @@ const hasBash = bashCheck.status === 0 && !bashCheck.error;
 type BuildResult = {
   out: string;
   work: string;
-  binDir: string;
 };
 
 let buildResult: BuildResult | null = null;
@@ -47,15 +50,8 @@ function ensureBuild(): BuildResult {
   if (buildResult) return buildResult;
   if (buildError) throw new Error(buildError);
 
-  const work = mkdtempSync(resolve(tmpdir(), "apk-per-arch-"));
-  const binDir = resolve(work, "bins");
-  mkdirSync(binDir, { recursive: true });
+  const work = mkdtempSync(resolve(tmpdir(), "apk-noarch-"));
   const out = resolve(work, "dist");
-
-  // Create fake bbolt binaries for the 5 ABI families build-apk.sh knows about
-  for (const abi of ["x86_64", "aarch64", "armv7", "mipsel", "mips"]) {
-    writeFileSync(resolve(binDir, `bbolt-client-rs-${abi}`), `BBOLT-${abi}\n`);
-  }
 
   const result = spawnSync("bash", [BUILDSH, "0.0.0-r1", out], {
     cwd: ROOT,
@@ -63,7 +59,6 @@ function ensureBuild(): BuildResult {
     env: {
       ...process.env,
       APK_MKPKG_STUB: "1",
-      BBOLT_BIN_DIR: binDir,
       WORK_DIR: resolve(work, ".build"),
     },
   });
@@ -74,22 +69,11 @@ function ensureBuild(): BuildResult {
     throw new Error(buildError);
   }
 
-  buildResult = { out, work, binDir };
+  buildResult = { out, work };
   return buildResult;
 }
 
-describe("build_apk_per_arch", () => {
-  it.skipIf(!hasBash)(
-    "per-arch bbolt-client: exactly 20 (one per arch in the map)",
-    () => {
-      const { out } = ensureBuild();
-      const apks = readdirSync(out).filter((f) =>
-        /^bbolt-client_0\.0\.0-r1_.*\.apk$/.test(f),
-      );
-      expect(apks.length).toBe(20);
-    },
-  );
-
+describe("build_apk_noarch", () => {
   it.skipIf(!hasBash)("four noarch packages: exactly one each", () => {
     const { out } = ensureBuild();
     for (const name of [
@@ -103,65 +87,43 @@ describe("build_apk_per_arch", () => {
     }
   });
 
-  it.skipIf(!hasBash)(
-    "total apk count is exactly 24 (20 bbolt + 4 noarch)",
-    () => {
-      const { out } = ensureBuild();
-      const total = readdirSync(out).filter((f) => f.endsWith(".apk")).length;
-      expect(total).toBe(24);
-    },
-  );
+  it.skipIf(!hasBash)("total apk count is exactly 4 (all noarch)", () => {
+    const { out } = ensureBuild();
+    const total = readdirSync(out).filter((f) => f.endsWith(".apk")).length;
+    expect(total).toBe(4);
+  });
 
   it.skipIf(!hasBash)(
-    "bbolt binary belongs to bbolt-client package, NOT the backend",
+    "singbox-ui backend root bundles the ucode bbolt-client shim",
     () => {
       const { work } = ensureBuild();
-      const buildDir = resolve(work, ".build");
-      for (const probe of [
-        { arch: "aarch64_cortex-a53", abi: "aarch64" },
-        { arch: "mipsel_24kc", abi: "mipsel" },
-        { arch: "x86_64", abi: "x86_64" },
-      ]) {
-        const root = resolve(
-          buildDir,
-          `pkg-root-bbolt-${probe.arch}`,
-          "usr/libexec/singbox-ui/bbolt-client",
-        );
-        expect(existsSync(root)).toBe(true);
-        const content = require("node:fs").readFileSync(root, "utf8");
-        expect(content).toContain(`BBOLT-${probe.abi}`);
-      }
-    },
-  );
-
-  it.skipIf(!hasBash)(
-    "noarch backend root must NOT carry the bbolt binary",
-    () => {
-      const { work } = ensureBuild();
-      const backendBbolt = resolve(
+      const shim = resolve(
         work,
         ".build/pkg-root-singbox-ui/usr/libexec/singbox-ui/bbolt-client",
       );
-      expect(existsSync(backendBbolt)).toBe(false);
+      expect(existsSync(shim)).toBe(true);
+      // It is the ucode shim, not a native binary: ucode shebang + require.
+      const content = readFileSync(shim, "utf8");
+      expect(content).toContain("#!/usr/bin/ucode");
+      expect(content).toContain('require("bbolt")');
     },
   );
+
+  it.skipIf(!hasBash)("singbox-ui backend root bundles lib/bbolt.uc", () => {
+    const { work } = ensureBuild();
+    const lib = resolve(
+      work,
+      ".build/pkg-root-singbox-ui/usr/share/singbox-ui/lib/bbolt.uc",
+    );
+    expect(existsSync(lib)).toBe(true);
+  });
 
   it.skipIf(!hasBash)(
     "stale prior-version .apks are removed before build",
     () => {
       const work = mkdtempSync(resolve(tmpdir(), "apk-stale-"));
-      const binDir = resolve(work, "bins");
-      mkdirSync(binDir, { recursive: true });
       const out = resolve(work, "dist");
       mkdirSync(out, { recursive: true });
-
-      // Create fake bbolt binaries for all 5 ABIs
-      for (const abi of ["x86_64", "aarch64", "armv7", "mipsel", "mips"]) {
-        writeFileSync(
-          resolve(binDir, `bbolt-client-rs-${abi}`),
-          `BBOLT-${abi}\n`,
-        );
-      }
 
       // Plant stale .apks from a prior version (0.0.0-r0) alongside unrelated files
       writeFileSync(resolve(out, "singbox-ui_0.0.0-r0.apk"), "stale");
@@ -170,7 +132,6 @@ describe("build_apk_per_arch", () => {
         resolve(out, "luci-i18n-singbox-ui-ru_0.0.0-r0.apk"),
         "stale",
       );
-      writeFileSync(resolve(out, "bbolt-client_0.0.0-r0_x86_64.apk"), "stale");
       writeFileSync(resolve(out, "unrelated-package_1.2.3.apk"), "keep me");
 
       // Run build-apk.sh with new version (0.0.0-r1)
@@ -180,7 +141,6 @@ describe("build_apk_per_arch", () => {
         env: {
           ...process.env,
           APK_MKPKG_STUB: "1",
-          BBOLT_BIN_DIR: binDir,
           WORK_DIR: resolve(work, ".build"),
         },
       });
@@ -193,7 +153,6 @@ describe("build_apk_per_arch", () => {
         expect(files).not.toContain("singbox-ui_0.0.0-r0.apk");
         expect(files).not.toContain("luci-app-singbox-ui_0.0.0-r0.apk");
         expect(files).not.toContain("luci-i18n-singbox-ui-ru_0.0.0-r0.apk");
-        expect(files).not.toContain("bbolt-client_0.0.0-r0_x86_64.apk");
         // Unrelated .apk must survive
         expect(files).toContain("unrelated-package_1.2.3.apk");
         // New version .apks must be present
@@ -209,21 +168,13 @@ describe("build_apk_per_arch", () => {
   // Per-package versioning: each package's filename (and therefore its apk
   // metadata version, set from the same V_* var) must carry its OWN
   // PKG_VER_<PKG> override. An unset override falls back to the positional
-  // version. Regression for the rolling-feed behaviour where bbolt no longer
-  // re-versions on a commit that didn't touch bbolt-client/.
+  // version. Regression for the rolling-feed behaviour where an unchanged
+  // package keeps its version across pushes that didn't touch it.
   it.skipIf(!hasBash)(
     "PKG_VER_* override each package's version independently",
     () => {
       const work = mkdtempSync(resolve(tmpdir(), "apk-perpkg-ver-"));
-      const binDir = resolve(work, "bins");
-      mkdirSync(binDir, { recursive: true });
       const out = resolve(work, "dist");
-      for (const abi of ["x86_64", "aarch64", "armv7", "mipsel", "mips"]) {
-        writeFileSync(
-          resolve(binDir, `bbolt-client-rs-${abi}`),
-          `BBOLT-${abi}\n`,
-        );
-      }
 
       // Distinct version per package; I18N intentionally left UNSET so it falls
       // back to the positional 0.0.0-r99.
@@ -233,9 +184,7 @@ describe("build_apk_per_arch", () => {
         env: {
           ...process.env,
           APK_MKPKG_STUB: "1",
-          BBOLT_BIN_DIR: binDir,
           WORK_DIR: resolve(work, ".build"),
-          PKG_VER_BBOLT: "0.1.0-r5",
           PKG_VER_SINGBOX: "0.1.0-r10",
           PKG_VER_LUCIAPP: "0.1.0-r7",
           PKG_VER_AWGWARP: "0.1.0-r2",
@@ -245,18 +194,12 @@ describe("build_apk_per_arch", () => {
       try {
         expect(result.status).toBe(0);
         const files = readdirSync(out);
-        // Each noarch package carries its own override.
+        // Each package carries its own override.
         expect(files).toContain("singbox-ui_0.1.0-r10.apk");
         expect(files).toContain("luci-app-singbox-ui_0.1.0-r7.apk");
         expect(files).toContain("singbox-ui-plugin-awg_warp_0.1.0-r2.apk");
         // Unset override -> positional fallback.
         expect(files).toContain("luci-i18n-singbox-ui-ru_0.0.0-r99.apk");
-        // bbolt (per-arch) carries its own override on every arch.
-        const bbolt = files.filter((f) => /^bbolt-client_.*\.apk$/.test(f));
-        expect(bbolt.length).toBe(20);
-        expect(bbolt.every((f) => f.startsWith("bbolt-client_0.1.0-r5_"))).toBe(
-          true,
-        );
         // The mixed positional must NOT leak onto an overridden package.
         expect(files).not.toContain("singbox-ui_0.0.0-r99.apk");
       } finally {

@@ -23,7 +23,6 @@ const REGEN = join(REPO, "scripts/regen-po.sh");
 const BUILDSH = join(REPO, "scripts/build-apk.sh");
 const MAKEFILE = join(REPO, "singbox-ui/Makefile");
 const LUCIAPP_MAKEFILE = join(REPO, "luci-app-singbox-ui/Makefile");
-const BBOLT_MAKEFILE = join(REPO, "bbolt-client/Makefile");
 const POT = join(SB_PO_DIR, "templates/luci-singbox-ui.pot");
 const PO = join(SB_PO_DIR, "ru/luci-singbox-ui.po");
 
@@ -39,15 +38,7 @@ const gitAvailable =
 describe("audit G6 build scripts / packaging / i18n", () => {
   // Prerequisite: all required files exist
   it("all required source files exist", () => {
-    for (const f of [
-      REGEN,
-      BUILDSH,
-      MAKEFILE,
-      LUCIAPP_MAKEFILE,
-      BBOLT_MAKEFILE,
-      POT,
-      PO,
-    ]) {
+    for (const f of [REGEN, BUILDSH, MAKEFILE, LUCIAPP_MAKEFILE, POT, PO]) {
       expect(existsSync(f)).toBe(true);
     }
   });
@@ -55,7 +46,7 @@ describe("audit G6 build scripts / packaging / i18n", () => {
   // ---------------------------------------------------------------------------
   // G6 split — three package Makefiles carry key fields
   // ---------------------------------------------------------------------------
-  describe("split: three package Makefiles carry PKG_NAME and key fields", () => {
+  describe("split: package Makefiles carry PKG_NAME and key fields", () => {
     it("singbox-ui/Makefile: PKG_NAME:=singbox-ui", () => {
       const mk = readFileSync(MAKEFILE, "utf8");
       expect(mk).toMatch(/^PKG_NAME:=singbox-ui/m);
@@ -64,11 +55,6 @@ describe("audit G6 build scripts / packaging / i18n", () => {
     it("singbox-ui/Makefile: BuildPackage", () => {
       const mk = readFileSync(MAKEFILE, "utf8");
       expect(mk).toContain("BuildPackage");
-    });
-
-    it("singbox-ui/Makefile: DEPENDS includes +bbolt-client", () => {
-      const mk = readFileSync(MAKEFILE, "utf8");
-      expect(mk).toMatch(/^\s*DEPENDS:=.*\+bbolt-client/m);
     });
 
     it("luci-app-singbox-ui/Makefile: PKG_NAME:=luci-app-singbox-ui", () => {
@@ -84,21 +70,6 @@ describe("audit G6 build scripts / packaging / i18n", () => {
     it("luci-app-singbox-ui/Makefile: LUCI_DEPENDS includes +singbox-ui", () => {
       const mk = readFileSync(LUCIAPP_MAKEFILE, "utf8");
       expect(mk).toMatch(/^\s*LUCI_DEPENDS:=.*\+singbox-ui/m);
-    });
-
-    it("bbolt-client/Makefile: PKG_NAME:=bbolt-client", () => {
-      const mk = readFileSync(BBOLT_MAKEFILE, "utf8");
-      expect(mk).toMatch(/^PKG_NAME:=bbolt-client/m);
-    });
-
-    it("bbolt-client/Makefile: BuildPackage", () => {
-      const mk = readFileSync(BBOLT_MAKEFILE, "utf8");
-      expect(mk).toContain("BuildPackage");
-    });
-
-    it("bbolt-client/Makefile: DEPENDS includes +libc", () => {
-      const mk = readFileSync(BBOLT_MAKEFILE, "utf8");
-      expect(mk).toMatch(/^\s*DEPENDS:=.*\+libc/m);
     });
   });
 

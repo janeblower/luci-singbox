@@ -1,8 +1,11 @@
 #
 # singbox-ui — backend (ucode generators, rpcd handler, init.d, nft driver)
 #
-# This is the arch-independent (noarch) BACKEND package of the three-way split:
-#   bbolt-client  <-  singbox-ui  <-  luci-app-singbox-ui  <-  luci-i18n-*-ru
+# This is the arch-independent (noarch) BACKEND package of the split:
+#   singbox-ui  <-  luci-app-singbox-ui  <-  luci-i18n-*-ru
+# It bundles the pure-ucode bbolt cache.db reader (lib/bbolt.uc + the
+# usr/libexec/singbox-ui/bbolt-client shim) — the former per-arch Rust
+# bbolt-client package was folded in here.
 #
 # It ships NO LuCI views, so it is a plain OpenWrt package built with
 # include $(TOPDIR)/rules.mk + BuildPackage — NOT luci.mk. The LuCI frontend
@@ -36,7 +39,7 @@ define Package/$(PKG_NAME)
   URL:=https://github.com/janeblower/luci-singbox
   # CANON dep line — keep in sync with APP_DEPENDS in scripts/build-apk.sh.
   # NB: 'nftables' (base/fw4) and 'jq' are deliberately excluded.
-  DEPENDS:=+bbolt-client +sing-box +curl +ucode +ucode-mod-fs +kmod-nft-socket +kmod-nft-tproxy
+  DEPENDS:=+sing-box +curl +ucode +ucode-mod-fs +kmod-nft-socket +kmod-nft-tproxy
   PKGARCH:=all
   PROVIDES:=singbox-ui-any
 endef

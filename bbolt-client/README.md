@@ -1,67 +1,51 @@
 # bbolt-client
 
-`#![no_std]`, **без libc**, raw-syscall, read-only ридер [bbolt](https://github.com/etcd-io/bbolt)
-для кэшей sing-box (`experimental.cache_file`, например `/etc/sing-box/cache.db`
-или `/tmp/singbox-ui-cache.db`), собранный с упором на минимальный размер.
+Read-only ридер [bbolt](https://github.com/etcd-io/bbolt) для кэшей sing-box
+(`experimental.cache_file`, например `/etc/sing-box/cache.db` или
+`/tmp/singbox-ui-cache.db`) — **на чистом ucode**, без нативного кода.
 
-Полностью статичные libc-free бинарники: **~7.6 KB** (x86_64) / **~6.2 KB** (aarch64) /
-**~6.3 KB** (armv7) / **~9 KB** (mipsel) / **~9 KB** (mips). Сборки mips/mipsel
-чуть крупнее (o32-обёртка syscall'ов слегка менее компактна), но всё равно
-крошечные — `build.sh` вырезает MIPS-специфичную секцию `.pdr` (procedure-descriptor),
-~23 KB non-allocated блоб, который `strip` оставляет на месте и который иначе раздул бы
-их до ~32 KB. Каждый бинарник не линкует libc и делает прямые Linux-syscall'ы, поэтому
-один статический ELF одинаково работает и на glibc-хостах, и на musl/OpenWrt.
+Реализация живёт в бэкенд-пакете `singbox-ui`:
 
-## Сборка (нужен nightly)
+- **`singbox-ui/root/usr/share/singbox-ui/lib/bbolt.uc`** — парсер B+tree
+  (meta/page/search/walk/uvarint + bounds-checked LE-ридеры). Порт бывшего
+  `no_std`/raw-syscall Rust-бинарника 1:1 по поведению; ucode int64 wraps как
+  Rust u64 (доказано: FNV-1a64 совпадает с Go байт-в-байт).
+- **`singbox-ui/root/usr/libexec/singbox-ui/bbolt-client`** — тонкий CLI-шим
+  над `lib/bbolt.uc` (argv-совместим с прежним бинарником). Ставится как часть
+  `singbox-ui` (noarch) — отдельного per-arch пакета больше нет.
 
-    ./build.sh        # -> ./bbolt-client-rs-{x86_64,aarch64,armv7,mipsel,mips}  (+ ./bbolt-client-rs = native)
-    ./test.sh         # сборка + самодостаточные golden-регрессы
-
-Нужен nightly-тулчейн с `rust-src` (запинен в `rust-toolchain.toml`) и компонентом
-`llvm-tools` (даёт `rust-objcopy`, которым `build.sh` срезает `.pdr` на mips). Сборка
-использует `-Z build-std=core` с `panic = "immediate-abort"` и линкует через `-nostdlib`,
-так что ни libc, ни CRT не подтягиваются; результат — статический ELF без `PT_INTERP`.
-Кросс-таргеты линкуются встроенным в тулчейн `rust-lld` — cross-gcc не требуется.
-
-CI собирает все пять архитектур и гоняет тесты (кросс-арки под `qemu-user`)
-на каждый push — джоб `bbolt` в [`.github/workflows/build.yml`](../.github/workflows/build.yml).
-Бинарники выкладываются как артефакты (только бинарь; apk-упаковки пока нет).
-
-**Поддерживаемые арки: x86_64, aarch64, armv7, mipsel (LE), mips (BE) Linux.**
-Слой syscall'ов arch-gated (`#[cfg(target_arch)]`: номера syscall'ов + инструкция
-`syscall`/`svc` + `_start`); всё остальное архитектурно-независимо и читает on-disk
-целые little-endian, так что та же логика бинарника корректна и на big-endian mips.
-armv7 — это `target_arch="arm"`; mipsel и mips делят `target_arch="mips"`
-(endianness задаёт `target_endian`). Один bbolt-бинарник на семейство покрывает все
-CPU-подтипы OpenWrt в этом семействе (float не используется).
+Этот каталог (`bbolt-client/`) теперь несёт только golden-регресс-харнес:
+`test.sh` + `testdata/` (замороженные фикстуры и хэши, снятые с апстримного
+Go-референса `bbolt`).
 
 ## Использование
 
-    bbolt-client-rs <db>                   # список бакетов
-    bbolt-client-rs <db> <bucket>          # список ключей в бакете
-    bbolt-client-rs <db> <bucket> <key>    # сырые байты значения в stdout
-    bbolt-client-rs -r <db> <bucket> <key> # снять обёртку SavedRuleSet -> .srs
+    bbolt-client <db>                   # список бакетов
+    bbolt-client <db> <bucket>          # список ключей в бакете
+    bbolt-client <db> <bucket> <key>    # сырые байты значения в stdout
+    bbolt-client -r <db> <bucket> <key> # снять обёртку SavedRuleSet -> .srs
 
 Пример — достать кэшированный rule-set и декомпилировать его:
 
-    bbolt-client-rs -r cache.db rule_set warp-telegram-community-ruleset > rs.srs
+    bbolt-client -r cache.db rule_set warp-telegram-community-ruleset > rs.srs
     sing-box rule-set decompile rs.srs --output rs.json
 
-Открывает read-only с shared-блокировкой и таймаутом ~1с: если файл держит sing-box
-(эксклюзивная блокировка), печатает `timeout` (exit 1) вместо зависания — скопируй db
-и читай копию. Коды возврата: `0` ok, `1` ошибка (нет файла/бакета/ключа, блокировка),
-`2` плохие аргументы. У вывода значения нет завершающего перевода строки.
+Читает весь файл в память (`fs`), никакого mmap. Коды возврата: `0` ok, `1`
+ошибка (нет файла/бакета/ключа, битая db), `2` плохие аргументы. У вывода
+значения нет завершающего перевода строки.
 
-> Текст OS-ошибки для отсутствующего файла / блокировки / провала mmap упрощён (полная
-> таблица errno→строка не стоит байтов). Выводы bucket/key/value/`-r`/usage/
-> `no bucket`/`no key`/`timeout` — точные.
+**Нет flock.** bbolt — copy-on-write с двумя checksummed meta-страницами
+(`select_root` берёт валидную с бо́льшим txid), поэтому конкурентный писатель
+(sing-box) не может отдать торн-дерево; полуросший файл упирается в bounds-guard
+→ чистая ошибка → cron ретраит. Прежний Rust-бинарник брал `LOCK_SH` с таймаутом
+~1с; ucode-ридер читает сквозь advisory-lock.
 
 ### Обёртка SavedRuleSet (`-r`)
 
 Бакет `rule_set` хранит не сырой `.srs`, а sing-box-обёртку `experimental/cachefile`:
 `u8 version(==1)`, uvarint-длина контента, сам `.srs`, затем хвостовые метаданные
 (`LastUpdated`, `LastEtag`). `-r` валидирует version + длину и отдаёт только контент.
-Если формат обёртки изменится в апстриме — правь `unwrap_ruleset`.
+Если формат обёртки изменится в апстриме — правь `unwrap_ruleset` в `lib/bbolt.uc`.
 
 ### Устойчивость к битому вводу
 
@@ -70,23 +54,23 @@ CPU-подтипы OpenWrt в этом семействе (float не испол
 проходят bbolt'овскую self-identity-проверку (`FastCheck`), и ограничивает глубину
 спуска по B+tree, так что обрезанная копия или подделанная db (циклические page-ссылки,
 заворачивающийся `pgid`, фейковое поле `overflow`) дают чистый exit вместо
-SIGSEGV/SIGILL или неверного ответа.
-
-## Как он остаётся маленьким
-
-- Без libc, без CRT: собственный `_start` (через `global_asm!`) + raw-обёртки
-  `syscall`/`svc`.
-- Без heap'а: db маппится `mmap`'ом `PROT_READ`; ключи/значения — это слайсы в маппинг,
-  поэтому `build-std` компилирует только `core` (никакого `alloc`).
-- `panic = "immediate-abort"`, `opt-level = "z"`, `lto`, `codegen-units = 1`, strip.
-- На mips/mipsel `build.sh` дополнительно вырезает non-allocated `.pdr` через
-  `rust-objcopy --remove-section .pdr` (~23 KB, который `strip` не трогает).
+неверного ответа. Оверфлоу-гарды сделаны в pre-divide форме (`id > len/ps` до
+умножения), потому что ucode int64 знаковый и молча заворачивается.
 
 ## Тесты
 
-`./test.sh` самодостаточен — он сводит вывод бинарника к sha256 и сравнивает с
-закоммиченными golden-хэшами в `testdata/golden/` (изначально сняты с апстримного
-Go-референса `bbolt` и заморожены). Фикстуры в `testdata/`:
+`./test.sh` самодостаточен — сводит вывод шима к sha256 и сравнивает с
+закоммиченными golden-хэшами в `testdata/golden/` (сняты с Go-референса `bbolt`
+и заморожены). Прогон против ucode-шима:
+
+    LIB=../singbox-ui/root/usr/share/singbox-ui/lib
+    SHIM=../singbox-ui/root/usr/libexec/singbox-ui/bbolt-client
+    RUN="ucode -L$LIB $SHIM" ./test.sh
+
+В CI это гоняет backend-лейн in-guest (`tests/backend/test_bbolt_golden.test.ts`),
+где реальные OpenWrt ucode + ucode-mod-fs гарантированно есть и совпадают с прод.
+
+Фикстуры в `testdata/`:
 
 - `cache.db` — настоящий (тонкий) sing-box-кэш, включая путь `-r`.
 - `stress.db` — форсит то, чего нет в реальной db: branch-страницы B+tree, overflow-
@@ -94,11 +78,7 @@ Go-референса `bbolt` и заморожены). Фикстуры в `tes
   high-byte.
 - `cyclic.db` / `wrap.db` / `overflow.db` — подделанная порча для safety-гардов.
 
-Прогнать aarch64-сборку через тот же набор под qemu:
-
-    RUN="qemu-aarch64 target/aarch64-unknown-linux-gnu/release/bbolt-client-rs" ./test.sh
-
 Фикстуры воспроизводимы через (игнорируемые сборкой) генераторы в `testdata/`:
 `gen_stress.go` (нужен Go-модуль с `go.etcd.io/bbolt`) и `gen_corrupt.go`
 (только stdlib: `go run testdata/gen_corrupt.go <cyclic|wrap|overflow> <out.db>`). После
-изменения фикстуры обнови golden: `./test.sh gen`.
+изменения фикстуры обнови golden: `RUN="ucode -L$LIB $SHIM" ./test.sh gen`.

@@ -8,8 +8,10 @@ import { describe, expect, it } from "vitest";
 // the hand-maintained mirror of the CI `changes` job's dorny/paths-filter
 // globs (build.yml) whose static wiring this test guards.
 //
-// Directory-based 4-domain model:
-//   bbolt / backend / ui / packaging, plus a shared fan-out that sets all four.
+// Directory-based 3-domain model:
+//   backend / ui / packaging, plus a shared fan-out that sets all three.
+//   bbolt-client/ (the former per-arch Rust reader, now a pure-ucode golden
+//   harness for lib/bbolt.uc) maps to backend.
 //
 // NOTE: The classifier (domain_classify.sh) is a shell script sourced into sh.
 // We invoke it via sh subprocess to replicate the exact logic faithfully.
@@ -49,11 +51,10 @@ function expectDomain(files: string, varName: string, want: "true" | "false") {
 }
 
 describe("domain classifier: path -> domain mapping", () => {
-  // 1) bbolt-only change => ONLY bbolt true (the goal-e isolation invariant).
-  describe("1) bbolt-only change", () => {
-    const f = "bbolt-client/src/main.rs";
-    it("bbolt=true", () => expectDomain(f, "bbolt", "true"));
-    it("backend=false", () => expectDomain(f, "backend", "false"));
+  // 1) bbolt-client harness change => backend (the ucode reader is backend code).
+  describe("1) bbolt-client golden harness change", () => {
+    const f = "bbolt-client/test.sh";
+    it("backend=true", () => expectDomain(f, "backend", "true"));
     it("ui=false", () => expectDomain(f, "ui", "false"));
     it("packaging=false", () => expectDomain(f, "packaging", "false"));
   });
@@ -62,7 +63,6 @@ describe("domain classifier: path -> domain mapping", () => {
   describe("2) backend ucode change", () => {
     const f = "singbox-ui/root/usr/share/singbox-ui/lib/outbound.uc";
     it("backend=true", () => expectDomain(f, "backend", "true"));
-    it("bbolt=false", () => expectDomain(f, "bbolt", "false"));
     it("ui=false", () => expectDomain(f, "ui", "false"));
     it("packaging=false", () => expectDomain(f, "packaging", "false"));
   });
@@ -78,7 +78,7 @@ describe("domain classifier: path -> domain mapping", () => {
   describe("4) tests/backend/*", () => {
     const f = "tests/backend/test_outbound_uc.sh";
     it("backend=true", () => expectDomain(f, "backend", "true"));
-    it("bbolt=false", () => expectDomain(f, "bbolt", "false"));
+    it("ui=false", () => expectDomain(f, "ui", "false"));
   });
 
   // 5) UI source => only ui.
@@ -119,8 +119,8 @@ describe("domain classifier: path -> domain mapping", () => {
   });
 
   // 8) shared fan-out: tests/lib, tests/run*, tests/docker,
-  //    tests/browser-container, .github => ALL FOUR true.
-  describe("8) shared fan-out (all four domains)", () => {
+  //    tests/browser-container, .github => ALL THREE true.
+  describe("8) shared fan-out (all three domains)", () => {
     const sharedFiles = [
       "tests/lib/sb_helpers.sh",
       "tests/run-vm.sh",
@@ -129,7 +129,7 @@ describe("domain classifier: path -> domain mapping", () => {
       ".github/workflows/build.yml",
     ];
     for (const f of sharedFiles) {
-      for (const d of ["bbolt", "backend", "ui", "packaging"] as const) {
+      for (const d of ["backend", "ui", "packaging"] as const) {
         it(`${f} => ${d}=true`, () => expectDomain(f, d, "true"));
       }
     }
@@ -139,7 +139,6 @@ describe("domain classifier: path -> domain mapping", () => {
   //     shared fan-out: changing ONLY it must trigger no domain.
   describe("8b) sing-box-extended.yml carve-out", () => {
     const sbx = ".github/workflows/sing-box-extended.yml";
-    it("sbx alone: bbolt=false", () => expectDomain(sbx, "bbolt", "false"));
     it("sbx alone: backend=false", () => expectDomain(sbx, "backend", "false"));
     it("sbx alone: ui=false", () => expectDomain(sbx, "ui", "false"));
     it("sbx alone: packaging=false", () =>
@@ -148,8 +147,6 @@ describe("domain classifier: path -> domain mapping", () => {
     // A real shared github change alongside it still fans out
     const sbxPlus =
       ".github/workflows/sing-box-extended.yml\n.github/workflows/build.yml";
-    it("sbx + build.yml: bbolt=true", () =>
-      expectDomain(sbxPlus, "bbolt", "true"));
     it("sbx + build.yml: backend=true", () =>
       expectDomain(sbxPlus, "backend", "true"));
     it("sbx + build.yml: ui=true", () => expectDomain(sbxPlus, "ui", "true"));
@@ -161,27 +158,24 @@ describe("domain classifier: path -> domain mapping", () => {
       ".github/workflows/sing-box-extended.yml\nscripts/build-feed.sh";
     it("sbx + packaging file: packaging=true", () =>
       expectDomain(sbxPkg, "packaging", "true"));
-    it("sbx + packaging file: bbolt=false", () =>
-      expectDomain(sbxPkg, "bbolt", "false"));
     it("sbx + packaging file: backend=false", () =>
       expectDomain(sbxPkg, "backend", "false"));
     it("sbx + packaging file: ui=false", () =>
       expectDomain(sbxPkg, "ui", "false"));
   });
 
-  // 9) multi-file change unions domains: bbolt + ui => both true, backend/packaging false.
+  // 9) multi-file change unions domains: backend + ui => both true, packaging false.
   describe("9) multi-file change unions domains", () => {
     const multi =
-      "bbolt-client/build.sh\nluci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js";
-    it("bbolt=true", () => expectDomain(multi, "bbolt", "true"));
+      "bbolt-client/test.sh\nluci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js";
+    it("backend=true", () => expectDomain(multi, "backend", "true"));
     it("ui=true", () => expectDomain(multi, "ui", "true"));
-    it("backend=false", () => expectDomain(multi, "backend", "false"));
     it("packaging=false", () => expectDomain(multi, "packaging", "false"));
   });
 
   // 10) empty input => everything false (no changed files).
   describe("10) empty input => all domains false", () => {
-    for (const d of ["bbolt", "backend", "ui", "packaging"] as const) {
+    for (const d of ["backend", "ui", "packaging"] as const) {
       it(`${d}=false`, () => expectDomain("", d, "false"));
     }
   });
@@ -244,85 +238,74 @@ describe("domain classifier: path -> domain mapping", () => {
       ));
   });
 
-  // Goal-e isolation matrix
-  describe("goal-e isolation matrix", () => {
-    it("bbolt-client/src/main.rs: bbolt=T backend=F ui=F packaging=F", () => {
-      const f = "bbolt-client/src/main.rs";
-      const r = classify(f);
+  // isolation matrix
+  describe("isolation matrix", () => {
+    it("bbolt-client/test.sh: backend=T ui=F packaging=F", () => {
+      const r = classify("bbolt-client/test.sh");
       expect(r).toMatchObject({
-        bbolt: "true",
-        backend: "false",
-        ui: "false",
-        packaging: "false",
-      });
-    });
-    it("singbox-ui/.../outbound.uc: bbolt=F backend=T ui=F packaging=F", () => {
-      const f = "singbox-ui/root/usr/share/singbox-ui/lib/outbound.uc";
-      const r = classify(f);
-      expect(r).toMatchObject({
-        bbolt: "false",
         backend: "true",
         ui: "false",
         packaging: "false",
       });
     });
-    it("luci-app-singbox-ui/.../main.js: bbolt=F backend=F ui=T packaging=F", () => {
+    it("singbox-ui/.../outbound.uc: backend=T ui=F packaging=F", () => {
+      const f = "singbox-ui/root/usr/share/singbox-ui/lib/outbound.uc";
+      const r = classify(f);
+      expect(r).toMatchObject({
+        backend: "true",
+        ui: "false",
+        packaging: "false",
+      });
+    });
+    it("luci-app-singbox-ui/.../main.js: backend=F ui=T packaging=F", () => {
       const f =
         "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui/main.js";
       const r = classify(f);
       expect(r).toMatchObject({
-        bbolt: "false",
         backend: "false",
         ui: "true",
         packaging: "false",
       });
     });
-    it("scripts/build-apk.sh: bbolt=F backend=F ui=F packaging=T", () => {
-      const f = "scripts/build-apk.sh";
-      const r = classify(f);
+    it("scripts/build-apk.sh: backend=F ui=F packaging=T", () => {
+      const r = classify("scripts/build-apk.sh");
       expect(r).toMatchObject({
-        bbolt: "false",
         backend: "false",
         ui: "false",
         packaging: "true",
       });
     });
     it("tests/lib/sb_helpers.sh (shared): all=true", () => {
-      const f = "tests/lib/sb_helpers.sh";
-      const r = classify(f);
+      const r = classify("tests/lib/sb_helpers.sh");
       expect(r).toMatchObject({
-        bbolt: "true",
         backend: "true",
         ui: "true",
         packaging: "true",
       });
     });
-    it("plugin lib/.../awg_warp.uc: bbolt=F backend=T ui=F packaging=F", () => {
+    it("plugin lib/.../awg_warp.uc: backend=T ui=F packaging=F", () => {
       const f = "plugins/awg_warp/lib/protocols/awg_warp.uc";
       const r = classify(f);
       expect(r).toMatchObject({
-        bbolt: "false",
         backend: "true",
         ui: "false",
         packaging: "false",
       });
     });
-    it("plugin htdocs/.../tab.js: bbolt=F backend=F ui=T packaging=F", () => {
+    it("plugin htdocs/.../tab.js: backend=F ui=T packaging=F", () => {
       const f =
         "plugins/awg_warp/htdocs/luci-static/resources/view/singbox-ui/plugins/awg_warp/tab.js";
       const r = classify(f);
       expect(r).toMatchObject({
-        bbolt: "false",
         backend: "false",
         ui: "true",
         packaging: "false",
       });
     });
-    it("plugin root/awg-provision.sh: bbolt=F backend=T ui=F packaging=F", () => {
+    it("plugin root/awg-provision.sh: backend=T ui=F packaging=F", () => {
       const f = "plugins/awg_warp/root/usr/libexec/singbox-ui/awg-provision.sh";
       const r = classify(f);
       expect(r).toMatchObject({
-        bbolt: "false",
         backend: "true",
         ui: "false",
         packaging: "false",
@@ -340,17 +323,12 @@ describe("static wiring guard: build.yml changes job (dorny/paths-filter)", () =
     expect(yml).toMatch(/dorny\/paths-filter@/);
   });
 
-  for (const domain of ["bbolt", "backend", "ui", "packaging"]) {
+  for (const domain of ["backend", "ui", "packaging"]) {
     it(`changes job exports ${domain} as steps.agg.outputs.${domain}`, () => {
       const yml = readFileSync(BUILD_YML, "utf8");
       expect(yml).toMatch(new RegExp(`steps\\.agg\\.outputs\\.${domain}`));
     });
   }
-
-  it("bbolt job is gated on needs.changes.outputs.bbolt == 'true'", () => {
-    const yml = readFileSync(BUILD_YML, "utf8");
-    expect(yml).toMatch(/needs\.changes\.outputs\.bbolt == 'true'/);
-  });
 
   it("test job is gated on needs.changes.outputs.backend == 'true'", () => {
     const yml = readFileSync(BUILD_YML, "utf8");
@@ -370,6 +348,11 @@ describe("static wiring guard: build.yml changes job (dorny/paths-filter)", () =
   it("changes job has the sing-box-extended carve-out", () => {
     const yml = readFileSync(BUILD_YML, "utf8");
     expect(yml).toMatch(/sing-box-extended\.yml/);
+  });
+
+  it("build.yml backend filter includes bbolt-client/", () => {
+    const yml = readFileSync(BUILD_YML, "utf8");
+    expect(yml).toContain("bbolt-client/**");
   });
 
   it("build.yml backend filter includes plugin lib/", () => {

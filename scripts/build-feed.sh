@@ -10,8 +10,8 @@
 #
 # Usage: build-feed.sh <version> <dist_dir> <out_dir>
 #   version   OpenWrt minor used as the top path segment (e.g. 25.12)
-#   dist_dir  dir containing bbolt-client-<arch>.apk (the only per-arch package)
-#             + the noarch quartet singbox-ui.apk / luci-app-singbox-ui.apk /
+#   dist_dir  dir containing the noarch quartet singbox-ui.apk (backend, bundles
+#             the pure-ucode bbolt reader) / luci-app-singbox-ui.apk /
 #             luci-i18n-singbox-ui-ru.apk / singbox-ui-plugin-awg_warp.apk
 #   out_dir   output dir (wiped and recreated); this is what is deployed to Pages
 #
@@ -27,10 +27,16 @@
 # filename. The client reconstructs the download URL as "<name>-<version>.apk"
 # relative to the repository's packages.adb directory (verified against the
 # official OpenWrt feed: e.g. csstidy-2021.06.13~707feaec-r1.apk). The GitHub
-# release assets are named bbolt-client-<arch>.apk (per-arch) and the noarch
-# quartet singbox-ui.apk / luci-app-singbox-ui.apk / luci-i18n-singbox-ui-ru.apk /
-# singbox-ui-plugin-awg_warp.apk, so
-# each package is copied into the feed under its apk "<name>-<version>.apk" name.
+# release assets are the noarch quartet singbox-ui.apk / luci-app-singbox-ui.apk /
+# luci-i18n-singbox-ui-ru.apk / singbox-ui-plugin-awg_warp.apk, so each package
+# is copied into the feed under its apk "<name>-<version>.apk" name.
+#
+# All packages are noarch (the former per-arch Rust bbolt-client is gone — the
+# cache.db reader is now ucode inside singbox-ui). We still lay out one dir PER
+# ARCH: the feed shares its gh-pages tree with the sing-box-extended core feed,
+# which IS per-arch and lives beside us at <version>/<arch>/sing-box/, and
+# install.sh points apk at <version>/<arch>/luci-singbox/packages.adb per its
+# detected arch. The noarch quartet is duplicated into every arch dir.
 set -eu
 
 VERSION="${1:?usage: build-feed.sh <version> <dist_dir> <out_dir>}"
@@ -38,6 +44,11 @@ DIST="${2:?usage: build-feed.sh <version> <dist_dir> <out_dir>}"
 OUT="${3:?usage: build-feed.sh <version> <dist_dir> <out_dir>}"
 
 REPO_NAME="luci-singbox"
+# Covered arches — one feed dir each. MUST stay in sync with COVERED in
+# install.sh (both list the arches the sing-box core feed publishes binaries
+# for). All luci packages are noarch, so this bounds which arch dirs exist, not
+# which packages they hold. Update BOTH when the covered arch set changes.
+COVERED_ARCHES="x86_64 aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 arm_cortex-a8_vfpv3 arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 arm_cortex-a15_neon-vfpv4 mipsel_24kc mipsel_24kc_24kf mipsel_74kc mipsel_mips32 mips_24kc mips_mips32"
 # Noarch packages duplicated into every per-arch dir so apk at arch X can resolve
 # the whole stack from one packages.adb.
 CORE="singbox-ui.apk"
@@ -91,14 +102,12 @@ gen_dir_index() {
 }
 
 # Assemble one arch directory: copy apks (renamed), build/sign the index, indexes.
-# Five packages land here: the per-arch bbolt-client plus the noarch quartet
-# (core/app/i18n/plugin), the quartet duplicated into every arch dir so apk at arch X
-# resolves the whole stack from this single packages.adb.
+# The noarch quartet (core/app/i18n/plugin) lands here, duplicated into every
+# arch dir so apk at arch X resolves the whole stack from this single packages.adb.
 build_arch_dir() {
   ba_arch="$1"
   ba_d="$OUT/$VERSION/$ba_arch/$REPO_NAME"
   mkdir -p "$ba_d"
-  copy_pkg "$DIST/bbolt-client-$ba_arch.apk" "$ba_d"
   for ba_noarch in "$CORE" "$APP" "$I18N" "$PLUGIN"; do
     if [ -f "$DIST/$ba_noarch" ]; then
       copy_pkg "$DIST/$ba_noarch" "$ba_d"
@@ -121,17 +130,12 @@ build_arch_dir() {
 rm -rf "$OUT"
 mkdir -p "$OUT/$VERSION"
 
-# Discover arches from the only per-arch package (bbolt-client); never hardcode.
-found=0
-for apk in "$DIST"/bbolt-client-*.apk; do
-  [ -e "$apk" ] || continue
-  base="$(basename "$apk")"
-  arch="${base#bbolt-client-}"
-  arch="${arch%.apk}"
+# One dir per covered arch (see COVERED_ARCHES). Require the noarch core to be
+# present so an empty/mis-staged dist fails loudly rather than shipping an empty feed.
+[ -f "$DIST/$CORE" ] || { echo "no $CORE in $DIST" >&2; exit 1; }
+for arch in $COVERED_ARCHES; do
   build_arch_dir "$arch"
-  found=1
 done
-[ "$found" = "1" ] || { echo "no bbolt-client-*.apk in $DIST" >&2; exit 1; }
 
 # Version-level browsable index (lists arches).
 gen_dir_index "$OUT/$VERSION" "OpenWrt $VERSION - architectures"

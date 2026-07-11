@@ -2,13 +2,12 @@
 # Build the singbox-ui .apk package set directly via the OpenWrt SDK's host
 # `apk` tool, skipping the full SDK build orchestration.
 #
-# Produces FIVE packages (dependency chain bbolt-client <- singbox-ui <-
+# Produces FOUR noarch packages (dependency chain singbox-ui <-
 # luci-app-singbox-ui <- luci-i18n-singbox-ui-ru):
-#   - bbolt-client_<version>_<exact-arch>.apk   one per covered OpenWrt arch
-#     (20 arches total), each embedding the correct bbolt-client binary at
-#     usr/libexec/singbox-ui/bbolt-client. arch=<exact OpenWrt arch>.
 #   - singbox-ui_<version>.apk                  noarch backend (ucode handlers,
-#     init.d, rpcd, uci-defaults, default config). depends on bbolt-client.
+#     init.d, rpcd, uci-defaults, default config). Includes the pure-ucode
+#     bbolt cache.db reader (usr/libexec/singbox-ui/bbolt-client + lib/bbolt.uc);
+#     the former per-arch Rust bbolt-client package was folded in here.
 #   - luci-app-singbox-ui_<version>.apk         noarch LuCI frontend (htdocs JS,
 #     menu, acl). depends on singbox-ui + luci-base.
 #   - luci-i18n-singbox-ui-ru_<version>.apk     noarch Russian translation.
@@ -20,14 +19,6 @@
 #   version defaults to the most recent git tag (leading 'v' stripped).
 #
 # Environment knobs:
-#   BBOLT_BIN_DIR        dir containing bbolt-client-rs-<abi> for the 5 ABIs.
-#                        Required unless SINGBOX_SKIP_BBOLT=1.
-#   SINGBOX_SKIP_BBOLT=1 allow a binary-less local build — no BBOLT_BIN_DIR
-#                        required. The bbolt-client binary cannot be embedded,
-#                        so the per-arch bbolt-client apks are SKIPPED entirely;
-#                        the four noarch packages (singbox-ui,
-#                        luci-app-singbox-ui, luci-i18n-singbox-ui-ru,
-#                        singbox-ui-plugin-awg_warp) are still built.
 #   APK_MKPKG_STUB=1     replace real `apk mkpkg` with a touch stub (CI unit
 #                        tests). Also skips SDK download/extract/po2lmo and
 #                        the verify_root_owner check.
@@ -53,27 +44,22 @@ TAB="$(printf '\t')"
 # ---------------------------------------------------------------------------
 # Package identity / metadata
 # ---------------------------------------------------------------------------
-# 1) bbolt-client — per-arch native binary (cache.db reader).
-BBOLT_NAME="bbolt-client"
-BBOLT_DESC="bbolt cache.db reader for singbox-ui"
-BBOLT_DEPENDS="libc"
-
-# 2) singbox-ui — noarch backend. Runtime dependencies baked into the shipped
+# 1) singbox-ui — noarch backend. Runtime dependencies baked into the shipped
 # .apk. This is the PRIMARY delivery path (releases + feed + install.sh), so it
 # MUST carry the same runtime needs as the buildroot path (DEPENDS in
 # singbox-ui/Makefile) — keep the two in sync (guarded by
 # tests/test_makefile_deps.sh):
-#   - bbolt-client   the per-arch native cache.db reader package (above)
 #   - sing-box       the proxy core this UI drives
 #   - curl           subscription bodies are fetched via curl (subscription.uc)
-#   - ucode + ucode-mod-fs  shipped .uc handlers require('fs') (helpers/generate/...)
+#   - ucode + ucode-mod-fs  shipped .uc handlers require('fs') (helpers/generate/
+#                    bbolt.uc cache.db reader)
 #   - kmod-nft-socket / kmod-nft-tproxy  nftables.uc emits `socket transparent` and
 #                    `tproxy ... to` expressions; without the kmods tproxy apply fails.
 # NOTE: `nftables` is intentionally NOT listed — it ships in OpenWrt base / fw4.
 # (libc is apk's base dep; jq was dropped — not used by any shipped on-device code.)
 SINGBOX_NAME="singbox-ui"
 SINGBOX_DESC="singbox-ui backend (config generator, nftables, subscriptions)"
-SINGBOX_DEPENDS="libc bbolt-client sing-box curl ucode ucode-mod-fs kmod-nft-socket kmod-nft-tproxy"
+SINGBOX_DEPENDS="libc sing-box curl ucode ucode-mod-fs kmod-nft-socket kmod-nft-tproxy"
 SINGBOX_CONFFILE="/etc/config/singbox-ui"
 
 # 3) luci-app-singbox-ui — noarch LuCI frontend. luci-base is implicit via the
@@ -124,20 +110,19 @@ if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$'; th
     exit 1
 fi
 
-# Per-package versions. Each of the five packages may carry its OWN version,
+# Per-package versions. Each of the four packages may carry its OWN version,
 # passed by the CI workflow via PKG_VER_<PKG> as 0.1.0-r<N> where <N> counts only
 # the commits that touched THAT package's source paths. An unchanged package then
 # keeps its version+filename across pushes that don't touch it, so the feed stops
 # republishing it and it stops looking like a new release every commit (the old
-# behaviour, where all five shared 0.0.0-r<total-commit-count>). Any unset
+# behaviour, where all shared 0.0.0-r<total-commit-count>). Any unset
 # override falls back to the single positional $VERSION — so local builds and
 # tagged releases (one coordinated version for the whole set) work unchanged.
-V_BBOLT="${PKG_VER_BBOLT:-$VERSION}"
 V_SINGBOX="${PKG_VER_SINGBOX:-$VERSION}"
 V_LUCIAPP="${PKG_VER_LUCIAPP:-$VERSION}"
 V_I18N="${PKG_VER_I18N:-$VERSION}"
 V_AWGWARP="${PKG_VER_AWGWARP:-$VERSION}"
-for _pv in "$V_BBOLT" "$V_SINGBOX" "$V_LUCIAPP" "$V_I18N" "$V_AWGWARP"; do
+for _pv in "$V_SINGBOX" "$V_LUCIAPP" "$V_I18N" "$V_AWGWARP"; do
     if ! printf '%s' "$_pv" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$'; then
         echo "invalid per-package version '$_pv' (expected X.Y.Z or X.Y.Z-rN)" >&2
         exit 1
@@ -150,57 +135,13 @@ WORK_DIR="${WORK_DIR:-$ROOT_DIR/.build}"
 mkdir -p "$WORK_DIR" "$OUTPUT_DIR"
 
 # Clean up stale outputs from prior versions before building. Only remove THIS
-# package set's outputs (3 noarch + per-arch bbolt filenames), not unrelated .apks.
+# package set's outputs (4 noarch filenames), not unrelated .apks.
 rm -f "$OUTPUT_DIR/${SINGBOX_NAME}_"*.apk \
       "$OUTPUT_DIR/${LUCIAPP_NAME}_"*.apk \
       "$OUTPUT_DIR/${I18N_NAME}_"*.apk \
-      "$OUTPUT_DIR/${AWGWARP_NAME}_"*.apk \
-      "$OUTPUT_DIR/${BBOLT_NAME}_"*_*.apk
-
-# ---------------------------------------------------------------------------
-# bbolt-client arch map (single source of truth)
-# Each bbolt_arches_<abi> variable lists the exact OpenWrt arches that use
-# that generic ABI binary.
-# NOTE: install.sh's COVERED allowlist duplicates these 20 arches — update it too when arches change.
-# ---------------------------------------------------------------------------
-bbolt_arches_x86_64="x86_64"
-bbolt_arches_aarch64="aarch64_cortex-a53 aarch64_cortex-a72 aarch64_cortex-a76 aarch64_generic"
-bbolt_arches_armv7="arm_cortex-a5_vfpv4 arm_cortex-a7 arm_cortex-a7_neon-vfpv4 arm_cortex-a7_vfpv4 arm_cortex-a8_vfpv3 arm_cortex-a9 arm_cortex-a9_neon arm_cortex-a9_vfpv3-d16 arm_cortex-a15_neon-vfpv4"
-bbolt_arches_mipsel="mipsel_24kc mipsel_24kc_24kf mipsel_74kc mipsel_mips32"
-bbolt_arches_mips="mips_24kc mips_mips32"
-BBOLT_ABIS="x86_64 aarch64 armv7 mipsel mips"
-
-# Return the space-separated list of exact OpenWrt arches for a given ABI name.
-# Using a function avoids eval-based variable indirection in bash code.
-get_arches_for_abi() {
-    case "$1" in
-        x86_64) echo "$bbolt_arches_x86_64" ;;
-        aarch64) echo "$bbolt_arches_aarch64" ;;
-        armv7) echo "$bbolt_arches_armv7" ;;
-        mipsel) echo "$bbolt_arches_mipsel" ;;
-        mips) echo "$bbolt_arches_mips" ;;
-        *) echo "unknown ABI: $1" >&2; exit 1 ;;
-    esac
-}
-
-BBOLT_BIN_DIR="${BBOLT_BIN_DIR:-}"
-if [ -z "$BBOLT_BIN_DIR" ] \
-   && [ "${SINGBOX_SKIP_BBOLT:-0}" != "1" ] \
-   && [ "${APK_MKPKG_STUB:-0}" != "1" ]; then
-    echo "BBOLT_BIN_DIR unset (dir with bbolt-client-rs-<abi>). Set it, or SINGBOX_SKIP_BBOLT=1 for a binary-less local build (or APK_MKPKG_STUB=1 for the CI unit-test stub)." >&2
-    exit 1
-fi
+      "$OUTPUT_DIR/${AWGWARP_NAME}_"*.apk
 
 APK_MKPKG_STUB="${APK_MKPKG_STUB:-0}"
-SINGBOX_SKIP_BBOLT="${SINGBOX_SKIP_BBOLT:-0}"
-
-# When the bbolt binary cannot be embedded (SINGBOX_SKIP_BBOLT=1) we skip the
-# per-arch bbolt-client apks entirely but still build the four noarch packages.
-BUILD_BBOLT=1
-if [ "$SINGBOX_SKIP_BBOLT" = "1" ]; then
-    BUILD_BBOLT=0
-    echo ">>> SINGBOX_SKIP_BBOLT=1 — skipping per-arch bbolt-client apks; building noarch packages only"
-fi
 
 # ---------------------------------------------------------------------------
 # SDK / po2lmo (skipped entirely under APK_MKPKG_STUB=1)
@@ -254,7 +195,7 @@ fi
 
 # ---------------------------------------------------------------------------
 # Source trees + manifests for the two file-set noarch packages.
-# (bbolt-client carries only the binary; i18n is po2lmo-generated.)
+# (i18n is po2lmo-generated, not manifest-driven.)
 # ---------------------------------------------------------------------------
 SINGBOX_SRC="$ROOT_DIR/singbox-ui"
 SINGBOX_MANIFEST="$SCRIPT_DIR/install-manifest-singbox-ui.txt"
@@ -299,66 +240,7 @@ write_pkg_list() {
 }
 
 # ===========================================================================
-# 1) bbolt-client (per-arch) — populate + mkpkg helpers
-# ===========================================================================
-# populate_bbolt_root <exact-arch> <abi>
-#   Assembles the per-arch bbolt-client package root: just the native binary at
-#   usr/libexec/singbox-ui/bbolt-client (copied from
-#   $BBOLT_BIN_DIR/bbolt-client-rs-<abi>) plus its .list.  Does NOT run apk
-#   mkpkg — callers do that after establishing correct ownership.
-#   Root is written to $WORK_DIR/pkg-root-bbolt-<exact-arch> so binaries don't
-#   bleed between arches and the test can inspect each root independently.
-#   Under APK_MKPKG_STUB=1 also touches the stub output apk.
-populate_bbolt_root() {
-    local exact_arch="$1"
-    local abi="$2"
-
-    local root="$WORK_DIR/pkg-root-bbolt-$exact_arch"
-    local out="$OUTPUT_DIR/${BBOLT_NAME}_${V_BBOLT}_${exact_arch}.apk"
-    rm -rf "$root"
-
-    if [ -n "$BBOLT_BIN_DIR" ]; then
-        install -D -m0755 "$BBOLT_BIN_DIR/bbolt-client-rs-$abi" \
-            "$root/usr/libexec/singbox-ui/bbolt-client"
-    else
-        # Stub-only path (no BBOLT_BIN_DIR): lay down a placeholder so .list and
-        # the package root are non-empty. Only reachable under APK_MKPKG_STUB=1
-        # (SINGBOX_SKIP_BBOLT=1 takes the BUILD_BBOLT=0 branch and never calls us).
-        install -D -m0755 /dev/null "$root/usr/libexec/singbox-ui/bbolt-client"
-    fi
-
-    write_pkg_list "$root" "$BBOLT_NAME"
-
-    if [ "$APK_MKPKG_STUB" = "1" ]; then
-        : > "$out"
-        return
-    fi
-}
-
-# mkpkg_bbolt <exact-arch>
-#   Runs apk mkpkg for one per-arch bbolt-client package.  Must be called after
-#   populate_bbolt_root and after the root has correct (root:root) ownership.
-mkpkg_bbolt() {
-    local exact_arch="$1"
-    local root="$WORK_DIR/pkg-root-bbolt-$exact_arch"
-    local out="$OUTPUT_DIR/${BBOLT_NAME}_${V_BBOLT}_${exact_arch}.apk"
-    "$APK_BIN" mkpkg \
-        --files "$root" \
-        --output "$out" \
-        -I "name:$BBOLT_NAME" \
-        -I "version:$V_BBOLT" \
-        -I "description:$BBOLT_DESC" \
-        -I "arch:$exact_arch" \
-        -I "license:$PKG_LICENSE" \
-        -I "origin:$BBOLT_NAME" \
-        -I "maintainer:$PKG_MAINTAINER" \
-        -I "url:$PKG_URL" \
-        -I "depends:$BBOLT_DEPENDS" \
-        -I "provides:${BBOLT_NAME}-any"
-}
-
-# ===========================================================================
-# 2) singbox-ui (noarch) — populate + mkpkg
+# 1) singbox-ui (noarch) — populate + mkpkg
 # ===========================================================================
 SINGBOX_ROOT="$WORK_DIR/pkg-root-singbox-ui"
 SINGBOX_SCRIPTS="$WORK_DIR/scripts-singbox-ui"
@@ -503,7 +385,7 @@ mkpkg_singbox() {
 }
 
 # ===========================================================================
-# 3) luci-app-singbox-ui (noarch) — populate + mkpkg
+# 2) luci-app-singbox-ui (noarch) — populate + mkpkg
 # ===========================================================================
 LUCIAPP_ROOT="$WORK_DIR/pkg-root-luci-app"
 LUCIAPP_SCRIPTS="$WORK_DIR/scripts-luci-app"
@@ -568,7 +450,7 @@ mkpkg_luciapp() {
 }
 
 # ===========================================================================
-# 4) luci-i18n-singbox-ui-ru (noarch) — populate + mkpkg
+# 3) luci-i18n-singbox-ui-ru (noarch) — populate + mkpkg
 # ===========================================================================
 I18N_ROOT="$WORK_DIR/pkg-root-i18n-ru"
 I18N_SCRIPTS="$WORK_DIR/scripts-i18n-ru"
@@ -648,7 +530,7 @@ mkpkg_i18n() {
 }
 
 # ===========================================================================
-# 5) singbox-ui-plugin-awg_warp (noarch) — populate + mkpkg
+# 4) singbox-ui-plugin-awg_warp (noarch) — populate + mkpkg
 # ===========================================================================
 AWGWARP_ROOT="$WORK_DIR/pkg-root-awg-warp"
 AWGWARP_SCRIPTS="$WORK_DIR/scripts-awg-warp"
@@ -727,19 +609,12 @@ mkpkg_awgwarp() {
 }
 
 # ===========================================================================
-# Build dispatch — three ownership modes, all five packages.
+# Build dispatch — three ownership modes, all four packages.
 # ===========================================================================
 echo ">>> Building apk packages"
 
 if [ "$APK_MKPKG_STUB" = "1" ]; then
     # Stub path: populate every root + touch stub outputs. No SDK or ownership.
-    if [ "$BUILD_BBOLT" = "1" ]; then
-        for abi in $BBOLT_ABIS; do
-            for exact in $(get_arches_for_abi "$abi"); do
-                populate_bbolt_root "$exact" "$abi"
-            done
-        done
-    fi
     populate_singbox_root
     populate_luciapp_root
     populate_i18n_root
@@ -747,17 +622,6 @@ if [ "$APK_MKPKG_STUB" = "1" ]; then
 elif [ "$(id -u)" -eq 0 ]; then
     # Already running as root — populate the roots, chown 0:0, then mkpkg sees
     # correct ownership.
-    if [ "$BUILD_BBOLT" = "1" ]; then
-        for abi in $BBOLT_ABIS; do
-            for exact in $(get_arches_for_abi "$abi"); do
-                root="$WORK_DIR/pkg-root-bbolt-$exact"
-                populate_bbolt_root "$exact" "$abi"
-                chown -R 0:0 "$root"
-                mkpkg_bbolt "$exact"
-            done
-        done
-    fi
-
     populate_singbox_root
     chown -R 0:0 "$SINGBOX_ROOT" "$SINGBOX_SCRIPTS"
     mkpkg_singbox
@@ -776,13 +640,6 @@ elif [ "$(id -u)" -eq 0 ]; then
 elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
     # Unprivileged user namespace: populate roots as current user (no mkpkg yet),
     # then chown+mkpkg exactly once inside the namespace where UID 0 is mapped to us.
-    if [ "$BUILD_BBOLT" = "1" ]; then
-        for abi in $BBOLT_ABIS; do
-            for exact in $(get_arches_for_abi "$abi"); do
-                populate_bbolt_root "$exact" "$abi"
-            done
-        done
-    fi
     populate_singbox_root
     populate_luciapp_root
     populate_i18n_root
@@ -796,9 +653,7 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
     fi
 
     # Export everything the inline shell needs.
-    export BUILD_BBOLT \
-           BBOLT_NAME BBOLT_DESC BBOLT_DEPENDS \
-           SINGBOX_NAME SINGBOX_DESC SINGBOX_DEPENDS SINGBOX_CONFFILE \
+    export SINGBOX_NAME SINGBOX_DESC SINGBOX_DEPENDS SINGBOX_CONFFILE \
            SINGBOX_ROOT SINGBOX_SCRIPTS SINGBOX_OUT SINGBOX_CONFLICTS_OK \
            LUCIAPP_NAME LUCIAPP_DESC LUCIAPP_DEPENDS \
            LUCIAPP_ROOT LUCIAPP_SCRIPTS LUCIAPP_OUT \
@@ -807,36 +662,10 @@ elif command -v unshare >/dev/null 2>&1 && unshare -r true >/dev/null 2>&1; then
            AWGWARP_NAME AWGWARP_DESC AWGWARP_DEPENDS \
            AWGWARP_ROOT AWGWARP_SCRIPTS AWGWARP_OUT \
            APK_BIN VERSION PKG_LICENSE PKG_URL PKG_MAINTAINER \
-           V_BBOLT V_SINGBOX V_LUCIAPP V_I18N V_AWGWARP \
-           WORK_DIR OUTPUT_DIR \
-           bbolt_arches_x86_64 bbolt_arches_aarch64 bbolt_arches_armv7 \
-           bbolt_arches_mipsel bbolt_arches_mips BBOLT_ABIS
+           V_SINGBOX V_LUCIAPP V_I18N V_AWGWARP \
+           WORK_DIR OUTPUT_DIR
     # shellcheck disable=SC2016
     unshare -r sh -c '
-        if [ "$BUILD_BBOLT" = "1" ]; then
-            for abi in $BBOLT_ABIS; do
-                eval "exacts=\$bbolt_arches_$abi"
-                for exact in $exacts; do
-                    root="$WORK_DIR/pkg-root-bbolt-$exact"
-                    out="$OUTPUT_DIR/${BBOLT_NAME}_${V_BBOLT}_${exact}.apk"
-                    chown -R 0:0 "$root"
-                    "$APK_BIN" mkpkg \
-                        --files "$root" \
-                        --output "$out" \
-                        -I "name:$BBOLT_NAME" \
-                        -I "version:$V_BBOLT" \
-                        -I "description:$BBOLT_DESC" \
-                        -I "arch:$exact" \
-                        -I "license:$PKG_LICENSE" \
-                        -I "origin:$BBOLT_NAME" \
-                        -I "maintainer:$PKG_MAINTAINER" \
-                        -I "url:$PKG_URL" \
-                        -I "depends:$BBOLT_DEPENDS" \
-                        -I "provides:${BBOLT_NAME}-any"
-                done
-            done
-        fi
-
         chown -R 0:0 "$SINGBOX_ROOT" "$SINGBOX_SCRIPTS"
         if [ "$SINGBOX_CONFLICTS_OK" = "1" ]; then
             "$APK_BIN" mkpkg \

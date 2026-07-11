@@ -4,11 +4,11 @@
 # Two packages carry installable file trees:
 #   singbox-ui/          -> scripts/install-manifest-singbox-ui.txt
 #   luci-app-singbox-ui/ -> scripts/install-manifest-luci-app-singbox-ui.txt
-# (bbolt-client ships a single prebuilt binary embedded by build-apk.sh — no
-#  manifest. i18n .po/.pot under luci-app-singbox-ui/po are handled by the
-#  po2lmo step in the Makefile / build-apk, not the manifest.)
-# Mode detection: anything under etc/init.d/, etc/uci-defaults/, or
-# usr/libexec/rpcd/ is 'bin'; etc/config/ is 'conf'; everything else 'data'.
+# (i18n .po/.pot under luci-app-singbox-ui/po are handled by the po2lmo step in
+#  the Makefile / build-apk, not the manifest.)
+# Mode detection: anything under etc/init.d/, etc/uci-defaults/,
+# usr/libexec/rpcd/, or usr/libexec/singbox-ui/ (the ucode bbolt-client shim) is
+# 'bin'; etc/config/ is 'conf'; everything else 'data'.
 # Manual overrides in scripts/install-manifest-overrides.txt (TSV same shape).
 set -e
 
@@ -17,7 +17,7 @@ OVERRIDES="${OVERRIDES:-$ROOT/scripts/install-manifest-overrides.txt}"
 
 mode_for() {
 	case "$1" in
-		root/etc/init.d/*|root/etc/uci-defaults/*|root/usr/libexec/rpcd/*) echo bin ;;
+		root/etc/init.d/*|root/etc/uci-defaults/*|root/usr/libexec/rpcd/*|root/usr/libexec/singbox-ui/*) echo bin ;;
 		root/etc/config/*) echo conf ;;
 		*) echo data ;;
 	esac

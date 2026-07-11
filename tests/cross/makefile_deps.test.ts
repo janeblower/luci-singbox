@@ -10,7 +10,6 @@ const BUILDSH = resolve(ROOT, "scripts/build-apk.sh");
 // Required runtime deps the backend set must carry, in BOTH declarations.
 // Mirrors BACKEND_REQUIRED in the old shell test.
 const BACKEND_REQUIRED = [
-  "bbolt-client",
   "sing-box",
   "curl",
   "ucode",
@@ -44,8 +43,8 @@ function grepFirst(file: string, re: RegExp): string {
 
 // --- Extracted dependency sets (computed once) --------------------------------
 //
-// Backend Makefile:  `  DEPENDS:=+bbolt-client +sing-box +curl ...`
-// Backend build-apk: `SINGBOX_DEPENDS="libc bbolt-client sing-box curl ..."`
+// Backend Makefile:  `  DEPENDS:=+sing-box +curl ...`
+// Backend build-apk: `SINGBOX_DEPENDS="libc sing-box curl ..."`
 // LuCI Makefile:     `LUCI_DEPENDS:=+singbox-ui`  (luci-base is implicit)
 // LuCI build-apk:    `LUCIAPP_DEPENDS="libc singbox-ui luci-base"`
 

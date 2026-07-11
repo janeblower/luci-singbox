@@ -34,10 +34,10 @@ UCI-defaults migrations are required for any MINOR or MAJOR change to the schema
 ## Build artifacts (apk-only)
 
 The project is apk-only — there is no OpenWrt SDK / `.ipk` build path. A single
-host-side build (`scripts/build-apk.sh`) produces **five** apk packages:
+host-side build (`scripts/build-apk.sh`) produces **four** noarch apk packages:
 
-- `bbolt-client_<version>.apk` — the cache.db reader (the **only** per-arch package).
-- `singbox-ui_<version>.apk` — noarch backend (ucode handlers, nftables, subscriptions).
+- `singbox-ui_<version>.apk` — noarch backend (ucode handlers, nftables, subscriptions;
+  bundles the pure-ucode bbolt cache.db reader).
 - `luci-app-singbox-ui_<version>.apk` — noarch LuCI frontend (htdocs JS, ACL, menu).
 - `luci-i18n-singbox-ui-ru_<version>.apk` — noarch Russian translation.
 - `singbox-ui-plugin-awg_warp_<version>.apk` — noarch AWG/WARP plugin.

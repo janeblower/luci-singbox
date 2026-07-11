@@ -8,9 +8,11 @@ root/etc/uci-defaults/90-singbox-ui-fwmark	etc/uci-defaults/90-singbox-ui-fwmark
 root/etc/uci-defaults/91-singbox-ui-cron	etc/uci-defaults/91-singbox-ui-cron	bin
 root/etc/uci-defaults/99-luci-singbox-ui	etc/uci-defaults/99-luci-singbox-ui	bin
 root/usr/libexec/rpcd/singbox-ui	usr/libexec/rpcd/singbox-ui	bin
+root/usr/libexec/singbox-ui/bbolt-client	usr/libexec/singbox-ui/bbolt-client	bin
 root/usr/share/singbox-ui/apply-plugins.uc	usr/share/singbox-ui/apply-plugins.uc	data
 root/usr/share/singbox-ui/export_section.uc	usr/share/singbox-ui/export_section.uc	data
 root/usr/share/singbox-ui/generate.uc	usr/share/singbox-ui/generate.uc	data
+root/usr/share/singbox-ui/lib/bbolt.uc	usr/share/singbox-ui/lib/bbolt.uc	data
 root/usr/share/singbox-ui/lib/builder/_filler.uc	usr/share/singbox-ui/lib/builder/_filler.uc	data
 root/usr/share/singbox-ui/lib/builder/_shared/dial.uc	usr/share/singbox-ui/lib/builder/_shared/dial.uc	data
 root/usr/share/singbox-ui/lib/builder/_shared/dns_action.uc	usr/share/singbox-ui/lib/builder/_shared/dns_action.uc	data
