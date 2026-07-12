@@ -783,6 +783,12 @@ function content_tag(o) {
 		o.uuid ?? "", o.password ?? "", o.method ?? ""));
 }
 
+// name_slug(s) — stable ASCII-safe slug from an arbitrary (UTF-8) string, for
+// tagging imported groups whose provider name isn't ASCII ("🇱🇻 … | Латвия").
+// content_tag hashes a node's CONTENT fields, all empty for a group object, so
+// it would collide every group onto one hash; slug from the NAME instead.
+function name_slug(s) { return fnv1a32("" + (s ?? "")); }
+
 function parse_proxy_url(url) {
 	if (match(url, /^vless:\/\//))     return parse_vless(url);
 	if (match(url, /^vmess:\/\//))     return parse_vmess(url);
@@ -819,5 +825,6 @@ return {
 	parse_proxy_link,
 	display_name_of,
 	content_tag,
+	name_slug,
 	country_from_flag_emoji,
 };

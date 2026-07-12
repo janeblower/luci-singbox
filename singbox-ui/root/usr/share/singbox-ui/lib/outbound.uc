@@ -81,6 +81,26 @@ function read_subscription_urls(name) {
 	return urls;
 }
 
+// read_subscription_groups(name) — the group-record counterpart of
+// read_subscription_urls (Phase C). A sub_<name>.txt line is either a node
+// (share-link or JSON {o}) or a JSON group record {g,n,m}; parse_group returns
+// null for the former, so node lines fall away and only provider
+// urltest/selector groups come through. read_subscription_urls stays node-only
+// for back-compat.
+function read_subscription_groups(name) {
+	let path = `${TMPDIR}/sub_${name}.txt`;
+	let f = fs.open(path, "r");
+	if (!f) return [];
+	let body = f.read("all") ?? "";
+	f.close();
+	let recs = [];
+	for (let line in split(body, "\n")) {
+		let g = subformat.parse_group(line);
+		if (g) push(recs, g);
+	}
+	return recs;
+}
+
 // outbound-meta side-car: tag -> { name, type, link }. The sing-box JSON has
 // nowhere to keep a human-readable node name (the tag must stay ASCII-safe and
 // is referenced by route rules), so the display name — plus the originating
@@ -238,13 +258,118 @@ function build_outbounds(cur) {
 					if (target != null) pd.ob.detour = target;
 					else warn(sprintf("outbound.uc: subscription '%s': dropping detour to '%s' (not a node of this subscription)\n", name, pd.name));
 				}
-				if (length(children)) {
-					// GEN-3: only "selector"/"urltest" are valid sing-box group
-					// types. A stale/hand-edited sub_selector_type would emit an
-					// invalid `type` and make sing-box reject the whole config —
-					// clamp anything unexpected to the safe default "selector".
-					let selector_type = (section.sub_selector_type === "urltest") ? "urltest" : "selector";
-					let group = { tag: name, type: selector_type, outbounds: children };
+				// Phase C: rebuild the provider's urltest/selector groups as
+				// namespaced outbounds. Off by default (sub_import_groups) so an
+				// existing subscription's flat selector stays byte-for-byte the same.
+				let import_groups = (section.sub_import_groups === "1");
+				let hide_grouped  = (section.sub_hide_grouped_nodes ?? "1") === "1";
+				let trust         = (section.sub_trust_provider === "1");
+				let max_depth     = int(section.sub_group_max_depth ?? "3") || 3;
+
+				let grouped_leaf = {};   // leaf tags claimed by some imported group
+				let group_tags = [];     // emitted group tags, provider order
+				let group_by_name = {};  // provider group name -> our group tag
+
+				if (import_groups) {
+					let recs = read_subscription_groups(name);
+					// First pass: assign each group a namespaced tag so members can
+					// reference other groups (bounded nesting). Slug from the NAME —
+					// content_tag hashes node CONTENT fields (all empty for a group)
+					// and would collide every group onto one tag.
+					let gi = 0;
+					for (let r in recs) {
+						let slug = sharelink.name_slug(r.name ?? sprintf("g%d", gi++));
+						let gtag = name + "__grp__" + slug, k = 2;
+						while (seen_tags[gtag]) { gtag = sprintf("%s__grp__%s_%d", name, slug, k); k++; }
+						r._tag = gtag;
+						if (r.name != null && !(r.name in group_by_name)) group_by_name[r.name] = gtag;
+					}
+					// resolve_member(nm) -> tag | null: a same-sub node, another
+					// imported group, or (only with sub_trust_provider) direct/block.
+					let resolve_member = function(nm) {
+						if (nm in name_to_tag) return name_to_tag[nm];
+						if (nm in group_by_name) return group_by_name[nm];
+						if (trust && (nm === "direct" || nm === "block")) return nm; // escape hatch
+						return null;
+					};
+					// Second pass: build each group, cycle/depth-guarded.
+					let building = {};   // gtag -> true while on the DFS stack (cycle guard)
+					let built = {};      // gtag -> true (emitted) | false (dropped)
+					let build_group;     // forward: ucode resolves let-bound fns in order
+					build_group = function(r, depth) {
+						if (built[r._tag] != null) return built[r._tag] ? r._tag : null;
+						if (depth > max_depth || building[r._tag]) { built[r._tag] = false; return null; } // depth/cycle
+						building[r._tag] = true;
+						let kids = [];
+						for (let mnm in r.group.members) {
+							let t = resolve_member(mnm);
+							if (t == null) {
+								// a nested group not yet resolvable (unnamed, or forward ref)
+								let nested = null;
+								for (let r2 in recs) if (r2.name === mnm) nested = r2;
+								if (nested) t = build_group(nested, depth + 1);
+							}
+							if (t == null) {
+								warn(sprintf("outbound.uc: subscription '%s': group '%s' drops member '%s' (unresolved)\n", name, r.name ?? r._tag, mnm));
+								continue;
+							}
+							push(kids, t);
+							if (t in seen_tags && substr(t, 0, length(name) + 6) === name + "__grp_") {} // group child
+							else grouped_leaf[t] = true; // a leaf child is "grouped"
+						}
+						building[r._tag] = false;
+						if (!length(kids)) { built[r._tag] = false; return null; }
+						let gt = (lc(r.group.type) === "selector") ? "selector" : "urltest";
+						let gob = { tag: r._tag, type: gt, outbounds: kids };
+						// url/interval/tolerance: user override (main-level field) wins,
+						// else provider, else builtin. selector `default` only when it
+						// resolves within the sub.
+						if (gt === "urltest") {
+							let u = (section.sub_urltest_url != null && section.sub_urltest_url !== "")
+								? section.sub_urltest_url : (r.group.url ?? null);
+							if (u != null) gob.url = u;
+							if (r.group.interval != null)  gob.interval = r.group.interval;
+							if (r.group.tolerance != null) gob.tolerance = r.group.tolerance;
+						} else if (r.group["default"] != null) {
+							let d = resolve_member(r.group["default"]);
+							if (d != null) gob["default"] = d;
+						}
+						if (!add_ob(gob)) { built[r._tag] = false; return null; }
+						push(group_tags, r._tag);
+						meta[r._tag] = { name: r.name ?? r._tag, type: gt, link: null };
+						built[r._tag] = true;
+						return r._tag;
+					};
+					for (let r in recs) build_group(r, 1);
+				}
+
+				// GEN-3: only "selector"/"urltest" are valid sing-box group types.
+				// A stale/hand-edited sub_selector_type would emit an invalid `type`
+				// and make sing-box reject the whole config — clamp to "selector".
+				let selector_type = (section.sub_selector_type === "urltest") ? "urltest" : "selector";
+				let main_children;
+				if (import_groups && length(group_tags)) {
+					// main replaces the provider's top selector: its children are the
+					// top-level groups (not referenced by another imported group) plus
+					// leaves no group claimed (unless hidden). Hiding is view-only —
+					// every leaf is still emitted via add_ob above and stays routable.
+					let referenced = {};
+					for (let gt in group_tags) {
+						let ob = null; for (let x in outbounds) if (x.tag === gt) ob = x;
+						if (ob) for (let c in ob.outbounds) referenced[c] = true;
+					}
+					main_children = [];
+					for (let gt in group_tags) if (!referenced[gt]) push(main_children, gt);
+					for (let lt in children) {
+						if (referenced[lt]) continue;                 // it's inside a group
+						if (hide_grouped && grouped_leaf[lt]) continue;
+						push(main_children, lt);
+					}
+				} else {
+					main_children = children;
+				}
+				if (length(main_children)) {
+					let group = { tag: name, type: selector_type, outbounds: main_children };
 					if (selector_type === "urltest" && section.sub_urltest_url)
 						group.url = section.sub_urltest_url;
 					add_ob(group);
