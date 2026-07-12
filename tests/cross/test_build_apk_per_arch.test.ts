@@ -27,7 +27,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = resolve(import.meta.dirname, "../..");
@@ -207,4 +207,46 @@ describe("build_apk_noarch", () => {
       }
     },
   );
+
+  it.skipIf(!hasBash)(
+    "every file under singbox-ui/root/ lands in the built package root",
+    () => {
+      const { work } = ensureBuild();
+      const dst = resolve(work, ".build/pkg-root-singbox-ui");
+      // Ground truth is git's index, not a re-walk of singbox-ui/root/: the
+      // build (cp -a) and a re-walk both read the same live working tree, so
+      // a file deleted from disk would silently vanish from both sides and
+      // the test could never fail. `git ls-files` still lists a tracked file
+      // even after it's removed from the working tree without `git rm`,
+      // which is exactly what makes this catch a build that drops a file.
+      const lsFiles = spawnSync("git", ["ls-files", "--", "singbox-ui/root"], {
+        cwd: ROOT,
+        encoding: "utf8",
+      });
+      const want = lsFiles.stdout
+        .split("\n")
+        .filter(Boolean)
+        .map((f) => f.slice("singbox-ui/root/".length));
+      expect(want.length).toBeGreaterThan(0);
+      for (const rel of want)
+        expect(existsSync(join(dst, rel)), `packaged: ${rel}`).toBe(true);
+    },
+  );
+
+  // D4.5/E: the core backend package must ship ONLY plugin infrastructure
+  // under lib/plugins/ — registry.uc + discovery.uc. Actual plugins ship
+  // their own lib/plugins/<name>/ subtree from their own package (e.g.
+  // singbox-ui-plugin-awg_warp), never from core. Formerly guarded by
+  // reading the generated install manifest (tests/cross/test_install_manifest_fresh.test.ts,
+  // deleted alongside it); since populate_singbox_root now does a plain
+  // `cp -a` of singbox-ui/root/ into the package root, what core ships is
+  // identical to what's in the source tree, so this checks the source
+  // directly — no build required.
+  it("D4.5/E: core ships only plugin INFRASTRUCTURE under lib/plugins/ (registry.uc + discovery.uc); no plugin payloads", () => {
+    const dir = resolve(
+      ROOT,
+      "singbox-ui/root/usr/share/singbox-ui/lib/plugins",
+    );
+    expect(readdirSync(dir).sort()).toEqual(["discovery.uc", "registry.uc"]);
+  });
 });

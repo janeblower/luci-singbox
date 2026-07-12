@@ -126,14 +126,6 @@ describe("test_view_modules_layout", () => {
     it("style.css exists", () => {
       expect(existsSync(join(SB_VIEW, "style.css"))).toBe(true);
     });
-
-    it("style.css is in the UI install manifest", () => {
-      const manifest = readFileSync(
-        join(REPO, "scripts/install-manifest-luci-app-singbox-ui.txt"),
-        "utf8",
-      );
-      expect(manifest).toContain("style.css");
-    });
   });
 
   it("D1.8: build_constructor_for dispatcher region ≤14 lines in outbound.uc", () => {

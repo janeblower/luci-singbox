@@ -36,11 +36,6 @@ SCRIPT_PATH="${BASH_SOURCE:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-# A literal TAB for manifest field-splitting. `IFS=$'\t'` is bash ANSI-C
-# quoting and silently fails to split under dash (the whole line lands in the
-# first field), so use a printf-derived tab that both shells honour.
-TAB="$(printf '\t')"
-
 # ---------------------------------------------------------------------------
 # Package identity / metadata
 # ---------------------------------------------------------------------------
@@ -197,38 +192,12 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# Source trees + manifests for the two file-set noarch packages.
-# (i18n is po2lmo-generated, not manifest-driven.)
+# Source trees for the two file-set noarch packages.
+# (i18n is po2lmo-generated, not tree-driven.)
 # ---------------------------------------------------------------------------
 SINGBOX_SRC="$ROOT_DIR/singbox-ui"
-SINGBOX_MANIFEST="$SCRIPT_DIR/install-manifest-singbox-ui.txt"
-[ -f "$SINGBOX_MANIFEST" ] || { echo "install-manifest-singbox-ui.txt missing at $SINGBOX_MANIFEST" >&2; exit 1; }
-
 LUCIAPP_SRC="$ROOT_DIR/luci-app-singbox-ui"
-LUCIAPP_MANIFEST="$SCRIPT_DIR/install-manifest-luci-app-singbox-ui.txt"
-[ -f "$LUCIAPP_MANIFEST" ] || { echo "install-manifest-luci-app-singbox-ui.txt missing at $LUCIAPP_MANIFEST" >&2; exit 1; }
-
 AWGWARP_SRC="$ROOT_DIR/plugins/awg_warp"
-
-# ---------------------------------------------------------------------------
-# Generic manifest installer: lay down a package root from a tab-separated
-# manifest (src<TAB>dst<TAB>mode; modes bin/conf/data).  Comments and blank
-# lines are skipped.
-# ---------------------------------------------------------------------------
-install_manifest() {
-    local manifest="$1" pkg_src="$2" pkg_root="$3"
-    local src dst mode
-    while IFS="$TAB" read -r src dst mode; do
-        case "$src" in '#'*|'') continue ;; esac
-        install -d "$pkg_root/$(dirname "$dst")"
-        case "$mode" in
-            bin)  install -m 0755 "$pkg_src/$src" "$pkg_root/$dst" ;;
-            conf) install -m 0644 "$pkg_src/$src" "$pkg_root/$dst" ;;
-            data) install -m 0644 "$pkg_src/$src" "$pkg_root/$dst" ;;
-            *)    echo "$manifest: unknown mode '$mode' for $src" >&2; exit 1 ;;
-        esac
-    done < "$manifest"
-}
 
 # ---------------------------------------------------------------------------
 # .list builder: enumerate package files (excluding the apk bookkeeping dir)
@@ -315,7 +284,13 @@ EOF
 #   NOT run apk mkpkg (ownership established by callers).
 populate_singbox_root() {
     rm -rf "$SINGBOX_ROOT" "$SINGBOX_SCRIPTS"
-    install_manifest "$SINGBOX_MANIFEST" "$SINGBOX_SRC" "$SINGBOX_ROOT"
+    mkdir -p "$SINGBOX_ROOT"
+    # Lay down the package tree verbatim. git already stores the exec bit (the
+    # init.d script, the uci-defaults, the rpcd handler), and `cp -a` preserves
+    # it — which is all the old TSV manifest's `mode` column ever encoded (its
+    # `conf` and `data` rows both installed 0644). Same shape as
+    # populate_awgwarp_root below, which has always built this way.
+    cp -a "$SINGBOX_SRC/root/." "$SINGBOX_ROOT/"
 
     # .list/.conffiles for the conffile /etc/config/singbox-ui.
     write_pkg_list "$SINGBOX_ROOT" "$SINGBOX_NAME"
@@ -401,11 +376,16 @@ EOF
 }
 
 # populate_luciapp_root
-#   Lay down the frontend file set (htdocs->www mapping already in the manifest
-#   dst column) + .list + post-install script. No conffiles.
+#   Lay down the frontend file set (htdocs/ -> www/, the LuCI serving
+#   convention, mapped below) + .list + post-install script. No conffiles.
 populate_luciapp_root() {
     rm -rf "$LUCIAPP_ROOT" "$LUCIAPP_SCRIPTS"
-    install_manifest "$LUCIAPP_MANIFEST" "$LUCIAPP_SRC" "$LUCIAPP_ROOT"
+    mkdir -p "$LUCIAPP_ROOT"
+    cp -a "$LUCIAPP_SRC/root/." "$LUCIAPP_ROOT/"
+    # htdocs/ -> www/ : the LuCI serving convention. This mapping used to live in
+    # the manifest's dst column; it is two lines of cp.
+    mkdir -p "$LUCIAPP_ROOT/www"
+    cp -a "$LUCIAPP_SRC/htdocs/." "$LUCIAPP_ROOT/www/"
     write_pkg_list "$LUCIAPP_ROOT" "$LUCIAPP_NAME"
     write_luciapp_scripts "$LUCIAPP_SCRIPTS"
 
