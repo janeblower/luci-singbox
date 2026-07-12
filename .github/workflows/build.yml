@@ -103,7 +103,6 @@ jobs:
               - 'scripts/**'
               - 'install.sh'
               - 'feed/**'
-              - '**/Makefile'
               - 'tests/cross/**'
             shared_core:
               - 'tests/lib/**'

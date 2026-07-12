@@ -44,11 +44,11 @@ TAB="$(printf '\t')"
 # ---------------------------------------------------------------------------
 # Package identity / metadata
 # ---------------------------------------------------------------------------
-# 1) singbox-ui — noarch backend. Runtime dependencies baked into the shipped
-# .apk. This is the PRIMARY delivery path (releases + feed + install.sh), so it
-# MUST carry the same runtime needs as the buildroot path (DEPENDS in
-# singbox-ui/Makefile) — keep the two in sync (guarded by
-# tests/test_makefile_deps.sh):
+# 1) singbox-ui — noarch backend.
+# Runtime deps of the backend package. This is the SINGLE source of truth —
+# the project is apk-only (docs/release.md), there is no buildroot Makefile to
+# keep in sync. `nftables` is deliberately absent: it ships in the OpenWrt base
+# via fw4 (guarded by tests/cross/test_pkg_deps.test.ts).
 #   - sing-box       the proxy core this UI drives
 #   - curl           subscription bodies are fetched via curl (subscription.uc)
 #   - ucode + ucode-mod-fs  shipped .uc handlers require('fs') (helpers/generate/

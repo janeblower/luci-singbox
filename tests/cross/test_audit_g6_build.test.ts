@@ -1,12 +1,5 @@
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -14,15 +7,12 @@ import { describe, expect, it } from "vitest";
 // Regression coverage for audit group G6 (build scripts / packaging / i18n):
 //   12.1 — regen-po.sh determinism / no leaked absolute paths / pinned date
 //   12.2 — build-apk.sh version derivation/validation
-//   12.4 — Makefile install loop hard-fails on unknown mode
 
 const REPO = resolve(import.meta.dirname, "../..");
 
 const SB_PO_DIR = join(REPO, "luci-app-singbox-ui/po");
 const REGEN = join(REPO, "scripts/regen-po.sh");
 const BUILDSH = join(REPO, "scripts/build-apk.sh");
-const MAKEFILE = join(REPO, "singbox-ui/Makefile");
-const LUCIAPP_MAKEFILE = join(REPO, "luci-app-singbox-ui/Makefile");
 const POT = join(SB_PO_DIR, "templates/luci-singbox-ui.pot");
 const PO = join(SB_PO_DIR, "ru/luci-singbox-ui.po");
 
@@ -38,39 +28,9 @@ const gitAvailable =
 describe("audit G6 build scripts / packaging / i18n", () => {
   // Prerequisite: all required files exist
   it("all required source files exist", () => {
-    for (const f of [REGEN, BUILDSH, MAKEFILE, LUCIAPP_MAKEFILE, POT, PO]) {
+    for (const f of [REGEN, BUILDSH, POT, PO]) {
       expect(existsSync(f)).toBe(true);
     }
-  });
-
-  // ---------------------------------------------------------------------------
-  // G6 split — three package Makefiles carry key fields
-  // ---------------------------------------------------------------------------
-  describe("split: package Makefiles carry PKG_NAME and key fields", () => {
-    it("singbox-ui/Makefile: PKG_NAME:=singbox-ui", () => {
-      const mk = readFileSync(MAKEFILE, "utf8");
-      expect(mk).toMatch(/^PKG_NAME:=singbox-ui/m);
-    });
-
-    it("singbox-ui/Makefile: BuildPackage", () => {
-      const mk = readFileSync(MAKEFILE, "utf8");
-      expect(mk).toContain("BuildPackage");
-    });
-
-    it("luci-app-singbox-ui/Makefile: PKG_NAME:=luci-app-singbox-ui", () => {
-      const mk = readFileSync(LUCIAPP_MAKEFILE, "utf8");
-      expect(mk).toMatch(/^PKG_NAME:=luci-app-singbox-ui/m);
-    });
-
-    it("luci-app-singbox-ui/Makefile: includes luci.mk", () => {
-      const mk = readFileSync(LUCIAPP_MAKEFILE, "utf8");
-      expect(mk).toContain("luci.mk");
-    });
-
-    it("luci-app-singbox-ui/Makefile: LUCI_DEPENDS includes +singbox-ui", () => {
-      const mk = readFileSync(LUCIAPP_MAKEFILE, "utf8");
-      expect(mk).toMatch(/^\s*LUCI_DEPENDS:=.*\+singbox-ui/m);
-    });
   });
 
   // ---------------------------------------------------------------------------
@@ -226,93 +186,6 @@ describe("audit G6 build scripts / packaging / i18n", () => {
         "x",
       ]) {
         expect(versionResolve(bad)).toBeNull();
-      }
-    });
-  });
-
-  // ---------------------------------------------------------------------------
-  // 12.4 — Makefile install loop hard-fails on unknown mode (no 0644 degrade)
-  // ---------------------------------------------------------------------------
-  describe("12.4 Makefile install loop hard-fails on unknown mode", () => {
-    for (const [label, path] of [
-      ["singbox-ui/Makefile", MAKEFILE],
-      ["luci-app-singbox-ui/Makefile", LUCIAPP_MAKEFILE],
-    ]) {
-      it(`${label}: catch-all must NOT silently install as 0644`, () => {
-        const mk = readFileSync(path as string, "utf8");
-        // The catch-all (*) must NOT have 'install -m 0644' on the same line
-        const lines = mk.split("\n");
-        for (const line of lines) {
-          if (/^\s*\*\)/.test(line) && /install -m 0644/.test(line)) {
-            throw new Error(
-              `${label} catch-all still silently installs unknown modes as 0644`,
-            );
-          }
-        }
-      });
-
-      it(`${label}: dispatches on $$mode (case statement)`, () => {
-        const mk = readFileSync(path as string, "utf8");
-        expect(mk).toContain('case "$$mode" in');
-      });
-
-      it(`${label}: catch-all echoes 'unknown mode' and exits 1`, () => {
-        const mk = readFileSync(path as string, "utf8");
-        expect(mk).toMatch(/\*\).*unknown mode.*exit 1/);
-      });
-
-      it(`${label}: enumerates data) explicitly (parity with build-apk.sh)`, () => {
-        const mk = readFileSync(path as string, "utf8");
-        expect(mk).toMatch(/\bdata\)\s*install -m 0644/);
-      });
-    }
-
-    it("runtime: valid manifest modes (bin/conf/data) pass the install loop", () => {
-      const tmp = mkdtempSync(join(tmpdir(), "g6-test-"));
-      try {
-        const okTsv = join(tmp, "ok.tsv");
-        writeFileSync(
-          okTsv,
-          "a.uc\tusr/x/a.uc\tbin\nb.json\tetc/b\tdata\nc\td\tconf\n",
-        );
-        const script = `
-while IFS="$(printf '\\t')" read -r src dst mode; do
-  case "$src" in '#'*|'') continue ;; esac
-  case "$mode" in
-    bin)  : ;;
-    conf) : ;;
-    data) : ;;
-    *)    echo "install-manifest.txt: unknown mode '$mode' for $src" >&2; exit 1 ;;
-  esac
-done < "${okTsv}"
-`;
-        const r = spawnSync("sh", ["-c", script], { encoding: "utf8" });
-        expect(r.status).toBe(0);
-      } finally {
-        rmSync(tmp, { recursive: true, force: true });
-      }
-    });
-
-    it("runtime: typo'd mode 'binn' hard-fails the install loop", () => {
-      const tmp = mkdtempSync(join(tmpdir(), "g6-test-"));
-      try {
-        const badTsv = join(tmp, "bad.tsv");
-        writeFileSync(badTsv, "a.uc\tusr/x/a.uc\tbinn\n");
-        const script = `
-while IFS="$(printf '\\t')" read -r src dst mode; do
-  case "$src" in '#'*|'') continue ;; esac
-  case "$mode" in
-    bin)  : ;;
-    conf) : ;;
-    data) : ;;
-    *)    echo "install-manifest.txt: unknown mode '$mode' for $src" >&2; exit 1 ;;
-  esac
-done < "${badTsv}"
-`;
-        const r = spawnSync("sh", ["-c", script], { encoding: "utf8" });
-        expect(r.status).not.toBe(0);
-      } finally {
-        rmSync(tmp, { recursive: true, force: true });
       }
     });
   });
