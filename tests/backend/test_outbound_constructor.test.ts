@@ -426,6 +426,38 @@ config outbound 's'
     expect(node?.detour).toBeUndefined();
   });
 
+  it("self-referential subscription detour is dropped (self-guard, no runtime loop)", async () => {
+    await setup();
+    // One node whose provider detour names ITSELF: name_to_tag['X'] resolves
+    // back to this node's own tag, so target === the node's own tag. Without the
+    // self-guard the outbound emits detour === its own tag — sing-box check
+    // passes, then the dial path loops/hangs at runtime whenever it is used.
+    const line = JSON.stringify({
+      o: {
+        type: "vless",
+        server: "1.2.3.4",
+        server_port: 443,
+        uuid: "11111111-1111-1111-1111-111111111111",
+      },
+      n: "X",
+      l: null,
+      d: "X",
+    });
+    await seed("s", [line]);
+    const cfg = await runGen(`
+config outbound 's'
+\toption enabled '1'
+\toption type 'subscription'
+\toption sub_url 'https://x/y'
+\toption sub_multi '1'
+`);
+    const doc = JSON.parse(cfg) as Doc;
+    const node = doc.outbounds.find((o) => (o.tag || "").startsWith("s__"));
+    expect(node).toBeTruthy();
+    expect(node?.detour).toBeUndefined(); // no self-detour emitted
+    expect(node?.detour).not.toBe(node?.tag); // and never its own tag
+  });
+
   it("subscription detour to a same-subscription node resolves to that node's tag", async () => {
     await setup();
     // Two nodes in the same subscription: "Main" detours to "Hop" by display name.

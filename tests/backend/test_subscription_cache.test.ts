@@ -346,6 +346,34 @@ describe("test_subscription_cache", () => {
     await exec(`rm -rf ${dir}`);
   });
 
+  it("F1: flipping sub_cache_persist OFF removes a flash copy a prior persist-on fetch wrote", async () => {
+    // The flag's stated purpose (UI + uci-schema.md) is keeping node passwords
+    // off flash. A user who ran on the default (on), then flips it off for
+    // exactly that reason, must not be left with the old credential-bearing copy
+    // still sitting on flash — skipping persist() is not enough, the old file
+    // has to be deleted.
+    const { dir, run } = await setup();
+    await run("fetch-subs"); // persist ON (default): flash copy written
+    expect((await exec(`ls ${dir}/cache/sub_sub1.txt`)).stdout.trim()).toBe(
+      `${dir}/cache/sub_sub1.txt`,
+    );
+
+    // flip the SAME section to persist OFF and refetch: the stale flash copy
+    // must be gone, not merely left untouched.
+    await putFile(
+      `config outbound 'sub1'\n\toption type 'subscription'\n` +
+        `\toption sub_url 'https://example.test/sub'\n\toption sub_cache_persist '0'\n`,
+      `${dir}/uci/singbox-ui`,
+    );
+    await run("fetch-subs");
+    expect(
+      (
+        await exec(`ls ${dir}/cache/sub_sub1.txt 2>/dev/null || echo GONE`)
+      ).stdout.trim(),
+    ).toBe("GONE");
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("metadata: headers override the body preamble and reach sub_status normalized", async () => {
     const { dir, run } = await setup();
     // preamble in the body carries a title + support url; the header re-states

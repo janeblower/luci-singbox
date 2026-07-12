@@ -764,8 +764,15 @@ function fetch_one(cur, name, timeout) {
 
 	if (helpers.uci_get_or_empty(cur, name, "sub_cache_persist") !== "0")
 		persist(name, profile, ua_used ?? "", body, meta_json, stat_json);
-	else
+	else {
+		// persist OFF promises node passwords stay off flash — so a copy a PRIOR
+		// persist-on fetch left behind must be REMOVED, not merely skipped, or the
+		// credential sits on flash forever. Only the flash files (not purge(),
+		// which also drops the tmpfs working copy sing-box still needs).
+		let c = cache_paths(name);
+		for (let p in [c.txt, c.profile, c.ua, c.meta, c.stat]) helpers.unlink_quiet(p);
 		log(sprintf("fetch_subs: %s cache-persist off (tmpfs only)", name));
+	}
 
 	log(sprintf("fetch_subs: %s -> %s (%d nodes, %d skipped, format=%s, changed=%s)",
 	            name, t.txt, length(parsed.nodes), parsed.skipped, parsed.format,

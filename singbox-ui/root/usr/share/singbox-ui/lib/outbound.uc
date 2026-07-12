@@ -275,7 +275,12 @@ function build_outbounds(cur) {
 				let detour_target = {};
 				for (let pd in pending_detour) {
 					let target = name_to_tag[pd.name];
-					if (target != null) { pd.ob.detour = target; detour_target[target] = true; }
+					// Self-guard: a node whose detour names ITSELF resolves target
+					// back to its own tag. sing-box check passes, then the dial path
+					// loops/hangs at runtime — drop it. (Minimal self-guard; full
+					// multi-node detour-cycle detection is a documented follow-up.)
+					if (target != null && target !== pd.ob.tag) { pd.ob.detour = target; detour_target[target] = true; }
+					else if (target != null) warn(sprintf("outbound.uc: subscription '%s': dropping self-referential detour on '%s'\n", name, pd.ob.tag));
 					else warn(sprintf("outbound.uc: subscription '%s': dropping detour to '%s' (not a node of this subscription)\n", name, pd.name));
 				}
 				// Phase C: rebuild the provider's urltest/selector groups as

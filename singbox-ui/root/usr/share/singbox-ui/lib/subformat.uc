@@ -16,17 +16,18 @@
 //
 // Group record (urltest/selector, sing-box JSON `outbounds` or Clash
 // `proxy-groups`): { group: { type: "urltest"|"selector", members: [name,…],
-// url?, interval?, tolerance?, default? }, name }. No consumer yet (B1 only
-// extracts and persists) — a raw provider group is never honoured as routing
-// policy, same trust-boundary reasoning as `detour`.
+// url?, interval?, tolerance?, default? }, name }. Consumed by lib/outbound.uc
+// (sub_import_groups): provider groups ARE rebuilt as namespaced outbounds, with
+// members resolved STRICTLY within the same subscription — the trust-boundary
+// reasoning `detour` follows, applied to group membership.
 //
 // On-disk form (sub_<name>.txt) stays LINE based:
 //   * a line starting with `{"g"` is a group record {"g":…,"n":…,"m":…}
 //   * a line starting with `{` (anything else) is a JSON node record
 //     {"o":…,"n":…,"l":…,"d":…}
 //   * anything else is a share-link URI (unchanged, human-inspectable)
-// parse_node()/parse_group() below are the single readers for these, used by
-// lib/outbound.uc and (once B1 lands a consumer) whoever reads groups.
+// parse_node()/parse_group() below are the single readers for these, both used
+// by lib/outbound.uc (nodes always; groups when sub_import_groups is set).
 //
 // NB: lib/clash.uc is the clash_api CLIENT (controls a running sing-box over
 // HTTP). It has nothing to do with Clash YAML. This is the YAML parser.
