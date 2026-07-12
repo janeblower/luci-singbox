@@ -448,8 +448,10 @@ describe("test_subformat", () => {
                 mode: "auto",
                 path: "/auth/signin",
                 host: "cdn.example.com",
-                // extra.xmux/padding must be DROPPED (base xhttp dials without it)
-                extra: { xmux: { maxConcurrency: 8 }, xPaddingBytes: "100-1000" },
+                // extra.xmux must be DROPPED (base xhttp dials without it), but
+                // extra.xPaddingBytes MUST be carried: sing-box-extended rejects
+                // an xhttp transport with no x_padding_bytes at load.
+                extra: { xmux: { maxConcurrency: 8 }, xPaddingBytes: "200-1000" },
               },
             },
           },
@@ -496,6 +498,25 @@ describe("test_subformat", () => {
               },
             },
           },
+          {
+            protocol: "vless",
+            tag: "B#2",
+            settings: {
+              vnext: [
+                { address: "b2.example.com", port: 443, users: [{ id: "uuid-b2" }] },
+              ],
+            },
+            streamSettings: {
+              network: "xhttp",
+              // no `extra` at all — some provider nodes ship xhttpSettings this
+              // bare; x_padding_bytes must still be defaulted, not omitted.
+              xhttpSettings: {
+                mode: "auto",
+                path: "/b2",
+                host: "cdn2.example.com",
+              },
+            },
+          },
           { protocol: "freedom", tag: "direct" },
         ],
       },
@@ -508,7 +529,7 @@ describe("test_subformat", () => {
 
     const groupLines = lines.filter(isGroupLine);
     const nodeLines = lines.filter((l) => !isGroupLine(l));
-    expect(nodeLines.length).toBe(3); // A#1, A#2, B#1
+    expect(nodeLines.length).toBe(4); // A#1, A#2, B#1, B#2
     expect(groupLines.length).toBe(2); // Alpha, Beta
 
     const groups: Record<string, any> = {};
@@ -521,7 +542,7 @@ describe("test_subformat", () => {
     expect(groups.Alpha.g.url).toBe("https://www.gstatic.com/generate_204");
     // leastLoad tolerance (0.8, a load fraction) must NOT leak into urltest.tolerance (ms)
     expect(groups.Alpha.g.tolerance).toBeUndefined();
-    expect(groups.Beta.m).toEqual(["B#1"]);
+    expect(groups.Beta.m).toEqual(["B#1", "B#2"]);
 
     const byName: Record<string, any> = {};
     for (const l of nodeLines) {
@@ -529,17 +550,28 @@ describe("test_subformat", () => {
       byName[n.n] = n.o;
     }
     // the xhttp node is NOT skipped and carries a sing-box xhttp transport,
-    // with the extra.xmux/padding sub-object dropped
+    // with the extra.xmux sub-object dropped but x_padding_bytes carried
+    // (sing-box-extended REQUIRES x_padding_bytes on an xhttp transport —
+    // "x_padding_bytes cannot be disabled" at load — otherwise)
     expect(byName["A#2"].transport).toEqual({
       type: "xhttp",
       mode: "auto",
       path: "/auth/signin",
       host: "cdn.example.com",
+      x_padding_bytes: "200-1000",
     });
     // reality still applied on the xhttp node
     expect(byName["A#2"].tls.reality.public_key).toBe("PUBKEY");
     // the tcp node is intact
     expect(byName["A#1"].flow).toBe("xtls-rprx-vision");
+    // xhttpSettings with NO `extra` at all still gets a defaulted x_padding_bytes
+    expect(byName["B#2"].transport).toEqual({
+      type: "xhttp",
+      mode: "auto",
+      path: "/b2",
+      host: "cdn2.example.com",
+      x_padding_bytes: "100-1000",
+    });
   });
 
   it("F3: a gzip-compressed body is transparently decompressed", async () => {

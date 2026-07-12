@@ -536,13 +536,21 @@ function xray_stream(ss, out) {
 	if (net === "xhttp") {
 		// xhttp is supported ONLY by sing-box-extended (the project's default
 		// core); stock sing-box rejects it at load — that is expected, not a
-		// case to guard against here. The base transport dials fine without the
-		// `extra.xmux`/padding sub-object, so we omit it entirely.
+		// case to guard against here. Extended additionally REQUIRES
+		// `x_padding_bytes` on an xhttp transport ("x_padding_bytes cannot be
+		// disabled" at load) — always emit it, defaulting when the provider
+		// sends none. `extra.xmux` and the other padding sub-fields stay
+		// dropped: genuinely optional, the base transport dials fine without
+		// them.
 		let o = (type(ss.xhttpSettings) === "object") ? ss.xhttpSettings : {};
 		let t = { type: "xhttp",
 		          mode: (o.mode != null && o.mode !== "") ? "" + o.mode : "auto",
 		          path: (o.path != null && o.path !== "") ? "" + o.path : "/" };
 		if (o.host != null && o.host !== "") t.host = "" + o.host;
+		let extra = (type(o.extra) === "object") ? o.extra : null;
+		let xpad = (extra != null && extra.xPaddingBytes != null) ? extra.xPaddingBytes : o.xPaddingBytes;
+		xpad = (xpad != null) ? ("" + xpad) : "";
+		t.x_padding_bytes = (xpad !== "") ? xpad : "100-1000";
 		out.transport = t;
 		return true;
 	}
