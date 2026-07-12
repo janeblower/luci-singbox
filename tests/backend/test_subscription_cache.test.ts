@@ -306,6 +306,46 @@ describe("test_subscription_cache", () => {
     await exec(`rm -rf ${dir}`);
   });
 
+  it("F1: sub_cache_persist=0 also skips the RESTORE side (flash -> tmpfs on boot), not just persist", async () => {
+    // same shape as C1 (tmpfs wiped, network down forces the restore-from-flash
+    // path), but toggling sub_cache_persist to prove the restore() gate itself
+    // — C1 alone never flips the flag, so a broken gate there ships silently.
+    const { dir, run } = await setup();
+    await run("fetch-subs"); // persist ON (default): flash cache gets populated
+    expect((await exec(`ls ${dir}/cache/sub_sub1.txt`)).stdout.trim()).toBe(
+      `${dir}/cache/sub_sub1.txt`,
+    );
+
+    // flip to OFF, wipe tmpfs, fetch with the network down: restore must NOT
+    // repopulate tmpfs from the (still-populated) flash cache.
+    await putFile(
+      `config outbound 'sub1'\n\toption type 'subscription'\n` +
+        `\toption sub_url 'https://example.test/sub'\n\toption sub_cache_persist '0'\n`,
+      `${dir}/uci/singbox-ui`,
+    );
+    await exec(`rm -rf ${dir}/rt && mkdir -p ${dir}/rt`);
+    await run("fetch-subs", { FAKE_CURL_RC: "6" });
+    expect(
+      (await exec(`cat ${dir}/rt/sub_sub1.txt 2>/dev/null || echo MISSING`))
+        .stdout.trim(),
+    ).toBe("MISSING");
+
+    // flip back to the default (persist on): the identical wipe-then-fetch
+    // DOES restore, proving the other direction of the same gate.
+    await putFile(
+      `config outbound 'sub1'\n\toption type 'subscription'\n` +
+        `\toption sub_url 'https://example.test/sub'\n`,
+      `${dir}/uci/singbox-ui`,
+    );
+    await exec(`rm -rf ${dir}/rt && mkdir -p ${dir}/rt`);
+    await run("fetch-subs", { FAKE_CURL_RC: "6" });
+    expect(
+      (await exec(`cat ${dir}/rt/sub_sub1.txt 2>/dev/null || echo MISSING`))
+        .stdout,
+    ).toContain("trojan://");
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("metadata: headers override the body preamble and reach sub_status normalized", async () => {
     const { dir, run } = await setup();
     // preamble in the body carries a title + support url; the header re-states
