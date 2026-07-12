@@ -295,7 +295,9 @@ describe("test_subscription_cache", () => {
   it("F1: sub_cache_persist=0 keeps the cache out of flash; default persists it", async () => {
     const off = await setup({ sub_cache_persist: "0" });
     await off.run("fetch-subs");
-    const offLs = await exec(`ls ${off.dir}/cache/sub_sub1.txt 2>/dev/null || echo MISSING`);
+    const offLs = await exec(
+      `ls ${off.dir}/cache/sub_sub1.txt 2>/dev/null || echo MISSING`,
+    );
     expect(offLs.stdout.trim()).toBe("MISSING");
     await exec(`rm -rf ${off.dir}`);
 
@@ -326,8 +328,9 @@ describe("test_subscription_cache", () => {
     await exec(`rm -rf ${dir}/rt && mkdir -p ${dir}/rt`);
     await run("fetch-subs", { FAKE_CURL_RC: "6" });
     expect(
-      (await exec(`cat ${dir}/rt/sub_sub1.txt 2>/dev/null || echo MISSING`))
-        .stdout.trim(),
+      (
+        await exec(`cat ${dir}/rt/sub_sub1.txt 2>/dev/null || echo MISSING`)
+      ).stdout.trim(),
     ).toBe("MISSING");
 
     // flip back to the default (persist on): the identical wipe-then-fetch
