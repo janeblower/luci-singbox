@@ -45,13 +45,6 @@ return L.Class.extend({
 			['path', { 'd': 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' }]
 		]);
 	},
-	info: function () {
-		return svg([
-			['circle', { 'cx': '12', 'cy': '12', 'r': '10' }],
-			['path', { 'd': 'M12 16v-4' }],
-			['path', { 'd': 'M12 8h.01' }]
-		]);
-	},
 	link: function () {
 		return svg([
 			['path', { 'd': 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71' }],

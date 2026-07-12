@@ -65,7 +65,6 @@ const { exports: icons } = loadLuciModule(ICONS_JS, {
 const NAMES = [
   "loaderCircle",
   "copy",
-  "info",
   "link",
   "x",
   "pause",
@@ -99,12 +98,6 @@ describe("lib/icons.js", () => {
     expect(el.attrs["stroke-width"]).toBe("2");
     expect(el.attrs["stroke-linecap"]).toBe("round");
     expect(el.attrs["stroke-linejoin"]).toBe("round");
-  });
-
-  it("does not hardcode width/height (size comes from CSS)", () => {
-    const el: FakeEl = icons.info();
-    expect(el.attrs.width).toBeUndefined();
-    expect(el.attrs.height).toBeUndefined();
   });
 
   it("loaderCircle spins via the CSS class, not SMIL", () => {
