@@ -96,6 +96,8 @@ function loadMonitoring() {
     Promise.resolve({ status: "ok", body: '{"connections":[]}' });
   let clashMutateImpl: (...a: unknown[]) => Promise<any> = () =>
     Promise.resolve({ status: "ok" });
+  let outboundMetaImpl: () => Promise<any> = () =>
+    Promise.resolve({ meta: {} });
 
   const sandbox: Record<string, unknown> = {
     __moduleExports: null,
@@ -131,6 +133,9 @@ function loadMonitoring() {
       delete timeouts[id];
     },
     Math,
+    // The host Date, deliberately: the duration tests advance Date.now() and the
+    // module must see the same intrinsic the test patched.
+    Date,
     Object,
     Array,
     JSON,
@@ -142,8 +147,20 @@ function loadMonitoring() {
       callClashGet: (...a: unknown[]) => clashGetImpl(...a),
       callClashMutate: (...a: unknown[]) => clashMutateImpl(...a),
       callDhcpLeases: () => Promise.resolve({ leases: [] }),
+      callOutboundMeta: () => outboundMetaImpl(),
+    },
+    // lib/icons.js builds real SVG nodes via createElementNS; the harness only
+    // needs something appendable.
+    SbIcons: {
+      x: () => makeEl("svg"),
+      pause: () => makeEl("svg"),
+      play: () => makeEl("svg"),
+      search: () => makeEl("svg"),
     },
     __test: {
+      setOutboundMeta: (fn: () => Promise<any>) => {
+        outboundMetaImpl = fn;
+      },
       setClashGet: (fn: (...a: unknown[]) => Promise<any>) => {
         clashGetImpl = fn;
       },
@@ -214,14 +231,19 @@ const isSelect = (n: any) => n.tag === "select" && n.attrs && n.attrs.change;
 const isCloseBtn = (n: any) =>
   n.tag === "button" &&
   n.attrs &&
-  /cbi-button-remove/.test(n.attrs.class || "") &&
-  typeof n.attrs.click === "function";
-// Both close buttons render as a bare ✕ glyph, so they are told apart by
+  typeof n.attrs.click === "function" &&
+  /^close-/.test(n.attrs["data-action"] || "");
+// Both close buttons render as a bare ✕ icon, so they are told apart by
 // `data-action` rather than by their label.
 const isRowCloseBtn = (n: any) =>
   isCloseBtn(n) && n.attrs["data-action"] === "close-row";
 const isCloseAllBtn = (n: any) =>
   isCloseBtn(n) && n.attrs["data-action"] === "close-all";
+// The tab buttons are a label span + a count badge span, so their textContent is
+// "Active3" — address them by data-action instead of by text.
+const isTabBtn = (which: string) => (n: any) =>
+  n.tag === "button" && n.attrs && n.attrs["data-action"] === `tab-${which}`;
+const tabCount = (n: any) => n.children[1]?.textContent;
 
 // ============================================================================
 
@@ -239,13 +261,13 @@ describe("monitoring.js", () => {
       expect(rejected).toBe(false);
     });
 
-    it("poll() shows unreachable message on failure (S2-1)", async () => {
+    it("poll() shows the unavailable state on failure (S2-1)", async () => {
       const ctx = loadMonitoring();
       ctx.__test.setClashGet(() => Promise.reject(new Error("ubus down")));
       const m = ctx.__moduleExports.buildMonitoring();
       await m.poll().catch(() => {});
       expect(
-        m.node.textContent.indexOf("Clash API unreachable"),
+        m.node.textContent.indexOf("Connections are unavailable"),
       ).toBeGreaterThanOrEqual(0);
     });
   });
@@ -270,14 +292,7 @@ describe("monitoring.js", () => {
     await m.poll(); // c1 active (device 10.0.0.5)
     await m.poll(); // c1 disappears -> moved to state.closed
     // Switch to the Closed tab.
-    const closedBtn = ctx.__test.find(
-      m.node,
-      (n: any) =>
-        n.tag === "button" &&
-        n.attrs &&
-        typeof n.attrs.click === "function" &&
-        /^Closed\b/.test(n.textContent || ""),
-    );
+    const closedBtn = ctx.__test.find(m.node, isTabBtn("closed"));
     expect(!!closedBtn).toBe(true);
     closedBtn.attrs.click();
     // 10.0.0.5 exists only among closed connections; it must appear as a device
@@ -674,7 +689,9 @@ describe("monitoring.js", () => {
       await m91b.poll();
       const rowBtn = ctx.__test.find(m91b.node, isRowCloseBtn);
       await rowBtn.attrs.click();
-      expect(m91b.node.textContent.indexOf("Clash API unreachable")).toBe(-1);
+      expect(m91b.node.textContent.indexOf("Connections are unavailable")).toBe(
+        -1,
+      );
     });
 
     it("a failed per-row DELETE keeps the table mounted (9.1)", async () => {
@@ -747,7 +764,9 @@ describe("monitoring.js", () => {
       await mAll.poll();
       const closeAllBtn = ctx.__test.find(mAll.node, isCloseAllBtn);
       await closeAllBtn.attrs.click();
-      expect(mAll.node.textContent.indexOf("Clash API unreachable")).toBe(-1);
+      expect(mAll.node.textContent.indexOf("Connections are unavailable")).toBe(
+        -1,
+      );
     });
 
     it("a failed Close all keeps the table mounted (MON-1)", async () => {
@@ -871,7 +890,7 @@ describe("monitoring.js", () => {
         m92.node,
         (n: any) =>
           n.tag === "td" &&
-          (n.textContent || "").indexOf("No connections") >= 0,
+          (n.textContent || "").indexOf("No active connections") >= 0,
       );
       expect(noConnCell).toBeNull();
     });
@@ -1046,6 +1065,132 @@ describe("monitoring.js", () => {
     expect(m.node.textContent.indexOf("second")).toBeGreaterThanOrEqual(0);
   });
 
+  // Pausing must FREEZE the view, not DROP data: a connection that opens (and
+  // even closes) while paused would otherwise never be seen at all. The newest
+  // payload is parked and replayed on resume.
+  it("pause parks the payload — a connection born while paused shows on resume", async () => {
+    const ctx = loadMonitoring();
+    let served = [conn("a", "10.0.0.1", "first")];
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({ connections: served }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    await m.poll();
+    m.setPaused(true);
+    served = [conn("a", "10.0.0.1", "first"), conn("b", "10.0.0.2", "second")];
+    await m.poll(); // arrives while paused -> parked, not painted
+    expect(m.node.textContent.indexOf("second")).toBe(-1);
+    m.setPaused(false); // NO new poll: the parked payload must be applied
+    expect(m.node.textContent.indexOf("second")).toBeGreaterThanOrEqual(0);
+  });
+
+  // Route shows the human name of the outbound (rpcd outbound_meta side-car),
+  // not the content-hash tag sing-box routes on.
+  it("route resolves the outbound tag to its human name", async () => {
+    const ctx = loadMonitoring();
+    ctx.__test.setOutboundMeta(() =>
+      Promise.resolve({ meta: { sub__ab12: { name: "Amsterdam 01" } } }),
+    );
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({
+          connections: [conn("r1", "10.0.0.1", "ex.com", ["sub__ab12"])],
+        }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    m.start();
+    await m.poll();
+    await m.poll();
+    m.stop();
+    expect(m.node.textContent.indexOf("Amsterdam 01")).toBeGreaterThanOrEqual(
+      0,
+    );
+    expect(m.node.textContent.indexOf("sub__ab12")).toBe(-1);
+  });
+
+  it("an unmapped tag falls back to the raw tag", async () => {
+    const ctx = loadMonitoring();
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({
+          connections: [conn("r2", "10.0.0.1", "ex.com", ["direct"])],
+        }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    await m.poll();
+    expect(m.node.textContent.indexOf("direct")).toBeGreaterThanOrEqual(0);
+  });
+
+  // The duration column must advance between polls; without its own tick it sat
+  // frozen at whatever the last payload painted.
+  it("Time ticks without a new poll", async () => {
+    const ctx = loadMonitoring();
+    const start = new Date(Date.now() - 65000).toISOString();
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({
+          connections: [
+            {
+              id: "t1",
+              start,
+              metadata: { sourceIP: "10.0.0.1", host: "ex.com" },
+            },
+          ],
+        }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    await m.poll();
+    expect(m.node.textContent.indexOf("1:05")).toBeGreaterThanOrEqual(0);
+    const real = Date.now;
+    Date.now = () => real() + 5000;
+    try {
+      m._tickTimes();
+      expect(m.node.textContent.indexOf("1:10")).toBeGreaterThanOrEqual(0);
+    } finally {
+      Date.now = real;
+    }
+  });
+
+  it("Time is frozen while paused", async () => {
+    const ctx = loadMonitoring();
+    const start = new Date(Date.now() - 65000).toISOString();
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({
+          connections: [
+            {
+              id: "t1",
+              start,
+              metadata: { sourceIP: "10.0.0.1", host: "ex.com" },
+            },
+          ],
+        }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    await m.poll();
+    m.setPaused(true);
+    const real = Date.now;
+    Date.now = () => real() + 5000;
+    try {
+      m._tickTimes();
+      expect(m.node.textContent.indexOf("1:05")).toBeGreaterThanOrEqual(0);
+      expect(m.node.textContent.indexOf("1:10")).toBe(-1);
+    } finally {
+      Date.now = real;
+    }
+  });
+
   // Closed connections never come back, so the map only grows. Uncapped, an
   // hour on a busy LAN buries the repaint under tens of thousands of dead rows.
   it("the closed list is capped at 300, newest kept", async () => {
@@ -1064,10 +1209,7 @@ describe("monitoring.js", () => {
       served = [];
       await m.poll(); // c{i} closes
     }
-    const closedBtn = ctx.__test.find(
-      m.node,
-      (n: any) => n.tag === "button" && /^Closed\b/.test(n.textContent || ""),
-    );
-    expect(closedBtn.textContent).toBe("Closed 300");
+    const closedBtn = ctx.__test.find(m.node, isTabBtn("closed"));
+    expect(tabCount(closedBtn)).toBe("300");
   });
 });

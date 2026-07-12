@@ -53,57 +53,182 @@ button.cbi-button.busy {
 /* ==========================================================================
  * Monitoring tab.
  *
- * Toolbar (tabs | filters | actions) over a wide connection table. Under 720px
- * the table stops being a table: the header row is hidden and every cell prints
- * its own `data-label` (set in monitoring.js) before its value, so each
+ * Controls (segmented Active/Closed | device+search | icon actions) over a
+ * fixed-layout connection table: eight columns whose widths are declared, so
+ * the columns stop dancing every time a host name changes length. Under 900px
+ * the table stops being a table — the header row is hidden and every cell
+ * prints its own `data-label` (set in monitoring.js) before its value, so each
  * connection becomes a stacked card. That is the only way eight columns fit a
  * phone without a horizontal scrollbar.
  * ========================================================================== */
-.sb-mon-toolbar { display: flex; align-items: center; gap: .5em 1em;
-	flex-wrap: wrap; margin: .5em 0; }
-.sb-mon-tabs, .sb-mon-filters, .sb-mon-actions {
-	display: flex; align-items: center; gap: .4em; }
-.sb-mon-actions { margin-left: auto; }
-.sb-mon-filters { flex: 1 1 14em; min-width: 0; }
-.sb-mon-search { flex: 1 1 8em; min-width: 6em; }
-.sb-mon-tab, .sb-mon-icon { margin: 0; }
-/* Square icon buttons (✕ / ⏸ ▶) so the toolbar's right edge is a tidy pair of
- * glyphs rather than two wide word-buttons. */
-.sb-mon-icon { width: 2.2em; padding: 0; line-height: 1.8em; text-align: center; }
-.sb-mon-rate { font-size: .85em; opacity: .75; white-space: nowrap;
-	font-variant-numeric: tabular-nums; }
+.sb-monitoring {
+	--sb-mon-h: 32px;
+	--sb-mon-line: rgba(127, 127, 127, .22);
+	--sb-mon-soft: rgba(127, 127, 127, .08);
+	--sb-mon-soft-hi: rgba(127, 127, 127, .14);
+	--sb-mon-accent: var(--primary-color-high, #1976d2);
+	--sb-mon-danger: #d9534f;
+	width: 100%;
+	min-width: 0;
+}
 
-.sb-mon-table-wrap { overflow-x: auto; }
-.sb-mon-table { width: 100%; }
-.sb-mon-table td { vertical-align: middle; }
-/* cbi-section-table centres its headers; the values under them are left-aligned,
- * so the two edges disagreed on every column. */
-.sb-mon-table th { text-align: left; }
-.sb-mon-table th:last-child { width: 1%; }
+.sb-mon-controls { display: flex; flex-wrap: wrap; align-items: center;
+	justify-content: space-between; gap: 12px; margin: 0 0 12px; min-width: 0; }
+.sb-mon-filters { display: flex; flex: 1 1 auto; flex-wrap: wrap;
+	align-items: center; gap: 12px; min-width: 0; }
+.sb-mon-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Segmented control: one bordered shell, two flat buttons inside it. */
+.sb-mon-tabs { display: inline-flex; align-items: center; gap: 2px;
+	padding: 2px; border: 1px solid var(--sb-mon-line); border-radius: 6px;
+	background: var(--sb-mon-soft); box-sizing: border-box; }
+.sb-monitoring .btn.sb-mon-tab {
+	display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+	height: calc(var(--sb-mon-h) - 6px); margin: 0; padding: 0 12px;
+	border: 0; border-radius: 4px; background: transparent; box-shadow: none;
+	color: var(--text-color-medium, #888); font-weight: 600; line-height: 1; }
+.sb-monitoring .btn.sb-mon-tab:hover:not(:disabled) {
+	background: var(--sb-mon-soft-hi); color: var(--text-color-high, #eee); }
+.sb-monitoring .btn.sb-mon-tab-on {
+	background: rgba(25, 118, 210, .16); color: var(--sb-mon-accent); font-weight: 700; }
+.sb-mon-tab-badge { display: inline-flex; align-items: center; justify-content: center;
+	min-width: 18px; height: 18px; padding: 0 6px; border-radius: 999px;
+	background: rgba(127, 127, 127, .22); color: var(--text-color-medium, #888);
+	box-sizing: border-box; font-size: 12px; font-weight: 700; line-height: 1; }
+.sb-mon-tab-on .sb-mon-tab-badge {
+	background: rgba(25, 118, 210, .22); color: var(--sb-mon-accent); }
+
+.sb-mon-device { width: min(220px, 100%); min-width: 0; margin: 0 !important;
+	height: var(--sb-mon-h) !important; padding-top: 0 !important;
+	padding-bottom: 0 !important; box-sizing: border-box; }
+/* The magnifier sits INSIDE the field; the input just reserves room for it. */
+.sb-mon-search { position: relative; display: flex; align-items: center;
+	width: min(320px, 100%); min-width: 0; height: var(--sb-mon-h); margin: 0; }
+.sb-mon-search-icon { position: absolute; left: 8px; display: flex;
+	color: var(--text-color-medium, #888); pointer-events: none; }
+.sb-mon-search-icon svg.sb-icon { width: 16px; height: 16px; }
+.sb-mon-search-input { width: 100%; margin: 0 !important;
+	height: var(--sb-mon-h) !important; padding: 0 8px 0 30px !important;
+	box-sizing: border-box; }
+
+/* Square icon buttons: pause (order 1) then close-all (order 2, danger red). */
+.sb-monitoring .btn.sb-mon-icon {
+	display: flex; align-items: center; justify-content: center; flex: 0 0 auto;
+	width: 32px; height: 32px; min-width: 32px; margin: 0; padding: 0;
+	border: 1px solid var(--sb-mon-line); border-radius: 6px;
+	background: transparent; box-shadow: none; line-height: 1;
+	color: var(--text-color-medium, #888); box-sizing: border-box; }
+.sb-monitoring .btn.sb-mon-icon:hover:not(:disabled) {
+	background: var(--sb-mon-soft-hi); color: var(--text-color-high, #eee); }
+.sb-monitoring .btn.sb-mon-icon:disabled { opacity: .45; cursor: not-allowed; }
+.sb-monitoring .btn.sb-mon-pause { order: 1; }
+.sb-monitoring .btn.sb-mon-pause.cbi-button-active {
+	background: rgba(25, 118, 210, .16); color: var(--sb-mon-accent); }
+.sb-monitoring .btn.sb-mon-close-all { order: 2;
+	border-color: rgba(217, 83, 79, .4); color: var(--sb-mon-danger); }
+.sb-monitoring .btn.sb-mon-close-all:hover:not(:disabled) {
+	border-color: rgba(217, 83, 79, .6); background: transparent;
+	color: var(--sb-mon-danger); }
+.sb-mon-icon svg.sb-icon { width: 16px; height: 16px; }
+
+.sb-mon-table-wrap { width: 100%; overflow-x: auto; }
+.sb-mon-table { width: 100%; min-width: 840px; table-layout: fixed;
+	border-collapse: collapse; margin-bottom: 0; }
+.sb-mon-table th, .sb-mon-table td {
+	padding: 8px 6px; border-bottom: 1px solid var(--sb-mon-line);
+	box-sizing: border-box; text-align: left; vertical-align: middle;
+	overflow: hidden; white-space: nowrap; }
+.sb-mon-table th { color: var(--text-color-medium, #888); font-size: 11px;
+	font-weight: 600; text-transform: uppercase;
+	border-bottom-color: rgba(127, 127, 127, .32); }
+/* Declared column widths — otherwise every poll re-measures the content and the
+ * eight columns jitter sideways under the cursor. */
+.sb-mon-table th:nth-child(1) { width: 28%; }
+.sb-mon-table th:nth-child(2) { width: 6%; }
+.sb-mon-table th:nth-child(3) { width: 16%; }
+.sb-mon-table th:nth-child(4) { width: 8%; }
+.sb-mon-table th:nth-child(5) { width: 9.5%; }
+.sb-mon-table th:nth-child(6) { width: 8.5%; }
+.sb-mon-table th:nth-child(7) { width: 16%; }
+.sb-mon-table th:nth-child(8) { width: 8%; }
+.sb-mon-table tbody tr:last-child td { border-bottom: 0; }
+/* Time / Down / Up are numbers — right-aligned, muted; Close is centred. */
+.sb-mon-table th:nth-child(4), .sb-mon-table td:nth-child(4),
+.sb-mon-table th:nth-child(5), .sb-mon-table td:nth-child(5),
+.sb-mon-table th:nth-child(6), .sb-mon-table td:nth-child(6) { text-align: right; }
+.sb-mon-table td:nth-child(4) .sb-mon-val,
+.sb-mon-table td:nth-child(5) .sb-mon-val,
+.sb-mon-table td:nth-child(6) .sb-mon-val {
+	color: var(--text-color-medium, #bbb); text-align: right;
+	font-variant-numeric: tabular-nums; }
+.sb-mon-table th:last-child, .sb-mon-table td:last-child { text-align: center; }
+.sb-mon-table td:last-child { padding-top: 0; padding-bottom: 0; }
+
 /* Closed connections are history — faded, and no Close button (audit 9.6). */
 .sb-monitoring tr.closed td { opacity: .6; }
-.sb-monitoring tr.closing   { opacity: .5; }
+.sb-monitoring tr.closing   { opacity: .55; }
 /* Every cell's value is one truncating line; the full text is in `title`. */
-.sb-mon-val { display: block; overflow: hidden; text-overflow: ellipsis;
-	white-space: nowrap; max-width: 22em; }
-.sb-mon-net   { text-transform: uppercase; font-size: .8em; opacity: .7; }
-.sb-mon-route { font-size: .9em; opacity: .85; }
-.sb-mon-src   { display: flex; flex-direction: column; line-height: 1.25; }
-.sb-mon-src-ip { font-size: .8em; opacity: .6; }
-.sb-mon-action { text-align: right; }
-.sb-mon-row-close { margin: 0; padding: 0 .5em; }
+.sb-mon-val { display: block; max-width: 100%; overflow: hidden;
+	text-overflow: ellipsis; white-space: nowrap; line-height: 1.3;
+	font-size: 13px; color: var(--text-color-high, #eee); }
+.sb-mon-net   { color: var(--text-color-medium, #bbb); text-transform: lowercase; }
+/* The route is a pill, not prose: it is a label, and it reads as one. */
+.sb-mon-route { display: inline-block; width: auto; padding: 2px 6px;
+	border-radius: 4px; background: rgba(128, 128, 128, .15);
+	font-size: 11px; font-weight: 500; }
+.sb-mon-src   { display: flex; align-items: baseline; gap: 5px; }
+.sb-mon-src-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sb-mon-src-ip { flex: 0 1 auto; min-width: 0; overflow: hidden;
+	text-overflow: ellipsis; color: var(--text-color-medium, #bbb); font-size: 12px; }
+.sb-monitoring .btn.sb-mon-row-close {
+	display: inline-flex; align-items: center; justify-content: center;
+	width: 24px; height: 24px; min-width: 24px; margin: 0; padding: 0;
+	border: 0; border-radius: 999px; background: transparent; box-shadow: none;
+	color: var(--sb-mon-danger); line-height: 1; }
+.sb-monitoring .btn.sb-mon-row-close:hover:not(:disabled) {
+	background: var(--sb-mon-soft-hi); color: var(--sb-mon-danger); }
+.sb-monitoring .btn.sb-mon-row-close:disabled { opacity: .45; cursor: wait; }
+.sb-mon-row-close svg.sb-icon { width: 14px; height: 14px; }
 
-@media (max-width: 720px) {
+.sb-mon-state-cell { padding: 0 !important; }
+.sb-mon-state { display: flex; align-items: center; justify-content: center;
+	min-height: 90px; color: var(--text-color-medium, #888); text-align: center; }
+
+@media (max-width: 900px) {
+	.sb-mon-tabs { flex: 1 0 100%; }
+	.sb-mon-table { min-width: 0; }
 	.sb-mon-table thead { display: none; }
-	.sb-mon-table tr { display: block; padding: .4em 0;
-		border-bottom: 1px solid var(--border-color-medium, #ddd); }
-	.sb-mon-table td { display: flex; justify-content: space-between;
-		gap: 1em; border: none; padding: .15em .4em; }
+	.sb-mon-table, .sb-mon-table tbody, .sb-mon-table tr, .sb-mon-table td {
+		display: block; width: 100%; }
+	.sb-mon-table tr { margin-bottom: 8px; padding: 8px; box-sizing: border-box;
+		border: 1px solid var(--sb-mon-line); border-radius: 4px; }
+	.sb-mon-table td { display: grid;
+		grid-template-columns: minmax(92px, 34%) minmax(0, 1fr); gap: 8px;
+		border: 0; border-bottom: 1px solid var(--sb-mon-line); padding: 4px 0;
+		text-align: left; }
+	/* The desktop right-alignment of Time/Down/Up would drag their data-labels
+	 * right too, so the card's label column would zig-zag. */
+	.sb-mon-table td:nth-child(4), .sb-mon-table td:nth-child(5),
+	.sb-mon-table td:nth-child(6) { text-align: left; }
 	.sb-mon-table td::before { content: attr(data-label);
-		font-size: .8em; opacity: .6; flex: 0 0 auto; }
-	.sb-mon-table td:empty { display: none; }
-	.sb-mon-val { max-width: none; text-align: right; }
-	.sb-mon-src { align-items: flex-end; }
+		color: var(--text-color-medium, #888); font-weight: 700;
+		overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.sb-mon-table td:last-child { align-items: center; border-bottom: 0;
+		padding: 4px 0; text-align: left; }
+	.sb-mon-val, .sb-mon-table td:nth-child(4) .sb-mon-val,
+	.sb-mon-table td:nth-child(5) .sb-mon-val,
+	.sb-mon-table td:nth-child(6) .sb-mon-val { text-align: right; }
+	.sb-mon-route, .sb-monitoring .btn.sb-mon-row-close { justify-self: end; }
+	.sb-mon-src { justify-content: flex-end; }
+	.sb-mon-state-row td::before { display: none; }
+	.sb-mon-state-row td { border-bottom: 0; }
+}
+
+@media (max-width: 520px) {
+	.sb-mon-controls, .sb-mon-filters { flex-direction: column; align-items: stretch; }
+	.sb-mon-tabs { display: grid; grid-template-columns: 1fr 1fr; width: 100%; }
+	.sb-mon-device, .sb-mon-search { width: 100%; max-width: none; }
+	.sb-mon-actions { align-self: flex-end; }
 }
 
 /* E1: eye-toggle for secret inputs in the descriptor-driven modal */
