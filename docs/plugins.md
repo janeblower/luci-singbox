@@ -275,7 +275,6 @@ The layout mirrors the flat structure used by `plugins/awg_warp/`:
 
 ```
 plugins/<name>/
-  Makefile                       OpenWrt/LuCI package definition (LUCI_DEPENDS = +luci-app-singbox-ui only)
   lib/                           → installed at /usr/share/singbox-ui/lib/plugins/<name>/
     init.uc                      Framework discovery entry: calls register({...})
     protocols/<name>.uc          Outbound/inbound descriptor — mirrors builder/protocols/ layout
@@ -309,43 +308,26 @@ is required as `plugins.<name>.protocols.<name>`).
 `/usr/share/singbox-ui/lib/plugins/*/init.uc`. The `init.uc` installed from
 `lib/` lands at exactly that path, so discovery works automatically.
 
-### Makefile
+### How the package is actually built
 
-```makefile
-PKG_NAME:=singbox-ui-plugin-<name>
-PKG_VERSION:=1.0.0
-PKG_RELEASE:=1
+There is no Makefile and no generic plugin build tool. `scripts/build-apk.sh`
+is apk-only and hardcodes exactly four packages (see its header comment) —
+it does not loop over `plugins/*`. A new plugin needs its own block in that
+script, mirroring the awg_warp one:
 
-PKG_BUILD_DIR:=$(BUILD_DIR)/$(PKG_NAME)
+- Identity variables near the top of the script, e.g.
+  `AWGWARP_DEPENDS="libc luci-app-singbox-ui"` — the apk equivalent of
+  `LUCI_DEPENDS`, a plain dependency string with no `+` prefix.
+- `populate_awgwarp_root()` (~line 534) stages the file tree from the
+  mapping table above and writes the apk file list.
+- `mkpkg_awgwarp()` (~line 576) calls `apk mkpkg --files "$AWGWARP_ROOT"
+  --output "$AWGWARP_OUT" -I name:... -I depends:"$AWGWARP_DEPENDS" -I
+  arch:noarch ...` directly.
+- Both are invoked from the three build-dispatch branches (stub / root /
+  unshare-reexec) near the end of the script.
 
-# luci-base is pulled in implicitly by luci.mk.
-# singbox-ui is NOT listed here — the dependency is on the UI package
-# (which already depends on singbox-ui).
-# External runtime components (kernel modules, helper tools, third-party
-# binaries) are NOT listed — they are self-provisioned at runtime via
-# plugin rpcd methods (see Self-provisioning pattern below).
-LUCI_DEPENDS:=+luci-app-singbox-ui
-LUCI_PKGARCH:=all
-
-include $(TOPDIR)/feeds/luci/luci.mk
-
-define Package/$(PKG_NAME)/description
-  My plugin for luci-app-singbox-ui.
-endef
-
-$(eval $(call BuildPackage,$(PKG_NAME)))
-```
-
-Key constraints:
-
-- `LUCI_DEPENDS` must include `luci-app-singbox-ui` and nothing that is
-  already in `singbox-ui`'s dependency tree unless your plugin strictly
-  requires a version not yet on the device.
-- External components (kernel modules, custom binaries, packages from
-  third-party feeds) are **not** listed in `LUCI_DEPENDS`. Self-provision
-  them at runtime via a plugin rpcd method (see below).
-- Use `LUCI_PKGARCH:=all` (noarch). Only add a per-arch sub-package if
-  your plugin ships a compiled binary (e.g. a Rust helper).
+Copy the block, rename `awgwarp` / `AWGWARP_*`, and add the new
+`populate_*`/`mkpkg_*` calls next to the existing ones in each branch.
 
 ### ACL file
 
@@ -386,8 +368,8 @@ not be reused.
 
 Some plugins depend on external components (a custom kernel module, a helper
 binary, a feed from another vendor) that are not available in the standard
-OpenWrt feeds at install time. Those components must not be listed in
-`LUCI_DEPENDS`. Instead the plugin self-provisions them at runtime via a
+OpenWrt feeds at install time. Those components must not be listed as an
+apk `depends:` entry. Instead the plugin self-provisions them at runtime via a
 **bash provisioning script**.
 
 ### Bash-script approach (recommended)
