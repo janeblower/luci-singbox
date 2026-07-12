@@ -262,6 +262,20 @@ function buildOutboundsMap() {
 	o.depends('type', 'subscription');
 	o.description = _('Override the hardware ID sent to the provider. Leave empty to use the automatic one.');
 
+	// Bootstrapping case: the panel itself is blocked, so the only route to it is
+	// the tunnel the panel is supposed to configure. Point this at a local
+	// socks/mixed inbound of the running sing-box.
+	o = s.taboption('basic', form.Value, 'sub_proxy', _('Fetch via proxy'));
+	o.modalonly   = true;
+	o.placeholder = 'socks5h://127.0.0.1:2080';
+	o.depends('type', 'subscription');
+	o.description = _('Fetch this subscription through a proxy (e.g. a local mixed/socks inbound), for providers whose panel is unreachable directly. Leave empty to fetch directly.');
+	o.validate = function (_sid, v) {
+		if (!v) return true;
+		return /^(socks5h|socks5|socks4a|socks4|https?):\/\/[A-Za-z0-9._~%@:-]+:\d{1,5}$/.test(v)
+			? true : _('Expected scheme://host:port, e.g. socks5h://127.0.0.1:2080');
+	};
+
 	o = s.taboption('basic', form.Value, 'sub_interval', _('Update interval (s)'));
 	o.modalonly   = true;
 	o.datatype    = 'uinteger';

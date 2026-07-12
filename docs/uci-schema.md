@@ -468,7 +468,9 @@ Shared outbound dial options emitted by `_shared/dial.uc`. Applies to all proxy 
 
 Subscription URL and update policy are stored on the outbound UCI section itself. The resolved nodes are written by `subscription.uc` to `$TMPDIR/sub_<name>.txt` and read back by `outbound.uc` at config-generation time — `outbound.uc` never reads `sub_url` or `sub_interval` directly.
 
-`sub_<name>.txt` is line based, and a line is EITHER a share-link URI (uri-list / base64 feeds) OR a JSON node record `{"o":<outbound>,"n":<display name>,"l":null}` (Clash YAML and sing-box JSON feeds have no share-link). `lib/subformat.uc` writes and reads both forms; nothing else may parse that file.
+`sub_<name>.txt` is line based, and a line is EITHER a share-link URI (uri-list / base64 feeds) OR a JSON node record `{"o":<outbound>,"n":<display name>,"l":null}` (Clash YAML, sing-box JSON and Xray JSON feeds have no share-link). `lib/subformat.uc` writes and reads both forms; nothing else may parse that file.
+
+Body formats accepted (auto-detected, never configured): uri-list, base64 (≤2 unwraps), Clash/Mihomo YAML, sing-box JSON, and Xray/V2Ray config JSON (`outbounds[].protocol` + `settings`/`streamSettings`, translated to sing-box outbounds — an Xray node whose stream we cannot represent, e.g. `kcp`/`xhttp`, is skipped rather than silently downgraded to plain TCP). The detected format is reported per subscription in `sub_<name>.stat` and on the dashboard.
 
 A "last known good" copy of every node list also lives on flash in `/etc/singbox-ui/sub-cache/` (dir `0700`, files `0600` — the node lines carry passwords). It is restored into tmpfs at boot, and is invalidated whenever the `(sub_url, sub_user_agent, hwid)` profile changes.
 
@@ -478,6 +480,7 @@ A "last known good" copy of every node list also lives on flash in `/etc/singbox
 | `sub_user_agent` | string | `sing-box`, `happ`, `v2rayn`, `v2rayng`, `mihomo`, `clash.meta` (or a literal UA) | no | `type=subscription` | Client profile tried FIRST when fetching. The backend rotates through the remaining profiles until a body actually parses (a panel commonly answers HTTP 200 with an HTML stub for the "wrong" UA). Empty → start at `sing-box/<version>`. A value that is not a known profile id is sent verbatim (back-compat). Read by `subscription.uc`. |
 | `sub_auto_hwid` | bool | `0`/`1` | no | `type=subscription` | Default `1`. Send `X-HWID: md5(MAC+model)` (plus `X-Device-OS`/`X-Device-Model`/`X-Ver-OS`/locale headers). Remnawave/Happ panels bind a config to one device and return an empty body without it. |
 | `sub_hwid` | string | `xxxx-xxxx-xxxx-xxxx` | no | `type=subscription` | Explicit hardware ID; overrides the derived one. |
+| `sub_proxy` | string | `scheme://host:port` (`socks5h`/`socks5`/`socks4a`/`socks4`/`http`/`https`) | no | `type=subscription` | Fetch THIS subscription through a proxy (`curl -x`), e.g. a local mixed/socks inbound of the running sing-box, when the provider's panel is unreachable directly. Validated in `subscription.uc` (`proxy_of`); a value that does not match is logged and ignored (the fetch goes direct) — the string crosses into curl's argv, where an unexpected scheme such as `file://` would be a local read. Empty → fetch direct. |
 | `sub_interval` | integer | seconds | no | `type=subscription` | Auto-refresh interval in seconds. Read by `subscription.uc` scheduler; **not read by `outbound.uc`**. |
 | `sub_multi` | bool | `0`/`1` | no | `type=subscription` | When `1`, all parsed proxy URLs are expanded into individual child outbounds grouped under a selector or urltest group. When `0`, only the first parseable URL is used. Read by `outbound.uc`. |
 | `sub_selector_type` | enum | `selector`, `urltest` | no | `sub_multi=1` | Group type for expanded proxies. Defaults to `selector`. Read by `outbound.uc`. |
@@ -663,7 +666,9 @@ There IS a named `subscriptions` section carrying the auto-update toggle:
 |---|---|---|---|---|
 | `auto_update` | bool | `0`/`1` | no | Gates the cron refresh path only (the UI's Refresh button always forces a fetch). |
 
-**Note:** subscriptions are fetched with `curl` straight over the WAN — never through an outbound. A `sub_update_via` field is documented in older revisions of this file; it does not exist and was never read.
+**Note:** subscriptions are fetched with `curl`, straight over the WAN unless the section sets `sub_proxy` (a plain `curl -x` proxy — *not* routing through a sing-box outbound). A `sub_update_via` field is documented in older revisions of this file; it does not exist and was never read.
+
+**Refresh progress:** `refresh {what:"subscriptions", async:true}` forks the fetch and answers immediately (a multi-subscription refresh outlives the ubus timeout). `subscription.uc` reports where the run is in `$TMPDIR/sub_progress.json` (`{running,total,done,current,started,finished,results}`), which `sub_status` returns as `progress` — the UI polls it (`SbCommon.waitSubRefresh`).
 
 ---
 

@@ -10,6 +10,7 @@ var callPreviewConfig = SbRpc.callPreviewConfig;
 var notify         = SbCommon.notify;
 var showJsonModal  = SbCommon.showJsonModal;
 var withBusy       = SbCommon.withBusy;
+var waitSubRefresh = SbCommon.waitSubRefresh;
 var renderStatusPanel = SbStatusPanel.renderStatusPanel;
 
 
@@ -23,8 +24,12 @@ function renderActionBar(statusHolder) {
 			'class': 'btn cbi-button cbi-button-action',
 			'click': ui.createHandlerFn(this, function (ev) {
 				var self = this;
-				return withBusy(ev.currentTarget, busyLabel, function () {
-					return Promise.resolve(handler.call(self)).then(refreshStatus);
+				var el = ev.currentTarget;
+				return withBusy(el, busyLabel, function () {
+					// The element is handed to the handler so a long-running job can
+					// keep the label live ("Refreshing… 3/5"); withBusy restores the
+					// original text on both settle paths, so this is safe to mutate.
+					return Promise.resolve(handler.call(self, el)).then(refreshStatus);
 				});
 			})
 		}, label);   // label (and busyLabel) are already _()-translated by the
@@ -32,8 +37,19 @@ function renderActionBar(statusHolder) {
 		             // and pollutes .pot extraction.
 	}
 	return E('div', { 'class': 'sb-actionbar', 'style': 'display:flex;gap:.5em;margin:.5em 0' }, [
-		btn(_('Refresh subscriptions'), _('Refreshing…'), function () {
-			return notify(callRefresh('subscriptions'), 'Done', _('Refresh subscriptions failed'));
+		btn(_('Refresh subscriptions'), _('Refreshing…'), function (el) {
+			// async: the fetch is forked and we poll its progress side-car. A
+			// synchronous refresh of several subscriptions outlives the ubus
+			// timeout, which surfaced as "Refresh failed" over a fetch that was
+			// in fact still running (and then succeeded, invisibly).
+			var p = callRefresh('subscriptions', '', true).then(function () {
+				return waitSubRefresh(function (res) {
+					var pr = res && res.progress;
+					if (pr && pr.running && pr.total > 0)
+						el.textContent = _('Refreshing… %d/%d').format(pr.done, pr.total);
+				});
+			});
+			return notify(p, 'Done', _('Refresh subscriptions failed'));
 		}),
 		btn(_('Refresh rule-sets'), _('Refreshing…'), function () {
 			return notify(callRefresh('rulesets'),      'Done', _('Refresh rule-sets failed'));

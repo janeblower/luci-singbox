@@ -2,6 +2,7 @@
 'require form';
 'require uci';
 'require ui';
+'require view.singbox-ui.lib.rpc as SbRpc';
 
 function loadOutboundList(o, includeNone) {
 	o.load = function (section_id) {
@@ -273,8 +274,30 @@ function logicalSubRuleValidate(uci, _) {
 	};
 }
 
+// waitSubRefresh(onTick) — an async refresh returns the moment the fetch is
+// FORKED, so the caller is not done until the backend's progress side-car says
+// so. Polls sub_status; onTick(res) gets every reply (the dashboard repaints,
+// the action bar counts "3/5"). MAX_TICKS is the backstop for a child that dies
+// without ever clearing running:1 — otherwise the button spins forever.
+function waitSubRefresh(onTick) {
+    var INTERVAL = 1500, MAX_TICKS = 200;   // ~5 min ceiling
+    var tries = 0;
+    function tick() {
+        return SbRpc.callSubStatus().then(function (res) {
+            if (onTick) onTick(res);
+            var p = res && res.progress;
+            if (!p || !p.running || ++tries > MAX_TICKS) return res;
+            return new Promise(function (resolve) {
+                window.setTimeout(resolve, INTERVAL);
+            }).then(tick);
+        });
+    }
+    return tick();
+}
+
 return L.Class.extend({
     loadOutboundList:  loadOutboundList,
+    waitSubRefresh:    waitSubRefresh,
     addRenameField:    addRenameField,
     wireTabs:          wireTabs,
     notify:            notify,

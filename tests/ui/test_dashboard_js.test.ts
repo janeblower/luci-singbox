@@ -173,6 +173,15 @@ function loadDashboard() {
       callRefresh: (...a: unknown[]) => clashRefresh(...a),
       callOutboundMeta: (...a: unknown[]) => outboundMeta(...a),
     },
+    // The async refresh polls sub_status until the backend's progress side-car
+    // clears; here a single pass through the caller's tick is enough.
+    SbCommon: {
+      waitSubRefresh: (onTick?: (r: unknown) => void) =>
+        Promise.resolve(subStatus()).then((r: unknown) => {
+          if (onTick) onTick(r);
+          return r;
+        }),
+    },
     // lib/icons.js builds real SVG nodes via createElementNS; in the vm sandbox
     // they are just opaque elements — the dashboard only appends them.
     SbIcons: {

@@ -42,8 +42,9 @@ const LOCK_STALE = 600;   // a lock older than this is a crashed run, not a live
 // C3: only ever invoked when the node set ACTUALLY changed.
 const SINGBOX_INITD = getenv("SINGBOX_INITD") || "/etc/init.d/singbox-ui";
 
-// curl binary seam (tests override via env). Subscriptions are always fetched
-// directly via curl — no proxy/outbound routing.
+// curl binary seam (tests override via env). A subscription is fetched directly
+// unless its section sets sub_proxy (see proxy_of) — the case where the panel
+// itself is blocked and only the tunnel can reach it.
 const CURL = getenv("CURL") || "/usr/bin/curl";
 const RETRY_SLEEP = (getenv("SINGBOX_RETRY_SLEEP") != null) ? +getenv("SINGBOX_RETRY_SLEEP") : 2;
 const RETRIES = 3;
@@ -202,6 +203,7 @@ let _fetcher = function(jobs) {
 		             "--connect-timeout", "15", "--speed-time", "15", "--speed-limit", "1",
 		             "--max-filesize", sprintf("%d", MAX_BODY),
 		             "-A", j.ua ];
+		if (j.proxy) push(argv, "-x", j.proxy);
 		for (let h in (j.headers ?? [])) { push(argv, "-H"); push(argv, h); }
 		push(argv, "-D", j.hdr_path, "-o", j.body_path, j.url);
 		let quoted = [];
@@ -440,6 +442,26 @@ function tmp_paths(name) {
 	};
 }
 
+// Progress side-car. rpcd's `refresh {async:true}` forks this file into the
+// background and answers the browser immediately (a 6-subscription refresh over
+// a slow link outlives ubus' request timeout), so this file is the ONLY thing
+// the dashboard can poll to know where the run is.
+const PROG_PATH = `${TMPDIR}/sub_progress.json`;
+function prog_write(p) { write_atomic(PROG_PATH, sprintf("%J", p), 0o644); }
+
+// sub_proxy — fetch THIS subscription through a proxy (curl -x). Validated, not
+// escaped-and-hoped: the value crosses into curl's argv, and curl reads a
+// scheme it does not know (e.g. `file://`) as a local read.
+function proxy_of(cur, name) {
+	let v = trim(helpers.uci_get_or_empty(cur, name, "sub_proxy"));
+	if (v === "") return null;
+	if (!match(v, /^(socks5h|socks5|socks4a|socks4|http|https):\/\/[A-Za-z0-9._~%@:-]+:[0-9]{1,5}$/)) {
+		log_err(`fetch_subs: ${name} has an unusable sub_proxy, fetching direct`);
+		return null;
+	}
+	return v;
+}
+
 function cache_dir_ensure() {
 	let parent = replace(CACHE_DIR, /\/[^\/]+$/, "");
 	if (parent !== CACHE_DIR && parent !== "") fs.mkdir(parent, 0o755);
@@ -637,10 +659,11 @@ function fetch_one(cur, name, timeout) {
 	let body_path = `${TMPDIR}/sub_${name}.raw`;
 	let hdr_path  = `${TMPDIR}/sub_${name}.hdr`;
 
+	let proxy = proxy_of(cur, name);
 	let parsed = null, ua_used = null, raw = null, hdr_raw = "";
 	for (let ua_id in ua_candidates(cur, name)) {
 		let job = {
-			name: name, url: url, ua: ua_of(ua_id), headers: headers,
+			name: name, url: url, ua: ua_of(ua_id), headers: headers, proxy: proxy,
 			body_path: body_path, hdr_path: hdr_path, opts: { timeout: timeout },
 		};
 		let rc = download(job);
@@ -750,12 +773,23 @@ function cmd_fetch_subs(cur, only) {
 	let timeout = boot ? 5 : 15;
 	let changed = 0;
 
+	let todo = [];
 	for (let name in names) {
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
 			log_err(`fetch_subs: ${name} disabled, skipping`);
 			continue;
 		}
 		if (only != null && name !== only) continue;
+		push(todo, name);
+	}
+
+	let prog = { running: 1, total: length(todo), done: 0, current: "",
+	             started: time(), finished: 0, results: {} };
+	prog_write(prog);
+
+	for (let name in todo) {
+		prog.current = name;
+		prog_write(prog);
 
 		// C1: restore the flash copy FIRST. init.d runs `fetch-subs` before
 		// generate.uc and waits for it, so a boot with no network still hands
@@ -766,7 +800,16 @@ function cmd_fetch_subs(cur, only) {
 		try { r = fetch_one(cur, name, timeout); }
 		catch (e) { log_err(`fetch_subs: ${name} failed: ${e}`); r = { changed: false }; }
 		if (r.changed) changed++;
+
+		prog.results[name] = r.ok ? "ok" : "error";
+		prog.done++;
+		prog.current = "";
+		prog_write(prog);
 	}
+
+	prog.running = 0;
+	prog.finished = time();
+	prog_write(prog);
 
 	lock_release();
 	return changed;
@@ -881,6 +924,7 @@ return {
 	_signature_for_test: signature,
 	_ua_of_for_test: ua_of,
 	_ua_candidates_for_test: ua_candidates,
+	_proxy_of_for_test: proxy_of,
 	_set_io_for_test,
 	_set_fetcher_for_test,
 	_fetcher_real_for_test: function(jobs) { return _fetcher(jobs); },

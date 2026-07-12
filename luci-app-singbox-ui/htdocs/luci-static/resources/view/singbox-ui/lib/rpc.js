@@ -2,8 +2,10 @@
 'require rpc';
 
 return L.Class.extend({
+    // async:true forks the subscription fetch and answers at once — poll
+    // sub_status().progress (SbCommon.waitSubRefresh) for the outcome.
     callRefresh:     rpc.declare({ object: 'singbox-ui', method: 'refresh',
-                                   params: [ 'what', 'name' ] }),
+                                   params: [ 'what', 'name', 'async' ] }),
     callRestart:    rpc.declare({ object: 'singbox-ui', method: 'restart' }),
     callStatus:     rpc.declare({ object: 'singbox-ui', method: 'status' }),
     callReadConfig: rpc.declare({ object: 'singbox-ui', method: 'read_config' }),

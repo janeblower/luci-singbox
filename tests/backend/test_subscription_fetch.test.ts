@@ -160,4 +160,62 @@ sub._fetcher_real_for_test([
     // and our own body cap, which forkop has no equivalent of
     expect(lines).toContain("--max-filesize");
   });
+
+  it("Test D: sub_proxy reaches curl as -x; a bogus one is ignored, not passed", async () => {
+    const dir = `/tmp/sbfetch-d-${Date.now()}`;
+    await exec(`mkdir -p ${dir}/config ${dir}/tmp`);
+
+    // `viaproxy` fetches through a local socks inbound (the panel is blocked);
+    // `bogus` carries a value curl would happily read as a LOCAL FILE.
+    const uciCfg =
+      `config outbound 'viaproxy'\n` +
+      `\toption type 'subscription'\n` +
+      `\toption sub_url 'https://sub.example.com/x'\n` +
+      `\toption sub_proxy 'socks5h://127.0.0.1:2080'\n\n` +
+      `config outbound 'bogus'\n` +
+      `\toption type 'subscription'\n` +
+      `\toption sub_url 'https://sub.example.com/y'\n` +
+      `\toption sub_proxy 'file:///etc/shadow'\n`;
+    await putFile(uciCfg, `${dir}/config/singbox-ui`);
+
+    const probe = `
+let sub = require("subscription");
+let captured = {};
+sub._set_fetcher_for_test(function(jobs){
+  for (let j in jobs) captured[j.name] = j.proxy ?? null;
+  let fs = require("fs");
+  for (let j in jobs) { let f = fs.open(j.body_path,"w"); f.write("trojan://x@h:1#n\\n"); f.close(); }
+});
+let uci = require("uci").cursor(getenv("UCI_CONFIG_DIR"));
+sub._cmd_fetch_subs_for_test(uci);
+print(sprintf("%J", captured));
+`;
+    const probePath = `${dir}/probeD.uc`;
+    await putFile(probe, probePath);
+
+    const r = await runProbe(probePath, {
+      UCI_CONFIG_DIR: `${dir}/config`,
+      SINGBOX_TMPDIR: `${dir}/tmp`,
+      SINGBOX_SUB_CACHE: `${dir}/subcache`,
+    });
+    const prog = await exec(`cat ${dir}/tmp/sub_progress.json`);
+    await exec(`rm -rf ${dir}`);
+
+    expect(r.exitCode).toBe(0);
+    const cap = JSON.parse(r.stdout) as Record<string, string | null>;
+    expect(cap.viaproxy).toBe("socks5h://127.0.0.1:2080");
+    expect(cap.bogus).toBeNull();
+
+    // Test E rides along: the progress side-car the async refresh polls.
+    const p = JSON.parse(prog.stdout) as {
+      running: number;
+      total: number;
+      done: number;
+      results: Record<string, string>;
+    };
+    expect(p.running).toBe(0);
+    expect(p.total).toBe(2);
+    expect(p.done).toBe(2);
+    expect(p.results.viaproxy).toBe("ok");
+  });
 });

@@ -2,7 +2,9 @@
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.icons as SbIcons';
+'require view.singbox-ui.lib.common as SbCommon';
 
+var waitSubRefresh   = SbCommon.waitSubRefresh;
 var callClashGet     = SbRpc.callClashGet;
 var callClashMutate  = SbRpc.callClashMutate;
 var callClashDelay   = SbRpc.callClashDelay;
@@ -75,18 +77,20 @@ function buildDashboard() {
 		return false;
 	}
 
+	function applySubStatus(res) {
+		var map = {};
+		var arr = (res && res.subscriptions) || [];
+		(Array.isArray(arr) ? arr : []).forEach(function (s) { map[s.name] = s; });
+		state.subs = map;
+		// DASH-2: prefer the server-supplied `now` (like the status panel)
+		// so "updated X ago" stays accurate on routers whose clock drifts
+		// from the browser (common without NTP). Falls back to the client
+		// clock in agoText() when the backend doesn't emit `now`.
+		state.subsNow = (res && +res.now) || 0;
+	}
+
 	function fetchSubs() {
-		return callSubStatus().then(function (res) {
-			var map = {};
-			var arr = (res && res.subscriptions) || [];
-			(Array.isArray(arr) ? arr : []).forEach(function (s) { map[s.name] = s; });
-			state.subs = map;
-			// DASH-2: prefer the server-supplied `now` (like the status panel)
-			// so "updated X ago" stays accurate on routers whose clock drifts
-			// from the browser (common without NTP). Falls back to the client
-			// clock in agoText() when the backend doesn't emit `now`.
-			state.subsNow = (res && +res.now) || 0;
-		}, function () { /* keep last known */ });
+		return callSubStatus().then(applySubStatus, function () { /* keep last known */ });
 	}
 	function refreshSubs() { return fetchSubs().then(repaint); }
 
@@ -120,9 +124,14 @@ function buildDashboard() {
 		state.subUpdating[name] = true;
 		renderGroups();
 		function done() { state.subUpdating[name] = false; }
-		return callRefresh('subscriptions', name).then(function () {
+		// async: the RPC returns as soon as the fetch is forked; waitSubRefresh
+		// polls sub_status (which also keeps the table live) until the backend's
+		// progress side-car reports the run finished.
+		return callRefresh('subscriptions', name, true).then(function () {
+			return waitSubRefresh(function (res) { applySubStatus(res); repaint(); });
+		}).then(function () {
 			done();
-			return Promise.all([ fetchSubs(), fetchProxies(), fetchMeta() ]).then(repaint);
+			return Promise.all([ fetchProxies(), fetchMeta() ]).then(repaint);
 		}, function () {
 			done();
 			renderGroups();

@@ -412,6 +412,138 @@ function clash_to_outbound(p) {
 	return o;
 }
 
+// -------------------------------------------------------- Xray -> sing-box
+// An Xray/V2Ray config JSON: `outbounds` entries carry `protocol` +
+// settings/streamSettings where sing-box has a flat `type` + fields. Panels
+// hand these out verbatim as an "Xray JSON subscription"; without a translation
+// the whole body parses to zero nodes, which the fetcher reads as "wrong UA"
+// and rotates through every profile for nothing.
+
+const XRAY_PROXY_PROTOS = {
+	vless: true, vmess: true, trojan: true, shadowsocks: true, socks: true, http: true,
+};
+// Local policy outbounds every Xray config carries. Ignored, NOT counted as
+// skipped: "45 nodes, 3 skipped" on a clean config is a bug report waiting to
+// happen.
+const XRAY_LOCAL_PROTOS = { freedom: true, blackhole: true, dns: true, loopback: true };
+
+// xray_stream(ss, out) -> bool. Fills out.tls / out.transport. false means the
+// stream is one we cannot represent (xhttp, kcp, quic, …) — skip the node
+// rather than ship an outbound that silently talks plain TCP instead.
+function xray_stream(ss, out) {
+	if (type(ss) !== "object") return true;   // no streamSettings = plain TCP
+
+	let sec = lc(s_of(ss.security));
+	if (sec === "tls" || sec === "reality") {
+		let ts = (sec === "reality") ? ss.realitySettings : ss.tlsSettings;
+		if (type(ts) !== "object") ts = {};
+		let t = { enabled: true };
+		let sni = ts.serverName;
+		if (sni != null && sni !== "") t.server_name = "" + sni;
+		if (is_yes(ts.allowInsecure)) t.insecure = true;
+		let alpn = alpn_of(ts.alpn);
+		if (alpn) t.alpn = alpn;
+		let fp = ts.fingerprint;
+		if (fp != null && fp !== "" && fp !== "none")
+			t.utls = { enabled: true, fingerprint: "" + fp };
+		if (sec === "reality") {
+			let r = { enabled: true };
+			if (ts.publicKey != null && ts.publicKey !== "") r.public_key = "" + ts.publicKey;
+			if (ts.shortId  != null && ts.shortId  !== "") r.short_id   = "" + ts.shortId;
+			t.reality = r;
+			if (!t.utls) t.utls = { enabled: true, fingerprint: "chrome" };
+		}
+		out.tls = t;
+	}
+
+	let net = lc(s_of(ss.network));
+	if (net === "" || net === "tcp" || net === "raw") return true;   // xray 25.x renamed tcp -> raw
+
+	if (net === "ws") {
+		let o = (type(ss.wsSettings) === "object") ? ss.wsSettings : {};
+		let t = { type: "ws", path: (o.path != null && o.path !== "") ? "" + o.path : "/" };
+		let h = {};
+		if (type(o.headers) === "object") for (let k in o.headers) h[k] = "" + o.headers[k];
+		if (o.host != null && o.host !== "" && h.Host == null) h.Host = "" + o.host;
+		if (length(h)) t.headers = h;
+		out.transport = t;
+		return true;
+	}
+	if (net === "grpc") {
+		let o = (type(ss.grpcSettings) === "object") ? ss.grpcSettings : {};
+		let t = { type: "grpc" };
+		if (o.serviceName != null && o.serviceName !== "") t.service_name = "" + o.serviceName;
+		out.transport = t;
+		return true;
+	}
+	if (net === "httpupgrade") {
+		let o = (type(ss.httpupgradeSettings) === "object") ? ss.httpupgradeSettings : {};
+		let t = { type: "httpupgrade" };
+		if (o.path != null && o.path !== "") t.path = "" + o.path;
+		if (o.host != null && o.host !== "") t.host = "" + o.host;
+		out.transport = t;
+		return true;
+	}
+	if (net === "h2" || net === "http") {
+		let o = (type(ss.httpSettings) === "object") ? ss.httpSettings : {};
+		let t = { type: "http" };
+		if (o.path != null && o.path !== "") t.path = "" + o.path;
+		if (o.host != null && o.host !== "")
+			t.host = (type(o.host) === "array") ? o.host : [ "" + o.host ];
+		out.transport = t;
+		return true;
+	}
+	return false;
+}
+
+// xray_to_outbound(o) — one Xray outbound -> one sing-box outbound (no tag).
+// null = skip.
+function xray_to_outbound(o) {
+	if (type(o) !== "object") return null;
+	let proto = lc(s_of(o.protocol));
+	if (!XRAY_PROXY_PROTOS[proto]) return null;
+	let st = (type(o.settings) === "object") ? o.settings : {};
+	let out;
+
+	if (proto === "vless" || proto === "vmess") {
+		let v = (type(st.vnext) === "array") ? st.vnext[0] : null;
+		if (type(v) !== "object") return null;
+		let u = (type(v.users) === "array") ? v.users[0] : null;
+		if (type(u) !== "object" || s_of(u.id) === "") return null;
+		out = { type: proto, server: s_of(v.address), server_port: port_of(v),
+		        uuid: s_of(u.id) };
+		if (proto === "vless") {
+			// "none" is xray's way of spelling "no flow"; sing-box rejects it.
+			if (u.flow != null && u.flow !== "" && u.flow !== "none") out.flow = "" + u.flow;
+		} else {
+			out.alter_id = +u.alterId || 0;
+			out.security = (s_of(u.security) !== "") ? s_of(u.security) : "auto";
+		}
+	} else {
+		let srv = (type(st.servers) === "array") ? st.servers[0] : null;
+		if (type(srv) !== "object") return null;
+		out = { type: proto, server: s_of(srv.address), server_port: port_of(srv) };
+		if (proto === "trojan") {
+			if (s_of(srv.password) === "") return null;
+			out.password = s_of(srv.password);
+		} else if (proto === "shadowsocks") {
+			if (s_of(srv.method) === "" || s_of(srv.password) === "") return null;
+			out.method   = s_of(srv.method);
+			out.password = s_of(srv.password);
+		} else {
+			let u = (type(srv.users) === "array") ? srv.users[0] : null;
+			if (type(u) === "object") {
+				if (s_of(u.user) !== "") out.username = s_of(u.user);
+				if (s_of(u.pass) !== "") out.password = s_of(u.pass);
+			}
+		}
+	}
+
+	if (out.server === "" || !out.server_port) return null;
+	if (!xray_stream(o.streamSettings, out)) return null;
+	return out;
+}
+
 // ------------------------------------------------------------- format parsers
 
 function nodes_from_yaml(body) {
@@ -428,6 +560,28 @@ function nodes_from_yaml(body) {
 	return { format: "clash", nodes: nodes, skipped: skipped };
 }
 
+// is_xray_list(list) — an Xray outbound has `protocol`, a sing-box one has
+// `type`. One entry deciding for the whole body is fine: no panel mixes the two
+// dialects in a single document.
+function is_xray_list(list) {
+	for (let o in list)
+		if (type(o) === "object" && o.protocol != null && o.type == null) return true;
+	return false;
+}
+
+function nodes_from_xray(list) {
+	let nodes = [], skipped = 0;
+	for (let o in list) {
+		if (type(o) === "object" && XRAY_LOCAL_PROTOS[lc(s_of(o.protocol))]) continue;
+		let ob = null;
+		try { ob = xray_to_outbound(o); } catch (_) { ob = null; }
+		if (!ob) { skipped++; continue; }
+		let nm = (type(o) === "object" && o.tag != null && o.tag !== "") ? "" + o.tag : null;
+		push(nodes, { outbound: ob, display_name: nm, link: null });
+	}
+	return { format: "xray", nodes: nodes, skipped: skipped };
+}
+
 function nodes_from_json(body) {
 	let nodes = [], skipped = 0;
 	let doc = null;
@@ -436,6 +590,8 @@ function nodes_from_json(body) {
 	if (type(doc) === "array") list = doc;
 	else if (type(doc) === "object" && type(doc.outbounds) === "array") list = doc.outbounds;
 	else if (type(doc) === "object" && doc.type != null) list = [ doc ];
+	else if (type(doc) === "object" && doc.protocol != null) list = [ doc ];
+	if (is_xray_list(list)) return nodes_from_xray(list);
 	for (let o in list) {
 		if (type(o) !== "object" || !JSON_PROXY_TYPES[s_of(o.type)]) { skipped++; continue; }
 		let nm = (o.tag != null && o.tag !== "") ? "" + o.tag : null;
@@ -525,4 +681,5 @@ return {
 	// test seams
 	_yaml_proxies: yaml_proxies,
 	_clash_to_outbound: clash_to_outbound,
+	_xray_to_outbound: xray_to_outbound,
 };

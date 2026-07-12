@@ -240,6 +240,136 @@ describe("test_subformat", () => {
     expect(JSON.parse(single.lines[0]).o.type).toBe("hysteria2");
   });
 
+  it("F6: an Xray config JSON is translated to sing-box outbounds", async () => {
+    const { lines, stat } = await fetchBody(
+      JSON.stringify({
+        outbounds: [
+          // every Xray config ships these; they are local policy, not nodes,
+          // and must not inflate `skipped`
+          { protocol: "freedom", tag: "direct" },
+          { protocol: "blackhole", tag: "block" },
+          {
+            protocol: "vless",
+            tag: "R1",
+            settings: {
+              vnext: [
+                {
+                  address: "r.example.com",
+                  port: 443,
+                  users: [
+                    {
+                      id: "uuid-1",
+                      flow: "xtls-rprx-vision",
+                      encryption: "none",
+                    },
+                  ],
+                },
+              ],
+            },
+            streamSettings: {
+              network: "tcp",
+              security: "reality",
+              realitySettings: {
+                serverName: "www.example.org",
+                publicKey: "PUBKEY",
+                shortId: "ab12",
+                fingerprint: "chrome",
+              },
+            },
+          },
+          {
+            protocol: "vmess",
+            tag: "W1",
+            settings: {
+              vnext: [
+                {
+                  address: "w.example.com",
+                  port: 80,
+                  users: [{ id: "uuid-2", alterId: 0, security: "auto" }],
+                },
+              ],
+            },
+            streamSettings: {
+              network: "ws",
+              wsSettings: {
+                path: "/ray",
+                headers: { Host: "cdn.example.com" },
+              },
+            },
+          },
+          {
+            protocol: "shadowsocks",
+            tag: "S1",
+            settings: {
+              servers: [
+                {
+                  address: "s.example.com",
+                  port: 8388,
+                  method: "aes-128-gcm",
+                  password: "p@ss",
+                },
+              ],
+            },
+          },
+          // kcp has no sing-box equivalent: skip the node rather than ship an
+          // outbound that would silently talk plain TCP
+          {
+            protocol: "vless",
+            tag: "KCP",
+            settings: {
+              vnext: [
+                {
+                  address: "k.example.com",
+                  port: 1,
+                  users: [{ id: "uuid-3" }],
+                },
+              ],
+            },
+            streamSettings: { network: "kcp" },
+          },
+        ],
+      }),
+    );
+    expect(stat.format).toBe("xray");
+    expect(stat.skipped).toBe(1); // the kcp node only
+    expect(lines.length).toBe(3);
+
+    const byName: Record<string, any> = {};
+    for (const l of lines) {
+      const n = JSON.parse(l);
+      byName[n.n] = n.o;
+    }
+    expect(byName.R1).toMatchObject({
+      type: "vless",
+      server: "r.example.com",
+      server_port: 443,
+      uuid: "uuid-1",
+      flow: "xtls-rprx-vision",
+      tls: {
+        enabled: true,
+        server_name: "www.example.org",
+        utls: { enabled: true, fingerprint: "chrome" },
+        reality: { enabled: true, public_key: "PUBKEY", short_id: "ab12" },
+      },
+    });
+    expect(byName.W1).toMatchObject({
+      type: "vmess",
+      uuid: "uuid-2",
+      alter_id: 0,
+      security: "auto",
+      transport: {
+        type: "ws",
+        path: "/ray",
+        headers: { Host: "cdn.example.com" },
+      },
+    });
+    expect(byName.S1).toMatchObject({
+      type: "shadowsocks",
+      method: "aes-128-gcm",
+      password: "p@ss",
+    });
+  });
+
   it("F3: a gzip-compressed body is transparently decompressed", async () => {
     const { lines, stat } = await fetchBody(
       "trojan://pw@t.example.com:443#T\nvless://uuid@v.example.com:443?security=tls#V\n",

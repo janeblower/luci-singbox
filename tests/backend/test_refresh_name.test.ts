@@ -55,4 +55,44 @@ describe("test_refresh_name", () => {
     const got = await callRefresh('{"what":"subscriptions","name":"a;b rm"}');
     expect(got).not.toContain(";");
   });
+
+  // async:true must answer the browser without waiting for the fetch: a slow
+  // provider used to outlive the ubus timeout, which the dashboard reported as
+  // "refresh failed" over a fetch that was still running.
+  it("async:true returns at once, stamps a running progress stub, and still forks the fetch", async () => {
+    const tmp = `${STUB_DIR}/tmp`;
+    await exec(`rm -rf ${tmp} && mkdir -p ${tmp} && rm -f ${ARGV_OUT}`);
+
+    // The stub sleeps: if refresh were still synchronous, the handler could not
+    // answer before the sleep elapsed.
+    const slow = `${STUB_DIR}/slow_stub.uc`;
+    await putFile(
+      `system(["/bin/sh","-c","sleep 2"]);\n` +
+        `let fs=require("fs");\n` +
+        `let f=fs.open(getenv("ARGV_OUT"),"w");\n` +
+        `if (f) { f.write(join("\\n", ARGV)); f.close(); }\n`,
+      slow,
+    );
+
+    const t0 = Date.now();
+    const r = await exec(
+      `printf '%s' '{"what":"subscriptions","name":"mysub","async":true}' | ` +
+        `env SUBSCRIPTION_UC=${slow} RULESETS_UC=/bin/true ARGV_OUT=${ARGV_OUT} ` +
+        `SINGBOX_TMP=${tmp} ucode -L ${LIB} ${HANDLER} call refresh`,
+    );
+    const elapsed = Date.now() - t0;
+
+    expect(r.stdout).toContain('"ok"');
+    expect(elapsed).toBeLessThan(2000); // did not wait for the child's sleep
+
+    const prog = JSON.parse(
+      (await exec(`cat ${tmp}/sub_progress.json`)).stdout,
+    ) as { running: number };
+    expect(prog.running).toBe(1); // the dashboard's first poll sees a live run
+
+    // the fetch really was forked, not dropped on the floor when we exited
+    await exec("sleep 4");
+    const argv = (await exec(`cat ${ARGV_OUT} 2>/dev/null || true`)).stdout;
+    expect(argv.split("\n")).toContain("mysub");
+  }, 20000);
 });

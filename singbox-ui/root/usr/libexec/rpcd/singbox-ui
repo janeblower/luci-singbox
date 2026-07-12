@@ -124,6 +124,23 @@ function run_env(cmd, env_map) {
 	return system(shcmd) === 0;
 }
 
+// run_bg(argv) — fire-and-forget. The child is disowned by the shell and
+// reparented to init, so it outlives this handler (rpcd forks a handler per
+// call and reaps it as soon as we answer). Used by refresh {async:true}: a
+// multi-subscription fetch over a slow link takes longer than ubus is willing
+// to wait, and a timed-out ubus call reads to the browser as "refresh failed"
+// while the fetch is in fact still running.
+// `trap '' HUP` is inherited as "ignored" by the child: without it the fetch
+// dies with whoever tears down our session's process group (a closing ssh
+// channel, procd stopping the service), which is exactly the long fetch this
+// fork exists to protect.
+function run_bg(argv) {
+	let quoted = [];
+	for (let a in argv) push(quoted, sq(a));
+	system(["/bin/sh", "-c",
+	        "trap '' HUP; (" + join(" ", quoted) + " >/dev/null 2>&1 &)"]);
+}
+
 // run_capture(argv) — like run() but returns child stdout (string) or null.
 // stderr is discarded so it can't corrupt the captured body.
 function run_capture(argv) {
@@ -215,6 +232,22 @@ function call_restart() {
 	else emit_err("service restart failed");
 }
 
+// SUB_PROGRESS — written by subscription.uc as it walks the subscriptions, read
+// back by sub_status. For an async refresh WE stamp the "queued" state before
+// forking: otherwise the dashboard's first poll races the child and reads the
+// PREVIOUS run's file, sees running:0, and declares the refresh finished before
+// it started.
+const SUB_PROGRESS = `${TMPDIR}/sub_progress.json`;
+
+function progress_stub() {
+	fs.mkdir(TMPDIR, 0o755);
+	let f = fs.open(SUB_PROGRESS, "w", 0o644);
+	if (!f) return;
+	f.write(sprintf("%J", { running: 1, total: 0, done: 0, current: "",
+	                        started: time(), finished: 0, results: {} }));
+	f.close();
+}
+
 function call_refresh() {
 	let args = parse_args();
 	let what = args.what || "all";
@@ -224,12 +257,14 @@ function call_refresh() {
 	}
 	let name = (type(args.name) === "string" && match(args.name, /^[A-Za-z0-9_-]+$/))
 	           ? args.name : "";
+	let async = (args.async === true || args.async === "1" || args.async === 1);
 	let ok = true;
 	if (what === "subscriptions" || what === "all") {
 		let argv = name !== ""
 			? uc_argv(SUBSCRIPTION_UC, "refresh", "force", name)
 			: uc_argv(SUBSCRIPTION_UC, "refresh", "force");
-		if (!run(argv)) ok = false;
+		if (async) { progress_stub(); run_bg(argv); }
+		else if (!run(argv)) ok = false;
 	}
 	if (what === "rulesets" || what === "all") {
 		if (!run(uc_argv(RULESETS_UC, "refresh", "force"))) ok = false;
@@ -362,9 +397,12 @@ function call_sub_status() {
 	let arr;
 	try { arr = json(raw || "[]"); } catch (e) { arr = []; }
 	if (type(arr) !== "array") arr = [];
+	let prog = null;
+	try { prog = json(fs.readfile(SUB_PROGRESS) ?? ""); } catch (_) { prog = null; }
+	if (type(prog) !== "object") prog = null;
 	// `now` lets the dashboard render "updated X ago" off the server clock
 	// (DASH-2) instead of the browser clock, which can be skewed.
-	emit({ status: "ok", now: time(), subscriptions: arr });
+	emit({ status: "ok", now: time(), subscriptions: arr, progress: prog });
 }
 
 function call_protocol_schema() {
