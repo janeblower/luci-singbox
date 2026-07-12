@@ -58,7 +58,7 @@ msgstr "Действие"
 msgid "Active"
 msgstr "Активные"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:329
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:402
 msgid "Active Connections"
 msgstr "Активные соединения"
 
@@ -85,9 +85,9 @@ msgid ""
 "block), bypassing the proxy for those nodes. Unsafe — leave off unless you "
 "trust the feed."
 msgstr ""
-"Разрешить провайдеру напрямую маршрутизировать импортированные ноды "
-"(detour на direct/block), в обход прокси для этих нод. Небезопасно — "
-"оставляйте выключенным, если не доверяете фиду."
+"Разрешить провайдеру напрямую маршрутизировать импортированные ноды (detour "
+"на direct/block), в обход прокси для этих нод. Небезопасно — оставляйте "
+"выключенным, если не доверяете фиду."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:53
 msgid "Auto-update subscriptions"
@@ -159,6 +159,7 @@ msgstr ""
 "пробуются остальные профили."
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:158
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:350
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:242
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:289
 msgid "Close"
@@ -203,7 +204,8 @@ msgstr "Копировать"
 msgid "Copy failed — select the text and copy manually."
 msgstr "Не удалось скопировать — выделите текст и скопируйте вручную."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:471
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:306
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:544
 msgid "Copy proxy link"
 msgstr "Скопировать ссылку"
 
@@ -244,7 +246,7 @@ msgstr "DNS-серверы, правила и глобальные настро�
 msgid "Dashboard"
 msgstr "Дашборд"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:289
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:362
 msgid "Dashboard currently unavailable"
 msgstr "Дашборд сейчас недоступен"
 
@@ -289,8 +291,8 @@ msgstr "Отключить"
 msgid "Disabled. Reload the page."
 msgstr "Отключено. Перезагрузите страницу."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:322
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:326
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:395
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:399
 msgid "Downlink"
 msgstr "Входящий"
 
@@ -348,7 +350,7 @@ msgstr "Развернуть в selector"
 msgid "Expected scheme://host:port, e.g. socks5h://127.0.0.1:2080"
 msgstr "Ожидается scheme://host:port, например socks5h://127.0.0.1:2080"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:405
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:478
 msgid "Expires"
 msgstr "Истекает"
 
@@ -445,6 +447,10 @@ msgstr "Хост"
 msgid "Hosts file"
 msgstr "Файл hosts"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:337
+msgid "Idle timeout"
+msgstr "Тайм-аут простоя"
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:99
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:94
 msgid "Import"
@@ -462,9 +468,9 @@ msgid ""
 "cascades). Off by default: turning it on changes the selector membership, "
 "which can move your saved node pick."
 msgstr ""
-"Импортировать группы urltest/selector, которые присылает провайдер "
-"(группы по странам, каскады detour). По умолчанию выключено: включение "
-"меняет состав селектора, из-за чего может слететь сохранённый выбор ноды."
+"Импортировать группы urltest/selector, которые присылает провайдер (группы "
+"по странам, каскады detour). По умолчанию выключено: включение меняет состав "
+"селектора, из-за чего может слететь сохранённый выбор ноды."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:88
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:137
@@ -539,6 +545,14 @@ msgstr "Установка…"
 msgid "Internal: unhandled scheme"
 msgstr "Внутренняя ошибка: необработанная схема"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:339
+msgid "Interrupt existing connections"
+msgstr "Прерывать существующие соединения"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:333
+msgid "Interval"
+msgstr "Интервал"
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:53
 msgid "Invalid JSON: "
 msgstr "Некорректный JSON: "
@@ -579,8 +593,8 @@ msgid ""
 "flash."
 msgstr ""
 "Хранить последнюю рабочую копию на флеш-памяти, чтобы подписка переживала "
-"перезагрузку. Выключено — кэш только в RAM (теряется при перезагрузке); "
-"так пароли нод не попадают на флеш."
+"перезагрузку. Выключено — кэш только в RAM (теряется при перезагрузке); так "
+"пароли нод не попадают на флеш."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:307
 msgid "Keep only nodes whose name matches. Empty = keep all."
@@ -652,7 +666,7 @@ msgstr ""
 msgid "Max group nesting"
 msgstr "Макс. вложенность групп"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:331
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:404
 msgid "Memory Usage"
 msgstr "Использование памяти"
 
@@ -665,7 +679,7 @@ msgstr "Отсутствует поле \"type\""
 msgid "Monitoring"
 msgstr "Мониторинг"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:411
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:484
 msgid "More details"
 msgstr "Подробнее"
 
@@ -690,6 +704,10 @@ msgstr "Имя уже используется в другом разделе"
 msgid "Name must not be empty"
 msgstr "Имя не должно быть пустым"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:340
+msgid "No"
+msgstr "Нет"
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:410
 msgid "No active connections"
 msgstr "Нет активных соединений"
@@ -698,7 +716,7 @@ msgstr "Нет активных соединений"
 msgid "No closed connections"
 msgstr "Нет закрытых соединений"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:585
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:667
 msgid "No proxy groups. Configure selector/urltest outbounds."
 msgstr "Нет прокси-групп. Настройте selector/urltest outbound'ы."
 
@@ -706,7 +724,7 @@ msgstr "Нет прокси-групп. Настройте selector/urltest outb
 msgid "Node name prefix"
 msgstr "Префикс имени ноды"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:399
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:472
 msgid "Nodes"
 msgstr "Узлы"
 
@@ -801,7 +819,7 @@ msgstr "Предпросмотр конфигурации (dry-run)"
 msgid "Preview generated config"
 msgstr "Показать сгенерированный конфиг"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:409
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:482
 msgid "Profile"
 msgstr "Профиль"
 
@@ -818,7 +836,7 @@ msgstr "Ссылка скопирована"
 msgid "RPC failed: "
 msgstr "Ошибка RPC: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:406
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:479
 msgid "Refill"
 msgstr "Пополнение"
 
@@ -913,13 +931,17 @@ msgstr "Набор правил"
 msgid "Rule-Sets"
 msgstr "Наборы правил"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:334
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:407
 msgid "Running"
 msgstr "Работает"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:295
 msgid "Search"
 msgstr "Поиск"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:322
+msgid "Selected"
+msgstr "Выбрано"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:290
 msgid "Selector type"
@@ -941,7 +963,7 @@ msgstr "Служба запущена"
 msgid "Service stopped"
 msgstr "Служба остановлена"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:333
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:406
 msgid "Services info"
 msgstr "Информация о сервисах"
 
@@ -959,7 +981,7 @@ msgid "Show only parameters compatible with the installed sing-box version"
 msgstr ""
 "Показывать только параметры, совместимые с установленной версией sing-box"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:545
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:627
 msgid "Sort by latency"
 msgstr "Сортировать по задержке"
 
@@ -978,7 +1000,7 @@ msgstr "Статус"
 msgid "Status unavailable"
 msgstr "Статус недоступен"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:334
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:407
 msgid "Stopped"
 msgstr "Остановлен"
 
@@ -994,7 +1016,7 @@ msgstr "Под-правила должны быть правилами типа 
 msgid "Subscription URL"
 msgstr "URL подписки"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:415
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:488
 msgid "Subscription info:"
 msgstr "Информация о подписке:"
 
@@ -1007,11 +1029,11 @@ msgstr "Не удалось обновить подписку"
 msgid "Subscriptions"
 msgstr "Подписки"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:410
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:483
 msgid "Support"
 msgstr "Поддержка"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:328
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:401
 msgid "System info"
 msgstr "Системная информация"
 
@@ -1024,6 +1046,10 @@ msgstr "TLS"
 msgid "Test latency"
 msgstr "Тестирование задержки"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:330
+msgid "Testing URL"
+msgstr "URL проверки"
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:231
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:288
 msgid "Time"
@@ -1033,12 +1059,16 @@ msgstr "Время"
 msgid "Toggle visibility"
 msgstr "Переключить видимость"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:320
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:403
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:335
+msgid "Tolerance"
+msgstr "Допуск"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:393
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:476
 msgid "Traffic"
 msgstr "Трафик"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:324
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:397
 msgid "Traffic Total"
 msgstr "Всего трафика"
 
@@ -1072,6 +1102,15 @@ msgstr "URL не должен быть пустым"
 msgid "URL-test URL"
 msgstr "URL для url-test"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:615
+msgid "URLTest details"
+msgstr "Подробности URLTest"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:344
+#, javascript-format
+msgid "URLTest details: %s"
+msgstr "Подробности URLTest: %s"
+
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:66
 msgid "Unknown ALPN protocol:"
 msgstr "Неизвестный ALPN-протокол:"
@@ -1096,17 +1135,17 @@ msgstr "Неподдерживаемый vless flow: "
 msgid "Update interval (s)"
 msgstr "Интервал обновления (с)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:533
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:534
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:606
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:607
 msgid "Update subscriptions"
 msgstr "Обновить подписки"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:400
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:473
 msgid "Updated"
 msgstr "Обновлено"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:321
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:325
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:394
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:398
 msgid "Uplink"
 msgstr "Исходящий"
 
@@ -1123,7 +1162,7 @@ msgstr "Используется в"
 msgid "User-Agent"
 msgstr "User-Agent"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:336
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:409
 msgid "Version"
 msgstr "Версия"
 
@@ -1134,6 +1173,10 @@ msgid ""
 msgstr ""
 "Когда включено, несовместимые по версии поля скрываются вместо отображения "
 "неактивными. Применяется после сохранения/перезагрузки."
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:340
+msgid "Yes"
+msgstr "Да"
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:324
 msgid "anytls link is missing the password"
@@ -1175,7 +1218,7 @@ msgstr "удалено в"
 msgid "requires"
 msgstr "требуется"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:344
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:417
 msgid ""
 "sing-box is stopped or its Clash API is unreachable. Start the service (and "
 "enable the API in General settings) to display the dashboard."

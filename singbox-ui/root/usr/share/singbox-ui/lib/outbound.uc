@@ -128,6 +128,21 @@ function meta_entry(nm, ob, link) {
 	return e;
 }
 
+// urltest_meta(ob) — pull the dashboard info-modal's own fields (Testing URL/
+// Interval/Tolerance/Idle timeout/Interrupt) off a BUILT urltest outbound
+// object. sing-box's Clash API /proxies never echoes these back (its
+// proxyInfo() only ever puts type/name/udp/history/now/all — verified against
+// upstream experimental/clashapi/proxies.go), so this generator — which just
+// wrote them into the outbound — is the only place left that still knows them.
+// Stashing them in the same outbound-meta side-car the dashboard already polls
+// for display names costs no new rpcd method / no new call.
+function urltest_meta(ob) {
+	let e = {};
+	for (let k in ["url", "interval", "tolerance", "idle_timeout", "interrupt_exist_connections"])
+		if (ob[k] != null) e[k] = ob[k];
+	return e;
+}
+
 // A user-supplied regex must never abort config generation: an unclosed bracket
 // throws out of regexp(). Compile once, warn, and treat a broken pattern as
 // "filter not set" — same as an empty field.
@@ -341,7 +356,9 @@ function build_outbounds(cur) {
 						}
 						if (!add_ob(gob)) { built[r._tag] = null; return null; }
 						push(group_tags, r._tag);
-						meta[r._tag] = { name: r.name ?? r._tag, type: gt, link: null };
+						let gmeta = { name: r.name ?? r._tag, type: gt, link: null };
+						for (let k, v in urltest_meta(gob)) gmeta[k] = v;
+						meta[r._tag] = gmeta;
 						built[r._tag] = r._tag;
 						return r._tag;
 					};
@@ -407,6 +424,15 @@ function build_outbounds(cur) {
 			// built the same way. The registry IS the list of what exists; asking it
 			// beats keeping a second hand-written copy of the same set in helpers.uc.
 			outbound = build_constructor_for(section, kind);
+			// A hand-built urltest group's own url/interval/tolerance/idle_timeout
+			// live only in this UCI section — see urltest_meta() above for why the
+			// core can't hand them back. Stash them under the same tag the
+			// dashboard's info modal already looks up via outbound_meta.
+			if (outbound && kind === "urltest") {
+				let gmeta = urltest_meta(outbound);
+				gmeta.name = name; gmeta.type = "urltest"; gmeta.link = null;
+				meta[name] = gmeta;
+			}
 		} else {
 			warn(sprintf("outbound.uc: unknown type '%s' for '%s'; skipping\n", kind, name));
 			return;

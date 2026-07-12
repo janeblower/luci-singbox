@@ -63,6 +63,7 @@
   { "id": "dashboard.test",       "tab": "dashboard", "kind": "dashboard", "label": "Test (group latency)" },
   { "id": "dashboard.update_sub", "tab": "dashboard", "kind": "dashboard", "label": "Update (subscription)" },
   { "id": "dashboard.choose_node","tab": "dashboard", "kind": "dashboard", "label": "Select node (selector group)" },
+  { "id": "dashboard.urltest_info","tab": "dashboard", "kind": "dashboard", "label": "URLTest details modal (info button)" },
 
   { "id": "monitoring.tab_active",  "tab": "monitoring", "kind": "monitoring", "label": "Active tab button" },
   { "id": "monitoring.tab_closed",  "tab": "monitoring", "kind": "monitoring", "label": "Closed tab button" },

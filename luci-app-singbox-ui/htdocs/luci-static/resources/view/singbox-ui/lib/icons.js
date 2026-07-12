@@ -74,6 +74,13 @@ return L.Class.extend({
 			['circle', { 'cx': '11', 'cy': '11', 'r': '8' }]
 		]);
 	},
+	info: function () {
+		return svg([
+			['circle', { 'cx': '12', 'cy': '12', 'r': '10' }],
+			['path', { 'd': 'M12 16v-4' }],
+			['path', { 'd': 'M12 8h.01' }]
+		]);
+	},
 
 	// Border-tracing "switching node" animation: a rect stretched to the host box
 	// (hence no viewBox — it must scale to whatever it overlays), dashed via CSS

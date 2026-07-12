@@ -24,7 +24,8 @@
 import { test, assert, wait, clickTopTab } from './fixtures';
 
 export const COVERS = ["tab.dashboard",
-    "dashboard.sort", "dashboard.test", "dashboard.update_sub", "dashboard.choose_node"];
+    "dashboard.sort", "dashboard.test", "dashboard.update_sub", "dashboard.choose_node",
+    "dashboard.urltest_info"];
 
 test('dashboard: sort/test/update/choose-node buttons fire RPCs', async ({ page }) => {
     // Install the XHR stub BEFORE clicking the tab (which calls start()/poll()).
@@ -137,4 +138,103 @@ test('dashboard: sort/test/update/choose-node buttons fire RPCs', async ({ page 
     await wait(800);
     const muts = await page.evaluate(() => window.__rpc.mutate.length);
     assert('choose-node issued clash_mutate', muts >= 1, muts);
+});
+
+// E1: info button on a urltest group opens a details modal. Test params
+// (url/interval/tolerance) never come back from Clash's /proxies — sing-box's
+// own proxyInfo() only ever reports type/name/udp/history/now/all — so the
+// backend stashes them in outbound_meta instead (lib/outbound.uc:
+// urltest_meta()), keyed by the group's own tag same as state.proxies.
+test('dashboard: urltest group info button opens a details modal', async ({ page }) => {
+    await page.evaluate(() => {
+        const proxies = { proxies: {
+            AUTO: { type: 'urltest', all: ['a1', 'a2'], now: 'a1' },
+            a1: { type: 'vless', history: [{ delay: 90 }] },
+            a2: { type: 'vless', history: [{ delay: 250 }] }
+        }};
+        const meta = { meta: {
+            AUTO: { name: 'Auto', type: 'urltest', link: null,
+                url: 'https://provider.test/probe-e1', interval: '5m', tolerance: 50 },
+            a1: { name: 'Node One', type: 'VLESS', link: 'vless://uuid@example.com:443#one' },
+            a2: { name: 'Node Two', type: 'VLESS', link: 'vless://uuid@example.com:443#two' }
+        }};
+        window.__rpc = { mutate: [], delay: [], refresh: [] };
+        const R = (id, payload) => ({ jsonrpc: '2.0', id, result: [0, payload] });
+        function reply(msg) {
+            const p = msg.params || [];
+            const method = p[2], args = p[3] || {};
+            if (method === 'clash_get') {
+                const path = args.path || '';
+                if (/proxies/.test(path)) return R(msg.id, { status:'ok', body: JSON.stringify(proxies) });
+                if (/version/.test(path))  return R(msg.id, { status:'ok', body: '{"version":"1.12.0"}' });
+                return R(msg.id, { status:'ok', body: '{"connections":[],"downloadTotal":0,"uploadTotal":0}' });
+            }
+            if (method === 'sub_status')    return R(msg.id, { subscriptions: [], now: 1000 });
+            if (method === 'outbound_meta') return R(msg.id, meta);
+            if (method === 'clash_mutate') { window.__rpc.mutate.push(args); return R(msg.id, { status:'ok', body:'{}' }); }
+            if (method === 'clash_delay')  { window.__rpc.delay.push(args); return R(msg.id, { status:'ok', body:'{"delay":99}' }); }
+            if (method === 'refresh')      { window.__rpc.refresh.push(args); return R(msg.id, { status:'ok' }); }
+            return R(msg.id, null);
+        }
+        const RealXHR = window.XMLHttpRequest;
+        window.XMLHttpRequest = function StubXHR() {
+            const xhr = new RealXHR();
+            let url = '';
+            const open = xhr.open.bind(xhr);
+            xhr.open = function (m, u) { url = String(u); return open.apply(xhr, arguments); };
+            const send = xhr.send.bind(xhr);
+            xhr.send = function (bodyStr) {
+                if (/admin\/ubus/.test(url) && bodyStr) {
+                    let req; try { req = JSON.parse(bodyStr); } catch (e) { req = null; }
+                    if (req) {
+                        const out = Array.isArray(req) ? req.map(reply) : reply(req);
+                        Object.defineProperty(xhr, 'readyState',    { configurable:true, get:()=>4 });
+                        Object.defineProperty(xhr, 'status',        { configurable:true, get:()=>200 });
+                        Object.defineProperty(xhr, 'responseText',  { configurable:true, get:()=>JSON.stringify(out) });
+                        Object.defineProperty(xhr, 'response',      { configurable:true, get:()=>JSON.stringify(out) });
+                        setTimeout(() => { if (xhr.onreadystatechange) xhr.onreadystatechange(); }, 0);
+                        return;
+                    }
+                }
+                return send.apply(xhr, arguments);
+            };
+            return xhr;
+        };
+    });
+    await clickTopTab(page, 'dashboard');
+    await wait(2500);
+
+    // A plain selector never gets this button — assert it exists AND is scoped
+    // to the urltest group before clicking it.
+    const infoPresent = await page.evaluate(
+        () => !!document.querySelector('.sb-dashboard-grp-info'));
+    assert('urltest group renders an info button', infoPresent);
+
+    await page.evaluate(() => {
+        const b = document.querySelector('.sb-dashboard-grp-info') as HTMLElement | null;
+        if (b) b.click();
+    });
+    await wait(500);
+
+    const modalText = await page.evaluate(() => {
+        const ov = document.getElementById('modal_overlay');
+        return ov ? ov.textContent || '' : '';
+    });
+    assert('info modal shows the group title', /URLTest details/.test(modalText), modalText);
+    assert('info modal shows the testing URL', /provider\.test\/probe-e1/.test(modalText), modalText);
+    assert('info modal shows both member names',
+        /Node One/.test(modalText) && /Node Two/.test(modalText), modalText);
+
+    // Close button dismisses the modal. LuCI's ui.hideModal() doesn't touch
+    // #modal_overlay directly — it toggles 'modal-overlay-active' on <body>,
+    // which is what the overlay's visibility CSS is keyed on.
+    await page.evaluate(() => {
+        const ov = document.getElementById('modal_overlay') as HTMLElement;
+        const btn = Array.from(ov.querySelectorAll('button')).find((b) => /close/i.test(b.textContent || ''));
+        if (btn) (btn as HTMLButtonElement).click();
+    });
+    await wait(300);
+    const modalGone = await page.evaluate(
+        () => !document.body.classList.contains('modal-overlay-active'));
+    assert('Close button dismisses the modal', modalGone);
 });

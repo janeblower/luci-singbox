@@ -362,6 +362,22 @@ button.cbi-button.busy {
 .sb-lat-bad  { color: var(--error-color-medium, #c62828); }
 .sb-dashboard-unavailable { display: block; margin: 1em 0; }
 
+/* URLTest details modal (E1): a label/value param grid, then a scrollable node
+ * list. Lives inside ui.showModal(), not the dashboard grid, so it gets its
+ * own small block instead of riding sb-dashboard-* like the page proper. */
+.sb-urltest-details { min-width: 0; }
+.sb-urltest-params { display: grid; grid-template-columns: max-content 1fr;
+	gap: 6px 12px; margin-bottom: 12px; }
+.sb-urltest-row { display: contents; }
+.sb-urltest-row-key { color: var(--text-color-medium, #888); white-space: nowrap; }
+.sb-urltest-row-val { min-width: 0; overflow-wrap: anywhere; }
+.sb-urltest-nodes { max-height: 320px; overflow-y: auto;
+	border: 1px solid var(--background-color-low, lightgray); border-radius: 4px; }
+.sb-urltest-node { display: flex; align-items: center; gap: 8px;
+	padding: 6px 8px; border-bottom: 1px solid var(--background-color-low, lightgray); }
+.sb-urltest-node:last-child { border-bottom: none; }
+.sb-urltest-node-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+
 /* Inline SVG icons (lib/icons.js). Scoped to .sb-icon — a bare `svg {}` rule
  * would leak into the LuCI theme's own icons. Size comes from the caller
  * (font-size/width on the icon or its parent), not from width/height attrs. */

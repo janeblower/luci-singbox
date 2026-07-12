@@ -125,6 +125,9 @@ function loadDashboard() {
     Promise.resolve({ status: "ok" });
   let outboundMeta: (...a: unknown[]) => Promise<any> = () =>
     Promise.resolve({ status: "ok", meta: {} });
+  // ui.showModal(title, [nodes]) capture — the E1 urltest-details modal test
+  // reads this back instead of touching a real #modal_overlay.
+  let lastModal: { title: unknown; body: unknown } | null = null;
 
   const sandbox: Record<string, unknown> = {
     __moduleExports: null,
@@ -134,6 +137,10 @@ function loadDashboard() {
     ui: {
       createHandlerFn: (_ctx: unknown, fn: unknown) => fn,
       addNotification: () => {},
+      showModal: (title: unknown, body: unknown) => {
+        lastModal = { title, body };
+      },
+      hideModal: () => {},
     },
     document: {
       visibilityState: "visible",
@@ -215,6 +222,7 @@ function loadDashboard() {
       fireInterval: (id: string | number) => intervals[id as any]?.fn(),
       find: findNode,
       findAll,
+      getModal: () => lastModal,
     },
   };
 
@@ -973,5 +981,81 @@ describe("dashboard.js", () => {
     const src = readFileSync(DASHBOARD_JS, "utf8");
     const writes = src.match(/innerHTML\s*=\s*\S+/g) || [];
     expect(writes.every((w) => /=\s*'';?/.test(w))).toBe(true);
+  });
+
+  // E1: info button on a urltest group opens a details modal. Test params
+  // (url/interval/tolerance) never come back from Clash's /proxies (sing-box's
+  // proxyInfo() only reports type/name/udp/history/now/all) — the backend
+  // stashes them in outbound_meta instead (lib/outbound.uc: urltest_meta()),
+  // keyed by the same group tag as state.proxies.
+  it("urltest group: info button opens a details modal with params + members", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    const PROXIES = {
+      proxies: {
+        Latvia: { type: "urltest", now: "LV1", all: ["LV1", "LV2"] },
+        LV1: { type: "Vless", history: [{ delay: 80 }] },
+        LV2: { type: "Vless", history: [{ delay: 200 }] },
+      },
+    };
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    ctx.__test.setMeta(() =>
+      Promise.resolve({
+        status: "ok",
+        meta: {
+          Latvia: {
+            name: "Latvia",
+            type: "urltest",
+            link: null,
+            url: "https://provider.test/probe",
+            interval: "5m",
+            tolerance: 50,
+          },
+          LV1: {
+            name: "LV #1",
+            type: "vless",
+            link: "vless://uuid@a.example:443#lv1",
+          },
+          LV2: {
+            name: "LV #2",
+            type: "vless",
+            link: "vless://uuid@b.example:443#lv2",
+          },
+        },
+      }),
+    );
+    const d = Dash.buildDashboard();
+    await d.poll();
+    await d.refreshProxies();
+
+    // A plain selector never gets this button — only urltest groups carry
+    // test params for the modal to show.
+    const infoBtn = findNode(
+      d.node,
+      (n: any) =>
+        n.tag === "button" &&
+        /sb-dashboard-grp-info/.test(n.attrs?.class || "") &&
+        typeof n.attrs?.click === "function",
+    );
+    expect(!!infoBtn).toBe(true);
+    infoBtn.attrs.click();
+
+    const modal = ctx.__test.getModal();
+    expect(!!modal).toBe(true);
+    expect(String(modal.title)).toContain("URLTest details");
+    const bodyText = (modal.body as any[])
+      .map((n: any) => n.textContent)
+      .join(" ");
+    expect(bodyText).toContain("https://provider.test/probe");
+    expect(bodyText).toContain("LV #1");
+    expect(bodyText).toContain("LV #2");
   });
 });

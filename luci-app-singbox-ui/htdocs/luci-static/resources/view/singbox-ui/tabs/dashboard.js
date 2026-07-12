@@ -279,6 +279,79 @@ function buildDashboard() {
 		});
 	}
 
+	// URLTest details modal (E1). A urltest group's own test parameters
+	// (url/interval/tolerance/idle_timeout/interrupt_exist_connections) never
+	// come back from sing-box's Clash API — proxyInfo() only ever reports
+	// type/name/udp/history/now/all — so the backend stashes them in the same
+	// outbound-meta side-car the dashboard already polls for display names
+	// (lib/outbound.uc: urltest_meta()). Read them off state.meta[gname], same
+	// key as state.proxies[gname].
+	function urltestRow(key, value) {
+		return E('div', { 'class': 'sb-urltest-row' }, [
+			E('span', { 'class': 'sb-urltest-row-key' }, key),
+			E('span', { 'class': 'sb-urltest-row-val' }, value)
+		]);
+	}
+	function urltestNodeRow(tag) {
+		var p = (state.proxies && state.proxies[tag]) || {};
+		var m = nodeMeta(tag);
+		var ms = memberDelay(p);
+		var kids = [
+			E('span', { 'class': 'sb-urltest-node-name' }, displayName(tag)),
+			E('span', { 'class': 'sb-dashboard-node-type' }, p.type || m.type || ''),
+			E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
+		];
+		if (m.link && COPYABLE_RE.test(m.link))
+			kids.push(E('button', { 'class': 'btn cbi-button sb-dashboard-node-copy',
+				'title': _('Copy proxy link'), 'aria-label': _('Copy proxy link'),
+				'click': (function (link) {
+					return function (ev) { ev.stopPropagation(); return copyLink(link); };
+				})(m.link) }, SbIcons.copy()));
+		return E('div', { 'class': 'sb-urltest-node' }, kids);
+	}
+	function showUrltestModal(gname) {
+		var proxies = state.proxies || {};
+		var grp = proxies[gname] || {};
+		var gmeta = nodeMeta(gname);   // url/interval/tolerance/idle_timeout/interrupt_exist_connections
+		var rows = [];
+
+		if (grp.now) {
+			var p = proxies[grp.now] || {};
+			var m = nodeMeta(grp.now);
+			var ms = memberDelay(p);
+			rows.push(urltestRow(_('Selected'), E('span', {}, [
+				displayName(grp.now) + ' ',
+				E('span', { 'class': 'sb-dashboard-node-type' }, p.type || m.type || ''),
+				' ',
+				E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
+			])));
+		}
+		if (/^https?:\/\//i.test(gmeta.url || ''))
+			rows.push(urltestRow(_('Testing URL'),
+				E('a', { 'href': gmeta.url, 'target': '_blank', 'rel': 'noopener noreferrer' }, gmeta.url)));
+		if (gmeta.interval != null && gmeta.interval !== '')
+			rows.push(urltestRow(_('Interval'), '' + gmeta.interval));
+		if (gmeta.tolerance != null && gmeta.tolerance !== '')
+			rows.push(urltestRow(_('Tolerance'), gmeta.tolerance + ' ms'));
+		if (gmeta.idle_timeout != null && gmeta.idle_timeout !== '')
+			rows.push(urltestRow(_('Idle timeout'), '' + gmeta.idle_timeout));
+		if (gmeta.interrupt_exist_connections != null)
+			rows.push(urltestRow(_('Interrupt existing connections'),
+				gmeta.interrupt_exist_connections ? _('Yes') : _('No')));
+
+		var nodes = (grp.all || []).map(urltestNodeRow);
+
+		ui.showModal(_('URLTest details: %s').format(gname), [
+			E('div', { 'class': 'sb-urltest-details' }, [
+				E('div', { 'class': 'sb-urltest-params' }, rows),
+				E('div', { 'class': 'sb-urltest-nodes' }, nodes)
+			]),
+			E('div', { 'class': 'right', 'style': 'margin-top:12px;' }, [
+				E('button', { 'class': 'cbi-button', 'click': ui.hideModal }, _('Close'))
+			])
+		]);
+	}
+
 	function showUnreachable() {
 		root.innerHTML = '';
 		// The mounted chrome (state.ui) was just detached by innerHTML=''.
@@ -535,6 +608,15 @@ function buildDashboard() {
 		}
 
 		if (grp) {
+			// Info affordance only on urltest groups: a plain selector has no test
+			// params (url/interval/tolerance) for the modal to show.
+			if ((grp.type || '').toLowerCase() === 'urltest')
+				actions.push(E('button', { 'class': 'btn cbi-button sb-dashboard-grp-info',
+					'title': _('URLTest details'), 'aria-label': _('URLTest details'),
+					'click': ui.createHandlerFn(this, (function (g) {
+						return function () { return showUrltestModal(g); };
+					})(gname)) }, SbIcons.info()));
+
 			// The sort toggle rides in the section header instead of a toolbar row of
 			// its own: forkop has no such row, and a lone button floating above the
 			// sections was the most obviously out-of-place thing on the page.
