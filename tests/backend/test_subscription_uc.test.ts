@@ -104,7 +104,7 @@ print(n);
       `${dir}/singbox-ui`,
     );
     const _r = await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const check = await exec(
       `cat ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`,
@@ -132,7 +132,7 @@ print(n);
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const check = await exec(
       `cat ${dir}/runtime/sub_subT.txt 2>/dev/null || echo MISSING`,
@@ -160,7 +160,7 @@ print(n);
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const check = await exec(
       `cat ${dir}/runtime/sub_subU.txt 2>/dev/null || echo MISSING`,
@@ -180,7 +180,7 @@ print(n);
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const check = await exec(
       `grep '^trojan://' ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`,
@@ -201,7 +201,7 @@ print(n);
       `${dir}/singbox-ui`,
     );
     const _r = await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log SINGBOX_BOOT_FETCH=1 CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log SINGBOX_BOOT_FETCH=1 CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const check = await exec(
       `test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`,
@@ -223,7 +223,7 @@ print(n);
       uciSub("subB", { sub_url: "https://example.test/b" });
     await putFile(uci, `${dir}/singbox-ui`);
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const a = await exec(
       `test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`,
@@ -247,7 +247,7 @@ print(n);
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_CURL_RC=1 FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_CURL_RC=1 FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
     const check = await exec(
       `grep '^vless://kept@host:1' ${dir}/runtime/sub_subA.txt 2>/dev/null || echo MISSING`,
@@ -266,7 +266,7 @@ print(n);
       `config outbound 'subA'\n\toption type 'subscription'\n\toption sub_url 'https://example.test/sub'\n\toption sub_interval '3600'\n`,
       `${dir}/singbox-ui`,
     );
-    const baseEnv = `UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`;
+    const baseEnv = `UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`;
     // warm cache
     await exec(
       `cd /tmp/work && env ${baseEnv} ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
@@ -310,7 +310,7 @@ print(n);
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const log = await exec(`cat ${dir}/curl.log`);
     expect(log.stdout).toContain("-A v2raytun/1.0");
@@ -508,14 +508,12 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
     expect(r1.stdout.trim()).toBe(r2.stdout.trim());
   });
 
-  it("C2.1.10: PROXY_SCHEME_RE shared scheme constant present in subscription.uc", async () => {
-    const content = readFileSync(`${HOST_SHARE}/subscription.uc`, "utf8");
-    expect(content).toMatch(
-      /PROXY_SCHEME_RE\s*=\s*\/\^\(vmess\|vless\|ss\|trojan\|hy2\|hysteria2\|tuic\|hysteria\|hy\|anytls\|socks5\?\)/,
-    );
-    expect(content).toMatch(/match\(t, PROXY_SCHEME_RE\)/);
-    expect(content).not.toMatch(/PROXY_SCHEME_RE.*http/);
-  });
+  // C2.1.10's source-grep for the PROXY_SCHEME_RE decode-trigger constant is gone
+  // with the constant itself: subscription.uc no longer decides "is this base64
+  // worth decoding?" by pattern-matching the body. lib/subformat.uc decodes,
+  // parses, and a body that yields NO node is simply not written — which is the
+  // property C2.1.10 was protecting. The behavioural sibling below
+  // ("non-scheme b64 payload yields no output file") still guards it.
 
   it("C2.1.10: non-scheme b64 payload yields no output file", async () => {
     const dir = tmpDir();
@@ -529,7 +527,7 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
     const check = await exec(
       `test -f ${dir}/runtime/sub_subC.txt && echo EXISTS || echo MISSING`,
@@ -543,7 +541,13 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
     expect(content).toMatch(/match\(lc\(t\)/);
   });
 
-  it("C2.1.11: plaintext body with HTTPS:// is accepted", async () => {
+  // Was "C2.1.11: plaintext body with HTTPS:// is accepted" — it asserted that a
+  // body whose only line is `HTTPS://…` got written verbatim to sub_<name>.txt.
+  // Phase 3 ends that: the file holds NODES, not raw lines, so a line no parser
+  // can turn into an outbound is counted in `skipped` and nothing is written.
+  // (outbound.uc discarded such a line at generate time anyway — it just did so
+  // silently, one layer later.)
+  it("C2.1.11: a body whose only line is an unsupported scheme yields no nodes", async () => {
     const dir = tmpDir();
     await exec(`mkdir -p ${dir}/bin ${dir}/runtime`);
     await putFile(CURL_STUB, `${dir}/bin/curl`);
@@ -554,16 +558,12 @@ print(parsed == null ? "null" : sprintf("%J", parsed));
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
     const check = await exec(
-      `test -s ${dir}/runtime/sub_subD.txt && echo ok || echo MISSING`,
+      `test -s ${dir}/runtime/sub_subD.txt && echo EXISTS || echo MISSING`,
     );
-    expect(check.stdout.trim()).toBe("ok");
-    const urlCheck = await exec(
-      `grep -qi '^HTTPS://' ${dir}/runtime/sub_subD.txt && echo found || echo NOTFOUND`,
-    );
-    expect(urlCheck.stdout.trim()).toBe("found");
+    expect(check.stdout.trim()).toBe("MISSING");
     await exec(`rm -rf ${dir}`);
   });
 
@@ -611,7 +611,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const check = await exec(
       `test -s ${dir}/runtime/sub_subA.txt && echo ok || echo MISSING`,
@@ -639,7 +639,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null`,
     );
     const check = await exec(
       `test -s ${dir}/runtime/sub_subBig.txt && echo ok || echo MISSING`,
@@ -666,7 +666,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
       `${dir}/singbox-ui`,
     );
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>/dev/null || true`,
     );
     const check = await exec(
       `test -f ${dir}/runtime/sub_subBig.txt && echo EXISTS || echo MISSING`,
@@ -690,7 +690,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
     await exec(`touch -t 197001020000 ${dir}/runtime/sub_subN.txt`);
     await exec(`> ${dir}/curl.log`);
     await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log SINGBOX_NO_RELOAD=1 CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} refresh 2>/dev/null`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 FAKE_BODY_FILE=${dir}/body FAKE_CURL_LOG=${dir}/curl.log SINGBOX_NO_RELOAD=1 CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} refresh 2>/dev/null`,
     );
     const log = await exec(`cat ${dir}/curl.log`);
     expect(log.stdout.trim().length).toBeGreaterThan(0);
@@ -707,7 +707,7 @@ printf("%s\\n", ok ? "all-covered" : "missing");
       `${dir}/singbox-ui`,
     );
     const r = await exec(
-      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>&1 1>/dev/null || true`,
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache SINGBOX_RETRY_SLEEP=0 CURL=${dir}/bin/curl PATH=${dir}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin ucode -L ${LIB} ${SUB_UC} fetch-subs 2>&1 1>/dev/null || true`,
     );
     expect(r.stdout).toMatch(/error:.*no subscription outbounds/i);
     await exec(`rm -rf ${dir}`);

@@ -58,6 +58,8 @@ print(sprintf("%J", captured));
     const r = await runProbe(probePath, {
       UCI_CONFIG_DIR: `${dir}/config`,
       SINGBOX_TMPDIR: `${dir}/tmp`,
+      SINGBOX_SUB_CACHE: `${dir}/subcache`,
+      SINGBOX_SB_VERSION: "1.11.0",
     });
 
     await exec(`rm -rf ${dir}`);
@@ -75,11 +77,12 @@ print(sprintf("%J", captured));
     expect(job1?.ua).toContain("v2rayNG");
     expect(job1?.has_cfg).toBe(false);
 
-    // mysub2: also picked up, ua is empty (DEFAULT_UA applied at fetch time, not here), no cfg
+    // mysub2: also picked up. An empty sub_user_agent no longer reaches the
+    // fetcher as "": U2 resolves the profile BEFORE the job is built, so the
+    // first candidate is sing-box's own UA (not the old Chrome default).
     const job2 = cap.find((j) => j.url.includes("sub.example.com/y"));
     expect(job2).toBeDefined();
-    // Empty sub_user_agent -> raw ua stored as "" (DEFAULT_UA substituted inside _fetcher, not here)
-    expect(job2?.ua).toBe("");
+    expect(job2?.ua).toBe("sing-box/1.11.0");
     expect(job2?.has_cfg).toBe(false);
   });
 
@@ -149,13 +152,12 @@ sub._fetcher_real_for_test([
     // custom UA must be a single token
     expect(lines).toContain("Custom UA/1.0");
 
-    // empty UA must fall back to the DEFAULT_UA (Chrome string)
-    const hasDefaultUA = lines.some(
-      (l) => l.includes("Mozilla/5.0") && l.includes("Chrome"),
-    );
-    expect(hasDefaultUA).toBe(true);
-
-    // --max-time flag must be present
+    // --max-time flag must be present, plus the D2 stall guards
     expect(lines).toContain("--max-time");
+    expect(lines).toContain("--connect-timeout");
+    expect(lines).toContain("--speed-time");
+    expect(lines).toContain("--speed-limit");
+    // and our own body cap, which forkop has no equivalent of
+    expect(lines).toContain("--max-filesize");
   });
 });

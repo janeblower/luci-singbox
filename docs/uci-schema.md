@@ -466,12 +466,18 @@ Shared outbound dial options emitted by `_shared/dial.uc`. Applies to all proxy 
 
 ### Subscription outbound (`type=subscription`)
 
-Subscription URL and update policy are stored on the outbound UCI section itself. The actual resolved proxy URLs are written by `subscription.uc` to `$TMPDIR/sub_<name>.txt` and read back by `outbound.uc` at config-generation time — `outbound.uc` never reads `sub_url` or `sub_interval` directly.
+Subscription URL and update policy are stored on the outbound UCI section itself. The resolved nodes are written by `subscription.uc` to `$TMPDIR/sub_<name>.txt` and read back by `outbound.uc` at config-generation time — `outbound.uc` never reads `sub_url` or `sub_interval` directly.
+
+`sub_<name>.txt` is line based, and a line is EITHER a share-link URI (uri-list / base64 feeds) OR a JSON node record `{"o":<outbound>,"n":<display name>,"l":null}` (Clash YAML and sing-box JSON feeds have no share-link). `lib/subformat.uc` writes and reads both forms; nothing else may parse that file.
+
+A "last known good" copy of every node list also lives on flash in `/etc/singbox-ui/sub-cache/` (dir `0700`, files `0600` — the node lines carry passwords). It is restored into tmpfs at boot, and is invalidated whenever the `(sub_url, sub_user_agent, hwid)` profile changes.
 
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `sub_url` | string | HTTPS URL | yes | `type=subscription` | Subscription feed URL. Read by `subscription.uc` (`cmd_fetch_subs`) to download the proxy list; **not read by `outbound.uc`**. |
-| `sub_user_agent` | string | any UA string | no | `type=subscription` | `User-Agent` sent when fetching the feed (combobox with common browser UAs). Empty → a Chrome default. Read by `subscription.uc`; **not read by `outbound.uc`**. |
+| `sub_user_agent` | string | `sing-box`, `happ`, `v2rayn`, `v2rayng`, `mihomo`, `clash.meta` (or a literal UA) | no | `type=subscription` | Client profile tried FIRST when fetching. The backend rotates through the remaining profiles until a body actually parses (a panel commonly answers HTTP 200 with an HTML stub for the "wrong" UA). Empty → start at `sing-box/<version>`. A value that is not a known profile id is sent verbatim (back-compat). Read by `subscription.uc`. |
+| `sub_auto_hwid` | bool | `0`/`1` | no | `type=subscription` | Default `1`. Send `X-HWID: md5(MAC+model)` (plus `X-Device-OS`/`X-Device-Model`/`X-Ver-OS`/locale headers). Remnawave/Happ panels bind a config to one device and return an empty body without it. |
+| `sub_hwid` | string | `xxxx-xxxx-xxxx-xxxx` | no | `type=subscription` | Explicit hardware ID; overrides the derived one. |
 | `sub_interval` | integer | seconds | no | `type=subscription` | Auto-refresh interval in seconds. Read by `subscription.uc` scheduler; **not read by `outbound.uc`**. |
 | `sub_multi` | bool | `0`/`1` | no | `type=subscription` | When `1`, all parsed proxy URLs are expanded into individual child outbounds grouped under a selector or urltest group. When `0`, only the first parseable URL is used. Read by `outbound.uc`. |
 | `sub_selector_type` | enum | `selector`, `urltest` | no | `sub_multi=1` | Group type for expanded proxies. Defaults to `selector`. Read by `outbound.uc`. |

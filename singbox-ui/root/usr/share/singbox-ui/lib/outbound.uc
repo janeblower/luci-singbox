@@ -10,6 +10,7 @@ let fs = require("fs");
 let helpers = require("helpers");
 let reg = require("builder.protocols.registry");
 let sharelink = require("sharelink");
+let subformat = require("subformat");
 let filler = require("builder._filler");
 
 // Eagerly load every active descriptor so register() fires. Anything not
@@ -60,6 +61,10 @@ function build_constructor_for(s, proto) {
 }
 
 function read_subscription_urls(name) {
+	// A line in sub_<name>.txt is EITHER a share-link URI (the historical form,
+	// still what a uri-list feed produces) OR a JSON node record — Clash YAML and
+	// sing-box JSON feeds have no share-link to write down. subformat.parse_node
+	// reads both, and the call sites below must never care which.
 	let path = `${TMPDIR}/sub_${name}.txt`;
 	let f = fs.open(path, "r");
 	if (!f) {
@@ -136,7 +141,7 @@ function build_outbounds(cur) {
 			if (section.sub_multi === "1") {
 				let children = [];
 				for (let u in urls) {
-					let p = sharelink.parse_proxy_link(u);
+					let p = subformat.parse_node(u);
 					if (!p) continue;
 					// Tag from CONTENT, not from position: a provider reordering
 					// its node list must not move the user's selector pick onto
@@ -167,7 +172,7 @@ function build_outbounds(cur) {
 
 			// Single-URL fallback (sub_multi=0): pick the first parseable one.
 			for (let u in urls) {
-				let p = sharelink.parse_proxy_link(u);
+				let p = subformat.parse_node(u);
 				if (!p) continue;
 				p.outbound.tag = name;
 				outbound = p.outbound;

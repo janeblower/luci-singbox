@@ -90,16 +90,20 @@ msgstr ""
 msgid "Auto-update subscriptions"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:240
+msgid "Automatic (sing-box, then others)"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:252
+msgid "Automatic HWID"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:22
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:124
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:116
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:98
 msgid "Basic"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:238
-msgid "Browser (Chrome)"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:22
@@ -139,6 +143,13 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:44
 msgid "Clash API"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:239
+msgid ""
+"Client profile whose User-Agent is sent when fetching. Tried first; if the "
+"provider answers with something unparseable, the other profiles are tried in "
+"turn."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:157
@@ -296,7 +307,7 @@ msgstr ""
 msgid "Error: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:252
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:271
 msgid "Expand to selector"
 msgstr ""
 
@@ -343,6 +354,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:9
 msgid "Global sing-box settings: cache file, log."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:258
+msgid "HWID"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
@@ -597,6 +612,12 @@ msgstr ""
 msgid "Output file (empty = procd stdout)"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:263
+msgid ""
+"Override the hardware ID sent to the provider. Leave empty to use the "
+"automatic one."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:94
 #, javascript-format
 msgid ""
@@ -749,8 +770,14 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:257
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:276
 msgid "Selector type"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:256
+msgid ""
+"Send an X-HWID header derived from this router (MAC + model). Required by "
+"panels that bind a subscription to one device."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:31
@@ -882,7 +909,7 @@ msgstr ""
 msgid "URL must not be empty"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:264
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:283
 msgid "URL-test URL"
 msgstr ""
 
@@ -911,7 +938,7 @@ msgstr ""
 msgid "Up"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:246
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:265
 msgid "Update interval (s)"
 msgstr ""
 
@@ -933,14 +960,8 @@ msgstr ""
 msgid "Used by"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:231
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:236
 msgid "User-Agent"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:234
-msgid ""
-"User-Agent header sent when fetching the subscription. Pick a preset or type "
-"a custom value."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:330

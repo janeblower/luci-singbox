@@ -8,34 +8,38 @@ const SHARE = "/tmp/work/singbox-ui/root/usr/share/singbox-ui";
 describe("test_subscription_unit", () => {
   useGuest();
 
-  it("S3-6: try_b64_decode is exported and decodes scheme-bearing base64", async () => {
+  // S3-6 used to poke subscription.uc's try_b64_decode, which decided whether a
+  // body was base64 by looking for a share-link scheme in the DECODED text. That
+  // heuristic is gone: lib/subformat.uc decodes and PARSES, and a payload that
+  // yields no node is simply not a subscription. Same two cases, same guarantee.
+  it("S3-6: a scheme-bearing base64 body decodes into nodes", async () => {
     const r = await runUcode(
       `
-let sub = require("subscription");
-// b64("vless://uuid@host:443\\n") — decoded line starts with a known scheme.
-print(sub.try_b64_decode("dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==") + "\\n");
+let sf = require("subformat");
+// b64("vless://uuid@host:443\\n")
+let res = sf.parse_body("dmxlc3M6Ly91dWlkQGhvc3Q6NDQzCg==", 0);
+printf("%s %d\\n", res.format, length(res.nodes));
 `,
       [],
       [SHARE],
     );
     expect(r.exitCode).toBe(0);
-    expect(r.stdout).toMatch(/^vless:\/\/uuid@host:443/);
+    expect(r.stdout.trim()).toBe("uri 1");
   });
 
-  it("S3-6: try_b64_decode passes through non-scheme payloads unchanged", async () => {
+  it("S3-6: base64 of a plaintext page yields no nodes (never mistaken for a feed)", async () => {
     const r = await runUcode(
       `
-let sub = require("subscription");
-// b64("visit https://example.com/path") decodes to plaintext with no
-// LINE starting with a scheme -> must be returned as the original b64.
-let s = "dmlzaXQgaHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo";
-print((sub.try_b64_decode(s) === s) ? "same" : "changed");
+let sf = require("subformat");
+// b64("visit https://example.com/path") — plaintext, no proxy URL anywhere.
+let res = sf.parse_body("dmlzaXQgaHR0cHM6Ly9leGFtcGxlLmNvbS9wYXRo", 0);
+printf("%d\\n", length(res.nodes));
 `,
       [],
       [SHARE],
     );
     expect(r.exitCode).toBe(0);
-    expect(r.stdout.trim()).toBe("same");
+    expect(r.stdout.trim()).toBe("0");
   });
 
   it("S3-7: _set_io_for_test installs an injectable reader", async () => {

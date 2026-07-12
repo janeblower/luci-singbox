@@ -127,6 +127,7 @@ print(sprintf("%J", sub._cmd_sub_status_for_test(uci)));
     const r = await runProbe(probePath, {
       UCI_CONFIG_DIR: `${dir}/cfg`,
       SINGBOX_TMPDIR: `${dir}/run`,
+      SINGBOX_SUB_CACHE: `${dir}/subcache`,
     });
     await exec(`rm -rf ${dir}`);
 
@@ -187,6 +188,7 @@ print("after_pass2_meta_exists=", (m2 != null) ? "yes" : "no"); print("\\n");
     const r = await runProbe(probePath, {
       UCI_CONFIG_DIR: `${dir}/cfg`,
       SINGBOX_TMPDIR: `${dir}/run`,
+      SINGBOX_SUB_CACHE: `${dir}/subcache`,
     });
     await exec(`rm -rf ${dir}`);
 
@@ -240,6 +242,7 @@ print("after_pass2_meta_exists=", (m2 != null) ? "yes" : "no"); print("\\n");
     const r = await runProbe(probePath, {
       UCI_CONFIG_DIR: `${dir}/cfg`,
       SINGBOX_TMPDIR: `${dir}/run`,
+      SINGBOX_SUB_CACHE: `${dir}/subcache`,
     });
     await exec(`rm -rf ${dir}`);
 

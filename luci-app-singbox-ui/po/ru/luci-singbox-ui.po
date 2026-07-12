@@ -83,6 +83,14 @@ msgstr "Все устройства"
 msgid "Auto-update subscriptions"
 msgstr "Авто-обновление подписок"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:240
+msgid "Automatic (sing-box, then others)"
+msgstr "Автоматически (sing-box, затем остальные)"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:252
+msgid "Automatic HWID"
+msgstr "Автоматический HWID"
+
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:22
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:124
@@ -90,10 +98,6 @@ msgstr "Авто-обновление подписок"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:98
 msgid "Basic"
 msgstr "Основное"
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:238
-msgid "Browser (Chrome)"
-msgstr "Браузер (Chrome)"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:22
 msgid "Cache file"
@@ -133,6 +137,16 @@ msgstr "Не удалось разобрать URL vmess"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:44
 msgid "Clash API"
 msgstr "Clash API"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:239
+msgid ""
+"Client profile whose User-Agent is sent when fetching. Tried first; if the "
+"provider answers with something unparseable, the other profiles are tried in "
+"turn."
+msgstr ""
+"Профиль клиента, чей User-Agent отправляется при загрузке подписки. "
+"Пробуется первым; если провайдер отдаёт нераспознаваемый ответ, по очереди "
+"пробуются остальные профили."
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:157
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:237
@@ -296,7 +310,7 @@ msgstr ""
 msgid "Error: "
 msgstr "Ошибка: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:252
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:271
 msgid "Expand to selector"
 msgstr "Развернуть в selector"
 
@@ -348,6 +362,10 @@ msgstr "Создание…"
 msgid "Global sing-box settings: cache file, log."
 msgstr "Глобальные настройки sing-box: кэш-файл, лог."
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:258
+msgid "HWID"
+msgstr "HWID"
+
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
 msgid "Hide"
 msgstr "Скрыть"
@@ -384,14 +402,14 @@ msgstr "Импорт share-link"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:88
 #, javascript-format
 msgid "Imported as \"%s\". Press \"Save & Apply\" to commit the changes."
-msgstr "Импортировано как «%s». Нажмите «Сохранить и применить», чтобы зафиксировать изменения."
+msgstr ""
 "Импортировано как «%s». Нажмите «Сохранить и применить», чтобы зафиксировать "
 "изменения."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:84
 #, javascript-format
 msgid "Imported as \"%s\". Press \"Save & Apply\" to commit."
-msgstr "Импортировано как «%s». Нажмите «Сохранить и применить», чтобы зафиксировать."
+msgstr ""
 "Импортировано как «%s». Нажмите «Сохранить и применить», чтобы зафиксировать."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:115
@@ -610,6 +628,14 @@ msgstr "Исходящие"
 msgid "Output file (empty = procd stdout)"
 msgstr "Файл вывода (пусто = stdout procd)"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:263
+msgid ""
+"Override the hardware ID sent to the provider. Leave empty to use the "
+"automatic one."
+msgstr ""
+"Переопределить аппаратный идентификатор, отправляемый провайдеру. Пусто — "
+"использовать автоматический."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:94
 #, javascript-format
 msgid ""
@@ -771,9 +797,17 @@ msgstr "Работает"
 msgid "Search"
 msgstr "Поиск"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:257
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:276
 msgid "Selector type"
 msgstr "Тип селектора"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:256
+msgid ""
+"Send an X-HWID header derived from this router (MAC + model). Required by "
+"panels that bind a subscription to one device."
+msgstr ""
+"Отправлять заголовок X-HWID, вычисленный из данных роутера (MAC + модель). "
+"Требуется панелями, которые привязывают подписку к одному устройству."
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:31
 msgid "Service running"
@@ -798,7 +832,7 @@ msgstr "Показать"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:16
 msgid "Show only parameters compatible with the installed sing-box version"
-msgstr "Показывать только параметры, совместимые с установленной версией sing-box"
+msgstr ""
 "Показывать только параметры, совместимые с установленной версией sing-box"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:339
@@ -906,7 +940,7 @@ msgstr "Настройки интерфейса"
 msgid "URL must not be empty"
 msgstr "URL не должен быть пустым"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:264
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:283
 msgid "URL-test URL"
 msgstr "URL для url-test"
 
@@ -935,7 +969,7 @@ msgstr "Неподдерживаемый vless flow: "
 msgid "Up"
 msgstr "Отдача"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:246
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:265
 msgid "Update interval (s)"
 msgstr "Интервал обновления (с)"
 
@@ -957,17 +991,9 @@ msgstr "Исходящий"
 msgid "Used by"
 msgstr "Используется в"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:231
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:236
 msgid "User-Agent"
 msgstr "User-Agent"
-
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:234
-msgid ""
-"User-Agent header sent when fetching the subscription. Pick a preset or type "
-"a custom value."
-msgstr ""
-"Заголовок User-Agent при загрузке подписки. Выберите пресет или введите своё "
-"значение."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:330
 msgid "Version"
@@ -1093,6 +1119,9 @@ msgstr "В vmess-ссылке отсутствует server/port/uuid"
 
 #~ msgid "Both (tcp+udp)"
 #~ msgstr "Оба (tcp+udp)"
+
+#~ msgid "Browser (Chrome)"
+#~ msgstr "Браузер (Chrome)"
 
 #~ msgid "Certificate path"
 #~ msgstr "Путь к сертификату"
@@ -1528,6 +1557,13 @@ msgstr "В vmess-ссылке отсутствует server/port/uuid"
 
 #~ msgid "Uploaded"
 #~ msgstr "Отдано"
+
+#~ msgid ""
+#~ "User-Agent header sent when fetching the subscription. Pick a preset or "
+#~ "type a custom value."
+#~ msgstr ""
+#~ "Заголовок User-Agent при загрузке подписки. Выберите пресет или введите "
+#~ "своё значение."
 
 #~ msgid "Users"
 #~ msgstr "Пользователи"

@@ -228,20 +228,39 @@ function buildOutboundsMap() {
 		return SbValidators.isUrl(value);
 	};
 
-	o = s.taboption('basic', form.Value, 'sub_user_agent', _('User-Agent'));
+	// A panel serves a DIFFERENT body per User-Agent (Clash YAML here, a base64
+	// URI list there, an HTML "open in the app" stub for a browser UA). The
+	// backend therefore rotates through the known client profiles until a body
+	// actually parses — a free-text UA would only pin it to one guess. Pick a
+	// profile ID, not a UA string; empty = start with sing-box and rotate.
+	o = s.taboption('basic', form.ListValue, 'sub_user_agent', _('User-Agent'));
 	o.modalonly = true;
 	o.depends('type', 'subscription');
-	o.description = _('User-Agent header sent when fetching the subscription. ' +
-		'Pick a preset or type a custom value.');
-	o.default = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 ' +
-		'(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-	o.value(o.default, _('Browser (Chrome)'));
-	o.value('v2rayNG/1.8.5', 'v2rayNG');
-	o.value('v2raytun/1.0', 'v2raytun');
-	o.value('Happ/1.0', 'Happ');
-	o.value('sing-box/1.11.0', 'sing-box');
-	o.value('clash-verge/1.6.0', 'clash-verge');
-	o.value('curl/8.7.1', 'curl');
+	o.description = _('Client profile whose User-Agent is sent when fetching. Tried first; if the provider answers with something unparseable, the other profiles are tried in turn.');
+	o.value('', _('Automatic (sing-box, then others)'));
+	o.value('sing-box', 'sing-box');
+	o.value('happ', 'Happ');
+	o.value('v2rayn', 'v2rayN');
+	o.value('v2rayng', 'v2rayNG');
+	o.value('mihomo', 'Mihomo');
+	o.value('clash.meta', 'Clash.Meta');
+	o.default = '';
+
+	// Remnawave/Happ-style panels bind a config to a device: without an X-HWID
+	// they hand back an empty body. The default is derived from the router's MAC
+	// and model, which is stable across reboots and needs no user action.
+	o = s.taboption('basic', form.Flag, 'sub_auto_hwid', _('Automatic HWID'));
+	o.modalonly = true;
+	o.default   = '1';
+	o.depends('type', 'subscription');
+	o.description = _('Send an X-HWID header derived from this router (MAC + model). Required by panels that bind a subscription to one device.');
+
+	o = s.taboption('basic', form.Value, 'sub_hwid', _('HWID'));
+	o.modalonly   = true;
+	o.password    = true;
+	o.placeholder = 'xxxx-xxxx-xxxx-xxxx';
+	o.depends('type', 'subscription');
+	o.description = _('Override the hardware ID sent to the provider. Leave empty to use the automatic one.');
 
 	o = s.taboption('basic', form.Value, 'sub_interval', _('Update interval (s)'));
 	o.modalonly   = true;
