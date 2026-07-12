@@ -362,6 +362,17 @@ function require_dir(sub) {
         try { require("builder." + sub + "." + m[1]); loaded++; }
         catch (e) { warn(sprintf("registry.require_dir(%s): failed to load %s: %s\n", sub, m[1], e)); }
     }
+    // A glob that matches nothing registers nothing — silently, and the config
+    // then simply lacks those types. That is the exact failure this function was
+    // written to abolish (the hardcoded lists it replaced could only ever lose
+    // ONE forgotten descriptor; a mis-anchored glob loses every one of them), and
+    // the first draft of it did precisely that. It should be unreachable now —
+    // the anchor is derived from a module `-L` has already resolved, so a bad
+    // path fails loudly at require() long before we get here — but "should be
+    // unreachable" is what the old lists' authors believed too. Say it out loud.
+    if (!loaded)
+        warn(sprintf("registry.require_dir(%s): no descriptor modules found under %s\n",
+                     sub, sourcepath(0, true) + "/../" + sub));
     return loaded;
 }
 
