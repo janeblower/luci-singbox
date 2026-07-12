@@ -139,6 +139,37 @@ function buildOutboundsMap() {
 		return node;
 	};
 
+	// H3: pin a distinct, generated X-HWID to each subscription outbound at
+	// creation. subscription.uc hwid_for() already prefers an explicit
+	// sub_hwid over the router-derived one (same for every subscription) —
+	// only the frontend needs to write one in, once, for that section.
+	// Must fire ONLY for sections created in THIS editing session: an
+	// EXISTING subscription's device binding must not change just because
+	// its modal was opened/saved (NO-migration). The field's own
+	// load/cfgvalue fires for existing sections too and can't tell new from
+	// old, so hook handleAdd instead — name IS the section id here
+	// (s.anonymous = false). newOutboundSids is consulted by sub_hwid's own
+	// parse() override below (map.save() is NOT the right hook: GridSection's
+	// modal builds a throwaway CBIMap per open — see renderMoreOptionsModal/
+	// handleModalSave in form.js — whose own .save() does the real parse+write;
+	// the outer m.save() we control is never called on a normal Add).
+	var newOutboundSids = {};
+	var origHandleAdd = s.handleAdd;
+	s.handleAdd = function (ev, name) {
+		newOutboundSids[name] = true;
+		return origHandleAdd.apply(this, arguments);
+	};
+
+	function genHwid() {
+		var b = new Uint8Array(8);
+		if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(b);
+		else for (var i = 0; i < 8; i++) b[i] = Math.floor(Math.random() * 256);
+		var hex = Array.prototype.map.call(b, function (x) {
+			return (x < 16 ? '0' : '') + x.toString(16);
+		}).join('');
+		return hex.slice(0, 4) + '-' + hex.slice(4, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16);
+	}
+
 	var o;
 	o = s.taboption('basic', form.Flag, 'enabled', _('Enable'));
 	o.default  = '1';
@@ -263,6 +294,23 @@ function buildOutboundsMap() {
 	o.placeholder = 'xxxx-xxxx-xxxx-xxxx';
 	o.depends('type', 'subscription');
 	o.description = _('Override the hardware ID sent to the provider. Leave empty to use the automatic one.');
+	// H3: on Save, if this is a section created THIS session (newOutboundSids),
+	// its type is subscription, and the user left HWID blank, pin a generated
+	// one instead of leaving it empty. AbstractValue.parse() skips write()
+	// entirely for an empty formvalue (it calls remove() instead), so the hook
+	// has to sit here, not on write(). GridSection.cloneOptions() (form.js)
+	// copies this own-property override onto the modal's throwaway clone, the
+	// same mechanism sub_url's custom validate above already relies on. The
+	// 'type' option is declared earlier in this section, so by the time this
+	// parse() runs its write() has already landed in the uci changeset.
+	var origSubHwidParse = o.parse;
+	o.parse = function (section_id) {
+		if (newOutboundSids[section_id] && !this.formvalue(section_id) &&
+		    uci.get('singbox-ui', section_id, 'type') === 'subscription') {
+			return Promise.resolve(this.write(section_id, genHwid()));
+		}
+		return origSubHwidParse.apply(this, arguments);
+	};
 
 	// Bootstrapping case: the panel itself is blocked, so the only route to it is
 	// the tunnel the panel is supposed to configure. Point this at a local
