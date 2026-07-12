@@ -7,12 +7,15 @@
 // refresh and leaves the router without outbounds.
 //
 // Node record (the unit every parser produces, and the unit lib/outbound.uc
-// consumes):  { outbound: <sing-box outbound object, no tag>, display_name, link }
+// consumes):  { outbound: <sing-box outbound object, no tag>, display_name, link, detour_name }
 //   - uri-list bodies keep their share-link in `link` (dashboard copy-link).
 //   - Clash/JSON bodies have no share-link -> link is null.
+//   - detour_name is the provider's original `detour` reference (sing-box JSON
+//     only), kept as a NAME for later within-subscription resolution — a raw
+//     `detour` is never persisted on the outbound itself (see nodes_from_json).
 //
 // On-disk form (sub_<name>.txt) stays LINE based:
-//   * a line starting with `{` is a JSON node record {"o":…,"n":…,"l":…}
+//   * a line starting with `{` is a JSON node record {"o":…,"n":…,"l":…,"d":…}
 //   * anything else is a share-link URI (unchanged, human-inspectable)
 // parse_node() below is the single reader for both, used by lib/outbound.uc.
 //
@@ -555,7 +558,7 @@ function nodes_from_yaml(body) {
 		try { ob = clash_to_outbound(p); } catch (_) { ob = null; }
 		if (!ob) { skipped++; continue; }
 		let nm = (type(p) === "object" && p.name != null && p.name !== "") ? "" + p.name : null;
-		push(nodes, { outbound: ob, display_name: nm, link: null });
+		push(nodes, { outbound: ob, display_name: nm, link: null, detour_name: null });
 	}
 	return { format: "clash", nodes: nodes, skipped: skipped };
 }
@@ -577,7 +580,7 @@ function nodes_from_xray(list) {
 		try { ob = xray_to_outbound(o); } catch (_) { ob = null; }
 		if (!ob) { skipped++; continue; }
 		let nm = (type(o) === "object" && o.tag != null && o.tag !== "") ? "" + o.tag : null;
-		push(nodes, { outbound: ob, display_name: nm, link: null });
+		push(nodes, { outbound: ob, display_name: nm, link: null, detour_name: null });
 	}
 	return { format: "xray", nodes: nodes, skipped: skipped };
 }
@@ -596,8 +599,17 @@ function nodes_from_json(body) {
 		if (type(o) !== "object" || !JSON_PROXY_TYPES[s_of(o.type)]) { skipped++; continue; }
 		let nm = (o.tag != null && o.tag !== "") ? "" + o.tag : null;
 		let ob = {};
-		for (let k in o) if (k !== "tag") ob[k] = o[k];
-		push(nodes, { outbound: ob, display_name: nm, link: null });
+		let detour_name = null;
+		for (let k in o) {
+			if (k === "tag") continue;
+			// A provider `detour` is an untrusted reference resolved later, within
+			// this subscription only (outbound.uc). Never persist it as a live field
+			// — a raw `detour:"direct"` would resolve onto our own direct outbound and
+			// route the node OUTSIDE the proxy (leak).
+			if (k === "detour") { detour_name = (o[k] != null && o[k] !== "") ? "" + o[k] : null; continue; }
+			ob[k] = o[k];
+		}
+		push(nodes, { outbound: ob, display_name: nm, link: null, detour_name: detour_name });
 	}
 	return { format: "singbox", nodes: nodes, skipped: skipped };
 }
@@ -655,7 +667,9 @@ function parse_body(body, depth) {
 // a compact JSON record.
 function encode_node(n) {
 	if (n.link != null && n.link !== "") return n.link;
-	return sprintf("%J", { o: n.outbound, n: n.display_name, l: null });
+	let rec = { o: n.outbound, n: n.display_name, l: null };
+	if (n.detour_name != null && n.detour_name !== "") rec.d = n.detour_name;
+	return sprintf("%J", rec);
 }
 
 // parse_node(line) — the inverse, used by lib/outbound.uc at generate time.
@@ -665,12 +679,14 @@ function parse_node(line) {
 	if (substr(t, 0, 1) !== "{") {
 		let p = null;
 		try { p = sharelink.parse_proxy_link(t); } catch (_) { p = null; }
+		if (p) p.detour_name = null;
 		return p;
 	}
 	let rec = null;
 	try { rec = json(t); } catch (_) { rec = null; }
 	if (type(rec) !== "object" || type(rec.o) !== "object") return null;
-	return { outbound: rec.o, display_name: rec.n ?? null, link: rec.l ?? null };
+	return { outbound: rec.o, display_name: rec.n ?? null, link: rec.l ?? null,
+	         detour_name: rec.d ?? null };
 }
 
 return {

@@ -415,6 +415,17 @@ describe("test_subformat", () => {
     expect(stat.skipped).toBe(2);
   });
 
+  it("F-detour: a JSON node's detour is carried as a name, never as a raw outbound field", async () => {
+    const body = JSON.stringify({ outbounds: [
+      { type: "vless", tag: "Node A", server: "1.2.3.4", server_port: 443,
+        uuid: "11111111-1111-1111-1111-111111111111", detour: "direct" },
+    ]});
+    const { lines } = await fetchBody(body);
+    const rec = JSON.parse(lines[0]);
+    expect(rec.o.detour).toBeUndefined();   // never persisted as a live field
+    expect(rec.d).toBe("direct");           // preserved as the provider's name
+  });
+
   it("hostile body: garbage YAML/JSON yields no nodes and does not abort the fetch", async () => {
     const res = await fetchBody("proxies:\n  - {{{{ broken\n  - name: x\n");
     expect(res.lines.length).toBe(0);
