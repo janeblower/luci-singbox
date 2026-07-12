@@ -271,8 +271,7 @@ pattern described below.
 
 A plugin lives under `plugins/<name>/` at the top level of this repository
 (or in any standalone repo) and is built as a separate noarch package.
-The layout mirrors the flat structure used by `plugins/awg_warp/` and
-the skeleton under `docs/plugin-skeleton/`:
+The layout mirrors the flat structure used by `plugins/awg_warp/`:
 
 ```
 plugins/<name>/
@@ -519,11 +518,14 @@ fixture_plugin/
   descriptor.uc  — registers a test outbound descriptor via try_register()
 ```
 
-The skeleton under `docs/plugin-skeleton/` mirrors the flat layout used by
-`plugins/awg_warp/`, with explanatory comments and no-op hook bodies. Copy
-it with:
+`plugins/awg_warp/` shows the flat layout in real use — a working plugin,
+not a set of no-op stubs. Copy it and strip the AWG-specific parts:
 
 ```sh
-cp -r docs/plugin-skeleton plugins/<yourname>
-# rename every occurrence of "skeleton" to your plugin name
+cp -r plugins/awg_warp plugins/<yourname>
+# rename every occurrence of "awg_warp" to your plugin name
+rm plugins/<yourname>/lib/{warp,awggen,iface,confstore,reconcile,nft}.uc plugins/<yourname>/root/usr/libexec/singbox-ui/awg-provision.sh
 ```
+
+This leaves `lib/init.uc`, `lib/protocols/`, and `root/usr/share/rpcd/acl.d/`
+as the scaffold — rename and rewrite their contents for the new plugin.
