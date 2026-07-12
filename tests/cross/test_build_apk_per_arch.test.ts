@@ -3,8 +3,8 @@
  *
  * Asserts scripts/build-apk.sh produces the FOUR-package noarch split:
  *   - singbox-ui_<ver>.apk                     noarch backend (bundles the
- *     pure-ucode bbolt cache.db reader: lib/bbolt.uc + the
- *     usr/libexec/singbox-ui/bbolt-client shim)
+ *     pure-ucode bbolt cache.db reader as a module: lib/bbolt.uc, required
+ *     in-process — no CLI shim ships)
  *   - luci-app-singbox-ui_<ver>.apk            noarch LuCI frontend
  *   - luci-i18n-singbox-ui-ru_<ver>.apk        noarch Russian translation
  *   - singbox-ui-plugin-awg_warp_<ver>.apk     noarch AWG-WARP plugin
@@ -94,29 +94,32 @@ describe("build_apk_noarch", () => {
   });
 
   it.skipIf(!hasBash)(
-    "singbox-ui backend root bundles the ucode bbolt-client shim",
+    "singbox-ui backend root bundles lib/bbolt.uc and NOT a forked CLI shim",
     () => {
       const { work } = ensureBuild();
-      const shim = resolve(
-        work,
-        ".build/pkg-root-singbox-ui/usr/libexec/singbox-ui/bbolt-client",
+      const root = resolve(work, ".build/pkg-root-singbox-ui");
+      // The reader is a module the backend requires in-process. The former CLI
+      // shim (usr/libexec/singbox-ui/bbolt-client) existed only for argv
+      // compatibility with a Rust binary that no longer exists; it now lives in
+      // bbolt-client/ as a test driver for the golden harness and must not ship.
+      expect(existsSync(join(root, "usr/share/singbox-ui/lib/bbolt.uc"))).toBe(
+        true,
       );
-      expect(existsSync(shim)).toBe(true);
-      // It is the ucode shim, not a native binary: ucode shebang + require.
-      const content = readFileSync(shim, "utf8");
-      expect(content).toContain("#!/usr/bin/ucode");
-      expect(content).toContain('require("bbolt")');
+      expect(
+        existsSync(join(root, "usr/libexec/singbox-ui/bbolt-client")),
+      ).toBe(false);
+      const src = readFileSync(
+        resolve(ROOT, "singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc"),
+        "utf8",
+      );
+      // In-process require, and no trace of the forked binary it replaced.
+      // (Not asserting the absence of "/bin/sh" outright: nft-rulesets.uc still
+      // shells out for the nft apply command line, which is unrelated.)
+      expect(src).toContain('require("bbolt")');
+      expect(src).not.toContain("bbolt-client");
+      expect(src).not.toContain("SINGBOX_BBOLT_BIN");
     },
   );
-
-  it.skipIf(!hasBash)("singbox-ui backend root bundles lib/bbolt.uc", () => {
-    const { work } = ensureBuild();
-    const lib = resolve(
-      work,
-      ".build/pkg-root-singbox-ui/usr/share/singbox-ui/lib/bbolt.uc",
-    );
-    expect(existsSync(lib)).toBe(true);
-  });
 
   it.skipIf(!hasBash)(
     "stale prior-version .apks are removed before build",

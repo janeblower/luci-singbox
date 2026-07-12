@@ -16,16 +16,21 @@
 // ponytail: no flock — bbolt is copy-on-write with two checksummed meta pages
 // and select_root() picks the higher-txid valid one, so a concurrent sing-box
 // writer can't hand us a torn tree; a half-grown file trips a bounds guard →
-// clean exit → cron retries. Upgrade path: a native flock helper if fail-fast
+// clean error → cron retries. Upgrade path: a native flock helper if fail-fast
 // on a busy writer ever matters (it doesn't on a 15-min cron).
 
 'use strict';
 
 let fs = require("fs");
 
-// shared clean-error exit — mirrors Rust bad()/err+sys_exit(1). A forged
-// count/pos/ksize/pgid must land here, never an OOB abort.
-function bad() { warn("invalid database\n"); exit(1); }
+// shared clean-error path — a forged count/pos/ksize/pgid must land here, never
+// an OOB abort. THROWS (die), it does not exit(): ucode's exit() is not
+// catchable, so an exit() here would take the whole caller down with it. The
+// in-process consumer (nft-rulesets.uc) has to turn a corrupt/absent cache.db
+// into a null probe and carry on — see SEC-10 there — and the CLI test driver
+// (bbolt-client/bbolt-cli.uc) catches this and exits 1 with the same message,
+// so the golden harness's exit codes and stderr texts are unchanged.
+function bad() { die("invalid database"); }
 
 // bounds-checked little-endian readers. u16/u32 stay in [0,2^32) (positive
 // int64); u64 keeps its raw bit pattern (may read as negative — fine, we only
@@ -70,13 +75,14 @@ function fnv1a64(d) {
 	return h;
 }
 
-// read whole db into memory. No flock (see header). Empty/unreadable → exit.
+// read whole db into memory. No flock (see header). Empty/unreadable → throws
+// (see bad(): never exit(), the caller must survive an absent cache.db).
 function read_db(path) {
 	let f = fs.open(path, "r");
-	if (!f) { warn("cannot open database\n"); exit(1); }
+	if (!f) die("cannot open database");
 	let d = f.read("all") ?? "";
 	f.close();
-	if (length(d) == 0) { warn("empty database\n"); exit(1); }
+	if (length(d) == 0) die("empty database");
 	return d;
 }
 
@@ -146,16 +152,28 @@ function lkey(p, i) {
 // list two children pointing at the next page stays under depth 64 while
 // demanding ~2^63 visits — a clean-looking read that never returns and hangs the
 // cron refresh. A real cache.db has a few thousand pages, so a flat visit budget
-// costs nothing and turns that into the same "invalid database" exit as any
-// other corruption. Process-scoped: the CLI shim is a fresh process per read.
+// costs nothing and turns that into the same "invalid database" error as any
+// other corruption.
+//
+// The budget is per top-level walk (reset at depth 0), not process-scoped. That is
+// HARDENING, not a live-bug fix, and the distinction is worth keeping straight:
+// measured, one rule_set walk costs ~4 page visits and a whole refresh ~13 walks
+// (~52) against a 200000 budget — ~3800x of headroom, so no counter alive today
+// could accumulate its way to a false "invalid database". What died is the
+// ASSUMPTION the old module-scoped counter rested on ("the CLI shim is a fresh
+// process per read"): the shim is gone, nft-rulesets.uc calls walk() in-process,
+// and wait_for_tags walks once a second. Per-walk is what the paragraph above
+// already claims the budget is, and it is the only thing that keeps this guard
+// honest if anything ever walks repeatedly in a long-lived process.
 let _visits = 0;
 const MAX_VISITS = 200000;
 
 // DFS the B+tree, pushing keys into `acc`. buckets_only => only sub-bucket
 // leaf entries. `depth` bounds descent so a cyclic/forged branch pgid is a
-// clean exit, not unbounded recursion. bbolt trees never approach 64.
+// clean error, not unbounded recursion. bbolt trees never approach 64.
 function walk(m, ps, p, buckets_only, depth, acc) {
 	if (depth > 64) bad();
+	if (depth == 0) _visits = 0;
 	if (++_visits > MAX_VISITS) bad();
 	let flags = u16le(p, 8), count = u16le(p, 10);
 	if (flags & 0x01) {

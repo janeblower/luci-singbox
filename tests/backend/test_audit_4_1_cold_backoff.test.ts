@@ -8,7 +8,11 @@ import { exec, putFile } from "../helpers/ssh.ts";
 //   4.6 INFO — failed cache_extract_srs leaves no stray rs_*.raw
 //   BUG1     — future-dated sentinel (NTP clock skew) must NOT wedge the tag
 //   BUG2     — force-refresh overrides backoff; cron path (no force) does not
-//   SEC-10   — bbolt probe failure (null keys) must NOT trigger a reload
+//   SEC-10   — cache probe FAILURE (null keys) must NOT trigger a reload
+//   NOBUCKET — a readable cache.db with no rule_set bucket is NOT a probe
+//              failure: it is confirmed evidence the tags are cold → reload
+//   POSTPROBE— a probe that fails AFTER the reload we already issued must still
+//              arm the backoff sentinel, or S4-1's reload loop comes back
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
@@ -18,25 +22,46 @@ const TMP = `/tmp/sb-cb41-${process.pid}`;
 const RUNTIME = `${TMP}/runtime`;
 const BIN = `${TMP}/bin`;
 const INITD = `${TMP}/initd`;
+const FAKELIB = `${TMP}/fakelib`;
 const RELOAD_LOG = `${TMP}/reload.log`;
-const BBOLT = `${BIN}/bbolt-client`;
 const SING_BOX = `${BIN}/sing-box`;
 const INITD_SCRIPT = `${INITD}/singbox-ui`;
+// A real bbolt db with buckets a_empty..f_bytes and NO rule_set bucket.
+const NO_BUCKET_DB = `${WORK}/bbolt-client/testdata/stress.db`;
+const MISSING_DB = `${TMP}/no-such-cache.db`;
 
-// Fake bbolt-client: lists $BBOLT_KNOWN on "db rule_set"; reads a body for
-// known tags on "-r db rule_set <tag>"; exits 1 for unknown tags.
-const FAKE_BBOLT = `#!/bin/sh
-known=" \${BBOLT_KNOWN:-} "
-if [ "$1" = "-r" ]; then
-  tag="$4"
-  case "$known" in *" $tag "*) printf 'SRS\\003FAKEBODY'; exit 0 ;; esac
-  exit 1
-fi
-if [ "$2" = "rule_set" ]; then
-  for t in \${BBOLT_KNOWN:-}; do echo "$t"; done
-  exit 0
-fi
-exit 0
+// Fake bbolt MODULE (not a binary): dropped into a lib dir passed to ucode
+// BEFORE the real lib, so require("bbolt") resolves here while require("helpers")
+// still reaches the real lib (ucode searches -L dirs in order). nft-rulesets.uc
+// now reads cache.db in-process, so the seam is a module, not a forked CLI.
+// $BBOLT_KNOWN keeps its old meaning — the space-separated set of tags in cache.db.
+//
+// $BBOLT_FAIL_FROM=N makes read_db throw from its Nth call onward (1-based), the
+// way the real reader does on an unreadable cache.db. The module is required once
+// per ucode process, so this counter spans a whole refresh — which is what lets a
+// single run have its PRE-reload probe succeed and every probe AFTER the reload
+// fail (POSTPROBE below). Unset/0 = never fail, so every other case is unchanged.
+const FAKE_BBOLT_UC = `// test fake for lib/bbolt.uc
+let known = [];
+for (let t in split(getenv("BBOLT_KNOWN") ?? "", " ")) if (length(t)) push(known, t);
+let fail_from = +(getenv("BBOLT_FAIL_FROM") ?? "0");
+let reads = 0;
+return {
+	read_db:        function(p) {
+	                    reads++;
+	                    if (fail_from > 0 && reads >= fail_from) die("empty database");
+	                    return { fake: true }; },
+	page_size:      function(m) { return 4096; },
+	select_root:    function(m, ps) { return 0; },
+	find_bucket:    function(m, ps, root, name) { return (name == "rule_set") ? { page: 1 } : null; },
+	page:           function(m, ps, n) { return "fake"; },
+	walk:           function(m, ps, bp, buckets_only, depth, acc) {
+	                    for (let k in known) push(acc, k); },
+	search:         function(m, ps, bp, key, depth) {
+	                    for (let k in known) if (k == key) return [ 0, "SRS\\x03FAKEBODY" ];
+	                    return null; },
+	unwrap_ruleset: function(v) { return "FAKEBODY"; },
+};
 `;
 
 // Fake sing-box: writes a minimal JSON rule-set to -o <outfile>.
@@ -53,38 +78,47 @@ echo "reload-called $*" >> ${RELOAD_LOG}
 `;
 
 // Dead-tag UCI config (cache enabled, one remote ruleset with 1-day interval).
-const UCI_DEAD = `config cache 'cache'
-\toption enabled '1'
-config ruleset 'deadrs'
+// cacheDb=null keeps the default storage (ram → /tmp/singbox-ui-cache.db), which
+// the fake module never actually opens; the real-module cases below point it at a
+// concrete file via storage=custom.
+function uciDead(cacheDb: string | null = null): string {
+  const cache = cacheDb
+    ? `config cache 'cache'\n\toption enabled '1'\n\toption storage 'custom'\n\toption path '${cacheDb}'\n`
+    : `config cache 'cache'\n\toption enabled '1'\n`;
+  return `${cache}config ruleset 'deadrs'
 \toption type 'remote'
 \toption url 'https://example.invalid/dead.srs'
 \toption nft_rules '1'
 \toption update_interval '86400'
 `;
+}
 
 async function setup(): Promise<void> {
-  await exec(`mkdir -p ${RUNTIME} ${BIN} ${INITD} && > ${RELOAD_LOG}`);
-  await putFile(FAKE_BBOLT, BBOLT);
+  await exec(
+    `mkdir -p ${RUNTIME} ${BIN} ${INITD} ${FAKELIB} && > ${RELOAD_LOG}`,
+  );
+  await putFile(FAKE_BBOLT_UC, `${FAKELIB}/bbolt.uc`);
   await putFile(FAKE_SINGBOX, SING_BOX);
   await putFile(FAKE_INITD, INITD_SCRIPT);
-  await exec(`chmod +x ${BBOLT} ${SING_BOX} ${INITD_SCRIPT}`);
-  await putFile(UCI_DEAD, `${TMP}/singbox-ui`);
+  await exec(`chmod +x ${SING_BOX} ${INITD_SCRIPT}`);
+  await putFile(uciDead(), `${TMP}/singbox-ui`);
 }
 
 async function teardown(): Promise<void> {
   await exec(`rm -rf ${TMP}`);
 }
 
-// Run nft-rulesets.uc with given args.
-// extraEnv is prepended to the command as shell VAR=val pairs.
+// Run nft-rulesets.uc with given args. extraEnv is prepended as shell VAR=val
+// pairs. `fake` (default) prepends -L FAKELIB so require("bbolt") resolves to the
+// fake module; pass false to drive the REAL reader against a real cache.db.
 async function runUc(
   args: string,
   extraEnv: string = "",
+  fake: boolean = true,
 ): Promise<{ stdout: string; exitCode: number }> {
   const env = [
     `UCI_CONFIG_DIR=${TMP}`,
     `SINGBOX_TMPDIR=${RUNTIME}`,
-    `SINGBOX_BBOLT_BIN=${BBOLT}`,
     `SINGBOX=${SING_BOX}`,
     `SINGBOX_INITD=${INITD_SCRIPT}`,
     `SINGBOX_NFT_APPLY=true`,
@@ -94,8 +128,9 @@ async function runUc(
   ]
     .filter(Boolean)
     .join(" ");
+  const libs = fake ? `-L ${FAKELIB} -L ${LIB}` : `-L ${LIB}`;
   const r = await exec(
-    `cd ${WORK} && export PATH=${BIN}:$PATH && ${env} ucode -L ${LIB} ${SUB_UC} ${args} >/dev/null 2>&1 || true`,
+    `cd ${WORK} && export PATH=${BIN}:$PATH && ${env} ucode ${libs} ${SUB_UC} ${args} 2>&1 || true`,
   );
   return { stdout: r.stdout, exitCode: r.exitCode };
 }
@@ -116,7 +151,7 @@ describe("audit_4_1_cold_backoff (S4-1/S4-5/S4-6/BUG1/BUG2/SEC-10)", () => {
 
   it("setup: create stubs and UCI", async () => {
     await setup();
-    const r = await exec(`[ -x ${BBOLT} ] && echo ok || echo fail`);
+    const r = await exec(`[ -f ${FAKELIB}/bbolt.uc ] && echo ok || echo fail`);
     expect(r.stdout.trim()).toBe("ok");
   });
 
@@ -233,11 +268,94 @@ describe("audit_4_1_cold_backoff (S4-1/S4-5/S4-6/BUG1/BUG2/SEC-10)", () => {
     expect(await countReloads()).toBe(1);
   });
 
-  // ---- SEC-10: bbolt probe failure (null key list) must NOT trigger reload ----
-  it("SEC-10: null key list (missing bbolt binary) → 0 reloads even on force", async () => {
-    await exec(`rm -f ${RUNTIME}/.rs_cold_deadrs.attempt`);
+  // ---- SEC-10: a FAILED cache probe must NOT trigger a reload ----------------
+  // Real bbolt module, cache.db path that does not exist: read_db fails, the probe
+  // returns null, and a failed probe must never bounce the daemon — not even on a
+  // forced refresh, and not even if the tags were in fact warm.
+  //
+  // (The old wording — "null key list (missing bbolt binary)" — described a fork
+  // that no longer happens: nft-rulesets.uc reads cache.db in-process, so there is
+  // no binary to be missing. An unreadable/absent cache.db is the failure mode that
+  // actually reaches production.)
+  it("SEC-10: unreadable cache.db → 0 reloads even on force", async () => {
+    await putFile(uciDead(MISSING_DB), `${TMP}/singbox-ui`);
+    await exec(`rm -f ${MISSING_DB} ${RUNTIME}/.rs_cold_deadrs.attempt`);
+    await exec(`rm -f ${RUNTIME}/rs_deadrs.json`);
     await clearReloadLog();
-    await runUc("refresh force", `SINGBOX_BBOLT_BIN=${BIN}/does-not-exist`);
+    const r = await runUc("refresh force", "", /* fake */ false);
+    expect(r.stdout).toContain("cache probe failed");
+    expect(await countReloads()).toBe(0);
+  });
+
+  // ---- NOBUCKET: a readable db with no rule_set bucket is COLD, not a failure --
+  // The counterpart to SEC-10, and the reason cache_open() cannot fold "no bucket"
+  // into its null (= probe failed) return. sing-box creates the rule_set bucket
+  // lazily, on the first rule-set it caches — so a router whose only nft rule-set
+  // has a dead/typo'd URL has a perfectly readable cache.db with NO rule_set
+  // bucket. That is confirmed evidence the tag is cold (the exact S4-1 scenario),
+  // and the operator fixing the URL and hitting Refresh must still get a reload.
+  // Folding it into the null probe would defer that reload forever.
+  //
+  // Driven against the REAL reader: the fake module's find_bucket always answers
+  // rule_set, so it structurally cannot express this shape.
+  it("NOBUCKET: readable cache.db without a rule_set bucket → cold → 1 reload", async () => {
+    await putFile(uciDead(NO_BUCKET_DB), `${TMP}/singbox-ui`);
+    await exec(`test -f ${NO_BUCKET_DB}`); // fixture must exist
+    await exec(
+      `rm -f ${RUNTIME}/.rs_cold_deadrs.attempt ${RUNTIME}/rs_deadrs.json`,
+    );
+    await clearReloadLog();
+    const r = await runUc("refresh force", "", /* fake */ false);
+    expect(r.stdout).not.toContain("cache probe failed");
+    expect(await countReloads()).toBe(1);
+  });
+
+  // ---- POSTPROBE: a probe that fails AFTER the reload must still arm the backoff --
+  // SEC-10 says a failed probe must not TRIGGER a reload. Its mirror image: once a
+  // reload HAS been issued, a failed post-wait probe must not be read as "the tag
+  // went warm" either — it means we cannot tell, and the backoff sentinel has to be
+  // written regardless. Otherwise the tag stays retry-eligible and the very next
+  // cron cycle issues another init.d reload — the un-throttled sing-box stop+start
+  // loop S4-1 exists to prevent, dropping every live proxy connection every 15
+  // minutes, forever.
+  //
+  // Reachable because cache.db is re-read from scratch at each probe: read_db slurps
+  // a multi-MB file into RAM on a 64 MB router, so a transient allocation/IO failure
+  // (or flaky flash under storage=flash) makes the POST probe fail while the PRE one
+  // succeeded. The forked shim could not express this: popen swallowed its exit
+  // status, so an unreadable db came back as an empty {} and the sentinel always got
+  // written. Classifying the failure honestly as null is what silently dropped it.
+  //
+  // BBOLT_FAIL_FROM=2: read_db succeeds on call 1 (the pre-reload probe → cold →
+  // eligible → reload) and throws from call 2 on (wait_for_tags, the post-wait probe,
+  // and cmd_fetch_rulesets' open — whose log line proves the seam actually fired).
+  it("POSTPROBE: failed post-reload probe still records the sentinel", async () => {
+    await putFile(uciDead(), `${TMP}/singbox-ui`); // back to the fake-module cache
+    await exec(
+      `rm -f ${RUNTIME}/.rs_cold_deadrs.attempt ${RUNTIME}/rs_deadrs.json`,
+    );
+    await clearReloadLog();
+    const r = await runUc(
+      "refresh",
+      "BBOLT_KNOWN= BBOLT_FAIL_FROM=2 SINGBOX_RS_CACHE_WAIT=0",
+    );
+    // pre-reload probe read fine → cold tag → eligible → exactly one reload
+    expect(await countReloads()).toBe(1);
+    // and every probe after it failed (not merely "no tags") — the seam fired
+    expect(r.stdout).toContain("cache.db unreadable: empty database");
+    const s = await exec(
+      `[ -f ${RUNTIME}/.rs_cold_deadrs.attempt ] && echo yes || echo no`,
+    );
+    expect(s.stdout.trim()).toBe("yes"); // regression: was "no" → reload loop
+  });
+
+  it("POSTPROBE: the next cron refresh is throttled by that sentinel → 0 reloads", async () => {
+    // Cache readable again, tag still cold: only the sentinel written above stands
+    // between us and a second stop+start. Without it this reloads every cycle.
+    await exec(`rm -f ${RUNTIME}/rs_deadrs.json`); // keep the tag stale, keep the sentinel
+    await clearReloadLog();
+    const r = await runUc("refresh", "BBOLT_KNOWN=");
+    expect(r.stdout).toContain("not in cache.db yet"); // reached the cold path
     expect(await countReloads()).toBe(0);
   });
 

@@ -1,15 +1,19 @@
 #!/bin/sh
-# Self-contained regression test for bbolt-client-rs — no external oracle.
-# The binary's output is reduced to a sha256 and compared against committed golden
-# hashes under testdata/golden/ (originally captured from the Go reference
+# Self-contained regression test for the bbolt reader (lib/bbolt.uc) — no external
+# oracle. The reader's output is reduced to a sha256 and compared against committed
+# golden hashes under testdata/golden/ (originally captured from the Go reference
 # implementation and frozen). Pure POSIX sh (runs under dash).
 #
-#   ./test.sh                                  test the native ./bbolt-client-rs
-#   RUN="qemu-aarch64 target/aarch64-.../bbolt-client-rs" ./test.sh   test a cross binary
-#   RUN=<tool> ./test.sh gen                   (re)generate golden from <tool>
+# The reader is driven through ./bbolt-cli.uc, a test-only CLI driver: production
+# (nft-rulesets.uc) requires the module in-process and forks nothing.
+#
+#   ./test.sh                  test lib/bbolt.uc via ./bbolt-cli.uc
+#   RUN=<tool> ./test.sh       test some other argv-compatible reader
+#   RUN=<tool> ./test.sh gen   (re)generate golden from <tool>
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
-RUN="${RUN:-$HERE/bbolt-client-rs}"
+LIB="${LIB:-$HERE/../singbox-ui/root/usr/share/singbox-ui/lib}"
+RUN="${RUN:-ucode -L $LIB $HERE/bbolt-cli.uc}"
 DATA="$HERE/testdata"
 GOLDEN="$DATA/golden"
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT INT TERM

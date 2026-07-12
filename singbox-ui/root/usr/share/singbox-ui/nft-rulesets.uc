@@ -9,13 +9,12 @@
 //   refresh [force]       — stale-check; cold-cache reload+poll; fetch; nft apply
 //
 // Env overrides (tests): SINGBOX_TMPDIR, SINGBOX, UCI_CONFIG_DIR,
-//   SINGBOX_BBOLT_BIN, SINGBOX_RS_CACHE_WAIT, SINGBOX_INITD, SINGBOX_NFT_APPLY,
+//   SINGBOX_RS_CACHE_WAIT, SINGBOX_INITD, SINGBOX_NFT_APPLY,
 //   SINGBOX_BOOT_FETCH, SINGBOX_NO_RELOAD.
 
 const TMPDIR     = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 const SINGBOX    = getenv("SINGBOX")        || "/usr/bin/sing-box";
 const MAX_BODY   = 8 * 1024 * 1024;   // 8 MiB
-const BBOLT_BIN     = getenv("SINGBOX_BBOLT_BIN") || "/usr/libexec/singbox-ui/bbolt-client";
 const RS_CACHE_WAIT = +(getenv("SINGBOX_RS_CACHE_WAIT") || "10");
 const SINGBOX_INITD = getenv("SINGBOX_INITD")     || "/etc/init.d/singbox-ui";
 const NFT_APPLY_CMD = getenv("SINGBOX_NFT_APPLY")
@@ -25,6 +24,7 @@ let fs  = require("fs");
 let uci_mod = require("uci");
 let helpers = require("helpers");
 let cache_mod = require("cache");
+let bb = require("bbolt");   // read-only bbolt reader — in-process, no fork
 
 function log(msg)     { warn(msg + "\n"); }
 function log_err(msg) { warn("error: " + msg + "\n"); }
@@ -102,30 +102,85 @@ function resolve_local_source(target) {
 	return null;
 }
 
-// bbolt_available() — path to the executable bbolt-client, or null. Defined
-// before its callers (cmd_fetch_rulesets, cmd_refresh) per ucode's
+// Why the last probe failed, as the reader itself put it ("cannot open database"
+// / "empty database" / "invalid database"). Absent, truncated and CORRUPT are very
+// different operator problems — a corrupt cache.db never self-heals, so without
+// this the operator reads one identical "absent or unreadable" line every cron
+// cycle, forever, on a device that is awkward to debug. Set by the probe's catch
+// blocks, consumed by the deferral log lines. Diagnostics only: it never steers a
+// decision.
+let last_probe_err = "";
+
+// cache_open(db) — open cache.db and locate the `rule_set` bucket. Returns
+// { m, ps, bp } or null. Defined before its callers per ucode's
 // callee-precedes-caller rule (no function hoisting).
-function bbolt_available() {
-	let st = fs.stat(BBOLT_BIN);
-	return (st && st.type === "file") ? BBOLT_BIN : null;
+//
+// A null return means the PROBE FAILED: the file is absent, truncated, or
+// otherwise unreadable, so we learned NOTHING about the tags. It never means
+// "the tags are cold" — SEC-10 depends on that distinction (see
+// retry_eligible_cold_tags). Every failure mode of the reader lands here,
+// because it throws rather than exiting (lib/bbolt.uc bad()).
+//
+// A readable db with NO rule_set bucket is emphatically NOT a failure: it is
+// confirmed evidence that sing-box has cached no rule-sets at all (it creates
+// the bucket lazily, on the first one it saves). So bp stays null, the key set
+// comes back empty, and the tags read as genuinely cold. Folding that into the
+// null probe would wedge the exact scenario the cold-reload exists for — one
+// nft rule-set with a dead URL means no bucket, so an operator who fixes the URL
+// and hits Refresh would be told "probe failed" and never get their reload.
+function cache_open(db) {
+	last_probe_err = "";
+	try {
+		let m = bb.read_db(db);
+		if (m == null) return null;
+		let ps = bb.page_size(m);
+		let root = bb.select_root(m, ps);
+		let bref = bb.find_bucket(m, ps, root, "rule_set");
+		let bp = null;
+		if (bref != null)
+			bp = (bref.page != null) ? bb.page(m, ps, bref.page) : bref.inline;
+		return { m: m, ps: ps, bp: bp };
+	} catch (e) {
+		last_probe_err = e.message ?? "unknown reader error";
+		return null;
+	}
 }
 
-// cache_extract_srs(db, tag, out_path) — write the .srs payload of `tag` from
-// cache.db (bucket rule_set) into out_path. Returns true on success (rc 0 and
-// non-empty file). Runs through /bin/sh with stdout redirection; every argument
-// is single-quoted via helpers.sq so a hostile tag/path cannot break out.
+// cache_extract_srs(c, tag, out_path) — write the .srs payload of `tag` from an
+// ALREADY-OPEN cache handle into out_path. Returns true on success.
 //
-// The `>` redirect (S4-6) targets a sibling tmp path, not out_path directly, so
-// a bbolt failure or empty body never leaves a 0-byte rs_*.raw observable at the
-// real path; we fs.rename onto out_path only after rc==0 AND size>0. A failed
-// extract cleans up the tmp file and leaves any prior out_path untouched.
-function cache_extract_srs(db, tag, out_path) {
-	let bin = bbolt_available();
-	if (!bin) return false;
+// The tmp+rename dance stays: it is genuine atomicity, so a failed or empty read
+// never leaves a 0-byte rs_*.raw observable at the real path (S4-6). What it no
+// longer has to do is launder the exit status of a forked shell.
+function cache_extract_srs(c, tag, out_path) {
+	if (c == null || c.bp == null) return false;
+	let payload = null;
+	// A page deeper in the tree can still be corrupt even though cache_open
+	// succeeded; the reader throws, and one bad tag must not abort the run.
+	// unwrap_ruleset is INSIDE the same try on purpose: it reads the envelope with
+	// raw substr/ord today and so cannot throw, but the moment anyone hardens it
+	// onto the bounds-checked sub()/bad() path — which is exactly what the rest of
+	// the reader uses — a corrupt envelope would become an uncaught die() that
+	// aborts the whole refresh mid-loop: no nft apply, no log, for every remaining
+	// rule-set. The guard costs nothing; discovering its absence would cost a router.
+	try {
+		let r = bb.search(c.m, c.ps, c.bp, tag, 0);
+		// plain key only; a sub-bucket entry (flags&1) carries no value
+		if (r == null || (r[0] & 0x01) != 0) return false;
+		payload = bb.unwrap_ruleset(r[1]);
+	} catch (_) { return false; }
+	if (payload == null || length(payload) === 0) return false;
+
 	let tmp = sprintf("%s.tmp.%d", out_path, time());
-	let cmd = helpers.sq(bin) + " -r " + helpers.sq(db) + " rule_set " +
-	          helpers.sq(tag) + " > " + helpers.sq(tmp) + " 2>/dev/null";
-	if (system(["/bin/sh", "-c", cmd]) !== 0) { helpers.unlink_quiet(tmp); return false; }
+	let fh = null;
+	try { fh = fs.open(tmp, "w"); } catch (_) { return false; }
+	if (!fh) return false;
+	let wrote = fh.write(payload);
+	fh.close();
+	// Short write, not just a zero/null one: ENOSPC on a full router flash writes
+	// a PREFIX of the payload and reports it honestly. Reject a truncated .srs here
+	// rather than shipping it to `rule-set decompile` and hoping that notices.
+	if (wrote !== length(payload)) { helpers.unlink_quiet(tmp); return false; }
 	let st = fs.stat(tmp);
 	if (!st || st.size === 0) { helpers.unlink_quiet(tmp); return false; }
 	let renamed = false;
@@ -134,20 +189,27 @@ function cache_extract_srs(db, tag, out_path) {
 	return true;
 }
 
-// cache_list_keys(db) — one bbolt-client list call returning a {tag:true} set of
-// the keys present in the rule_set bucket of cache.db, or null on probe failure.
-// Batching the list once per poll (S4-5) avoids forking bbolt-client per-tag.
+// cache_list_keys(db) — the {tag:true} set of keys in the rule_set bucket, or
+// null on probe failure (SEC-10). An empty set is a real answer: the db is
+// readable and holds no rule-sets.
+//
+// Deliberately re-opens the db on EVERY call: wait_for_tags polls this in a 1s
+// loop while sing-box is still writing newly-fetched rule-sets into cache.db, so
+// a hoisted handle would poll a stale snapshot forever and the wait could never
+// succeed. (cmd_fetch_rulesets, by contrast, opens ONCE and extracts every tag
+// from that one handle — bbolt is copy-on-write, so that is a consistent
+// snapshot, which is strictly better than the N independent whole-file reads the
+// forked binary used to do.)
 function cache_list_keys(db) {
-	let bin = bbolt_available();
-	if (!bin) return null;
-	let cmd = helpers.sq(bin) + " " + helpers.sq(db) + " rule_set 2>/dev/null";
-	let p = fs.popen(cmd, "r");
-	if (!p) return null;
-	let raw = p.read("all") ?? "";
-	p.close();
+	let c = cache_open(db);
+	if (c == null) return null;
+	if (c.bp == null) return {};        // readable, but nothing cached yet
+	let acc = [];
+	try { bb.walk(c.m, c.ps, c.bp, false, 0, acc); }
+	catch (e) { last_probe_err = e.message ?? "unknown reader error"; return null; }
 	let keys = {};
-	for (let line in split(raw, "\n")) {
-		let t = trim(line);
+	for (let k in acc) {
+		let t = trim(k);
 		if (t !== "") keys[t] = true;
 	}
 	return keys;
@@ -224,6 +286,12 @@ function cmd_fetch_rulesets(cur) {
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
 	let timeout = boot ? 10 : 30;
 
+	// One open per run: bbolt is copy-on-write, so every tag below is extracted
+	// from a single consistent snapshot instead of re-reading the whole file once
+	// per tag (which is what forking the CLI shim per tag used to cost).
+	let cache_db = cache_mod.cache_db_path(cur);
+	let cache_handle = (cache_db != null) ? cache_open(cache_db) : null;
+
 	let jobs = [];   // each: { name, raw_path, out_path, rs_type, target,
 	                 //         download? (remote only): url, outpath, opts }
 	for (let name in names) {
@@ -248,16 +316,17 @@ function cmd_fetch_rulesets(cur) {
 			// instead of curl'ing the URL a second time — sing-box already
 			// downloaded and cached the same rule-set. All cold edges degrade
 			// to skip+log (the cold-cache trigger lives in cmd_refresh).
-			let db = cache_mod.cache_db_path(cur);
-			if (db == null) {
+			if (cache_db == null) {
 				log_err(`fetch_rulesets: ${name} skipped — cache_file disabled (enable [cache] to build nft rules)`);
 				continue;
 			}
-			if (!bbolt_available()) {
-				log_err(`fetch_rulesets: ${name} skipped — bbolt-client not installed (reinstall or upgrade the package)`);
+			// cache_handle == null is a failed PROBE, not a cold tag: the file is
+			// missing or unreadable (see cache_open).
+			if (cache_handle == null) {
+				log_err(`fetch_rulesets: ${name} skipped — cache.db unreadable: ${last_probe_err || "absent"} (sing-box not started yet, or [cache] just enabled)`);
 				continue;
 			}
-			if (!cache_extract_srs(db, name, raw_path)) {
+			if (!cache_extract_srs(cache_handle, name, raw_path)) {
 				log_err(`fetch_rulesets: ${name} not in cache.db yet (will appear after sing-box fetches it), skipping`);
 				continue;
 			}
@@ -362,10 +431,12 @@ function remote_nft_tags(cur) {
 }
 
 // any_tag_cold(db, tags) — true if at least one tag is missing from cache.db.
-// Single batched list call (cache_list_keys) instead of one fork per tag.
+// One key list per poll (cache_list_keys), not one lookup per tag (S4-5).
 function any_tag_cold(db, tags) {
 	let keys = cache_list_keys(db);
-	if (keys == null) return true;     // probe failed → treat as cold
+	// Only the wait loop: an unreadable db keeps us polling until the deadline and
+	// then gives up. The reload DECISION is retry_eligible_cold_tags' (SEC-10).
+	if (keys == null) return true;     // probe failed → keep waiting
 	for (let t in tags) if (keys[t] !== true) return true;
 	return false;
 }
@@ -377,9 +448,10 @@ function any_tag_cold(db, tags) {
 //
 // Pacing (S4-5): each iteration sleeps 1s via the external `sleep`. If `sleep`
 // is missing/unforkable, system() returns non-zero and would return instantly —
-// without a guard the loop would busy-spin (forking bbolt-client) until the
-// deadline. So we also bound the iteration count to deadline_s+1 and bail when
-// it's exhausted, guaranteeing termination even if `sleep` never paces us.
+// without a guard the loop would busy-spin, re-reading the whole cache.db as
+// fast as it can until the deadline. So we also bound the iteration count to
+// deadline_s+1 and bail when it's exhausted, guaranteeing termination even if
+// `sleep` never paces us.
 function wait_for_tags(db, tags, deadline_s) {
 	let end = time() + deadline_s;
 	let iters = 0;
@@ -405,17 +477,23 @@ function wait_for_tags(db, tags, deadline_s) {
 // its caller.)
 function retry_eligible_cold_tags(cur, db, tags, force) {
 	let keys = cache_list_keys(db);
-	// SEC-10: a null result is a bbolt PROBE FAILURE (binary missing,
-	// cache.db transiently locked mid-upgrade), NOT confirmed evidence the
-	// tags are uncompiled. Treating it as "all cold" would trigger a full
-	// sing-box stop+start — dropping every live proxy connection — even on a
-	// forced UI refresh during a transient hiccup, and even if the tags are in
-	// fact warm. A failed probe is not a reason to bounce the daemon: defer the
-	// reload (empty eligible set) and surface why, so the next cycle retries
-	// once the probe recovers. The cron (non-force) path is already throttled
-	// by the cold-backoff sentinel; this closes the forced-refresh edge too.
+	// SEC-10: a null result is a cache PROBE FAILURE (cache.db absent, truncated,
+	// or transiently unreadable mid-upgrade), NOT confirmed evidence the tags are
+	// uncompiled. Treating it as "all cold" would trigger a full sing-box
+	// stop+start — dropping every live proxy connection — even on a forced UI
+	// refresh during a transient hiccup, and even if the tags are in fact warm. A
+	// failed probe is not a reason to bounce the daemon: defer the reload (empty
+	// eligible set) and surface why, so the next cycle retries once the probe
+	// recovers. The cron (non-force) path is already throttled by the cold-backoff
+	// sentinel; this closes the forced-refresh edge too.
+	//
+	// An EMPTY (non-null) key set is the opposite: the db read fine and holds no
+	// rule-sets, so the tags really are cold and must still be eligible.
 	if (keys == null) {
-		log("refresh: cache probe failed (bbolt unavailable / cache.db locked); deferring reload");
+		// The reason matters to whoever reads the log: "cannot open database" is a
+		// router that has not started sing-box yet (self-heals), "invalid database"
+		// is a corrupt cache.db that never will (needs a human).
+		log(`refresh: cache probe failed (${last_probe_err || "cache.db absent or unreadable"}); deferring reload`);
 		return [];
 	}
 	let out = [];
@@ -444,8 +522,22 @@ function cmd_refresh(cur, force) {
 			wait_for_tags(db, tags, RS_CACHE_WAIT);
 			let after = cache_list_keys(db);
 			for (let t in tags) {
+				// A null probe here does NOT mean the tag went warm — it means we
+				// cannot tell. We have already issued the reload, so throttle the
+				// next one either way: a still-cold tag and an unreadable cache both
+				// warrant the backoff sentinel. (SEC-10 forbids a failed probe from
+				// TRIGGERING a reload; suppressing a future one is the safe side of
+				// the same coin.) Before the reader ran in-process this branch was
+				// reached with an empty {} on an unreadable db — the forked shim's
+				// exit status was swallowed, so the sentinel always got written.
+				// Classifying that failure honestly as null silently dropped it,
+				// re-opening the very S4-1 stop+start loop this backoff exists to
+				// prevent: no sentinel → still retry-eligible → another init.d reload
+				// every cron cycle, dropping every live proxy connection, forever.
+				// cmd_fetch_rulesets clears the sentinel on the first successful
+				// extract, so a cache that comes back is immediately eligible again.
 				if (after != null && after[t] === true) clear_cold_attempt(t);
-				else if (after != null) record_cold_attempt(t);
+				else record_cold_attempt(t);
 			}
 		}
 	}

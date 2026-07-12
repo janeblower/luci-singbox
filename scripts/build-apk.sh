@@ -6,8 +6,9 @@
 # luci-app-singbox-ui <- luci-i18n-singbox-ui-ru):
 #   - singbox-ui_<version>.apk                  noarch backend (ucode handlers,
 #     init.d, rpcd, uci-defaults, default config). Includes the pure-ucode
-#     bbolt cache.db reader (usr/libexec/singbox-ui/bbolt-client + lib/bbolt.uc);
-#     the former per-arch Rust bbolt-client package was folded in here.
+#     bbolt cache.db reader as a module (lib/bbolt.uc), required in-process by
+#     nft-rulesets.uc; the former per-arch Rust bbolt-client package was folded
+#     in here, and its CLI shim is now a test-only driver in bbolt-client/.
 #   - luci-app-singbox-ui_<version>.apk         noarch LuCI frontend (htdocs JS,
 #     menu, acl). depends on singbox-ui + luci-base.
 #   - luci-i18n-singbox-ui-ru_<version>.apk     noarch Russian translation.

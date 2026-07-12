@@ -10,24 +10,29 @@ Read-only ридер [bbolt](https://github.com/etcd-io/bbolt) для кэшей
   (meta/page/search/walk/uvarint + bounds-checked LE-ридеры). Порт бывшего
   `no_std`/raw-syscall Rust-бинарника 1:1 по поведению; ucode int64 wraps как
   Rust u64 (доказано: FNV-1a64 совпадает с Go байт-в-байт).
-- **`singbox-ui/root/usr/libexec/singbox-ui/bbolt-client`** — тонкий CLI-шим
-  над `lib/bbolt.uc` (argv-совместим с прежним бинарником). Ставится как часть
-  `singbox-ui` (noarch) — отдельного per-arch пакета больше нет.
 
-Этот каталог (`bbolt-client/`) теперь несёт только golden-регресс-харнес:
-`test.sh` + `testdata/` (замороженные фикстуры и хэши, снятые с апстримного
-Go-референса `bbolt`).
+Это **модуль**: прод (`nft-rulesets.uc`) — тоже ucode, и `lib/bbolt.uc` лежит
+на его же `-L`-пути, поэтому кэш читается in-process, `require("bbolt")`, без
+форка. Пакет несёт только модуль; CLI-шима в нём больше нет.
 
-## Использование
+Этот каталог (`bbolt-client/`) — не пакет. В нём golden-регресс-харнес
+(`test.sh` + `testdata/`: замороженные фикстуры и хэши, снятые с апстримного
+Go-референса `bbolt`) и **`bbolt-cli.uc`** — тестовый CLI-драйвер над тем же
+модулем: шеллу нужен процесс, поэтому harness гоняет ридер через него. Раньше
+драйвер жил в пакете (`usr/libexec/singbox-ui/bbolt-client`) ради
+argv-совместимости с Rust-бинарником, которого давно нет.
 
-    bbolt-client <db>                   # список бакетов
-    bbolt-client <db> <bucket>          # список ключей в бакете
-    bbolt-client <db> <bucket> <key>    # сырые байты значения в stdout
-    bbolt-client -r <db> <bucket> <key> # снять обёртку SavedRuleSet -> .srs
+## Использование (тестовый драйвер)
+
+    bbolt-cli.uc <db>                   # список бакетов
+    bbolt-cli.uc <db> <bucket>          # список ключей в бакете
+    bbolt-cli.uc <db> <bucket> <key>    # сырые байты значения в stdout
+    bbolt-cli.uc -r <db> <bucket> <key> # снять обёртку SavedRuleSet -> .srs
 
 Пример — достать кэшированный rule-set и декомпилировать его:
 
-    bbolt-client -r cache.db rule_set warp-telegram-community-ruleset > rs.srs
+    LIB=../singbox-ui/root/usr/share/singbox-ui/lib
+    ucode -L$LIB ./bbolt-cli.uc -r cache.db rule_set warp-telegram-community-ruleset > rs.srs
     sing-box rule-set decompile rs.srs --output rs.json
 
 Читает весь файл в память (`fs`), никакого mmap. Коды возврата: `0` ok, `1`
@@ -59,13 +64,15 @@ Go-референса `bbolt`).
 
 ## Тесты
 
-`./test.sh` самодостаточен — сводит вывод шима к sha256 и сравнивает с
+`./test.sh` самодостаточен — сводит вывод ридера к sha256 и сравнивает с
 закоммиченными golden-хэшами в `testdata/golden/` (сняты с Go-референса `bbolt`
-и заморожены). Прогон против ucode-шима:
+и заморожены). По умолчанию гоняет `bbolt-cli.uc` над `lib/bbolt.uc`:
 
-    LIB=../singbox-ui/root/usr/share/singbox-ui/lib
-    SHIM=../singbox-ui/root/usr/libexec/singbox-ui/bbolt-client
-    RUN="ucode -L$LIB $SHIM" ./test.sh
+    ./test.sh
+
+Переопределить ридер (`LIB` — каталог модулей, `RUN` — команда целиком):
+
+    RUN="ucode -L<lib> <driver>" ./test.sh
 
 В CI это гоняет backend-лейн in-guest (`tests/backend/test_bbolt_golden.test.ts`),
 где реальные OpenWrt ucode + ucode-mod-fs гарантированно есть и совпадают с прод.

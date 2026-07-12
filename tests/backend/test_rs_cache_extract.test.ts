@@ -8,26 +8,37 @@ const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const SUB_UC = `${WORK}/singbox-ui/root/usr/share/singbox-ui/nft-rulesets.uc`;
 const TMP = `/tmp/sb-rscache-${process.pid}`;
 const RUNTIME = `${TMP}/runtime`;
-const BBOLT = `${TMP}/bin/bbolt-client`;
+const FAKELIB = `${TMP}/fakelib`;
 const SING_BOX = `${TMP}/bin/sing-box`;
 const INITD = `${TMP}/initd/singbox-ui`;
 const RELOAD_LOG = `${TMP}/reload.log`;
 
-// Shell script for fake bbolt-client.
-// $1, $2, $4, ${BBOLT_KNOWN:-} are shell variables — NOT TS interpolations.
-// \003 is the octal escape that must appear literally in the shell script.
-const FAKE_BBOLT = `#!/bin/sh
-known=" \${BBOLT_KNOWN:-} "
-if [ "$1" = "-r" ]; then
-  tag="$4"
-  case "$known" in *" $tag "*) printf 'SRS\\003FAKEBODY'; exit 0 ;; esac
-  exit 1
-fi
-if [ "$2" = "rule_set" ]; then
-  for t in \${BBOLT_KNOWN:-}; do echo "$t"; done
-  exit 0
-fi
-exit 0
+// Fake bbolt MODULE (not a binary): dropped into a lib dir passed to ucode
+// BEFORE the real lib, so require("bbolt") resolves here while require("helpers")
+// still reaches the real lib (ucode searches -L dirs in order). nft-rulesets.uc
+// now reads cache.db in-process, so the seam is a module, not a forked CLI.
+// $BBOLT_KNOWN keeps its old meaning — the space-separated set of tags in cache.db.
+//
+// Note what this fake CANNOT express: find_bucket always answers `rule_set`, so
+// "cold" here means *bucket present, key absent*. The other cold shape — a
+// readable db with no rule_set bucket at all — is covered against the REAL
+// module in test_audit_4_1_cold_backoff.
+const FAKE_BBOLT_UC = `// test fake for lib/bbolt.uc
+let known = [];
+for (let t in split(getenv("BBOLT_KNOWN") ?? "", " ")) if (length(t)) push(known, t);
+return {
+	read_db:        function(p) { return { fake: true }; },
+	page_size:      function(m) { return 4096; },
+	select_root:    function(m, ps) { return 0; },
+	find_bucket:    function(m, ps, root, name) { return (name == "rule_set") ? { page: 1 } : null; },
+	page:           function(m, ps, n) { return "fake"; },
+	walk:           function(m, ps, bp, buckets_only, depth, acc) {
+	                    for (let k in known) push(acc, k); },
+	search:         function(m, ps, bp, key, depth) {
+	                    for (let k in known) if (k == key) return [ 0, "SRS\\x03FAKEBODY" ];
+	                    return null; },
+	unwrap_ruleset: function(v) { return "FAKEBODY"; },
+};
 `;
 
 // Shell script for fake sing-box.
@@ -40,14 +51,15 @@ exit 0
 `;
 
 // Runs nft-rulesets.uc with given args, injecting env vars via inline prefix.
-// UCI_CONFIG_DIR, SINGBOX_TMPDIR, SINGBOX_BBOLT_BIN, SINGBOX are always set.
-// extraEnv may add BBOLT_KNOWN=..., SINGBOX_INITD=..., etc.
+// UCI_CONFIG_DIR, SINGBOX_TMPDIR, SINGBOX are always set. extraEnv may add
+// BBOLT_KNOWN=..., SINGBOX_INITD=..., etc. -L FAKELIB precedes -L LIB so
+// require("bbolt") picks up the fake and everything else the real lib.
 async function runUc(
   args: string,
   extraEnv: string = "",
 ): Promise<{ stdout: string; exitCode: number }> {
   const r = await exec(
-    `cd ${WORK} && ${extraEnv} UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${RUNTIME} SINGBOX_BBOLT_BIN=${BBOLT} SINGBOX=${SING_BOX} ucode -L ${LIB} ${SUB_UC} ${args} 2>&1 || true`,
+    `cd ${WORK} && ${extraEnv} UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${RUNTIME} SINGBOX=${SING_BOX} ucode -L ${FAKELIB} -L ${LIB} ${SUB_UC} ${args} 2>&1 || true`,
   );
   return { stdout: r.stdout, exitCode: r.exitCode };
 }
@@ -60,10 +72,10 @@ describe("rs_cache_extract", () => {
   useGuest();
 
   beforeAll(async () => {
-    await exec(`mkdir -p ${TMP}/bin ${TMP}/initd ${RUNTIME}`);
-    await putFile(FAKE_BBOLT, BBOLT);
+    await exec(`mkdir -p ${TMP}/bin ${TMP}/initd ${RUNTIME} ${FAKELIB}`);
+    await putFile(FAKE_BBOLT_UC, `${FAKELIB}/bbolt.uc`);
     await putFile(FAKE_SINGBOX, SING_BOX);
-    await exec(`chmod +x ${BBOLT} ${SING_BOX}`);
+    await exec(`chmod +x ${SING_BOX}`);
   });
 
   afterAll(async () => {
@@ -132,7 +144,7 @@ describe("rs_cache_extract", () => {
     // --- Cold: bbolt lists no keys → refresh must trigger reload ---
     await exec(`> ${RELOAD_LOG}`);
     await exec(
-      `cd ${WORK} && UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${RUNTIME} SINGBOX_BBOLT_BIN=${BBOLT} SINGBOX=${SING_BOX} SINGBOX_INITD=${INITD} SINGBOX_NFT_APPLY=true RELOAD_LOG=${RELOAD_LOG} BBOLT_KNOWN= SINGBOX_RS_CACHE_WAIT=1 ucode -L ${LIB} ${SUB_UC} refresh force 2>&1 || true`,
+      `cd ${WORK} && UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${RUNTIME} SINGBOX=${SING_BOX} SINGBOX_INITD=${INITD} SINGBOX_NFT_APPLY=true RELOAD_LOG=${RELOAD_LOG} BBOLT_KNOWN= SINGBOX_RS_CACHE_WAIT=1 ucode -L ${FAKELIB} -L ${LIB} ${SUB_UC} refresh force 2>&1 || true`,
     );
     const coldCheck = await exec(`grep -q reload-called ${RELOAD_LOG}`);
     expect(coldCheck.exitCode, "cold tag must trigger reload").toBe(0);
@@ -141,7 +153,7 @@ describe("rs_cache_extract", () => {
     await exec(`> ${RELOAD_LOG}`);
     await exec(`rm -f ${RUNTIME}/rs_geoip.json`);
     await exec(
-      `cd ${WORK} && UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${RUNTIME} SINGBOX_BBOLT_BIN=${BBOLT} SINGBOX=${SING_BOX} SINGBOX_INITD=${INITD} SINGBOX_NFT_APPLY=true RELOAD_LOG=${RELOAD_LOG} BBOLT_KNOWN=geoip SINGBOX_RS_CACHE_WAIT=1 ucode -L ${LIB} ${SUB_UC} refresh force 2>&1 || true`,
+      `cd ${WORK} && UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${RUNTIME} SINGBOX=${SING_BOX} SINGBOX_INITD=${INITD} SINGBOX_NFT_APPLY=true RELOAD_LOG=${RELOAD_LOG} BBOLT_KNOWN=geoip SINGBOX_RS_CACHE_WAIT=1 ucode -L ${FAKELIB} -L ${LIB} ${SUB_UC} refresh force 2>&1 || true`,
     );
     const warmNoReload = await exec(`test -s ${RELOAD_LOG}`);
     expect(
