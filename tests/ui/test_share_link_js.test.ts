@@ -202,4 +202,86 @@ describe("shareLinkImport (importers/outbound.js)", () => {
     expect(r.fields.transport_path).toBe("/ws");
     expect(r.fields.tls_insecure).toBe("1");
   });
+
+  // forkop parity: the backend has always parsed tuic/anytls/hysteria(v1); the
+  // UI refused them, so a pasted link could not be imported at all.
+  it("tuic link imports uuid/password/congestion_control", () => {
+    const r = mod.shareLinkImport(
+      "tuic://11111111-2222-3333-4444-555555555555:pw@t.example:443?congestion_control=bbr&udp_relay_mode=quic&sni=s.example#tu",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.fields.type).toBe("tuic");
+    expect(r.fields.server_uuid).toBe("11111111-2222-3333-4444-555555555555");
+    expect(r.fields.server_password).toBe("pw");
+    expect(r.fields.congestion_control).toBe("bbr");
+    expect(r.fields.udp_relay_mode).toBe("quic");
+    expect(r.fields.tls_server_name).toBe("s.example");
+  });
+  it("tuic without uuid:password is rejected", () => {
+    expect(mod.shareLinkImport("tuic://onlyuuid@t.example:443").ok).toBe(false);
+  });
+  it("anytls link imports the password", () => {
+    const r = mod.shareLinkImport(
+      "anytls://secret@a.example:8443?insecure=1#an",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.fields.type).toBe("anytls");
+    expect(r.fields.server_password).toBe("secret");
+    expect(r.fields.tls_insecure).toBe("1");
+  });
+  it("hysteria v1 link imports auth/up/down", () => {
+    const r = mod.shareLinkImport(
+      "hysteria://h.example:443?auth=tok&upmbps=50&downmbps=200&peer=s.example#hy1",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.fields.type).toBe("hysteria");
+    expect(r.fields.hysteria_auth_str).toBe("tok");
+    expect(r.fields.up_mbps).toBe("50");
+    expect(r.fields.down_mbps).toBe("200");
+    expect(r.fields.tls_server_name).toBe("s.example");
+  });
+
+  // Mirrors the backend fixes so the pre-filled draft matches what
+  // parse_proxy_url would build for the same link.
+  it("vless: trailing slash before the query parses (S2)", () => {
+    const r = mod.shareLinkImport(
+      "vless://11111111-2222-3333-4444-555555555555@h.example:443/?type=ws&security=tls",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.fields.server).toBe("h.example");
+    expect(r.fields.security).toBe("tls");
+  });
+  it("vless: sni without security= still enables TLS (S1)", () => {
+    const r = mod.shareLinkImport(
+      "vless://11111111-2222-3333-4444-555555555555@h.example:443?sni=cdn.example",
+    );
+    expect(r.ok).toBe(true);
+    expect(r.fields.security).toBe("tls");
+    expect(r.fields.tls_server_name).toBe("cdn.example");
+  });
+  it("vless: an unknown fingerprint normalises to chrome (S3)", () => {
+    const r = mod.shareLinkImport(
+      "vless://11111111-2222-3333-4444-555555555555@h.example:443?security=tls&fp=bogus",
+    );
+    expect(r.fields.utls_fingerprint).toBe("chrome");
+  });
+  it("vless: an unknown flow is rejected (S11)", () => {
+    const r = mod.shareLinkImport(
+      "vless://11111111-2222-3333-4444-555555555555@h.example:443?security=tls&flow=xtls-rprx-direct",
+    );
+    expect(r.ok).toBe(false);
+  });
+  it("vless: insecure=yes is truthy (S5)", () => {
+    const r = mod.shareLinkImport(
+      "vless://11111111-2222-3333-4444-555555555555@h.example:443?security=tls&insecure=yes",
+    );
+    expect(r.fields.tls_insecure).toBe("1");
+  });
+  it("ss: ?plugin-opts= is honoured (S13)", () => {
+    const r = mod.shareLinkImport(
+      "ss://aes-256-gcm:pw@s.example:8388?plugin=obfs-local&plugin-opts=obfs%3Dhttp#ss",
+    );
+    expect(r.fields.plugin).toBe("obfs-local");
+    expect(r.fields.plugin_opts).toBe("obfs=http");
+  });
 });

@@ -119,10 +119,37 @@ function _shareLinkImport(url) {
 		if (s == null) return '';
 		try { return decodeURIComponent(s); } catch (e) { return String(s); }
 	}
-	var schemes = ['vless', 'vmess', 'shadowsocks', 'trojan', 'hysteria2'];
+	// query(str) — the shared ?a=b&c=d splitter every scheme branch below uses.
+	function query(s) {
+		var out = {};
+		if (s) s.split('&').forEach(function(p) {
+			var kv = p.split('=');
+			out[safeDecode(kv[0])] = safeDecode(kv.slice(1).join('='));
+		});
+		return out;
+	}
+	// Providers emit insecure=yes / allowInsecure=on as readily as =1
+	// (mirrors sharelink_map.is_true).
+	function isTrue(v) {
+		if (v == null) return false;
+		var s = String(v).toLowerCase();
+		return s === '1' || s === 'true' || s === 'yes' || s === 'on';
+	}
+	// The set of values sing-box's utls.fingerprint accepts; anything else is a
+	// fatal config error, so normalise to chrome (mirrors sharelink_map.normalize_fp).
+	var UTLS = ['chrome', 'firefox', 'edge', 'safari', '360', 'ios', 'android',
+	            'randomized', 'randomizedalpn', 'randomizednoalpn'];
+	function normFp(v) {
+		if (!v) return '';
+		return (UTLS.indexOf(String(v).toLowerCase()) >= 0) ? String(v).toLowerCase() : 'chrome';
+	}
+
+	var schemes = ['vless', 'vmess', 'shadowsocks', 'trojan', 'hysteria2',
+	               'tuic', 'anytls', 'hysteria'];
 	var scheme = (url.split(':')[0] || '').toLowerCase();
 	if (scheme === 'ss')  scheme = 'shadowsocks';
 	if (scheme === 'hy2') scheme = 'hysteria2';
+	if (scheme === 'hy')  scheme = 'hysteria';
 	if (schemes.indexOf(scheme) === -1)
 		return { ok: false, errors: [_('Unsupported scheme: ') + scheme] };
 
@@ -168,20 +195,26 @@ function _shareLinkImport(url) {
 
 	var match;
 	if (scheme === 'vless') {
-		match = url.match(/^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		// The trailing slash before the query (host:443/?type=ws) is legal and
+		// common; rejecting it made the UI refuse links the backend accepts.
+		match = url.match(/^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)\/?(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse vless URL')] };
-		var params = {};
-		if (match[4]) match[4].split('&').forEach(function(p) {
-			var kv = p.split('='); params[safeDecode(kv[0])] = safeDecode(kv[1] || '');
-		});
+		var params = query(match[4]);
+		// sing-box only knows the xtls-rprx-vision flow (mirror parse_vless).
+		if (params.flow && params.flow !== 'xtls-rprx-vision')
+			return { ok: false, errors: [_('Unsupported vless flow: ') + params.flow] };
 		var f = {
 			type: 'vless',
 			server: match[2], server_port: +match[3],
 			server_uuid: safeDecode(match[1]),
 		};
-		if (params.sni)         f.tls_server_name = params.sni;
+		var vsni = params.sni || params.peer || '';
+		var vfp  = normFp(params.fp);
+		if (!vfp && (params.security === 'reality' || params.pbk)) vfp = 'chrome';
+		if (vsni)               f.tls_server_name = vsni;
 		if (params.flow)        f.vless_flow       = params.flow;
-		if (params.fp)          f.utls_fingerprint = params.fp;
+		if (vfp)                f.utls_fingerprint = vfp;
+		if (params.alpn)        f.tls_alpn = params.alpn.split(',').filter(Boolean);
 		// Mirror backend h_tls_security: a reality block (public_key + short_id)
 		// is emitted ONLY when pbk is present. reality without a public key is
 		// fatal in sing-box, so security=reality without pbk degrades to plain
@@ -190,64 +223,121 @@ function _shareLinkImport(url) {
 			f.security           = 'reality';
 			f.reality_public_key = params.pbk;
 			if (params.sid)      f.reality_short_id = params.sid;
-		} else if (params.security === 'tls' || params.security === 'reality') {
+		} else if (params.security === 'tls' || params.security === 'reality' ||
+		           params.security === 'xtls') {
+			f.security = 'tls';
+		} else if (!params.security && (vsni || params.alpn || vfp || params.pbk)) {
+			// Auto-TLS: a link with TLS-only params but no security= is a TLS link.
+			// Treating it as plaintext produced a draft that could never connect.
 			f.security = 'tls';
 		}
+		if (f.security && isTrue(params.allowInsecure || params.insecure))
+			f.tls_insecure = '1';
 		if (params.type)        f.transport        = params.type;
 		if (params.path)        f.transport_path   = params.path;
+		if (params.host)        f.transport_host   = params.host;
 		if (params.serviceName) f.transport_service_name = params.serviceName;
 		return { ok: true, fields: f };
 	}
 	if (scheme === 'trojan') {
-		match = url.match(/^trojan:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		match = url.match(/^trojan:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)\/?(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse trojan URL')] };
 		// Parse the query like vless/hysteria2 — these were silently dropped, so a
 		// trojan link with sni/transport/TLS imported as a bare host:port draft
 		// that diverged from what the backend parse_trojan yields for the same URL.
-		var tparams = {};
-		if (match[4]) match[4].split('&').forEach(function(p) {
-			var kv = p.split('='); tparams[safeDecode(kv[0])] = safeDecode(kv[1] || '');
-		});
+		var tparams = query(match[4]);
 		var tf = {
 			type: 'trojan',
 			server: match[2], server_port: +match[3],
 			server_password: safeDecode(match[1]),
 		};
-		if (tparams.sni)         tf.tls_server_name        = tparams.sni;
+		if (tparams.sni || tparams.peer)
+			tf.tls_server_name = tparams.sni || tparams.peer;
 		if (tparams.type)        tf.transport              = tparams.type;
 		if (tparams.path)        tf.transport_path         = tparams.path;
 		if (tparams.host)        tf.transport_host         = tparams.host;
 		if (tparams.serviceName) tf.transport_service_name = tparams.serviceName;
-		if (tparams.allowInsecure === '1' || tparams.allowInsecure === 'true' ||
-		    tparams.insecure === '1' || tparams.insecure === 'true')
+		if (normFp(tparams.fp))  tf.utls_fingerprint       = normFp(tparams.fp);
+		if (isTrue(tparams.allowInsecure) || isTrue(tparams.allowinsecure) ||
+		    isTrue(tparams.insecure))
 			tf.tls_insecure = '1';
 		return { ok: true, fields: tf };
 	}
 	if (scheme === 'hysteria2') {
-		match = url.match(/^(?:hysteria2|hy2):\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		match = url.match(/^(?:hysteria2|hy2):\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:]+):(\d+)\/?(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse hysteria2 URL')] };
-		var hparams = {};
-		if (match[4]) match[4].split('&').forEach(function(p) {
-			var kv = p.split('='); hparams[safeDecode(kv[0])] = safeDecode(kv[1] || '');
-		});
+		var hparams = query(match[4]);
 		var hf = {
 			type: 'hysteria2',
 			server: match[2], server_port: +match[3],
 			server_password: safeDecode(match[1]),
 		};
 		if (hparams.sni) hf.tls_server_name = hparams.sni;
+		if (isTrue(hparams.insecure) || isTrue(hparams.allowInsecure))
+			hf.tls_insecure = '1';
+		if (hparams.upmbps)   hf.up_mbps   = hparams.upmbps;
+		if (hparams.downmbps) hf.down_mbps = hparams.downmbps;
+		if (hparams.network)  hf.network   = hparams.network;
 		if (hparams.obfs === 'salamander') {
 			hf.obfs_type     = 'salamander';
 			hf.obfs_password = hparams['obfs-password'] || '';
 		}
 		return { ok: true, fields: hf };
 	}
+	// tuic / anytls / hysteria(v1): the backend has parsed these all along; the
+	// UI silently refused them, so a pasted link could not be imported at all.
+	if (scheme === 'tuic' || scheme === 'anytls' || scheme === 'hysteria') {
+		// Userinfo is optional (hysteria v1 may carry its token in ?auth=), so
+		// try the with-userinfo shape first and fall back to a bare host:port.
+		var uinfo = '', host, port, qs;
+		match = url.match(/^[a-z0-9]+:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:@/?#]+):(\d+)\/?(?:\?([^#]*))?(?:#(.*))?$/);
+		if (match) {
+			uinfo = safeDecode(match[1]);
+			host = match[2]; port = +match[3]; qs = match[4];
+		} else {
+			match = url.match(/^[a-z0-9]+:\/\/(\[[0-9a-fA-F:]+\]|[^:@/?#]+):(\d+)\/?(?:\?([^#]*))?(?:#(.*))?$/);
+			if (!match) return { ok: false, errors: [_('Cannot parse link: ') + scheme] };
+			host = match[1]; port = +match[2]; qs = match[3];
+		}
+		var qp = query(qs);
+		var xf = { type: scheme, server: host, server_port: port };
+		// TLS is mandatory for all three (QUIC/TLS transports).
+		xf.security = 'tls';
+		xf.tls_server_name = qp.sni || qp.peer || host;
+		if (isTrue(qp.insecure) || isTrue(qp.allow_insecure) || isTrue(qp.allowInsecure))
+			xf.tls_insecure = '1';
+		if (qp.alpn) xf.tls_alpn = qp.alpn.split(',').filter(Boolean);
+
+		if (scheme === 'tuic') {
+			var ci = uinfo.indexOf(':');
+			if (ci < 0) return { ok: false, errors: [_('tuic link needs uuid:password')] };
+			xf.server_uuid     = uinfo.slice(0, ci);
+			xf.server_password = uinfo.slice(ci + 1);
+			if (!xf.server_uuid || !xf.server_password)
+				return { ok: false, errors: [_('tuic link needs uuid:password')] };
+			if (qp.congestion_control) xf.congestion_control = qp.congestion_control;
+			if (qp.udp_relay_mode)     xf.udp_relay_mode     = qp.udp_relay_mode;
+		} else if (scheme === 'anytls') {
+			var ai = uinfo.indexOf(':');
+			xf.server_password = (ai >= 0) ? uinfo.slice(ai + 1) : uinfo;
+			if (!xf.server_password)
+				return { ok: false, errors: [_('anytls link is missing the password')] };
+		} else {
+			// hysteria v1: the auth token rides in the userinfo or in ?auth=.
+			var auth = qp.auth || uinfo;
+			if (auth) xf.hysteria_auth_str = auth;
+			if (qp.upmbps || qp.up)     xf.up_mbps   = qp.upmbps   || qp.up;
+			if (qp.downmbps || qp.down) xf.down_mbps = qp.downmbps || qp.down;
+			if (qp.obfs) xf.obfs = qp.obfs;
+		}
+		return { ok: true, fields: xf };
+	}
 	if (scheme === 'shadowsocks') {
 		// SIP002 links commonly carry ?plugin=name;opts before the #tag. The
 		// query group (?:\?([^#]*))? mirrors vless/trojan/hysteria2; without it
 		// the whole link failed to match and was rejected (audit 9.3). The host
 		// alternative also excludes '?' so the query is not swallowed into it.
-		match = url.match(/^ss:\/\/(?:([^@#?]+)@)?(\[[0-9a-fA-F:]+\]|[^:#?]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/);
+		match = url.match(/^ss:\/\/(?:([^@#?]+)@)?(\[[0-9a-fA-F:]+\]|[^:#?]+):(\d+)\/?(?:\?([^#]*))?(?:#(.*))?$/);
 		if (!match) return { ok: false, errors: [_('Cannot parse shadowsocks URL')] };
 		var userinfo = match[1] ? safeDecode(match[1]) : '';
 		var mp = userinfo.split(':');
@@ -276,17 +366,17 @@ function _shareLinkImport(url) {
 		// First ';'-segment is the plugin name, remainder is the opts string —
 		// matching parse_ss() in sharelink.uc so client pre-fill agrees with the
 		// config-generation parser.
+		// ?plugin-opts= carries the opts on its own when present; otherwise they
+		// are the tail of ?plugin=name;opts (mirrors parse_ss).
 		if (match[4]) {
-			var qp = {};
-			match[4].split('&').forEach(function (p) {
-				var kv = p.split('='); qp[safeDecode(kv[0])] = safeDecode(kv.slice(1).join('='));
-			});
-			if (qp.plugin) {
-				var semi = qp.plugin.indexOf(';');
-				ssf.plugin = (semi >= 0) ? qp.plugin.slice(0, semi) : qp.plugin;
-				if (semi >= 0 && semi + 1 < qp.plugin.length)
-					ssf.plugin_opts = qp.plugin.slice(semi + 1);
+			var ssq = query(match[4]);
+			var pl = ssq.plugin || '', po = ssq['plugin-opts'] || '';
+			if (pl && !po) {
+				var semi = pl.indexOf(';');
+				if (semi >= 0) { po = pl.slice(semi + 1); pl = pl.slice(0, semi); }
 			}
+			if (pl) ssf.plugin = pl;
+			if (po) ssf.plugin_opts = po;
 		}
 		return { ok: true, fields: ssf };
 	}

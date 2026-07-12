@@ -92,46 +92,210 @@ function parse_query(query_string) {
 	return params;
 }
 
-// h_tls_security(params, host, out) — enable the TLS block for security=tls|reality
-// and seed server_name (sni param wins, else the host). For reality, assemble the
-// reality sub-block (public_key + short_id) ONLY when pbk is present — emitting a
-// reality block without public_key makes sing-box FATAL at config load.
-// Consumes the `security`/`sni`/`pbk`/`sid` params (SPEC Delegated).
+// h_tls_security(params, host, out) — build the whole TLS block for a vless link.
+// Consumes security/sni/peer/pbk/sid/fp/alpn/allowInsecure/insecure (SPEC Delegated).
+//
+// TLS is enabled when `security` says so — but ALSO, when `security` is absent,
+// whenever the link carries a TLS-only parameter (sni/alpn/fp/pbk). Providers
+// routinely ship such links; requiring security= made us connect in plaintext to
+// a TLS server, i.e. not connect at all.
+//
+// Reality: the sub-block is emitted ONLY when pbk is present — a reality block
+// without public_key makes sing-box FATAL at config load. `security=reality`
+// without pbk therefore degrades to plain TLS here (forkop rejects the link
+// outright; the softer behaviour is deliberate and pinned by a test).
 function h_tls_security(params, host, out) {
-	let sec = params["security"];
-	if (sec !== "tls" && sec !== "reality") return;
-	out.tls = { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host };
-	if (sec === "reality" && length(params["pbk"])) {
-		out.tls.reality = { enabled: true, public_key: params["pbk"] };
+	let sec = params["security"] ?? "";
+	let sni = length(params["sni"]) ? params["sni"] : (params["peer"] ?? "");
+	let pbk = params["pbk"] ?? "";
+	let fp  = smap.normalize_fp(params["fp"] ?? "");
+	let alpn = smap.alpn_for_transport(smap.coerce(params["alpn"], "csv") ?? [],
+	                                   params["type"] ?? "");
+	// reality (and a bare pbk) always speaks uTLS; chrome is the universal default.
+	if ((sec === "reality" || length(pbk)) && !length(fp)) fp = "chrome";
+
+	let on = (sec === "tls" || sec === "xtls" || sec === "reality") ||
+	         (!length(sec) && (length(sni) || length(alpn) || length(fp) || length(pbk)));
+	if (!on) return;
+
+	out.tls = { enabled: true, server_name: length(sni) ? sni : host };
+	if (smap.is_true(params["allowInsecure"]) || smap.is_true(params["insecure"]))
+		out.tls.insecure = true;
+	if (length(alpn)) out.tls.alpn = alpn;
+	if (length(fp))   out.tls.utls = { enabled: true, fingerprint: fp };
+	if (length(pbk)) {
+		out.tls.reality = { enabled: true, public_key: pbk };
 		if (length(params["sid"])) out.tls.reality.short_id = params["sid"];
 	}
 }
 
-// h_transport(params, out) — v2ray transport block from type/path/host/serviceName.
-// Consumes the `type`/`path`/`host`/`serviceName` params (SPEC Delegated).
+// ---- xhttp (Xray) transport --------------------------------------------------
+// The knobs arrive either flat in the query (camel or snake) or nested inside a
+// JSON `extra` blob (?extra={...}, extra.xhttpSettings, extra.downloadSettings.
+// xhttpSettings, and an `extra` key inside either). Both spellings, all nesting
+// levels, one flat lookup table.
+
+const XHTTP_KEYS = [
+	"xPaddingBytes", "x_padding_bytes", "noGRPCHeader", "no_grpc_header",
+	"scMaxEachPostBytes", "sc_max_each_post_bytes",
+	"scMinPostsIntervalMs", "sc_min_posts_interval_ms",
+	"scStreamUpServerSecs", "sc_stream_up_server_secs", "xmux",
+];
+
+function x_present(v) { return v != null && !(type(v) === "string" && v === ""); }
+
+// x_obj(v) — an object as-is; a JSON string parsed; anything else {}.
+function x_obj(v) {
+	if (type(v) === "object") return v;
+	if (!x_present(v)) return {};
+	try { let p = json(`${v}`); return (type(p) === "object") ? p : {}; }
+	catch (e) { return {}; }
+}
+
+function x_copy(dst, src) {
+	if (type(src) !== "object") return;
+	for (let k in XHTTP_KEYS) if (x_present(src[k])) dst[k] = src[k];
+}
+
+function x_extra(params) {
+	let dst = {};
+	let e = x_obj(params["extra"]);
+	x_copy(dst, e);
+	let xs = x_obj(e.xhttpSettings);
+	x_copy(dst, xs);
+	x_copy(dst, x_obj(xs.extra));
+	let ds = x_obj(x_obj(e.downloadSettings).xhttpSettings);
+	x_copy(dst, ds);
+	x_copy(dst, x_obj(ds.extra));
+	return dst;
+}
+
+// x_val — flat query wins over the extra blob; camel wins over snake.
+function x_val(params, extra, camel, snake) {
+	for (let v in [ params[camel], params[snake], extra[camel], extra[snake] ])
+		if (x_present(v)) return v;
+	return null;
+}
+
+function x_int(v, positive) {
+	let n;
+	if (type(v) === "int") n = v;
+	else if (type(v) === "double") { n = int(v); if (n != v) return null; }
+	else {
+		let s = trim(`${v ?? ""}`);
+		if (!match(s, /^[0-9]+$/)) return null;
+		n = +s;
+	}
+	if (type(n) !== "int" || n < 0) return null;
+	if (positive && n === 0) return null;
+	return n;
+}
+
+// x_range(v) — an int, a "N-M" range string, or a {from,to} object. Returns the
+// int, the canonical "N-M" string, or {from,to}; null when it is none of those.
+function x_range(v, positive) {
+	if (!x_present(v)) return null;
+	if (type(v) === "object") {
+		let f = x_int(v.from, positive), t = x_int(v.to, positive);
+		return (f != null && t != null && f <= t) ? { from: f, to: t } : null;
+	}
+	let n = x_int(v, positive);
+	if (n != null) return n;
+	let mm = match(trim(`${v}`), /^([0-9]+)-([0-9]+)$/);
+	if (!mm) return null;
+	let f = x_int(mm[1], positive), t = x_int(mm[2], positive);
+	return (f != null && t != null && f <= t) ? sprintf("%d-%d", f, t) : null;
+}
+
+function x_xmux(v) {
+	// `src`, not `s`: the uci-schema coverage guard reads `s.<field>` as a UCI
+	// field access, and xmux keys are sing-box JSON, not UCI.
+	let src = x_obj(v);
+	let r = {};
+	for (let p in [ [ "max_concurrency", "maxConcurrency" ],
+	                [ "max_connections", "maxConnections" ],
+	                [ "c_max_reuse_times", "cMaxReuseTimes" ],
+	                [ "h_max_request_times", "hMaxRequestTimes" ],
+	                [ "h_max_reusable_secs", "hMaxReusableSecs" ] ]) {
+		let n = x_range(x_present(src[p[1]]) ? src[p[1]] : src[p[0]], false);
+		if (n != null) r[p[0]] = n;
+	}
+	let ka = x_int(x_present(src.hKeepAlivePeriod) ? src.hKeepAlivePeriod : src.h_keep_alive_period, false);
+	if (ka != null) r.h_keep_alive_period = ka;
+	return length(keys(r)) ? r : null;
+}
+
+function h_xhttp(params, path, host) {
+	let mode = params["mode"] ?? "auto";
+	if (mode !== "auto" && mode !== "packet-up" && mode !== "stream-up" && mode !== "stream-one")
+		mode = "auto";
+	let tr = {
+		type: "xhttp", mode: mode,
+		path: length(path) ? path : "/",
+		x_padding_bytes: "100-1000",
+		no_grpc_header: false,
+		sc_max_each_post_bytes: 1000000,
+		sc_min_posts_interval_ms: 30,
+	};
+	let h = length(host) ? host : (params["sni"] ?? "");   // xhttp Host falls back to sni
+	if (length(h)) tr.host = h;
+
+	let ex = x_extra(params);
+	let v = x_range(x_val(params, ex, "xPaddingBytes", "x_padding_bytes"), true);
+	if (v != null) tr.x_padding_bytes = v;
+	v = x_val(params, ex, "noGRPCHeader", "no_grpc_header");
+	if (x_present(v)) tr.no_grpc_header = smap.is_true(v);
+	v = x_range(x_val(params, ex, "scMaxEachPostBytes", "sc_max_each_post_bytes"), true);
+	if (v != null) tr.sc_max_each_post_bytes = v;
+	v = x_range(x_val(params, ex, "scMinPostsIntervalMs", "sc_min_posts_interval_ms"), false);
+	if (v != null) tr.sc_min_posts_interval_ms = v;
+	v = x_range(x_val(params, ex, "scStreamUpServerSecs", "sc_stream_up_server_secs"), false);
+	if (v != null) tr.sc_stream_up_server_secs = v;
+	let xm = x_xmux(x_val(params, ex, "xmux", "xmux"));
+	if (xm) tr.xmux = xm;
+	return tr;
+}
+
+// h_transport(params, out) — v2ray/xhttp transport block.
+// Consumes type/path/host/serviceName/ed + the xhttp keys (SPEC Delegated).
 function h_transport(params, out) {
 	let tt = params["type"];
 	if (!length(tt) || tt === "tcp") return;
-	let tr = { type: (tt === "h2") ? "http" : tt };
+	let path = params["path"] ?? "";
+	let host = params["host"] ?? "";
+	let tr;
 	if (tt === "ws") {
-		if (length(params["path"])) tr.path = params["path"];
-		if (length(params["host"])) tr.headers = { Host: params["host"] };
+		// A ws server without an explicit path serves "/" — the omitted path
+		// used to make sing-box request the empty path and get a 404.
+		tr = { type: "ws", path: length(path) ? path : "/" };
+		if (length(host)) tr.headers = { Host: host };
+		let ed = smap.coerce(params["ed"], "int");
+		if (ed != null) tr.max_early_data = ed;
 	} else if (tt === "grpc") {
-		if (length(params["serviceName"])) tr.service_name = params["serviceName"];
-		else if (length(params["path"]))   tr.service_name = params["path"];
+		tr = { type: "grpc" };
+		let sn = length(params["serviceName"]) ? params["serviceName"] : path;
+		if (length(sn)) tr.service_name = sn;
 	} else if (tt === "http" || tt === "h2") {
-		if (length(params["path"])) tr.path = params["path"];
-		if (length(params["host"])) tr.host = [ params["host"] ];
+		tr = { type: "http" };
+		if (length(path)) tr.path = path;
+		let hosts = smap.coerce(host, "csv");   // http host is a LIST (may be a CSV)
+		if (hosts != null) tr.host = hosts;
 	} else if (tt === "httpupgrade") {
-		if (length(params["path"])) tr.path = params["path"];
-		if (length(params["host"])) tr.host = params["host"];
+		tr = { type: "httpupgrade" };
+		if (length(path)) tr.path = path;
+		if (length(host)) tr.host = host;
+	} else if (tt === "xhttp") {
+		tr = h_xhttp(params, path, host);
+	} else {
+		tr = { type: tt };
 	}
 	out.transport = tr;
 }
 
 function parse_vless(url) {
-	// vless://uuid@host:port?params#name
-	let m = match(url, /^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	// vless://uuid@host:port[/]?params#name  (the trailing slash before the query
+	// is legal — and common; rejecting it dropped whole provider subscriptions.)
+	let m = match(url, /^vless:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let uuid = url_decode(m[1]);
 	let host = safe_host(m[2]);
@@ -141,13 +305,21 @@ function parse_vless(url) {
 	// S4.3: capture the #fragment node name as the tag (consistent with
 	// ss/trojan), instead of silently discarding it.
 	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+
+	// flow: sing-box only knows xtls-rprx-vision. Anything else is an Xray-only
+	// flow whose traffic sing-box cannot produce — importing it would build a
+	// config that silently fails to connect, so reject the link.
+	let flow = params["flow"] ?? "";
+	if (length(flow) && flow !== "xtls-rprx-vision") return null;
+
 	let out = {
 		type: "vless", server: host, server_port: port, uuid: uuid,
 		tag: safe_tag(length(frag) ? frag : host, url),
 	};
-	h_tls_security(params, host, out);   // Delegated: security + sni
-	h_transport(params, out);            // Delegated: type/path/host/serviceName
-	smap.apply_params(params, smap.SPEC.vless, out);  // Direct: flow/fp/pbk/sid/alpn/insecure
+	h_tls_security(params, host, out);   // Delegated: the TLS block
+	h_transport(params, out);            // Delegated: the transport block
+	if (length(flow) && out.tls != null) out.flow = flow;   // flow is TLS-only
+	smap.apply_params(params, smap.SPEC.vless, out);  // Direct: packetEncoding/encryption
 	return out;
 }
 
@@ -158,21 +330,56 @@ function h_obfs(params, out) {
 		out.obfs = { type: "salamander", password: params["obfs-password"] };
 }
 
+// h_ports(spec) — hysteria2 port hopping. "1000-2000,443" (from ?mport= or from
+// the port position itself) becomes sing-box's server_ports ["1000:2000","443:443"].
+// Returns null when the spec names a single port (the caller then emits the plain
+// server_port) or when any entry is not a valid port / range.
+// Consumes the `mport` param (SPEC Delegated).
+function h_ports(spec) {
+	let v = trim(`${spec ?? ""}`);
+	if (index(v, ",") < 0 && index(v, "-") < 0) return null;
+	let out = [];
+	for (let e in split(v, ",")) {
+		let entry = trim(e);
+		let mm = match(entry, /^([0-9]+)-([0-9]+)$/);
+		let a, b;
+		if (mm) {
+			a = safe_port(mm[1]); b = safe_port(mm[2]);
+			if (!a || !b || a > b) return null;
+		} else {
+			a = safe_port(entry);
+			if (!a) return null;
+			b = a;
+		}
+		push(out, sprintf("%d:%d", a, b));
+	}
+	return length(out) ? out : null;
+}
+
 function parse_hy2(url) {
-	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
-			match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	// The port position accepts a hop spec ("443-8443", "443,8000-9000") as well
+	// as a plain port; ?mport= overrides it.
+	let m = match(url, /^hy2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9][0-9,\-]*)\/?(\?[^#]*)?(#.*)?$/) ||
+			match(url, /^hysteria2:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9][0-9,\-]*)\/?(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let password = url_decode(m[1]);
 	let host = safe_host(m[2]);
-	let port = safe_port(m[3]);
-	if (!length(password) || !host || !port) return null;
+	if (!length(password) || !host) return null;
 	let params = m[4] ? parse_query(substr(m[4], 1)) : {};
 	let frag = m[5] ? url_decode(substr(m[5], 1)) : null;
+
+	let spec = length(params["mport"]) ? params["mport"] : m[3];
+	let ports = h_ports(spec);
+	let port = ports ? null : safe_port(spec);
+	if (!ports && !port) return null;
+
 	let out = {
-		type: "hysteria2", server: host, server_port: port, password: password,
+		type: "hysteria2", server: host, password: password,
 		tag: safe_tag(length(frag) ? frag : host, url),
 		tls: { enabled: true, server_name: length(params["sni"]) ? params["sni"] : host },
 	};
+	if (ports) out.server_ports = ports;
+	else       out.server_port  = port;
 	h_obfs(params, out);
 	smap.apply_params(params, smap.SPEC.hysteria2, out);
 	return out;
@@ -180,7 +387,7 @@ function parse_hy2(url) {
 
 // parse_tuic(url) — TUIC v5 share-link: tuic://<uuid>:<password>@host:port?params#name
 function parse_tuic(url) {
-	let m = match(url, /^tuic:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let m = match(url, /^tuic:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let userinfo = url_decode(m[1]);
 	let host = safe_host(m[2]);
@@ -206,7 +413,7 @@ function parse_tuic(url) {
 // parse_anytls(url) — AnyTLS share-link: anytls://<password>@host:port?params#name
 // (userinfo "user:pass" form: the password is the part after ':', else the whole).
 function parse_anytls(url) {
-	let m = match(url, /^anytls:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let m = match(url, /^anytls:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let userinfo = url_decode(m[1]);
 	let host = safe_host(m[2]);
@@ -233,14 +440,15 @@ function parse_anytls(url) {
 // (parse_socks etc. call it) remain intact.
 function b64_decode(s) { return helpers.b64_decode(s); }
 
-// parse_socks(url) — SOCKS5 share-link: socks5://[user:pass@]host:port#name
-// userinfo is OPTIONAL: plain "user:pass" or base64("user:pass"). -> sing-box socks (v5).
+// parse_socks(url) — SOCKS share-link: socks[4|4a|5]://[user:pass@]host:port#name
+// userinfo is OPTIONAL: plain "user:pass" or base64("user:pass").
+// The scheme carries the version: socks4 -> "4", socks4a -> "4a", socks5/socks -> "5".
 // Placed after b64_decode: ucode resolves top-level function refs by definition
 // order, so parse_socks (which calls b64_decode) must follow it.
 function parse_socks(url) {
 	let host, port, params, frag, raw = null;
 	// Pattern A: with userinfo  (m[1]=userinfo m[2]=host m[3]=port m[4]=query m[5]=frag)
-	let m = match(url, /^socks5?:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let m = match(url, /^socks[0-9a-z]*:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 	if (m) {
 		raw  = m[1];
 		host = safe_host(m[2]); port = safe_port(m[3]);
@@ -249,7 +457,7 @@ function parse_socks(url) {
 	} else {
 		// Pattern B: no userinfo  (m[1]=host m[2]=port m[3]=query m[4]=frag).
 		// Host class adds @ to its negation so this only matches a true no-@ URL.
-		m = match(url, /^socks5?:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+		m = match(url, /^socks[0-9a-z]*:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 		if (!m) return null;
 		host = safe_host(m[1]); port = safe_port(m[2]);
 		params = m[3] ? parse_query(substr(m[3], 1)) : {};
@@ -274,12 +482,17 @@ function parse_socks(url) {
 		if (colon >= 0) {
 			username = substr(ui, 0, colon);
 			password = substr(ui, colon + 1);
+			// socks4 links commonly repeat the user in the password slot; a
+			// password identical to the username is noise, not a credential.
+			if (username === password) password = null;
 		} else if (length(ui)) {
 			username = ui;
 		}
 	}
+	let vm = match(url, /^socks([0-9a-z]*):/);   // "" | "4" | "4a" | "5"
 	let out = {
-		type: "socks", server: host, server_port: port, version: "5",
+		type: "socks", server: host, server_port: port,
+		version: length(vm[1]) ? vm[1] : "5",
 		tag: safe_tag(length(frag) ? frag : host, url),
 	};
 	if (length(username)) out.username = username;
@@ -313,7 +526,7 @@ function parse_ss(url) {
 		let q = index(tail, "?");
 		let hp = q >= 0 ? substr(tail, 0, q) : tail;
 		if (q >= 0) query = substr(tail, q + 1);
-		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)$/);
+		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)\/?$/);
 		if (!hpm) return null;
 		host = hpm[1]; port = +hpm[2];
 
@@ -342,7 +555,7 @@ function parse_ss(url) {
 		let q = index(tail, "?");
 		let hp = q >= 0 ? substr(tail, 0, q) : tail;
 		if (q >= 0) query = substr(tail, q + 1);
-		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)$/);
+		let hpm = match(hp, /^(\[[0-9a-fA-F:]+\]|[^:]+):([0-9]+)\/?$/);
 		if (!hpm) return null;
 		host = hpm[1]; port = +hpm[2];
 		let colon = index(userinfo, ":");
@@ -366,17 +579,24 @@ function parse_ss(url) {
 	};
 	// S9.3: SIP002 ?plugin=name;opt=val;... → sing-box plugin / plugin_opts.
 	// The plugin value's first ';'-segment is the plugin name; the remainder is
-	// the opts string. parse_query splits on the first '=' only, so an
-	// unencoded (or %-encoded) ';'/'=' inside the value survives intact.
-	// SPEC ss: { param:"plugin", handler:"ss_plugin" } — bespoke name;opts split below
+	// the opts string — UNLESS the link carries the opts in its own
+	// ?plugin-opts= param, in which case `plugin` is the bare name.
+	// parse_query splits on the first '=' only, so an unencoded (or %-encoded)
+	// ';'/'=' inside the value survives intact.
+	// SPEC ss: plugin + plugin-opts, handler "ss_plugin" — split below.
 	if (length(query)) {
-		let pl = parse_query(query)["plugin"];
-		if (length(pl)) {
+		let q = parse_query(query);
+		let pl = q["plugin"] ?? "";
+		let po = q["plugin-opts"] ?? "";
+		if (length(pl) && !length(po)) {
 			let semi = index(pl, ";");
-			out.plugin = (semi >= 0) ? substr(pl, 0, semi) : pl;
-			if (semi >= 0 && semi + 1 < length(pl))
-				out.plugin_opts = substr(pl, semi + 1);
+			if (semi >= 0) {
+				po = substr(pl, semi + 1);
+				pl = substr(pl, 0, semi);
+			}
 		}
+		if (length(pl)) out.plugin = pl;
+		if (length(po)) out.plugin_opts = po;
 	}
 	return out;
 }
@@ -385,7 +605,7 @@ function parse_ss(url) {
 //   trojan://<password>@<host>:<port>[?sni=...&type=ws&path=...&allowInsecure=1][#name]
 // Returns a sing-box trojan outbound object, or null on parse failure.
 function parse_trojan(url) {
-	let m = match(url, /^trojan:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let m = match(url, /^trojan:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 	if (!m) return null;
 	let password = url_decode(m[1]);
 	let host = safe_host(m[2]);
@@ -409,8 +629,8 @@ function parse_trojan(url) {
 function parse_hysteria1(url) {
 	// Hysteria v1: hysteria:// or hy:// with optional userinfo (auth token).
 	// Try with-userinfo pattern first (groups: [1]=userinfo [2]=host [3]=port [4]=query [5]=frag).
-	let m = match(url, /^hysteria:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
-	        match(url, /^hy:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+	let m = match(url, /^hysteria:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/) ||
+	        match(url, /^hy:\/\/([^@]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 	let userauth = null;
 	let host, port, params, frag;
 	if (m) {
@@ -421,8 +641,8 @@ function parse_hysteria1(url) {
 		frag  = m[5] ? url_decode(substr(m[5], 1)) : null;
 	} else {
 		// No userinfo — groups: [1]=host [2]=port [3]=query [4]=frag.
-		let m2 = match(url, /^hysteria:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/) ||
-		         match(url, /^hy:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)(\?[^#]*)?(#.*)?$/);
+		let m2 = match(url, /^hysteria:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/) ||
+		         match(url, /^hy:\/\/(\[[0-9a-fA-F:]+\]|[^:/?#@]+):([0-9]+)\/?(\?[^#]*)?(#.*)?$/);
 		if (!m2) return null;
 		host  = safe_host(m2[1]);
 		port  = safe_port(m2[2]);
@@ -468,8 +688,7 @@ function parse_vmess(url) {
 	let wpath = drop_ctrl(`${cfg.path ?? ""}`);
 	let whost = drop_ctrl(`${cfg.host ?? ""}`);
 	if (net === "ws") {
-		let tr = { type: "ws" };
-		if (length(wpath)) tr.path = wpath;
+		let tr = { type: "ws", path: length(wpath) ? wpath : "/" };
 		if (length(whost)) tr.headers = { Host: whost };
 		out.transport = tr;
 	} else if (net === "grpc") {
@@ -478,7 +697,8 @@ function parse_vmess(url) {
 	} else if (net === "h2" || net === "http") {
 		out.transport = { type: "http" };
 		if (length(wpath)) out.transport.path = wpath;
-		if (length(whost)) out.transport.host = [ whost ];
+		let hosts = smap.coerce(whost, "csv");   // http host is a LIST
+		if (hosts != null) out.transport.host = hosts;
 	}
 
 	if (drop_ctrl(`${cfg.tls ?? ""}`) === "tls") {
@@ -489,10 +709,13 @@ function parse_vmess(url) {
 	// Direct SPEC pass (alpn/fp onto the tls block). vmess params == the decoded
 	// v2rayN JSON object; apply_params reads it the same as a query map. The
 	// gate {tls:"tls"} ensures alpn/fp only attach when TLS is enabled.
+	// `net` rides along so the alpn transform can apply the per-transport rule
+	// (ws/httpupgrade -> http/1.1) — apply_params reads type ?? net.
 	let vparams = {
 		tls:  drop_ctrl(`${cfg.tls ?? ""}`),
 		alpn: drop_ctrl(`${cfg.alpn ?? ""}`),
 		fp:   drop_ctrl(`${cfg.fp ?? ""}`),
+		net:  net,
 	};
 	smap.apply_params(vparams, smap.SPEC.vmess, out);
 	return out;
@@ -549,7 +772,8 @@ function parse_proxy_url(url) {
 	if (match(url, /^hysteria:\/\//) ||
 	    match(url, /^hy:\/\//))        return parse_hysteria1(url);
 	if (match(url, /^anytls:\/\//))    return parse_anytls(url);
-	if (match(url, /^socks5?:\/\//))   return parse_socks(url);
+	if (match(url, /^socks5?:\/\//) ||
+	    match(url, /^socks4a?:\/\//)) return parse_socks(url);
 	warn("sharelink.uc: unsupported proxy URL scheme: " + url + "\n");
 	return null;
 }

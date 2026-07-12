@@ -26,6 +26,43 @@ function set_path(obj, path, v) {
     cur[parts[length(parts) - 1]] = v;
 }
 
+// is_true(v) — the truthiness every share-link producer agrees on. Providers
+// emit insecure=yes / allowInsecure=on as readily as =1; accepting only 1|true
+// silently dropped the flag (S5).
+function is_true(v) {
+    if (v == null) return false;
+    if (type(v) === "bool") return v;
+    let s = lc(`${v}`);
+    return s === "1" || s === "true" || s === "yes" || s === "on";
+}
+
+// UTLS_FINGERPRINTS — the only values sing-box's utls.fingerprint accepts.
+// A link carrying anything else (a typo, an Xray-only profile) must not reach
+// sing-box: an unknown fingerprint is a FATAL config error, so normalise to
+// chrome (S3).
+const UTLS_FINGERPRINTS = {
+    chrome: true, firefox: true, edge: true, safari: true, "360": true,
+    ios: true, android: true, randomized: true, randomizedalpn: true,
+    randomizednoalpn: true,
+};
+
+function normalize_fp(v) {
+    if (v == null) return "";
+    let s = `${v}`;
+    if (!length(s)) return "";
+    return UTLS_FINGERPRINTS[lc(s)] ? lc(s) : "chrome";
+}
+
+// alpn_for_transport(list, transport) — the transport constrains the ALPN set:
+// xhttp needs h2/http-1.1 even when the link says nothing, and ws/httpupgrade
+// only ever speak HTTP/1.1 (S10).
+function alpn_for_transport(list, transport) {
+    let t = lc(`${transport ?? ""}`);
+    if (t === "xhttp" && !length(list)) return [ "h2", "http/1.1" ];
+    if ((t === "ws" || t === "httpupgrade") && length(list)) return [ "http/1.1" ];
+    return list;
+}
+
 // coerce(v, t) — apply a transform. Returns null to signal "omit this field"
 // (empty string, empty list, falsy bool, or non-numeric int).
 function coerce(v, t) {
@@ -37,16 +74,22 @@ function coerce(v, t) {
         for (let a in split(v, ",")) { let x = trim(a); if (length(x)) push(list, x); }
         return length(list) ? list : null;
     }
-    if (t === "bool") {
-        let s = lc(v);
-        return (s === "1" || s === "true") ? true : null;   // only set when truthy
-    }
+    if (t === "bool")
+        return is_true(v) ? true : null;                    // only set when truthy
     if (t === "int") {
         let mm = match(v, /^[0-9]+/);
         if (!mm) return null;
         let n = +mm[0];
         return (type(n) === "int") ? n : null;
     }
+    if (t === "fp") {
+        let f = normalize_fp(v);
+        return length(f) ? f : null;
+    }
+    if (t === "penc")                                       // vless packet_encoding
+        return (v === "xudp" || v === "packetaddr") ? v : null;
+    if (t === "encryption")                                 // "none" == sing-box default
+        return (length(v) && v !== "none") ? v : null;
     return length(v) ? v : null;
 }
 
@@ -73,7 +116,16 @@ function apply_params(params, entries, out) {
     for (let e in entries) {
         if (e.handler != null || e.unsupported != null) continue;   // not Direct
         if (e.when != null && !gate_ok(params, e.when)) continue;
-        let v = coerce(params[e.param], e.transform);
+        let v;
+        if (e.transform === "alpn") {
+            // ALPN is the one transform that depends on a sibling param (the
+            // transport: `type` in a query, `net` in the vmess JSON).
+            v = alpn_for_transport(coerce(params[e.param], "csv") ?? [],
+                                   params["type"] ?? params["net"] ?? "");
+            if (!length(v)) v = null;
+        } else {
+            v = coerce(params[e.param], e.transform);
+        }
         if (v == null) continue;
         set_path(out, e.path, v);
         if (e.enables != null) set_path(out, e.enables, true);
@@ -81,16 +133,30 @@ function apply_params(params, entries, out) {
     return out;
 }
 
+// XHTTP_PARAMS — the Xray xhttp transport knobs. They arrive either as flat
+// query params (camel or snake) or nested inside the JSON `extra` blob; both
+// are consumed by the `transport` handler in sharelink.uc.
+const XHTTP_PARAMS = [
+    "mode", "extra", "xmux",
+    "xPaddingBytes", "x_padding_bytes",
+    "noGRPCHeader", "no_grpc_header",
+    "scMaxEachPostBytes", "sc_max_each_post_bytes",
+    "scMinPostsIntervalMs", "sc_min_posts_interval_ms",
+    "scStreamUpServerSecs", "sc_stream_up_server_secs",
+];
+
 // INVENTORY / SPEC are filled in per scheme by later tasks.
 const INVENTORY = {
-    vless: [ "security", "sni", "type", "path", "host", "serviceName",
-             "flow", "fp", "pbk", "sid", "alpn", "allowInsecure",
-             "encryption", "spx", "mode", "headerType" ],
+    vless: [ "security", "sni", "peer", "type", "path", "host", "serviceName",
+             "flow", "fp", "pbk", "sid", "alpn", "allowInsecure", "insecure",
+             "encryption", "packetEncoding", "ed", "spx", "headerType",
+             ...XHTTP_PARAMS ],
     trojan: [ "sni", "peer", "alpn", "allowInsecure", "allowinsecure", "fp",
               "type", "path", "host", "serviceName" ],
-    hysteria2: [ "sni", "insecure", "alpn", "obfs", "obfs-password",
-                 "pinSHA256", "mport", "up", "down" ],
-    ss: [ "plugin" ],
+    hysteria2: [ "sni", "insecure", "allowInsecure", "alpn", "obfs",
+                 "obfs-password", "pinSHA256", "mport", "up", "down",
+                 "upmbps", "downmbps", "network" ],
+    ss: [ "plugin", "plugin-opts" ],
     tuic: [ "congestion_control", "udp_relay_mode", "alpn", "sni",
             "allow_insecure", "disable_sni" ],
     hysteria: [ "auth", "peer", "insecure", "alpn", "up", "upmbps",
@@ -104,30 +170,45 @@ const INVENTORY = {
 
 const SPEC = {
     vless: [
-        // Delegated: TLS enable + default SNI, and the v2ray transport block,
-        // are multi-param / context-dependent — handled by sharelink.uc helpers.
-        { param: "security",    handler: "tls_security" },
-        { param: "sni",         handler: "tls_security" },
-        { param: "pbk",         handler: "tls_security" },
-        { param: "sid",         handler: "tls_security" },
-        { param: "type",        handler: "transport" },
-        { param: "path",        handler: "transport" },
-        { param: "host",        handler: "transport" },
-        { param: "serviceName", handler: "transport" },
+        // Delegated: the whole TLS block (enable is inferred from sni/alpn/fp/pbk
+        // when `security` is absent — see h_tls_security) and the v2ray/xhttp
+        // transport block are multi-param / context-dependent.
+        { param: "security",     handler: "tls_security" },
+        { param: "sni",          handler: "tls_security" },
+        { param: "peer",         handler: "tls_security" },   // sni alias
+        { param: "pbk",          handler: "tls_security" },
+        { param: "sid",          handler: "tls_security" },
+        { param: "fp",           handler: "tls_security" },
+        { param: "alpn",         handler: "tls_security" },
+        { param: "allowInsecure", handler: "tls_security" },
+        { param: "insecure",     handler: "tls_security" },   // allowInsecure alias
+        { param: "type",         handler: "transport" },
+        { param: "path",         handler: "transport" },
+        { param: "host",         handler: "transport" },
+        { param: "serviceName",  handler: "transport" },
+        { param: "ed",           handler: "transport" },      // ws max_early_data
+        // flow is whitelisted in parse_vless (an unknown flow rejects the link).
+        { param: "flow",         handler: "flow" },
         // Direct:
-        { param: "flow",         path: "flow",
-                                 when: { security: ["tls", "reality"] } },
-        { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled",
-                                 when: { security: ["tls", "reality"] } },
-        { param: "alpn",         path: "tls.alpn", transform: "csv",
-                                 when: { security: ["tls", "reality"] } },
-        { param: "allowInsecure", path: "tls.insecure", transform: "bool",
-                                 when: { security: ["tls", "reality"] } },
+        { param: "packetEncoding", path: "packet_encoding", transform: "penc" },
+        { param: "encryption",     path: "encryption",       transform: "encryption" },
         // Unsupported (documented no-ops):
-        { param: "encryption", unsupported: "sing-box VLESS has no encryption field (always none)" },
         { param: "spx",        unsupported: "Xray spider_x — no sing-box equivalent" },
-        { param: "mode",       unsupported: "gRPC mode — no sing-box equivalent" },
         { param: "headerType", unsupported: "tcp/http header obfuscation — unsupported" },
+        // xhttp knobs (mode/extra/xmux/sc*/x_padding/no_grpc_header):
+        { param: "mode",                 handler: "transport" },
+        { param: "extra",                handler: "transport" },
+        { param: "xmux",                 handler: "transport" },
+        { param: "xPaddingBytes",        handler: "transport" },
+        { param: "x_padding_bytes",      handler: "transport" },
+        { param: "noGRPCHeader",         handler: "transport" },
+        { param: "no_grpc_header",       handler: "transport" },
+        { param: "scMaxEachPostBytes",   handler: "transport" },
+        { param: "sc_max_each_post_bytes", handler: "transport" },
+        { param: "scMinPostsIntervalMs", handler: "transport" },
+        { param: "sc_min_posts_interval_ms", handler: "transport" },
+        { param: "scStreamUpServerSecs", handler: "transport" },
+        { param: "sc_stream_up_server_secs", handler: "transport" },
     ],
     trojan: [
         { param: "type",        handler: "transport" },
@@ -137,24 +218,30 @@ const SPEC = {
         // peer first, sni second so an explicit sni wins (last write).
         { param: "peer",         path: "tls.server_name" },
         { param: "sni",          path: "tls.server_name" },
-        { param: "alpn",         path: "tls.alpn", transform: "csv" },
+        { param: "alpn",         path: "tls.alpn", transform: "alpn" },
         { param: "allowInsecure", path: "tls.insecure", transform: "bool" },
         { param: "allowinsecure", path: "tls.insecure", transform: "bool" },
-        { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled" },
+        { param: "fp",           path: "tls.utls.fingerprint", enables: "tls.utls.enabled",
+                                 transform: "fp" },
     ],
     hysteria2: [
         { param: "obfs",          handler: "obfs" },
         { param: "obfs-password", handler: "obfs" },
+        { param: "mport",         handler: "ports" },   // port hopping -> server_ports
         { param: "sni",      path: "tls.server_name" },
-        { param: "insecure", path: "tls.insecure", transform: "bool" },
+        { param: "insecure",      path: "tls.insecure", transform: "bool" },
+        { param: "allowInsecure", path: "tls.insecure", transform: "bool" },
         { param: "alpn",     path: "tls.alpn", transform: "csv" },
+        { param: "upmbps",   path: "up_mbps",   transform: "int" },
+        { param: "downmbps", path: "down_mbps", transform: "int" },
+        { param: "network",  path: "network" },
         { param: "pinSHA256", unsupported: "cert pinning — sing-box uses tls.certificate, not pin" },
-        { param: "mport",     unsupported: "port hopping — sing-box server_ports format differs" },
-        { param: "up",        unsupported: "client up bandwidth — server-advertised in sing-box" },
-        { param: "down",      unsupported: "client down bandwidth — server-advertised in sing-box" },
+        { param: "up",        unsupported: "client up bandwidth — server-advertised in sing-box (use upmbps)" },
+        { param: "down",      unsupported: "client down bandwidth — server-advertised in sing-box (use downmbps)" },
     ],
     ss: [
-        { param: "plugin", handler: "ss_plugin" },   // name;opts split is bespoke
+        { param: "plugin",      handler: "ss_plugin" },   // name;opts split is bespoke
+        { param: "plugin-opts", handler: "ss_plugin" },   // SIP002 explicit opts
     ],
     tuic: [
         { param: "congestion_control", path: "congestion_control" },
@@ -200,10 +287,12 @@ const SPEC = {
         { param: "tls",  handler: "tls" },          // "tls" string enables block
         { param: "sni",  handler: "tls" },
         // Direct (only when tls=="tls"):
-        { param: "alpn", path: "tls.alpn", transform: "csv", when: { tls: "tls" } },
-        { param: "fp",   path: "tls.utls.fingerprint", enables: "tls.utls.enabled", when: { tls: "tls" } },
+        { param: "alpn", path: "tls.alpn", transform: "alpn", when: { tls: "tls" } },
+        { param: "fp",   path: "tls.utls.fingerprint", enables: "tls.utls.enabled",
+                         transform: "fp", when: { tls: "tls" } },
         { param: "v",    unsupported: "v2rayN format-version marker — not a proxy field" },
     ],
 };
 
-return { INVENTORY, SPEC, apply_params, set_path, coerce };
+return { INVENTORY, SPEC, apply_params, set_path, coerce,
+         is_true, normalize_fp, alpn_for_transport };
