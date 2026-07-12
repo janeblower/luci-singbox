@@ -324,6 +324,37 @@ function buildOutboundsMap() {
 	o.description = _('Prepended to the display name of imported nodes. Does not change the tag.');
 	o.depends({ type: 'subscription', sub_multi: '1' });
 
+	o = s.taboption('basic', form.Flag, 'sub_import_groups', _('Import subscription groups'));
+	o.modalonly = true;
+	o.default   = '0';
+	o.depends({ type: 'subscription', sub_multi: '1' });
+	o.description = _('Import URLTest/selector groups the provider ships (country groups, detour cascades). Off by default: turning it on changes the selector membership, which can move your saved node pick.');
+
+	o = s.taboption('basic', form.Flag, 'sub_hide_grouped_nodes', _('Hide grouped nodes'));
+	o.modalonly = true;
+	o.default   = '1';
+	o.depends({ type: 'subscription', sub_multi: '1', sub_import_groups: '1' });
+	o.description = _('Hide nodes that are already inside an imported group, or used only as a detour hop, from the top selector. They stay routable.');
+
+	o = s.taboption('basic', form.Value, 'sub_group_max_depth', _('Max group nesting'));
+	o.modalonly   = true;
+	o.datatype    = 'range(1,16)';
+	o.placeholder = '3';
+	o.default     = '3';
+	o.depends({ type: 'subscription', sub_multi: '1', sub_import_groups: '1' });
+
+	o = s.taboption('basic', form.Flag, 'sub_trust_provider', _('Trust provider routing'));
+	o.modalonly = true;
+	o.default   = '0';
+	o.depends({ type: 'subscription', sub_multi: '1', sub_import_groups: '1' });
+	o.description = _('Allow the provider to route imported nodes directly (detour to direct/block), bypassing the proxy for those nodes. Unsafe — leave off unless you trust the feed.');
+
+	o = s.taboption('basic', form.Flag, 'sub_cache_persist', _('Persist cache to flash'));
+	o.modalonly = true;
+	o.default   = '1';
+	o.depends('type', 'subscription');
+	o.description = _('Keep a last-known-good copy on flash so the subscription survives a reboot. Off = cache only in RAM (lost on reboot); avoids writing node passwords to flash.');
+
 	return m;
 }
 

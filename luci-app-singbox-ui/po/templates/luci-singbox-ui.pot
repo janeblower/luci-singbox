@@ -86,6 +86,13 @@ msgstr ""
 msgid "All"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:350
+msgid ""
+"Allow the provider to route imported nodes directly (detour to direct/"
+"block), bypassing the proxy for those nodes. Unsafe — leave off unless you "
+"trust the feed."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:53
 msgid "Auto-update subscriptions"
 msgstr ""
@@ -402,6 +409,16 @@ msgstr ""
 msgid "Hide"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:333
+msgid "Hide grouped nodes"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:337
+msgid ""
+"Hide nodes that are already inside an imported group, or used only as a "
+"detour hop, from the top selector. They stay routable."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:228
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:287
 msgid "Host"
@@ -422,9 +439,20 @@ msgstr ""
 msgid "Import JSON"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:331
+msgid ""
+"Import URLTest/selector groups the provider ships (country groups, detour "
+"cascades). Off by default: turning it on changes the selector membership, "
+"which can move your saved node pick."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:88
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:137
 msgid "Import share-link"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:327
+msgid "Import subscription groups"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:88
@@ -521,6 +549,13 @@ msgstr ""
 msgid "JSON"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:356
+msgid ""
+"Keep a last-known-good copy on flash so the subscription survives a reboot. "
+"Off = cache only in RAM (lost on reboot); avoids writing node passwords to "
+"flash."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:307
 msgid "Keep only nodes whose name matches. Empty = keep all."
 msgstr ""
@@ -580,6 +615,10 @@ msgid ""
 "Match traffic and route, reject, sniff, resolve, or compose with logical "
 "rules. Rules consumed by a logical rule or inline rule-set are not applied "
 "standalone."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:339
+msgid "Max group nesting"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:331
@@ -688,6 +727,10 @@ msgstr ""
 msgid ""
 "Periodically refresh subscriptions via cron (each sub honors its own update "
 "interval)."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:352
+msgid "Persist cache to flash"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:23
@@ -951,6 +994,10 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:27
 msgid "Transport"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:346
+msgid "Trust provider routing"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:62

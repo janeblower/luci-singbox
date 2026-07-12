@@ -39,3 +39,22 @@ for (const p of PROTOCOLS) {
         });
     });
 }
+
+// Group-import fields (sub_import_groups + friends) only render once
+// sub_multi=1 flips the subscription into "expand to selector" mode —
+// they depend on it, per outbounds.js.
+test.describe('subscription — group import', () => {
+    test.use({
+        uciSeed: `uci -q delete singbox-ui.${SID}; uci set singbox-ui.${SID}=outbound; uci set singbox-ui.${SID}.enabled=1; uci set singbox-ui.${SID}.type=subscription; uci set singbox-ui.${SID}.sub_url=https://sub.example.com/config; uci set singbox-ui.${SID}.sub_multi=1; uci commit singbox-ui`,
+    });
+
+    test('outbound modal — subscription group-import field renders', async ({ page }) => {
+        await openEditModalBySid(page, 'outbound', SID);
+
+        const present = await page.evaluate(() => {
+            const ov = document.getElementById('modal_overlay');
+            return !!ov?.querySelector('[data-name="sub_import_groups"]');
+        });
+        assert('subscription: "sub_import_groups" field present', present);
+    });
+});

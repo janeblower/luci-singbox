@@ -79,6 +79,16 @@ msgstr "Дополнительно"
 msgid "All"
 msgstr "Все"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:350
+msgid ""
+"Allow the provider to route imported nodes directly (detour to direct/"
+"block), bypassing the proxy for those nodes. Unsafe — leave off unless you "
+"trust the feed."
+msgstr ""
+"Разрешить провайдеру напрямую маршрутизировать импортированные ноды "
+"(detour на direct/block), в обход прокси для этих нод. Небезопасно — "
+"оставляйте выключенным, если не доверяете фиду."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:53
 msgid "Auto-update subscriptions"
 msgstr "Авто-обновление подписок"
@@ -413,6 +423,19 @@ msgstr "HWID"
 msgid "Hide"
 msgstr "Скрыть"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:333
+msgid "Hide grouped nodes"
+msgstr "Скрывать сгруппированные ноды"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:337
+msgid ""
+"Hide nodes that are already inside an imported group, or used only as a "
+"detour hop, from the top selector. They stay routable."
+msgstr ""
+"Скрыть из верхнего селектора ноды, которые уже входят в импортированную "
+"группу или используются только как промежуточный переход (detour). Они "
+"остаются доступны для маршрутизации."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:228
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:287
 msgid "Host"
@@ -433,10 +456,24 @@ msgstr "Импорт"
 msgid "Import JSON"
 msgstr "Импорт JSON"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:331
+msgid ""
+"Import URLTest/selector groups the provider ships (country groups, detour "
+"cascades). Off by default: turning it on changes the selector membership, "
+"which can move your saved node pick."
+msgstr ""
+"Импортировать группы urltest/selector, которые присылает провайдер "
+"(группы по странам, каскады detour). По умолчанию выключено: включение "
+"меняет состав селектора, из-за чего может слететь сохранённый выбор ноды."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:88
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:137
 msgid "Import share-link"
 msgstr "Импорт share-link"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:327
+msgid "Import subscription groups"
+msgstr "Импортировать группы подписки"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:88
 #, javascript-format
@@ -535,6 +572,16 @@ msgstr "Некорректный up_mbps: "
 msgid "JSON"
 msgstr "JSON"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:356
+msgid ""
+"Keep a last-known-good copy on flash so the subscription survives a reboot. "
+"Off = cache only in RAM (lost on reboot); avoids writing node passwords to "
+"flash."
+msgstr ""
+"Хранить последнюю рабочую копию на флеш-памяти, чтобы подписка переживала "
+"перезагрузку. Выключено — кэш только в RAM (теряется при перезагрузке); "
+"так пароли нод не попадают на флеш."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:307
 msgid "Keep only nodes whose name matches. Empty = keep all."
 msgstr "Оставить только ноды, чьё имя совпало. Пусто — оставить все."
@@ -600,6 +647,10 @@ msgstr ""
 "Сопоставляйте трафик и маршрутизируйте, отклоняйте, сниффируйте, "
 "резолвируйте или комбинируйте с логическими правилами. Правила, поглощённые "
 "логическим или встроенным rule-set'ом, не применяются отдельно."
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:339
+msgid "Max group nesting"
+msgstr "Макс. вложенность групп"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:331
 msgid "Memory Usage"
@@ -716,6 +767,10 @@ msgid ""
 msgstr ""
 "Периодически обновлять подписки через cron (каждая подписка учитывает свой "
 "интервал обновления)."
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:352
+msgid "Persist cache to flash"
+msgstr "Сохранять кэш на флеш"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:23
 msgid "Persistent cache for proxies, DNS responses, and fakeip mappings."
@@ -990,6 +1045,10 @@ msgstr "Всего трафика"
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:27
 msgid "Transport"
 msgstr "Транспорт"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:346
+msgid "Trust provider routing"
+msgstr "Доверять маршрутизации провайдера"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:62
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:98
