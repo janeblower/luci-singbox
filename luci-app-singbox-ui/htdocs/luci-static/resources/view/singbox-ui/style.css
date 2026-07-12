@@ -50,66 +50,161 @@ button.cbi-button.busy {
 .sb-ok    { color: #3a3; }
 .sb-error { color: #c33; }
 
-/* Monitoring tab table — closed connections fade out. updateRows() tags rows
- * in the Closed tab with the `closed` class so this rule applies (audit 9.6). */
-.sb-monitoring table         { width: 100%; }
-.sb-monitoring tr.closed td  { opacity: 0.6; }
+/* ==========================================================================
+ * Monitoring tab.
+ *
+ * Toolbar (tabs | filters | actions) over a wide connection table. Under 720px
+ * the table stops being a table: the header row is hidden and every cell prints
+ * its own `data-label` (set in monitoring.js) before its value, so each
+ * connection becomes a stacked card. That is the only way eight columns fit a
+ * phone without a horizontal scrollbar.
+ * ========================================================================== */
+.sb-mon-toolbar { display: flex; align-items: center; gap: .5em 1em;
+	flex-wrap: wrap; margin: .5em 0; }
+.sb-mon-tabs, .sb-mon-filters, .sb-mon-actions {
+	display: flex; align-items: center; gap: .4em; }
+.sb-mon-actions { margin-left: auto; }
+.sb-mon-filters { flex: 1 1 14em; min-width: 0; }
+.sb-mon-search { flex: 1 1 8em; min-width: 6em; }
+.sb-mon-tab, .sb-mon-icon { margin: 0; }
+/* Square icon buttons (✕ / ⏸ ▶) so the toolbar's right edge is a tidy pair of
+ * glyphs rather than two wide word-buttons. */
+.sb-mon-icon { width: 2.2em; padding: 0; line-height: 1.8em; text-align: center; }
+.sb-mon-rate { font-size: .85em; opacity: .75; white-space: nowrap;
+	font-variant-numeric: tabular-nums; }
+
+.sb-mon-table-wrap { overflow-x: auto; }
+.sb-mon-table { width: 100%; }
+.sb-mon-table td { vertical-align: middle; }
+/* cbi-section-table centres its headers; the values under them are left-aligned,
+ * so the two edges disagreed on every column. */
+.sb-mon-table th { text-align: left; }
+.sb-mon-table th:last-child { width: 1%; }
+/* Closed connections are history — faded, and no Close button (audit 9.6). */
+.sb-monitoring tr.closed td { opacity: .6; }
+.sb-monitoring tr.closing   { opacity: .5; }
+/* Every cell's value is one truncating line; the full text is in `title`. */
+.sb-mon-val { display: block; overflow: hidden; text-overflow: ellipsis;
+	white-space: nowrap; max-width: 22em; }
+.sb-mon-net   { text-transform: uppercase; font-size: .8em; opacity: .7; }
+.sb-mon-route { font-size: .9em; opacity: .85; }
+.sb-mon-src   { display: flex; flex-direction: column; line-height: 1.25; }
+.sb-mon-src-ip { font-size: .8em; opacity: .6; }
+.sb-mon-action { text-align: right; }
+.sb-mon-row-close { margin: 0; padding: 0 .5em; }
+
+@media (max-width: 720px) {
+	.sb-mon-table thead { display: none; }
+	.sb-mon-table tr { display: block; padding: .4em 0;
+		border-bottom: 1px solid var(--border-color-medium, #ddd); }
+	.sb-mon-table td { display: flex; justify-content: space-between;
+		gap: 1em; border: none; padding: .15em .4em; }
+	.sb-mon-table td::before { content: attr(data-label);
+		font-size: .8em; opacity: .6; flex: 0 0 auto; }
+	.sb-mon-table td:empty { display: none; }
+	.sb-mon-val { max-width: none; text-align: right; }
+	.sb-mon-src { align-items: flex-end; }
+}
 
 /* E1: eye-toggle for secret inputs in the descriptor-driven modal */
 .sb-secret-wrap { display: inline-flex; align-items: stretch; gap: 4px; width: 100%; }
 .sb-secret-wrap > input { flex: 1; }
 .sb-eye-toggle { min-width: 5em; }
 
-/* Dashboard (clash-api).
+/* ==========================================================================
+ * Dashboard (clash-api).
  *
- * Structure is LuCI-native: every block is a `.cbi-section` with an `<h3>`, the
- * subscription list is a LuCI div-table (`.table`/`.tr`/`.td`) and the traffic
- * bar is `.cbi-progressbar`. Only the layout below is ours — colours, borders
- * and spacing come from the theme's CSS variables, so this follows dark mode. */
+ * One card grid, top to bottom: stat widgets, subscription strips, then a
+ * bordered box per proxy group whose members tile as node cards. Every grid on
+ * the page shares ONE column count (--sb-cols), so the widgets, the nodes and
+ * everything else line up on the same vertical edges instead of each block
+ * inventing its own auto-fit rhythm. Colours and borders come from the theme's
+ * CSS variables, so this follows dark mode.
+ * ========================================================================== */
+.sb-dashboard { --sb-cols: 4; --sb-col-min: 180px; }
+@media (max-width: 900px) { .sb-dashboard { --sb-cols: 2; } }
+@media (max-width: 560px) { .sb-dashboard { --sb-cols: 1; --sb-col-min: 0; } }
 
-/* Section heading with a right-aligned control (Proxy groups + sort). */
-.sb-dashboard-head { display: flex; align-items: center; gap: .5em; }
-.sb-dashboard-head h3 { flex: 1; margin: 0; }
+.sb-dashboard-grid,
+.sb-dashboard-widgets,
+.sb-dashboard-nodes { display: grid; gap: 10px;
+	grid-template-columns: repeat(var(--sb-cols), minmax(var(--sb-col-min), 1fr)); }
 
-/* Stat cards. auto-fit keeps them evenly sized instead of one stretching. */
-.sb-dashboard-widgets { display: grid; gap: 1em;
-	grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
-.sb-dashboard-widget { border: 1px solid var(--border-color-medium, #ccc);
-	border-radius: 4px; padding: .6em .8em; }
-.sb-dashboard-widget-title { display: block; font-size: .85em; opacity: .7; }
-.sb-dashboard-widget-body { margin-top: .3em; font-size: 1.1em;
-	white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sb-dashboard-card,
+.sb-dashboard-widget,
+.sb-dashboard-sub,
+.sb-dashboard-group,
+.sb-dashboard-node { border: 2px solid var(--background-color-low, lightgray);
+	border-radius: 4px; padding: 10px; min-width: 0; }
 
-/* Subscriptions table. The action column hugs its button; the rest share the row. */
-.sb-dashboard-subs .td { vertical-align: middle; }
-.sb-dashboard-subs .cbi-section-actions { width: 1%; white-space: nowrap; }
-.sb-dashboard-subs .cbi-progressbar { min-width: 8em; margin: 0; }
-.sb-dashboard-sub-name { white-space: nowrap; }
+.sb-dashboard-widgets { margin-top: 10px; }
+.sb-dashboard-widget-title { display: block; }
+.sb-dashboard-widget-rows { margin-top: .2em; }
+.sb-dashboard-widget-row { display: flex; gap: .4em; justify-content: space-between; }
+.sb-dashboard-widget-key { color: var(--text-color-medium, #888); font-size: .9em; }
+.sb-dashboard-widget-val { font-variant-numeric: tabular-nums;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-dashboard-widget-row.ok  .sb-dashboard-widget-val { color: var(--success-color-medium, #2e7d32); }
+.sb-dashboard-widget-row.err .sb-dashboard-widget-val { color: var(--error-color-medium, #c62828); }
 
-/* Proxy groups. 340px is the narrowest a card can get before the header row
- * (name + type + Test button) starts wrapping. */
-.sb-dashboard-groups { display: grid; gap: 1em;
-	grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
-.sb-dashboard-group { border: 1px solid var(--border-color-medium, #ccc);
-	border-radius: 4px; display: flex; flex-direction: column; }
-.sb-dashboard-grp-head { display: flex; align-items: center; gap: .5em;
-	padding: .5em .6em; border-bottom: 1px solid var(--border-color-medium, #ccc); }
-.sb-dashboard-grp-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-dashboard-grp-type { font-size: .8em; opacity: .6; flex: 1; }
+/* Subscription strip: name, then its facts as label/value pairs, then Update
+ * pinned right. A strip rather than a table row — the facts are pairs, not a
+ * matrix, and the columns were the only reason this had to fight the themes
+ * over how they lay out LuCI's div-table. */
+.sb-dashboard-sub { display: flex; align-items: center; gap: 6px 12px;
+	flex-wrap: wrap; margin-top: 10px; }
+.sb-dashboard-sub-name { flex: 0 1 auto; max-width: 28ch;
+	overflow-wrap: anywhere; }
+.sb-dashboard-facts { flex: 1 1 auto; min-width: 0; display: flex;
+	flex-wrap: wrap; align-items: center; gap: 5px 12px; }
+.sb-dashboard-fact { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.sb-dashboard-fact-key { color: var(--text-color-medium, #888); font-size: 12px;
+	white-space: nowrap; }
+.sb-dashboard-fact-val { font-weight: 600; overflow-wrap: anywhere; }
+/* The theme prints the bar's `title` as centred text INSIDE it. In a flex row
+ * the bar collapses to a hairline and that label spills out above it, so pin a
+ * real height. */
+.sb-dashboard-fact .cbi-progressbar { min-width: 10em; height: 1.5em; margin: 0;
+	position: relative; }
+.sb-dashboard-sub-update { margin: 0 0 0 auto; }
+
+.sb-dashboard-toolbar { display: flex; justify-content: flex-end; margin-top: 10px; }
+.sb-dashboard-toolbar .cbi-button { margin: 0; }
+
+/* Proxy group: a full-width box, its members tiled inside on the page grid. */
+.sb-dashboard-group { margin-top: 10px; }
+.sb-dashboard-grp-head { display: flex; align-items: center;
+	justify-content: space-between; gap: 8px 10px; min-width: 0; }
+.sb-dashboard-grp-name { font-weight: 700; min-width: 0;
+	color: var(--text-color-high); overflow-wrap: anywhere; }
+.sb-dashboard-grp-actions { display: flex; align-items: center; gap: 6px;
+	flex: 0 0 auto; }
+.sb-dashboard-grp-type { font-size: .8em; opacity: .6; }
 .sb-dashboard-grp-head button { margin: 0; }
-.sb-dashboard-nodes { padding: .3em; max-height: 22em; overflow-y: auto; }
+/* A subscription can carry 100+ members; cap the wall of cards and scroll. */
+.sb-dashboard-nodes { margin-top: 5px; max-height: 26em; overflow-y: auto; }
 
-/* Node row: name grows, type and latency keep fixed columns so they line up
- * across every card. */
-.sb-dashboard-node { display: grid; align-items: center; gap: .5em;
-	grid-template-columns: 1fr auto 4em; padding: .3em .4em; border-radius: 3px; }
-.sb-dashboard-node-sel { cursor: pointer; }
-.sb-dashboard-node-sel:hover { background: var(--background-color-medium, #f0f0f0); }
-.sb-dashboard-node-current { background: var(--background-color-medium, #e3f2fd);
-	box-shadow: inset 3px 0 0 var(--primary-color-medium, #2e7d32); font-weight: bold; }
+/* Node card: name on top, protocol + latency on the footer line. */
+.sb-dashboard-node { display: flex; flex-direction: column; justify-content: space-between;
+	gap: 6px; padding: 8px 10px; }
+.sb-dashboard-node-head { display: flex; align-items: center; min-width: 0; }
 .sb-dashboard-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-dashboard-node-type { font-size: .8em; opacity: .6; }
-.sb-dashboard-lat { font-size: .85em; text-align: right; font-variant-numeric: tabular-nums; }
+.sb-dashboard-node-foot { display: flex; align-items: baseline;
+	justify-content: space-between; gap: .5em; }
+.sb-dashboard-node-type { font-size: .8em; opacity: .6;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb-dashboard-lat { font-size: .85em; font-variant-numeric: tabular-nums;
+	flex: 0 0 auto; }
+.sb-dashboard-node-sel { cursor: pointer; }
+/* Tinted overlays, not theme background colours: `--background-color-medium` is
+ * a LIGHT grey even in the dark theme, so it washed the card out and the node
+ * name became unreadable on it. A translucent wash keeps the theme's own text
+ * colour legible on both themes; the border carries the "selected" signal. */
+.sb-dashboard-node-sel:hover { background: rgba(128, 128, 128, .18); }
+.sb-dashboard-node-current { background: rgba(46, 125, 50, .16);
+	border-color: #2e7d32; }
+.sb-dashboard-node-current .sb-dashboard-node-name { font-weight: 700; }
+
 .sb-lat-good { color: #2e7d32; } .sb-lat-mid { color: #f9a825; }
 .sb-lat-bad { color: #c62828; } .sb-lat-none { opacity: .5; }
 .sb-dashboard-unavailable { display: block; margin: 1em 0; }

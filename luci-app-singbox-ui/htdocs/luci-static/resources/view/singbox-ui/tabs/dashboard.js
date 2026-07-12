@@ -212,10 +212,19 @@ function buildDashboard() {
 	}
 
 	// --- widgets -----------------------------------------------------------
-	function widget(title, body) {
+	// A widget is a bordered card: bold title, then `key: value` rows. `cls` on a
+	// row tints its value via --success/--error, so "stopped" reads red without
+	// a second colour system.
+	function widget(title, rows) {
 		return E('div', { 'class': 'sb-dashboard-widget' }, [
 			E('b', { 'class': 'sb-dashboard-widget-title' }, title),
-			E('div', { 'class': 'sb-dashboard-widget-body' }, body)
+			E('div', { 'class': 'sb-dashboard-widget-rows' },
+				rows.map(function (r) {
+					return E('div', { 'class': 'sb-dashboard-widget-row ' + (r[2] || '') }, [
+						E('span', { 'class': 'sb-dashboard-widget-key' }, r[0] + ': '),
+						E('span', { 'class': 'sb-dashboard-widget-val' }, r[1])
+					]);
+				}))
 		]);
 	}
 
@@ -223,59 +232,64 @@ function buildDashboard() {
 		if (!state.ui) return;
 		var w = state.ui.widgets;
 		w.innerHTML = '';
-		w.appendChild(widget(_('Speed'),
-			'↓ ' + fmtBytes(state.dRate) + '/s  ↑ ' + fmtBytes(state.uRate) + '/s'));
-		w.appendChild(widget(_('Total traffic'),
-			'↓ ' + fmtBytes(state.totDown) + '  ↑ ' + fmtBytes(state.totUp)));
-		w.appendChild(widget(_('Active connections'), '' + state.conns));
-		w.appendChild(widget(_('sing-box'),
-			(state.running ? _('running') : _('stopped')) +
-			(state.version ? ('  ' + state.version) : '')));
+		w.appendChild(widget(_('Speed'), [
+			[ _('Download'), fmtBytes(state.dRate) + '/s' ],
+			[ _('Upload'),   fmtBytes(state.uRate) + '/s' ]
+		]));
+		w.appendChild(widget(_('Total traffic'), [
+			[ _('Downloaded'), fmtBytes(state.totDown) ],
+			[ _('Uploaded'),   fmtBytes(state.totUp) ]
+		]));
+		w.appendChild(widget(_('Connections'), [
+			[ _('Active'), '' + state.conns ]
+		]));
+		w.appendChild(widget(_('sing-box'), [
+			[ _('Status'), state.running ? _('running') : _('stopped'),
+			  state.running ? 'ok' : 'err' ],
+			[ _('Version'), state.version || '—' ]
+		]));
 	}
 
 	function mountChrome() {
 		var widgets = E('div', { 'class': 'sb-dashboard-widgets' });
-		var subs    = E('div', { 'class': 'table sb-dashboard-subs' });
+		var subs    = E('div', { 'class': 'sb-dashboard-subs' });
 		var groups  = E('div', { 'class': 'sb-dashboard-groups' });
 		var sortBtn = E('button', { 'class': 'cbi-button cbi-button-neutral sb-sort-btn',
 			'click': function () { setSortByLatency(!state.sortByLatency); } },
 			_('Sort by latency'));
-		var subsSection = E('div', { 'class': 'cbi-section' }, [
-			E('h3', {}, _('Subscriptions')), subs ]);
 		root.innerHTML = '';
-		root.appendChild(E('div', { 'class': 'cbi-section' }, widgets));
-		root.appendChild(subsSection);
-		root.appendChild(E('div', { 'class': 'cbi-section' }, [
-			E('div', { 'class': 'sb-dashboard-head' }, [
-				E('h3', {}, _('Proxy groups')), sortBtn ]),
-			groups ]));
-		state.ui = { widgets: widgets, subs: subs, groups: groups,
-		             sortBtn: sortBtn, subsSection: subsSection };
+		root.appendChild(widgets);
+		root.appendChild(subs);
+		root.appendChild(E('div', { 'class': 'sb-dashboard-toolbar' }, sortBtn));
+		root.appendChild(groups);
+		state.ui = { widgets: widgets, subs: subs, groups: groups, sortBtn: sortBtn };
 	}
 
-	// LuCI's div-table (`.table` / `.tr` / `.td`) — same markup the stock status
-	// pages use, so column alignment and theming come from the theme, not from us.
-	function td(cls, content) { return E('div', { 'class': 'td ' + cls }, content); }
+	function fact(key, value) {
+		return E('div', { 'class': 'sb-dashboard-fact' }, [
+			E('span', { 'class': 'sb-dashboard-fact-key' }, key),
+			E('span', { 'class': 'sb-dashboard-fact-val' }, value)
+		]);
+	}
 
-	// DASH-3: render every subscription (keyed by UCI section name) as a row,
+	// DASH-3: render every subscription (keyed by UCI section name) as a strip,
 	// independent of whether it was expanded into a proxy group. A non-expanded
 	// subscription (sub_multi='0', the default) produces no clash-api group, so
 	// its traffic cap / expiry would otherwise never surface — even though
 	// sub_status returns the userinfo.
+	//
+	// A strip, not a table row: the columns were the only reason this file had to
+	// fight the themes over how they lay out LuCI's div-table, and a plan's facts
+	// (nodes / updated / traffic / expiry) are label-value pairs, not a matrix.
 	function renderSubscriptions() {
 		if (!state.ui) return;
 		var box = state.ui.subs;
 		box.innerHTML = '';
 		var names = Object.keys(state.subs || {}).sort();
-		// Hide the whole section (heading included) when there is nothing to show.
-		state.ui.subsSection.style.display = names.length ? '' : 'none';
+		// Nothing to show -> the whole block collapses, no empty heading left over.
+		box.style.display = names.length ? '' : 'none';
 		if (!names.length) return;
 
-		box.appendChild(E('div', { 'class': 'tr table-titles' }, [
-			td('left', _('Subscription')), td('center', _('Nodes')),
-			td('left', _('Updated')), td('left', _('Traffic')),
-			td('center', _('Expires')), td('right cbi-section-actions', ' ')
-		]));
 		names.forEach(function (name) {
 			var s = state.subs[name] || {};
 			var ui_ = s.userinfo || {};
@@ -289,17 +303,18 @@ function buildDashboard() {
 					E('div', { 'style': 'width:' +
 						Math.min(100, Math.round(used / total * 100)) + '%' }))
 				: (used ? fmtBytes(used) : '—');
-			box.appendChild(E('div', { 'class': 'tr sb-dashboard-sub-row', 'data-sub': name }, [
-				td('left', E('b', { 'class': 'sb-dashboard-sub-name' }, s.title || name)),
-				td('center', '' + (s.node_count || 0)),
-				td('left', agoText(s.last_update)),
-				td('left', traffic),
-				td('center', fmtExpire(ui_.expire) || '—'),
-				td('right cbi-section-actions',
-					E('button', { 'class': 'cbi-button cbi-button-action sb-dashboard-sub-update',
-						'click': ui.createHandlerFn(this, (function (n) {
-							return function () { return updateSub(n); };
-						})(name)) }, _('Update')))
+			box.appendChild(E('div', { 'class': 'sb-dashboard-sub', 'data-sub': name }, [
+				E('b', { 'class': 'sb-dashboard-sub-name' }, s.title || name),
+				E('div', { 'class': 'sb-dashboard-facts' }, [
+					fact(_('Nodes'),   '' + (s.node_count || 0)),
+					fact(_('Updated'), agoText(s.last_update)),
+					fact(_('Traffic'), traffic),
+					fact(_('Expires'), fmtExpire(ui_.expire) || '—')
+				]),
+				E('button', { 'class': 'cbi-button cbi-button-action sb-dashboard-sub-update',
+					'click': ui.createHandlerFn(this, (function (n) {
+						return function () { return updateSub(n); };
+					})(name)) }, _('Update'))
 			]));
 		});
 	}
@@ -315,6 +330,9 @@ function buildDashboard() {
 		state.totDown = down; state.totUp = up;
 	}
 
+	// A node is a card, not a table row: name on top, protocol and latency on the
+	// footer line. Cards tile into the same responsive grid as the widgets, so a
+	// 100-node subscription reads as a wall of chips instead of a 100-row scroll.
 	function nodeRow(groupName, isSelector, member, proxies, currentNow) {
 		var p = proxies[member] || {};
 		var ms = memberDelay(p);
@@ -328,9 +346,12 @@ function buildDashboard() {
 			})(groupName, member));
 		}
 		return E('div', attrs, [
-			E('span', { 'class': 'sb-dashboard-node-name' }, member),
-			E('span', { 'class': 'sb-dashboard-node-type' }, p.type || ''),
-			E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
+			E('div', { 'class': 'sb-dashboard-node-head' },
+				E('b', { 'class': 'sb-dashboard-node-name' }, member)),
+			E('div', { 'class': 'sb-dashboard-node-foot' }, [
+				E('span', { 'class': 'sb-dashboard-node-type' }, p.type || ''),
+				E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
+			])
 		]);
 	}
 
@@ -368,10 +389,12 @@ function buildDashboard() {
 			};
 			if (busy) testBtnAttrs.disabled = '';
 			var header = E('div', { 'class': 'sb-dashboard-grp-head' }, [
-				E('b', { 'class': 'sb-dashboard-grp-name' }, gname),
-				E('span', { 'class': 'sb-dashboard-grp-type' },
-					isSel ? _('selector') : _('auto')),
-				E('button', testBtnAttrs, busy ? _('Testing…') : _('Test'))
+				E('div', { 'class': 'sb-dashboard-grp-name' }, gname),
+				E('div', { 'class': 'sb-dashboard-grp-actions' }, [
+					E('span', { 'class': 'sb-dashboard-grp-type' },
+						isSel ? _('selector') : _('auto')),
+					E('button', testBtnAttrs, busy ? _('Testing…') : _('Test'))
+				])
 			]);
 			var rows = members.map(function (m) {
 				return nodeRow(gname, isSel, m, proxies, grp.now);

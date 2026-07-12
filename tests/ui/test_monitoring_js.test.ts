@@ -216,10 +216,12 @@ const isCloseBtn = (n: any) =>
   n.attrs &&
   /cbi-button-remove/.test(n.attrs.class || "") &&
   typeof n.attrs.click === "function";
+// Both close buttons render as a bare ✕ glyph, so they are told apart by
+// `data-action` rather than by their label.
 const isRowCloseBtn = (n: any) =>
-  isCloseBtn(n) && (n.textContent || "") === "Close";
+  isCloseBtn(n) && n.attrs["data-action"] === "close-row";
 const isCloseAllBtn = (n: any) =>
-  isCloseBtn(n) && (n.textContent || "") === "Close all";
+  isCloseBtn(n) && n.attrs["data-action"] === "close-all";
 
 // ============================================================================
 
@@ -941,5 +943,131 @@ describe("monitoring.js", () => {
         false,
       );
     });
+  });
+
+  // The connection row grew from "host / device / chain / down / up" to the
+  // forkop column set. Each of these cells is a separate lookup path in
+  // monitoring.js (endpoint / networkOf / routeOf / durationOf / sourceOf), so
+  // a row that silently loses one of them is a real regression.
+  describe("connection row columns", () => {
+    async function rowFor(ctx: any, c: any) {
+      ctx.__test.setClashGet(() =>
+        Promise.resolve({
+          status: "ok",
+          body: JSON.stringify({ connections: [c] }),
+        }),
+      );
+      const m = ctx.__moduleExports.buildMonitoring();
+      await m.poll();
+      return ctx.__test.find(
+        m.node,
+        (n: any) =>
+          n.tag === "tr" && (n.textContent || "").indexOf("ex.com") >= 0,
+      );
+    }
+    const CONN = {
+      id: "c1",
+      start: new Date(Date.now() - 65000).toISOString(),
+      metadata: {
+        sourceIP: "10.0.0.5",
+        host: "ex.com",
+        destinationPort: 8080,
+        network: "tcp",
+      },
+      chains: ["node-a", "GW"],
+      download: 0,
+      upload: 0,
+    };
+
+    it("host cell carries a non-443 port", async () => {
+      const row = await rowFor(loadMonitoring(), CONN);
+      expect(
+        (row.textContent || "").indexOf("ex.com:8080"),
+      ).toBeGreaterThanOrEqual(0);
+    });
+
+    it("port 443 is dropped as noise", async () => {
+      const ctx = loadMonitoring();
+      const row = await rowFor(ctx, {
+        ...CONN,
+        metadata: { ...CONN.metadata, destinationPort: 443 },
+      });
+      expect((row.textContent || "").indexOf("ex.com:")).toBe(-1);
+    });
+
+    it("route is the LAST chain entry (the group), not the leaf node", async () => {
+      const row = await rowFor(loadMonitoring(), CONN);
+      const route = ctx_findClass(row, "sb-mon-route");
+      expect(route?.textContent).toBe("GW");
+    });
+
+    it("network and duration are rendered", async () => {
+      const row = await rowFor(loadMonitoring(), CONN);
+      expect(ctx_findClass(row, "sb-mon-net")?.textContent).toBe("tcp");
+      // start is 65s ago -> "1:05"
+      expect((row.textContent || "").indexOf("1:05")).toBeGreaterThanOrEqual(0);
+    });
+
+    function ctx_findClass(node: any, cls: string): any {
+      if (
+        node?.attrs &&
+        new RegExp(`\\b${cls}\\b`).test(node.attrs.class || "")
+      )
+        return node;
+      for (const kid of node?.children || []) {
+        const hit = ctx_findClass(kid, cls);
+        if (hit) return hit;
+      }
+      return null;
+    }
+  });
+
+  // Pause is the whole point of the pause button: the table the user is reading
+  // must stop moving. A poll that still ingests while paused would keep rows
+  // appearing and disappearing under the cursor.
+  it("paused poll() ingests nothing", async () => {
+    const ctx = loadMonitoring();
+    let served = [conn("a", "10.0.0.1", "first")];
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({ connections: served }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    await m.poll();
+    m.setPaused(true);
+    served = [conn("b", "10.0.0.2", "second")];
+    await m.poll();
+    expect(m.node.textContent.indexOf("first")).toBeGreaterThanOrEqual(0);
+    expect(m.node.textContent.indexOf("second")).toBe(-1);
+    m.setPaused(false);
+    await m.poll();
+    expect(m.node.textContent.indexOf("second")).toBeGreaterThanOrEqual(0);
+  });
+
+  // Closed connections never come back, so the map only grows. Uncapped, an
+  // hour on a busy LAN buries the repaint under tens of thousands of dead rows.
+  it("the closed list is capped at 300, newest kept", async () => {
+    const ctx = loadMonitoring();
+    let served: any[] = [];
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({ connections: served }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    for (let i = 0; i < 320; i++) {
+      served = [conn(`c${i}`, "10.0.0.1", `host${i}`)];
+      await m.poll(); // c{i} appears
+      served = [];
+      await m.poll(); // c{i} closes
+    }
+    const closedBtn = ctx.__test.find(
+      m.node,
+      (n: any) => n.tag === "button" && /^Closed\b/.test(n.textContent || ""),
+    );
+    expect(closedBtn.textContent).toBe("Closed 300");
   });
 });

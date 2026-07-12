@@ -79,10 +79,11 @@ test('monitoring: active/closed/search/device/close/close-all drive clash RPCs',
     }, re.source);
 
     // Count active-tab data rows (exclude the "No connections" placeholder row,
-    // which has a single <td colspan=6>; data rows have 6 <td> children).
+    // which has a single <td colspan=8>; data rows have 8 <td> children:
+    // host / type / route / time / down / up / source / close).
     const rowCount = () => page.evaluate(() =>
         Array.from(document.querySelectorAll('.sb-monitoring tbody tr'))
-            .filter(tr => tr.querySelectorAll('td').length === 6).length);
+            .filter(tr => tr.querySelectorAll('td').length === 8).length);
 
     const initial = await rowCount();
     assert('two active connections rendered', initial === 2, initial);
@@ -137,9 +138,10 @@ test('monitoring: active/closed/search/device/close/close-all drive clash RPCs',
     await wait(300);
 
     // Per-row Close → clash_mutate DELETE /connections/<id>.
+    // Both close buttons render as a bare ✕ glyph, so they are addressed by
+    // `data-action`, not by their label.
     await page.evaluate(() => {
-        const b = Array.from(document.querySelectorAll('.sb-monitoring tbody button'))
-            .find(x => /close/i.test((x.textContent || '').trim()));
+        const b = document.querySelector('.sb-monitoring tbody button[data-action=close-row]');
         if (b) b.click();
     });
     await wait(800);
@@ -150,8 +152,7 @@ test('monitoring: active/closed/search/device/close/close-all drive clash RPCs',
 
     // Close all → clash_mutate DELETE /connections (no id).
     await page.evaluate(() => {
-        const b = Array.from(document.querySelectorAll('.sb-monitoring button'))
-            .find(x => /^Close all$/.test((x.textContent || '').trim()));
+        const b = document.querySelector('.sb-monitoring button[data-action=close-all]');
         if (b) b.click();
     });
     await wait(800);
