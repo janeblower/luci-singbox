@@ -333,4 +333,36 @@ function materialize(kind, type_) {
     return result;
 }
 
-return { register, try_register, get, types_for_kind, materialize, _registry };
+// require_dir(sub) — eager-load every descriptor module under builder/<sub>/ so
+// its register() fires. Replaces four hand-maintained module lists that differed
+// only in their contents — and that a new descriptor could silently be left out
+// of. Same fs.glob idiom lib/plugins/discovery.uc already uses for plugins.
+//
+// The glob is anchored on sourcepath() — THIS module's own directory — not on an
+// absolute/configured lib root. The descriptors are siblings of this file, so
+// their location is known relative to it and stays right wherever the tree is
+// mounted: prod install, test checkout, staged copy. Anchoring on the prod path
+// instead (with an env override) looks equivalent and is not: every prod-path
+// invocation from a checkout globs a directory that isn't there and silently
+// registers NOTHING, which is precisely the silent-omission failure this
+// function exists to abolish. (Caught by the parity + generate.uc lanes.)
+//
+// `registry` is skipped (it would recurse). Modules that do not call register()
+// — route/headless.uc, dns_rule/headless.uc — are loaded harmlessly: they just
+// return their { build } surface.
+function require_dir(sub) {
+    let fs = require("fs");
+    let loaded = 0;
+    // sourcepath(0, true) = <lib>/builder/protocols; siblings live at ../<sub>/.
+    let paths = fs.glob(sourcepath(0, true) + "/../" + sub + "/*.uc");
+    for (let p in (paths ?? [])) {
+        let m = match(p, /\/([^\/]+)\.uc$/);
+        if (!m) continue;
+        if (m[1] === "registry") continue;
+        try { require("builder." + sub + "." + m[1]); loaded++; }
+        catch (e) { warn(sprintf("registry.require_dir(%s): failed to load %s: %s\n", sub, m[1], e)); }
+    }
+    return loaded;
+}
+
+return { register, try_register, get, types_for_kind, materialize, _registry, require_dir };

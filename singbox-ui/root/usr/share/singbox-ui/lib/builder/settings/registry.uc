@@ -1,9 +1,5 @@
-// lib/builder/settings/registry.uc — eager-loads singleton settings descriptors
-// (clash_api, cache). Modules are added by their respective phases.
+// lib/builder/settings/registry.uc — eager-load every singleton settings descriptor
+// (so its register() fires), then re-export the shared protocol registry surface.
 let reg = require("builder.protocols.registry");
-let _modules = [ "builder.settings.clash_api", "builder.settings.cache" ];
-for (let m in _modules) {
-    try { require(m); }
-    catch (e) { warn(sprintf("settings/registry: failed to load %s: %s\n", m, e)); }
-}
+reg.require_dir("settings");
 return reg;
