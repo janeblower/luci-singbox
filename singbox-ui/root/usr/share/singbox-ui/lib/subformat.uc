@@ -533,6 +533,19 @@ function xray_stream(ss, out) {
 		out.transport = t;
 		return true;
 	}
+	if (net === "xhttp") {
+		// xhttp is supported ONLY by sing-box-extended (the project's default
+		// core); stock sing-box rejects it at load — that is expected, not a
+		// case to guard against here. The base transport dials fine without the
+		// `extra.xmux`/padding sub-object, so we omit it entirely.
+		let o = (type(ss.xhttpSettings) === "object") ? ss.xhttpSettings : {};
+		let t = { type: "xhttp",
+		          mode: (o.mode != null && o.mode !== "") ? "" + o.mode : "auto",
+		          path: (o.path != null && o.path !== "") ? "" + o.path : "/" };
+		if (o.host != null && o.host !== "") t.host = "" + o.host;
+		out.transport = t;
+		return true;
+	}
 	return false;
 }
 
@@ -656,6 +669,85 @@ function nodes_from_xray(list) {
 	return { format: "xray", nodes: nodes, skipped: skipped, groups: [] };
 }
 
+// is_xray_config_list(list) — under the Happ/1.0 UA the provider returns an
+// ARRAY of full Xray *configs* (one per location), not an array of outbounds.
+// A config element is an object whose `outbounds` is an array of OBJECTS
+// (the location's proxy outbounds). We check for an object member rather than
+// just "has an outbounds array", because a bare sing-box array can carry an
+// inline urltest/selector group whose `outbounds` is an array of member-name
+// STRINGS — that is NOT an Xray config and must keep the existing handling.
+function is_xray_config_list(list) {
+	for (let el in list) {
+		if (type(el) !== "object" || type(el.outbounds) !== "array") continue;
+		for (let o in el.outbounds)
+			if (type(o) === "object") return true;
+	}
+	return false;
+}
+
+// nodes_from_xray_configs(list) — each element is ONE location = one urltest
+// group over its proxy nodes (see is_xray_config_list). Produces the same node
+// and group records the rest of the pipeline consumes; the group importer in
+// lib/outbound.uc rebuilds them as forkop-style per-country urltest cards.
+// Trust boundary: malformed input costs a skipped++/omit, never a throw.
+function nodes_from_xray_configs(list) {
+	let nodes = [], skipped = 0, groups = [];
+	let idx = 0;
+	for (let el in list) {
+		idx++;
+		if (type(el) !== "object") continue;   // garbage element: ignore (not a node)
+		let name = (el.remarks != null && el.remarks !== "") ? "" + el.remarks
+		                                                     : ("Group " + idx);
+		let produced = [];   // tags of the proxy outbounds we emitted, in order
+		let obs = (type(el.outbounds) === "array") ? el.outbounds : [];
+		for (let o in obs) {
+			if (type(o) !== "object") continue;
+			// freedom/blackhole/dns/loopback are local policy — ignore SILENTLY
+			// (not skipped++), same rule as nodes_from_xray.
+			if (XRAY_LOCAL_PROTOS[lc(s_of(o.protocol))]) continue;
+			let ob = null;
+			try { ob = xray_to_outbound(o); } catch (_) { ob = null; }
+			if (!ob) { skipped++; continue; }
+			let tag = (o.tag != null && o.tag !== "") ? "" + o.tag : null;
+			push(nodes, { outbound: ob, display_name: tag, link: null, detour_name: null });
+			if (tag != null) push(produced, tag);
+		}
+
+		// members: prefer the balancer's selector (its declared order) intersected
+		// with the tags we actually produced; else just the produced tags.
+		let bal = null;
+		if (type(el.routing) === "object" && type(el.routing.balancers) === "array")
+			bal = el.routing.balancers[0];
+		let members = produced;
+		if (type(bal) === "object" && type(bal.selector) === "array") {
+			let have = {};
+			for (let t in produced) have[t] = true;
+			let inter = [];
+			for (let m in bal.selector)
+				if (m != null && m !== "" && have["" + m]) push(inter, "" + m);
+			if (length(inter)) members = inter;
+		}
+		if (!length(members)) continue;   // no proxy nodes here -> no group
+
+		let g = { type: "urltest", members: members };
+		let pc = null;
+		if (type(el.burstObservatory) === "object" &&
+		    type(el.burstObservatory.pingConfig) === "object")
+			pc = el.burstObservatory.pingConfig;
+		if (pc != null) {
+			if (pc.destination != null && pc.destination !== "") g.url = "" + pc.destination;
+			if (pc.interval != null && pc.interval !== "") g.interval = "" + pc.interval;
+		}
+		if (type(bal) === "object" && type(bal.strategy) === "object" &&
+		    type(bal.strategy.settings) === "object") {
+			let tol = bal.strategy.settings.tolerance;
+			if (type(tol) === "int" || type(tol) === "double") g.tolerance = tol;
+		}
+		push(groups, { group: g, name: name });
+	}
+	return { format: "xray", nodes: nodes, skipped: skipped, groups: groups };
+}
+
 // group_from_json(o) — a sing-box selector/urltest entry -> our group record, or
 // null. Only the fields we re-emit are kept; everything else the provider set on
 // a group is local policy we do not honour.
@@ -677,6 +769,11 @@ function nodes_from_json(body) {
 	let nodes = [], skipped = 0;
 	let doc = null;
 	try { doc = json(body); } catch (_) { doc = null; }
+	// Happ/1.0: an array of full Xray configs (one per location) -> per-location
+	// urltest groups. Must run BEFORE the bare-array handling; a bare array of
+	// Xray/sing-box *outbounds* has no config element and falls through.
+	if (type(doc) === "array" && is_xray_config_list(doc))
+		return nodes_from_xray_configs(doc);
 	let list = [];
 	if (type(doc) === "array") list = doc;
 	else if (type(doc) === "object" && type(doc.outbounds) === "array") list = doc.outbounds;

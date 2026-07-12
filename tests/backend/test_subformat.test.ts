@@ -397,6 +397,149 @@ describe("test_subformat", () => {
     });
   });
 
+  it("H1: an array of Xray configs → per-location urltest groups + nodes (with xhttp)", async () => {
+    // Under the Happ/1.0 UA the provider returns a JSON ARRAY of full Xray
+    // configs, one per location; each is a urltest group over its member nodes.
+    // (Synthetic body — the real provider sample holds live credentials.)
+    const body = JSON.stringify([
+      {
+        remarks: "Alpha",
+        outbounds: [
+          {
+            protocol: "vless",
+            tag: "A#1",
+            settings: {
+              vnext: [
+                {
+                  address: "a1.example.com",
+                  port: 443,
+                  users: [{ id: "uuid-a1", flow: "xtls-rprx-vision" }],
+                },
+              ],
+            },
+            streamSettings: {
+              network: "tcp",
+              security: "reality",
+              realitySettings: {
+                serverName: "www.example.org",
+                publicKey: "PUBKEY",
+                shortId: "ab12",
+                fingerprint: "chrome",
+              },
+            },
+          },
+          {
+            protocol: "vless",
+            tag: "A#2",
+            settings: {
+              vnext: [
+                { address: "a2.example.com", port: 443, users: [{ id: "uuid-a2" }] },
+              ],
+            },
+            streamSettings: {
+              network: "xhttp",
+              security: "reality",
+              realitySettings: {
+                serverName: "www.example.org",
+                publicKey: "PUBKEY",
+                shortId: "ab12",
+              },
+              xhttpSettings: {
+                mode: "auto",
+                path: "/auth/signin",
+                host: "cdn.example.com",
+                // extra.xmux/padding must be DROPPED (base xhttp dials without it)
+                extra: { xmux: { maxConcurrency: 8 }, xPaddingBytes: "100-1000" },
+              },
+            },
+          },
+          // local policy — ignored, must NOT count as skipped
+          { protocol: "freedom", tag: "direct" },
+          { protocol: "blackhole", tag: "block" },
+        ],
+        routing: {
+          balancers: [
+            {
+              tag: "bal",
+              selector: ["A#1", "A#2"],
+              strategy: { type: "leastLoad", settings: { tolerance: 0.8 } },
+            },
+          ],
+        },
+        burstObservatory: {
+          subjectSelector: ["A#1", "A#2"],
+          pingConfig: {
+            destination: "https://www.gstatic.com/generate_204",
+            interval: "3m",
+            timeout: "2s",
+          },
+        },
+      },
+      {
+        remarks: "Beta",
+        outbounds: [
+          {
+            protocol: "vless",
+            tag: "B#1",
+            settings: {
+              vnext: [
+                { address: "b1.example.com", port: 443, users: [{ id: "uuid-b1" }] },
+              ],
+            },
+            streamSettings: {
+              network: "tcp",
+              security: "reality",
+              realitySettings: {
+                serverName: "www.example.org",
+                publicKey: "PUBKEY",
+                shortId: "cd34",
+              },
+            },
+          },
+          { protocol: "freedom", tag: "direct" },
+        ],
+      },
+    ]);
+
+    const { lines, stat } = await fetchBody(body);
+    expect(stat.format).toBe("xray");
+    // freedom/blackhole are local policy — ignored, not skipped
+    expect(stat.skipped).toBe(0);
+
+    const groupLines = lines.filter(isGroupLine);
+    const nodeLines = lines.filter((l) => !isGroupLine(l));
+    expect(nodeLines.length).toBe(3); // A#1, A#2, B#1
+    expect(groupLines.length).toBe(2); // Alpha, Beta
+
+    const groups: Record<string, any> = {};
+    for (const l of groupLines) {
+      const g = JSON.parse(l);
+      groups[g.n] = g;
+    }
+    expect(groups.Alpha.g.type).toBe("urltest");
+    expect(groups.Alpha.m).toEqual(["A#1", "A#2"]);
+    expect(groups.Alpha.g.url).toBe("https://www.gstatic.com/generate_204");
+    expect(groups.Beta.m).toEqual(["B#1"]);
+
+    const byName: Record<string, any> = {};
+    for (const l of nodeLines) {
+      const n = JSON.parse(l);
+      byName[n.n] = n.o;
+    }
+    // the xhttp node is NOT skipped and carries a sing-box xhttp transport,
+    // with the extra.xmux/padding sub-object dropped
+    expect(byName["A#2"].transport).toEqual({
+      type: "xhttp",
+      mode: "auto",
+      path: "/auth/signin",
+      host: "cdn.example.com",
+    });
+    // reality still applied on the xhttp node
+    expect(byName["A#2"].tls.reality.public_key).toBe("PUBKEY");
+    // the tcp node is intact
+    expect(byName["A#1"].flow).toBe("xtls-rprx-vision");
+  });
+
   it("F3: a gzip-compressed body is transparently decompressed", async () => {
     const { lines, stat } = await fetchBody(
       "trojan://pw@t.example.com:443#T\nvless://uuid@v.example.com:443?security=tls#V\n",
