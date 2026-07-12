@@ -114,96 +114,134 @@ button.cbi-button.busy {
 /* ==========================================================================
  * Dashboard (clash-api).
  *
- * One card grid, top to bottom: stat widgets, subscription strips, then a
- * bordered box per proxy group whose members tile as node cards. Every grid on
- * the page shares ONE column count (--sb-cols), so the widgets, the nodes and
- * everything else line up on the same vertical edges instead of each block
- * inventing its own auto-fit rhythm. Colours and borders come from the theme's
- * CSS variables, so this follows dark mode.
+ * ONE grid for the whole page: the four stat widgets, the subscription-metadata
+ * strip and every node card sit on the same column track (--sb-cols), so the
+ * page reads as a single wall of cards instead of each block inventing its own
+ * rhythm. Colours and borders come from the theme's CSS variables, so this
+ * follows dark mode.
  * ========================================================================== */
-.sb-dashboard { --sb-cols: 4; --sb-col-min: 180px; }
+.sb-dashboard { --sb-cols: 4; --sb-col-min: 180px; width: 100%; }
 @media (max-width: 900px) { .sb-dashboard { --sb-cols: 2; } }
 @media (max-width: 560px) { .sb-dashboard { --sb-cols: 1; --sb-col-min: 0; } }
 
 .sb-dashboard-grid,
-.sb-dashboard-widgets,
-.sb-dashboard-nodes { display: grid; gap: 10px;
+.sb-dashboard-widgets { display: grid; gap: 10px;
 	grid-template-columns: repeat(var(--sb-cols), minmax(var(--sb-col-min), 1fr)); }
 
-.sb-dashboard-card,
 .sb-dashboard-widget,
-.sb-dashboard-sub,
 .sb-dashboard-group,
+.sb-dashboard-sub-meta,
 .sb-dashboard-node { border: 2px solid var(--background-color-low, lightgray);
 	border-radius: 4px; padding: 10px; min-width: 0; }
 
+/* Core down: the widgets and the (stale) node grid would only lie about live
+ * state, so the whole page collapses to one dashed plaque. */
+.sb-dashboard-stopped { display: none; min-height: 180px; margin-top: 10px;
+	padding: 20px; box-sizing: border-box; align-items: center;
+	justify-content: center; text-align: center; font-style: italic;
+	border: 1px dashed var(--border-color-high, #555); border-radius: 6px;
+	color: var(--text-color-medium, #888); }
+.sb-dashboard--stopped .sb-dashboard-stopped { display: flex; }
+.sb-dashboard--stopped .sb-dashboard-content { display: none; }
+
 .sb-dashboard-widgets { margin-top: 10px; }
+.sb-dashboard-widget { min-height: 78px; }
 .sb-dashboard-widget-title { display: block; }
 .sb-dashboard-widget-rows { margin-top: .2em; }
 .sb-dashboard-widget-row { display: flex; gap: .4em; justify-content: space-between; }
-.sb-dashboard-widget-key { color: var(--text-color-medium, #888); font-size: .9em; }
+.sb-dashboard-widget-key { color: var(--text-color-medium, #888); }
 .sb-dashboard-widget-val { font-variant-numeric: tabular-nums;
 	overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-dashboard-widget-row.ok  .sb-dashboard-widget-val { color: var(--success-color-medium, #2e7d32); }
-.sb-dashboard-widget-row.err .sb-dashboard-widget-val { color: var(--error-color-medium, #c62828); }
-
-/* Subscription strip: name, then its facts as label/value pairs, then Update
- * pinned right. A strip rather than a table row — the facts are pairs, not a
- * matrix, and the columns were the only reason this had to fight the themes
- * over how they lay out LuCI's div-table. */
-.sb-dashboard-sub { display: flex; align-items: center; gap: 6px 12px;
-	flex-wrap: wrap; margin-top: 10px; }
-.sb-dashboard-sub-name { flex: 0 1 auto; max-width: 28ch;
-	overflow-wrap: anywhere; }
-.sb-dashboard-facts { flex: 1 1 auto; min-width: 0; display: flex;
-	flex-wrap: wrap; align-items: center; gap: 5px 12px; }
-.sb-dashboard-fact { display: flex; align-items: center; gap: 4px; min-width: 0; }
-.sb-dashboard-fact-key { color: var(--text-color-medium, #888); font-size: 12px;
-	white-space: nowrap; }
-.sb-dashboard-fact-val { font-weight: 600; overflow-wrap: anywhere; }
-/* The theme prints the bar's `title` as centred text INSIDE it. In a flex row
- * the bar collapses to a hairline and that label spills out above it, so pin a
- * real height. */
-.sb-dashboard-fact .cbi-progressbar { min-width: 10em; height: 1.5em; margin: 0;
-	position: relative; }
-.sb-dashboard-sub-update { margin: 0 0 0 auto; }
+.sb-dashboard-widget-row.sb-row-success .sb-dashboard-widget-val {
+	color: var(--success-color-medium, #2e7d32); }
+.sb-dashboard-widget-row.sb-row-error .sb-dashboard-widget-val {
+	color: var(--error-color-medium, #c62828); }
 
 .sb-dashboard-toolbar { display: flex; justify-content: flex-end; margin-top: 10px; }
 .sb-dashboard-toolbar .cbi-button { margin: 0; }
 
-/* Proxy group: a full-width box, its members tiled inside on the page grid. */
+/* Outbound section: one wide card per proxy group; its nodes tile inside it on
+ * the page grid. */
 .sb-dashboard-group { margin-top: 10px; }
 .sb-dashboard-grp-head { display: flex; align-items: center;
 	justify-content: space-between; gap: 8px 10px; min-width: 0; }
 .sb-dashboard-grp-name { font-weight: 700; min-width: 0;
 	color: var(--text-color-high); overflow-wrap: anywhere; }
-.sb-dashboard-grp-actions { display: flex; align-items: center; gap: 6px;
-	flex: 0 0 auto; }
+.sb-dashboard-grp-actions { display: flex; align-items: center;
+	justify-content: flex-end; gap: 6px; flex: 0 0 auto; }
 .sb-dashboard-grp-type { font-size: .8em; opacity: .6; }
-.sb-dashboard-grp-head button { margin: 0; }
-/* A subscription can carry 100+ members; cap the wall of cards and scroll. */
-.sb-dashboard-nodes { margin-top: 5px; max-height: 26em; overflow-y: auto; }
+.sb-dashboard-grp-head button { margin: 0; min-height: 28px;
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.sb-dashboard-sub-update { min-width: 130px; }
+/* Reserve the widest label ("Test latency: 100/100") so the progress counter
+ * ticking in place cannot make the whole header jitter. */
+.sb-dashboard-test { min-width: 99px; }
+.sb-dashboard-grp-head button[disabled] { cursor: not-allowed; opacity: .65; }
+.sb-dashboard-grp-head svg.sb-icon { width: 15px; height: 15px; }
+.sb-dashboard-grid { margin-top: 5px; }
 
-/* Node card: name on top, protocol + latency on the footer line. */
-.sb-dashboard-node { display: flex; flex-direction: column; justify-content: space-between;
-	gap: 6px; padding: 8px 10px; }
-.sb-dashboard-node-head { display: flex; align-items: center; min-width: 0; }
-.sb-dashboard-node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-dashboard-node-foot { display: flex; align-items: baseline;
-	justify-content: space-between; gap: .5em; }
-.sb-dashboard-node-type { font-size: .8em; opacity: .6;
-	overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sb-dashboard-lat { font-size: .85em; font-variant-numeric: tabular-nums;
-	flex: 0 0 auto; }
-.sb-dashboard-node-sel { cursor: pointer; }
-/* Tinted overlays, not theme background colours: `--background-color-medium` is
- * a LIGHT grey even in the dark theme, so it washed the card out and the node
- * name became unreadable on it. A translucent wash keeps the theme's own text
- * colour legible on both themes; the border carries the "selected" signal. */
-.sb-dashboard-node-sel:hover { background: rgba(128, 128, 128, .18); }
-.sb-dashboard-node-current { background: rgba(46, 125, 50, .16);
-	border-color: #2e7d32; }
-.sb-dashboard-node-current .sb-dashboard-node-name { font-weight: 700; }
+/* Subscription metadata: a full-bleed strip inside the section grid. */
+.sb-dashboard-sub-meta { grid-column: 1 / -1; padding: 8px 10px; }
+.sb-dashboard-meta-main { display: flex; align-items: center; gap: 6px 10px;
+	min-width: 0; }
+.sb-dashboard-meta-heading { flex: 0 0 auto; font-weight: 700; line-height: 1.25;
+	white-space: nowrap; color: var(--text-color-high); }
+.sb-dashboard-meta-title { flex: 0 1 auto; max-width: min(28ch, 30%);
+	font-weight: 700; line-height: 1.25; overflow-wrap: anywhere;
+	color: var(--text-color-high); }
+.sb-dashboard-facts { flex: 1 1 auto; min-width: 0; display: flex;
+	flex-wrap: wrap; align-items: baseline; gap: 5px 12px; }
+.sb-dashboard-fact { display: flex; align-items: baseline; gap: 4px; min-width: 0;
+	line-height: 1.25; }
+.sb-dashboard-fact-key { color: var(--text-color-medium, #888); font-size: 12px;
+	white-space: nowrap; }
+.sb-dashboard-fact-val { font-weight: 600; overflow-wrap: anywhere; }
+.sb-dashboard-meta-actions { flex: 0 0 auto; margin-left: auto; display: flex;
+	justify-content: flex-end; gap: 6px; }
+.sb-dashboard-meta-action { width: 28px; height: 28px; min-width: 28px;
+	padding: 2px; margin: 0; box-sizing: border-box; display: flex;
+	align-items: center; justify-content: center; line-height: 1; }
+.sb-dashboard-meta-action svg.sb-icon { width: 15px; height: 15px; }
+.sb-dashboard-meta-announce { margin: 6px 0 0; padding: 4px 8px;
+	border-left: 3px solid var(--primary-color-medium, dodgerblue);
+	background: rgba(128, 128, 128, .1); color: var(--text-color-medium, #888);
+	font-style: italic; line-height: 1.25; overflow-wrap: anywhere; }
+@media (max-width: 700px) {
+	.sb-dashboard-meta-main { align-items: flex-start; flex-wrap: wrap; }
+	.sb-dashboard-meta-heading, .sb-dashboard-meta-title { order: 1; }
+	.sb-dashboard-meta-actions { order: 2; }
+	.sb-dashboard-facts { order: 3; flex-basis: 100%; }
+	.sb-dashboard-meta-title { max-width: calc(100% - 42px); }
+}
+
+/* Node card: display name (+ copy-link) on top, protocol + latency below. */
+.sb-dashboard-node { position: relative; transition: border-color .2s ease; }
+.sb-dashboard-node-head { display: flex; align-items: flex-start;
+	justify-content: space-between; gap: 8px; }
+.sb-dashboard-node-name { min-width: 0; line-height: 1.25;
+	overflow-wrap: anywhere; }
+.sb-dashboard-node-copy { width: 22px; height: 22px; min-width: 22px; padding: 1px;
+	margin: 0; box-sizing: border-box; display: flex; align-items: center;
+	justify-content: center; flex: 0 0 auto; line-height: 1; }
+.sb-dashboard-node-copy svg.sb-icon { width: 13px; height: 13px; }
+.sb-dashboard-node-foot { display: flex; align-items: center;
+	justify-content: space-between; gap: 8px; margin-top: 10px; }
+.sb-dashboard-node-type { min-width: 0; overflow-wrap: anywhere;
+	color: var(--text-color-medium, #888); }
+.sb-dashboard-lat { font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.sb-dashboard-node--selectable { cursor: pointer; }
+.sb-dashboard-node--selectable:hover { border-color: var(--primary-color-high, dodgerblue); }
+.sb-dashboard-node--active { border-color: var(--success-color-medium, #2e7d32); }
+.sb-dashboard-node--disabled { cursor: default; }
+/* Switching: the border hands over to a dash running around the card. */
+.sb-dashboard-node--switching { border-color: transparent !important;
+	overflow: hidden; cursor: wait; }
+
+.sb-lat-none { color: var(--primary-color-low, lightgray); opacity: .6; }
+.sb-lat-good { color: var(--success-color-medium, #2e7d32); }
+.sb-lat-mid  { color: var(--warn-color-medium, #f9a825); }
+.sb-lat-bad  { color: var(--error-color-medium, #c62828); }
+.sb-dashboard-unavailable { display: block; margin: 1em 0; }
 
 /* Inline SVG icons (lib/icons.js). Scoped to .sb-icon — a bare `svg {}` rule
  * would leak into the LuCI theme's own icons. Size comes from the caller
@@ -212,6 +250,23 @@ svg.sb-icon { display: block; flex: 0 0 auto; width: 1em; height: 1em; }
 svg.sb-icon-spin { animation: sb-icon-spin 1s linear infinite; }
 @keyframes sb-icon-spin { to { transform: rotate(360deg); } }
 
-.sb-lat-good { color: #2e7d32; } .sb-lat-mid { color: #f9a825; }
-.sb-lat-bad { color: #c62828; } .sb-lat-none { opacity: .5; }
-.sb-dashboard-unavailable { display: block; margin: 1em 0; }
+/* The switching "snake": one rect stretched over the card, dashed on
+ * pathLength=100 so a dash unit is 1% of the perimeter. */
+svg.sb-snake { position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+	pointer-events: none; box-sizing: border-box; z-index: 2; }
+svg.sb-snake rect { stroke: var(--primary-color-high, dodgerblue); stroke-width: 4;
+	animation: sb-snake 1.2s linear infinite; }
+@keyframes sb-snake {
+	0%   { stroke-dasharray: 30 70; stroke-dashoffset: 100; }
+	100% { stroke-dasharray: 30 70; stroke-dashoffset: 0; }
+}
+
+/* Skeleton placeholder while the first poll is in flight. */
+.sb-skel { position: relative; overflow: hidden; border-color: transparent;
+	background: var(--background-color-low, #e0e0e0); min-height: 78px; }
+.sb-dashboard-group.sb-skel { min-height: 127px; }
+.sb-skel::after { content: ''; position: absolute; top: 0; left: -150%;
+	width: 150%; height: 100%;
+	background: linear-gradient(90deg, transparent, rgba(255, 255, 255, .25), transparent);
+	animation: sb-shimmer 1.6s infinite; }
+@keyframes sb-shimmer { 100% { left: 150%; } }

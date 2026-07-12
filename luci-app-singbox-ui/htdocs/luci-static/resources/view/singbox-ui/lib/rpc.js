@@ -14,6 +14,9 @@ return L.Class.extend({
     callClashDelay:  rpc.declare({ object: 'singbox-ui', method: 'clash_delay',
                                    params: [ 'name', 'url', 'timeout' ] }),
     callSubStatus:   rpc.declare({ object: 'singbox-ui', method: 'sub_status' }),
+    // tag -> { name, type, link }: the side-car that carries the human-readable
+    // node name (the sing-box tag is ASCII-safe and often a content hash).
+    callOutboundMeta: rpc.declare({ object: 'singbox-ui', method: 'outbound_meta' }),
     callExportSection: rpc.declare({ object: 'singbox-ui', method: 'export_section',
                                      params: [ 'kind', 'name' ] }),
     callPreviewConfig: rpc.declare({ object: 'singbox-ui', method: 'preview_config' }),

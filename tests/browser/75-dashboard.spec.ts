@@ -16,10 +16,11 @@
 // result:[code, payload]; code 0 = OK). dashboard.js reads res.status/res.body.
 //
 // Buttons exercised (verified against tabs/dashboard.js):
-//   .sb-sort-btn            -> setSortByLatency()           (mountChrome)
-//   .sb-dashboard-test      -> testGroup() -> clash_delay   (renderGroups)
-//   .sb-dashboard-node-sel  -> chooseNode() -> clash_mutate (nodeRow, selector)
-//   .sb-dashboard-sub-update-> updateSub()  -> refresh      (renderSubscriptions)
+//   .sb-sort-btn             -> setSortByLatency()           (mountChrome)
+//   .sb-dashboard-test       -> testGroup() -> clash_delay   (sectionCard)
+//   .sb-dashboard-node--selectable -> chooseNode() -> clash_mutate (nodeCard)
+//   .sb-dashboard-sub-update -> updateSub()  -> refresh      (sectionCard)
+// Plus the display-name contract: names come from outbound_meta, not the tag.
 import { test, assert, wait, clickTopTab } from './fixtures';
 
 export const COVERS = ["tab.dashboard",
@@ -33,9 +34,14 @@ test('dashboard: sort/test/update/choose-node buttons fire RPCs', async ({ page 
             n1: { type: 'vless', history: [{ delay: 120 }] },
             n2: { type: 'vless', history: [{ delay: 0 }] }
         }};
-        // sub_status fixture so the dedicated Subscriptions section (with its
-        // Update button) renders deterministically.
-        const subs = { subscriptions: [ { name: 'sub1', node_count: 2, last_update: 1000 } ], now: 2000 };
+        // sub_status fixture so the subscription section (with its metadata strip
+        // and Update button) renders deterministically.
+        const subs = { subscriptions: [ { name: 'sub1', node_count: 2, last_update: 1000,
+            title: 'My Plan', userinfo: { upload: 1e9, download: 2e9, total: 0 } } ], now: 2000 };
+        // outbound_meta side-car: the human-readable node name lives here, NOT in
+        // the sing-box tag ('n1' must render as 'Умная локация').
+        const meta = { meta: { n1: { name: '🇳🇱 Умная локация', type: 'VLESS',
+            link: 'vless://uuid@example.com:443#nl' } } };
         window.__rpc = { mutate: [], delay: [], refresh: [] };
         const R = (id, payload) => ({ jsonrpc: '2.0', id, result: [0, payload] });
         function reply(msg) {
@@ -47,7 +53,8 @@ test('dashboard: sort/test/update/choose-node buttons fire RPCs', async ({ page 
                 if (/version/.test(path))  return R(msg.id, { status:'ok', body: '{"version":"1.12.0"}' });
                 return R(msg.id, { status:'ok', body: '{"connections":[],"downloadTotal":0,"uploadTotal":0}' });
             }
-            if (method === 'sub_status')   return R(msg.id, subs);
+            if (method === 'sub_status')    return R(msg.id, subs);
+            if (method === 'outbound_meta') return R(msg.id, meta);
             if (method === 'clash_mutate') { window.__rpc.mutate.push(args); return R(msg.id, { status:'ok', body:'{}' }); }
             if (method === 'clash_delay')  { window.__rpc.delay.push(args); return R(msg.id, { status:'ok', body:'{"delay":99}' }); }
             if (method === 'refresh')      { window.__rpc.refresh.push(args); return R(msg.id, { status:'ok' }); }
@@ -85,6 +92,23 @@ test('dashboard: sort/test/update/choose-node buttons fire RPCs', async ({ page 
     // selectors below have nothing to act on — surface that explicitly.
     const grpRendered = await page.evaluate(() => !!document.querySelector('.sb-dashboard-group'));
     assert('proxy group rendered from /proxies fixture', grpRendered);
+
+    // Node names come from outbound_meta, never from the raw sing-box tag.
+    const names = await page.evaluate(() => Array.from(
+        document.querySelectorAll('.sb-dashboard-node-name')).map(n => n.textContent));
+    assert('node card shows the outbound_meta display name, not the tag',
+        names.indexOf('🇳🇱 Умная локация') >= 0 && names.indexOf('n1') < 0, names);
+    // Copy-link button only where the side-car carries a copyable link.
+    const copies = await page.evaluate(
+        () => document.querySelectorAll('.sb-dashboard-node-copy').length);
+    assert('copy-link button rendered for the node with a share link', copies === 1, copies);
+    // Subscription metadata strip: title + unlimited traffic (∞).
+    const metaTxt = await page.evaluate(() => {
+        const el = document.querySelector('.sb-dashboard-sub-meta');
+        return el ? el.textContent : '';
+    });
+    assert('subscription metadata strip shows title + unlimited traffic',
+        /My Plan/.test(metaTxt) && /∞/.test(metaTxt), metaTxt);
 
     // Sort button
     const sorted = await page.evaluate(() => {

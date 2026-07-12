@@ -123,6 +123,8 @@ function loadDashboard() {
   let subStatus: (...a: unknown[]) => Promise<any> = () => Promise.resolve([]);
   let clashRefresh: (...a: unknown[]) => Promise<any> = () =>
     Promise.resolve({ status: "ok" });
+  let outboundMeta: (...a: unknown[]) => Promise<any> = () =>
+    Promise.resolve({ status: "ok", meta: {} });
 
   const sandbox: Record<string, unknown> = {
     __moduleExports: null,
@@ -169,6 +171,16 @@ function loadDashboard() {
       callClashDelay: (...a: unknown[]) => clashDelay(...a),
       callSubStatus: (...a: unknown[]) => subStatus(...a),
       callRefresh: (...a: unknown[]) => clashRefresh(...a),
+      callOutboundMeta: (...a: unknown[]) => outboundMeta(...a),
+    },
+    // lib/icons.js builds real SVG nodes via createElementNS; in the vm sandbox
+    // they are just opaque elements — the dashboard only appends them.
+    SbIcons: {
+      copy: () => E("svg", { class: "sb-icon" }),
+      info: () => E("svg", { class: "sb-icon" }),
+      link: () => E("svg", { class: "sb-icon" }),
+      loaderCircle: () => E("svg", { class: "sb-icon" }),
+      snake: () => E("svg", { class: "sb-snake" }),
     },
     __test: {
       intervals,
@@ -187,6 +199,9 @@ function loadDashboard() {
       },
       setRefresh: (fn: typeof clashRefresh) => {
         clashRefresh = fn;
+      },
+      setMeta: (fn: typeof outboundMeta) => {
+        outboundMeta = fn;
       },
       fireInterval: (id: string | number) => intervals[id as any]?.fn(),
       find: findNode,
@@ -263,14 +278,18 @@ describe("dashboard.js", () => {
     expect(Object.keys(ctx.__test.intervals).length).toBe(0);
   });
 
-  it("renders selector + urltest groups", async () => {
+  it("renders selector + urltest groups; latency colours use the 800/1500 thresholds", async () => {
     const ctx = loadDashboard();
     const Dash = ctx.__moduleExports;
+    // Thresholds are forkop's: <800 green, <1500 yellow, else red. B at 900ms
+    // must therefore be YELLOW (the old 300/800 scale painted it red), and only
+    // C at 1600ms is red.
     const PROXIES = {
       proxies: {
-        GW: { type: "Selector", now: "A", all: ["A", "B"] },
+        GW: { type: "Selector", now: "A", all: ["A", "B", "C"] },
         A: { type: "Shadowsocks", history: [{ delay: 120 }] },
         B: { type: "Vmess", history: [{ delay: 900 }] },
+        C: { type: "Vmess", history: [{ delay: 1600 }] },
         AUTO: { type: "URLTest", now: "A", all: ["A", "B"] },
       },
     };
@@ -292,16 +311,23 @@ describe("dashboard.js", () => {
     const isCurrent = (n: any) =>
       n.attrs && /sb-dashboard-node-current/.test(n.attrs.class || "");
     expect(findAll(g.node, isCurrent).length >= 2).toBe(true);
-    const hasGood = findNode(
-      g.node,
-      (n: any) => n.attrs && /sb-lat-good/.test(n.attrs.class || ""),
-    );
-    const hasBad = findNode(
-      g.node,
-      (n: any) => n.attrs && /sb-lat-bad/.test(n.attrs.class || ""),
-    );
-    expect(!!hasGood).toBe(true);
-    expect(!!hasBad).toBe(true);
+    const latOf = (name: string) => {
+      const card = findNode(
+        g.node,
+        (n: any) =>
+          n.attrs &&
+          n.attrs["data-group"] === "GW" &&
+          n.attrs["data-name"] === name,
+      );
+      const lat = findNode(
+        card,
+        (n: any) => n.attrs && /sb-dashboard-lat/.test(n.attrs.class || ""),
+      );
+      return lat?.attrs.class || "";
+    };
+    expect(latOf("A")).toMatch(/sb-lat-good/);
+    expect(latOf("B")).toMatch(/sb-lat-mid/);
+    expect(latOf("C")).toMatch(/sb-lat-bad/);
     const urltestRows = findAll(
       g.node,
       (n: any) =>
@@ -608,18 +634,53 @@ describe("dashboard.js", () => {
     await d3s.poll();
     await d3s.refreshProxies();
     await d3s.refreshSubs();
-    const subsBox = findNode(
-      d3s.node,
-      (n: any) => n.attrs && /sb-dashboard-subs/.test(n.attrs.class || ""),
-    );
-    expect(!!subsBox).toBe(true);
+    // The strip lives in its own section card even though no proxy group exists.
     const subRow = findNode(
       d3s.node,
-      (n: any) => n.attrs && n.attrs["data-sub"] === "plainsub",
+      (n: any) =>
+        n.attrs &&
+        n.attrs["data-sub"] === "plainsub" &&
+        /sb-dashboard-sub-meta/.test(n.attrs.class || ""),
     );
     expect(!!subRow).toBe(true);
     expect(subRow.textContent.indexOf("13") >= 0).toBe(true);
     expect(subRow.textContent.indexOf("My Plan") >= 0).toBe(true);
+    // Traffic: used / total, decimal units (300 B / 1 KB), both from userinfo.
+    expect(subRow.textContent.indexOf("300 B / 1 KB") >= 0).toBe(true);
+  });
+
+  it("unlimited plan (no total) prints ∞, not 0 B", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: '{"proxies":{}}' });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    ctx.__test.setSub(() =>
+      Promise.resolve({
+        status: "ok",
+        subscriptions: [
+          {
+            name: "unl",
+            node_count: 3,
+            userinfo: { upload: 1e9, download: 2e9, total: 0 },
+          },
+        ],
+      }),
+    );
+    const du = Dash.buildDashboard();
+    await du.poll();
+    await du.refreshSubs();
+    const strip = findNode(
+      du.node,
+      (n: any) => n.attrs && n.attrs["data-sub"] === "unl",
+    );
+    expect(strip.textContent.indexOf("3 GB / ∞") >= 0).toBe(true);
   });
 
   it("DASH-2: 'updated ago' uses server clock, not browser clock", async () => {
@@ -707,7 +768,11 @@ describe("dashboard.js", () => {
     await Promise.resolve();
     const busyBtn = findTestBtn();
     expect(busyBtn && busyBtn.attrs.disabled !== undefined).toBe(true);
-    expect((busyBtn?.textContent || "").indexOf("Testing") >= 0).toBe(true);
+    // Busy label carries the live progress counter (0/20 at this point).
+    expect((busyBtn?.textContent || "").indexOf("Test latency: ") >= 0).toBe(
+      true,
+    );
+    expect((busyBtn?.textContent || "").indexOf("/20") >= 0).toBe(true);
     while (release.length) {
       const batch = release.splice(0);
       for (const f of batch) f();
@@ -719,7 +784,8 @@ describe("dashboard.js", () => {
     expect(maxInFlight > 0 && maxInFlight <= 8).toBe(true);
     const doneBtn = findTestBtn();
     expect(doneBtn && doneBtn.attrs.disabled === undefined).toBe(true);
-    expect((doneBtn?.textContent || "") === "Test").toBe(true);
+    // Back to the bare label — the counter is gone once the run settles.
+    expect((doneBtn?.textContent || "") === "Test latency").toBe(true);
   });
 
   it("uis-3: poll does not refetch /proxies while a node switch is pending", async () => {
@@ -767,5 +833,100 @@ describe("dashboard.js", () => {
     await d.poll();
     await d.poll();
     expect(proxiesCalls).toBe(before);
+  });
+
+  // The sing-box tag is ASCII-safe (often "sub_0"/a content hash); the human
+  // name lives only in the outbound_meta side-car. Showing the tag was the
+  // "asd__0 instead of Умная локация" bug.
+  it("node card shows the display name from outbound_meta, not the tag", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    const PROXIES = {
+      proxies: {
+        GW: { type: "Selector", now: "sub_0", all: ["sub_0", "sub_1"] },
+        sub_0: { type: "Vless", history: [{ delay: 120 }] },
+        sub_1: { type: "Vless", history: [{ delay: 0 }] },
+      },
+    };
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    ctx.__test.setMeta(() =>
+      Promise.resolve({
+        status: "ok",
+        meta: {
+          sub_0: {
+            name: "🇳🇱 Умная локация",
+            type: "VLESS",
+            link: "vless://uuid@host:443#nl",
+          },
+          // sub_1 deliberately absent -> falls back to the raw tag.
+        },
+      }),
+    );
+    const dm = Dash.buildDashboard();
+    await dm.poll();
+    await dm.refreshProxies();
+    const names = findAll(
+      dm.node,
+      (n: any) => n.attrs && /sb-dashboard-node-name/.test(n.attrs.class || ""),
+    ).map((n: any) => n.textContent);
+    expect(names.indexOf("🇳🇱 Умная локация") >= 0).toBe(true);
+    expect(names.indexOf("sub_1") >= 0).toBe(true);
+    expect(names.indexOf("sub_0") < 0).toBe(true);
+    // Copy-link button only where the side-car carries a copyable proxy link.
+    const copyBtns = findAll(
+      dm.node,
+      (n: any) =>
+        n.tag === "button" &&
+        /sb-dashboard-node-copy/.test(n.attrs?.class || ""),
+    );
+    expect(copyBtns.length).toBe(1);
+  });
+
+  // display_name is provider-controlled. It must reach the DOM as text only —
+  // never as markup (CLAUDE.md: untrusted content goes through E()/textContent).
+  it("XSS: a hostile display name is rendered as text, not markup", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    const EVIL = '<img src=x onerror="alert(1)">';
+    const PROXIES = {
+      proxies: {
+        GW: { type: "Selector", now: "t0", all: ["t0"] },
+        t0: { type: "Vless", history: [{ delay: 10 }] },
+      },
+    };
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    ctx.__test.setMeta(() =>
+      Promise.resolve({ status: "ok", meta: { t0: { name: EVIL } } }),
+    );
+    const dx = Dash.buildDashboard();
+    await dx.poll();
+    await dx.refreshProxies();
+    const nameEl = findNode(
+      dx.node,
+      (n: any) => n.attrs && /sb-dashboard-node-name/.test(n.attrs.class || ""),
+    );
+    // Text child (E()), no element children spawned from the payload.
+    expect(nameEl.textContent).toBe(EVIL);
+    expect(nameEl.children.length).toBe(0);
+    // And the source only ever uses innerHTML to clear a container.
+    const src = readFileSync(DASHBOARD_JS, "utf8");
+    const writes = src.match(/innerHTML\s*=\s*\S+/g) || [];
+    expect(writes.every((w) => /=\s*'';?/.test(w))).toBe(true);
   });
 });

@@ -1,24 +1,37 @@
 'use strict';
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
+'require view.singbox-ui.lib.icons as SbIcons';
 
-var callClashGet    = SbRpc.callClashGet;
-var callClashMutate = SbRpc.callClashMutate;
-var callClashDelay  = SbRpc.callClashDelay;
-var callSubStatus   = SbRpc.callSubStatus;
-var callRefresh     = SbRpc.callRefresh;
+var callClashGet     = SbRpc.callClashGet;
+var callClashMutate  = SbRpc.callClashMutate;
+var callClashDelay   = SbRpc.callClashDelay;
+var callSubStatus    = SbRpc.callSubStatus;
+var callRefresh      = SbRpc.callRefresh;
+var callOutboundMeta = SbRpc.callOutboundMeta;
 
 function buildDashboard() {
 	var state = {
-		timer: null, ui: null,
+		timer: null, ui: null, loaded: false,
 		lastDown: null, lastUp: null, dRate: 0, uRate: 0,
-		totDown: 0, totUp: 0, conns: 0, version: '', running: false,
+		totDown: 0, totUp: 0, conns: 0, memory: 0, version: '', running: false,
 		proxies: {}, proxiesEvery: 0, sortByLatency: false,
+		// tag -> { name, type, link } side-car (rpcd outbound_meta). The sing-box
+		// tag is ASCII-safe and often a content hash; the human-readable node name
+		// ("🇳🇱 Умная локация") only exists here. UNTRUSTED (it comes from the
+		// subscription provider) — render through E()/textContent only.
+		meta: {},
 		subs: {}, subsNow: 0,
 		// DASH-1/DASH-4: per-group "latency test in progress" flag. Set while a
 		// group's probes run so renderGroups() can disable its Test button and
 		// repeated clicks don't stack concurrent probe storms.
 		testing: {},
+		// group -> { done, total }; the Test button's label span is updated in
+		// place from it (see state.ui.labels), never by re-rendering the grid.
+		progress: {},
+		subUpdating: {},
+		// Tag whose selector switch is in flight — its card wears the snake.
+		switchingTag: '',
 		// UIS-3: flag to suppress periodic fetchProxies while a node switch is
 		// pending (between chooseNode's PUT and refreshProxies), preventing the
 		// poll from wiping the optimistic selection mid-flight.
@@ -26,10 +39,13 @@ function buildDashboard() {
 	};
 	var root = E('div', { 'class': 'sb-dashboard' });
 
-	function fmtBytes(n) {
-		n = n || 0; var u = ['B','KB','MB','GB','TB']; var i = 0;
-		while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-		return n.toFixed(i ? 1 : 0) + u[i];
+	// forkop's prettyBytes: decimal (1000) divisor, 3 significant digits.
+	function prettyBytes(n) {
+		n = +n || 0;
+		if (n < 1000) return n + ' B';
+		var u = ['B','KB','MB','GB','TB','PB'];
+		var e = Math.min(Math.floor(Math.log(n) / Math.log(1000)), u.length - 1);
+		return Number((n / Math.pow(1000, e)).toPrecision(3)) + ' ' + u[e];
 	}
 
 	function fetchProxies() {
@@ -43,7 +59,15 @@ function buildDashboard() {
 			// or chooseNode()'s success-only .then never clears switchPending.
 		});
 	}
-	function refreshProxies() { return fetchProxies().then(repaint); }
+	function fetchMeta() {
+		if (!callOutboundMeta) return Promise.resolve();
+		return callOutboundMeta().then(function (res) {
+			state.meta = (res && res.meta) || {};
+		}, function () { /* older backend without outbound_meta: fall back to tags */ });
+	}
+	function refreshProxies() {
+		return Promise.all([ fetchProxies(), fetchMeta() ]).then(repaint);
+	}
 	// True while any group's latency test is mid-run. The background poll uses
 	// this to avoid replacing state.proxies (which would wipe in-flight results).
 	function anyTesting() {
@@ -93,9 +117,15 @@ function buildDashboard() {
 	}
 
 	function updateSub(name) {
+		state.subUpdating[name] = true;
+		renderGroups();
+		function done() { state.subUpdating[name] = false; }
 		return callRefresh('subscriptions', name).then(function () {
-			return Promise.all([ fetchSubs(), fetchProxies() ]).then(repaint);
+			done();
+			return Promise.all([ fetchSubs(), fetchProxies(), fetchMeta() ]).then(repaint);
 		}, function () {
+			done();
+			renderGroups();
 			ui.addNotification(null, E('p', {}, _('Subscription update failed')));
 		});
 	}
@@ -113,7 +143,13 @@ function buildDashboard() {
 		// optimistic: reflect selection immediately, then resync from /proxies
 		if (state.proxies[groupName]) state.proxies[groupName].now = member;
 		state.switchPending = true;
+		state.switchingTag = member;
 		renderGroups();
+		function settle() {
+			state.switchPending = false;
+			state.switchingTag = '';
+			renderGroups();
+		}
 		return callClashMutate('PUT', '/proxies/' + groupName,
 		                       JSON.stringify({ name: member }))
 			.then(refreshProxies, function () {
@@ -122,8 +158,7 @@ function buildDashboard() {
 			})
 			// Clear on BOTH settle paths: a stuck switchPending freezes the panel on a
 			// stale value forever, because poll() then refuses to refetch the groups.
-			.then(function () { state.switchPending = false; },
-			      function () { state.switchPending = false; });
+			.then(settle, settle);
 	}
 
 	// DASH-1: probe at most TEST_POOL members concurrently and coalesce
@@ -144,9 +179,18 @@ function buildDashboard() {
 			return p && !isGroupType(p.type);   // don't probe nested groups
 		});
 		state.testing[groupName] = true;
+		state.progress[groupName] = { done: 0, total: members.length };
 		renderGroups();   // reflect the disabled/busy Test button immediately
 
 		var idx = 0;
+		function tick() {
+			// Progress is written straight into the label span. Re-rendering the
+			// whole grid per probe would be O(N^2) DOM on a 100-node selector.
+			var pr = state.progress[groupName];
+			pr.done++;
+			var label = state.ui && state.ui.labels && state.ui.labels[groupName];
+			if (label) label.textContent = testLabel(pr);
+		}
 		function probeOne(m) {
 			return callClashDelay(m, '', '5000').then(function (res) {
 				var ms = 0;
@@ -156,9 +200,11 @@ function buildDashboard() {
 				}
 				var p = state.proxies[m];
 				if (p) p.history = [ { delay: ms } ];
+				tick();
 			}, function () {
 				var p = state.proxies[m];
 				if (p) p.history = [ { delay: 0 } ];
+				tick();
 			});
 		}
 		// One worker drains the shared index, processing a batch then repainting
@@ -172,22 +218,28 @@ function buildDashboard() {
 				return worker();
 			});
 		}
-		return worker().then(function () {
+		function finish() {
 			state.testing[groupName] = false;
+			state.progress[groupName] = null;
 			renderGroups();
-		}, function () {
-			state.testing[groupName] = false;
-			renderGroups();
-		});
+		}
+		return worker().then(finish, finish);
 	}
 
+	function testLabel(pr) {
+		if (!pr || !(pr.total > 0)) return _('Test latency');
+		return _('Test latency') + ': ' + Math.min(pr.done, pr.total) + '/' + pr.total;
+	}
+
+	// forkop thresholds: no sample -> muted, <800 green, <1500 yellow, else red.
+	// (Ours used to be 300/800, which painted a perfectly usable 400ms node red.)
 	function latClass(ms) {
 		if (!(ms > 0)) return 'sb-lat-none';
-		if (ms < 300) return 'sb-lat-good';
-		if (ms < 800) return 'sb-lat-mid';
+		if (ms < 800)  return 'sb-lat-good';
+		if (ms < 1500) return 'sb-lat-mid';
 		return 'sb-lat-bad';
 	}
-	function latText(ms) { return (ms > 0) ? (ms + 'ms') : '—'; }
+	function latText(ms) { return (ms > 0) ? (ms + 'ms') : 'N/A'; }
 	function isGroupType(t) {
 		t = (t || '').toLowerCase();
 		return t === 'selector' || t === 'urltest';
@@ -200,6 +252,26 @@ function buildDashboard() {
 		var last = (h && h.length) ? h[h.length - 1] : null;
 		return (last && last.delay) || 0;
 	}
+	function nodeMeta(tag) { return (state.meta && state.meta[tag]) || {}; }
+	function displayName(tag) { return nodeMeta(tag).name || tag; }
+
+	var COPYABLE_RE =
+		/^(vless|vmess|trojan|ss|ssr|hysteria2?|hy2|tuic|anytls|socks5?):\/\//i;
+	function copyLink(link) {
+		var p = (typeof navigator !== 'undefined' && navigator.clipboard &&
+		         navigator.clipboard.writeText)
+			? navigator.clipboard.writeText(link) : Promise.reject();
+		return p.catch(function () {
+			// LuCI is usually served over plain http, where the async clipboard API
+			// is unavailable (secure-context only) — fall back to the old seam.
+			var ta = E('textarea', { 'style': 'position:fixed;opacity:0' }, link);
+			document.body.appendChild(ta);
+			ta.select();
+			try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
+		}).then(function () {
+			ui.addNotification(null, E('p', {}, _('Proxy link copied')), 'info');
+		});
+	}
 
 	function showUnreachable() {
 		root.innerHTML = '';
@@ -208,7 +280,7 @@ function buildDashboard() {
 		// repaint()'s `if (!state.ui) mountChrome()` guard.
 		state.ui = null;
 		root.appendChild(E('em', { 'class': 'sb-dashboard-unavailable' },
-			_('Clash API unreachable — enable it in General settings and restart the service.')));
+			_('Dashboard currently unavailable')));
 	}
 
 	// --- widgets -----------------------------------------------------------
@@ -219,7 +291,7 @@ function buildDashboard() {
 		return E('div', { 'class': 'sb-dashboard-widget' }, [
 			E('b', { 'class': 'sb-dashboard-widget-title' }, title),
 			E('div', { 'class': 'sb-dashboard-widget-rows' },
-				rows.map(function (r) {
+				rows.filter(Boolean).map(function (r) {
 					return E('div', { 'class': 'sb-dashboard-widget-row ' + (r[2] || '') }, [
 						E('span', { 'class': 'sb-dashboard-widget-key' }, r[0] + ': '),
 						E('span', { 'class': 'sb-dashboard-widget-val' }, r[1])
@@ -227,42 +299,55 @@ function buildDashboard() {
 				}))
 		]);
 	}
+	function skeleton(cls) {
+		return E('div', { 'class': cls + ' sb-skel' });
+	}
 
 	function renderWidgets() {
 		if (!state.ui) return;
 		var w = state.ui.widgets;
 		w.innerHTML = '';
-		w.appendChild(widget(_('Speed'), [
-			[ _('Download'), fmtBytes(state.dRate) + '/s' ],
-			[ _('Upload'),   fmtBytes(state.uRate) + '/s' ]
+		if (!state.loaded) {
+			for (var i = 0; i < 4; i++) w.appendChild(skeleton('sb-dashboard-widget'));
+			return;
+		}
+		w.appendChild(widget(_('Traffic'), [
+			[ _('Uplink'),   prettyBytes(state.uRate) + '/s' ],
+			[ _('Downlink'), prettyBytes(state.dRate) + '/s' ]
 		]));
-		w.appendChild(widget(_('Total traffic'), [
-			[ _('Downloaded'), fmtBytes(state.totDown) ],
-			[ _('Uploaded'),   fmtBytes(state.totUp) ]
+		w.appendChild(widget(_('Traffic Total'), [
+			[ _('Uplink'),   prettyBytes(state.totUp) ],
+			[ _('Downlink'), prettyBytes(state.totDown) ]
 		]));
-		w.appendChild(widget(_('Connections'), [
-			[ _('Active'), '' + state.conns ]
+		w.appendChild(widget(_('System info'), [
+			[ _('Active Connections'), '' + state.conns ],
+			// Only when the API actually reports it — a "—" placeholder row is noise.
+			state.memory ? [ _('Memory Usage'), prettyBytes(state.memory) ] : null
 		]));
-		w.appendChild(widget(_('sing-box'), [
-			[ _('Status'), state.running ? _('running') : _('stopped'),
-			  state.running ? 'ok' : 'err' ],
-			[ _('Version'), state.version || '—' ]
+		w.appendChild(widget(_('Services info'), [
+			[ 'sing-box', state.running ? '✔ ' + _('Running') : '✘ ' + _('Stopped'),
+			  state.running ? 'sb-row-success' : 'sb-row-error' ],
+			state.version ? [ _('Version'), state.version ] : null
 		]));
 	}
 
 	function mountChrome() {
 		var widgets = E('div', { 'class': 'sb-dashboard-widgets' });
-		var subs    = E('div', { 'class': 'sb-dashboard-subs' });
-		var groups  = E('div', { 'class': 'sb-dashboard-groups' });
+		var groups  = E('div', { 'class': 'sb-dashboard-sections' });
 		var sortBtn = E('button', { 'class': 'cbi-button cbi-button-neutral sb-sort-btn',
 			'click': function () { setSortByLatency(!state.sortByLatency); } },
 			_('Sort by latency'));
+		var stopped = E('div', { 'class': 'sb-dashboard-stopped', 'role': 'status' },
+			_('sing-box is stopped or its Clash API is unreachable. Start the service (and enable the API in General settings) to display the dashboard.'));
+		var content = E('div', { 'class': 'sb-dashboard-content' }, [
+			widgets,
+			E('div', { 'class': 'sb-dashboard-toolbar' }, sortBtn),
+			groups
+		]);
 		root.innerHTML = '';
-		root.appendChild(widgets);
-		root.appendChild(subs);
-		root.appendChild(E('div', { 'class': 'sb-dashboard-toolbar' }, sortBtn));
-		root.appendChild(groups);
-		state.ui = { widgets: widgets, subs: subs, groups: groups, sortBtn: sortBtn };
+		root.appendChild(stopped);
+		root.appendChild(content);
+		state.ui = { widgets: widgets, groups: groups, sortBtn: sortBtn, labels: {} };
 	}
 
 	function fact(key, value) {
@@ -271,57 +356,78 @@ function buildDashboard() {
 			E('span', { 'class': 'sb-dashboard-fact-val' }, value)
 		]);
 	}
+	function metaAction(label, url) {
+		if (!/^https?:\/\/\S+$/i.test(url || '')) return null;
+		return E('a', { 'class': 'cbi-button sb-dashboard-meta-action', 'href': url,
+			'target': '_blank', 'rel': 'noopener noreferrer',
+			'title': label, 'aria-label': label }, SbIcons.link());
+	}
 
-	// DASH-3: render every subscription (keyed by UCI section name) as a strip,
-	// independent of whether it was expanded into a proxy group. A non-expanded
-	// subscription (sub_multi='0', the default) produces no clash-api group, so
-	// its traffic cap / expiry would otherwise never surface — even though
-	// sub_status returns the userinfo.
-	//
-	// A strip, not a table row: the columns were the only reason this file had to
-	// fight the themes over how they lay out LuCI's div-table, and a plan's facts
-	// (nodes / updated / traffic / expiry) are label-value pairs, not a matrix.
-	function renderSubscriptions() {
-		if (!state.ui) return;
-		var box = state.ui.subs;
-		box.innerHTML = '';
-		var names = Object.keys(state.subs || {}).sort();
-		// Nothing to show -> the whole block collapses, no empty heading left over.
-		box.style.display = names.length ? '' : 'none';
-		if (!names.length) return;
+	// Normalize both shapes: today's sub_status ({title, userinfo:{…}}) and the
+	// richer metadata block the subscription rework will add ({traffic:{…},
+	// refillDate, webPageUrl, …}). Anything absent is simply not drawn.
+	function subFacts(s) {
+		var m = s.metadata || {};
+		var u = s.userinfo || {};
+		var t = m.traffic || null;
+		var used  = t ? (+t.used || 0) : ((+u.upload || 0) + (+u.download || 0));
+		var total = t ? (+t.total || 0) : (+u.total || 0);
+		var unlimited = t ? (t.isUnlimited || !total) : !total;
+		return {
+			title: m.title || s.title || s.name,
+			used: used, total: total, unlimited: unlimited,
+			expire: fmtExpire(m.expire || u.expire),
+			refill: fmtExpire(m.refillDate),
+			announce: m.announce || '',
+			webPageUrl: m.webPageUrl, supportUrl: m.supportUrl,
+			announceUrl: m.announceUrl
+		};
+	}
 
-		names.forEach(function (name) {
-			var s = state.subs[name] || {};
-			var ui_ = s.userinfo || {};
-			var used  = (+ui_.upload || 0) + (+ui_.download || 0);
-			var total = +ui_.total || 0;
-			// Native LuCI progressbar (as on the Overview page) instead of a
-			// hand-rolled "12MB / 30GB" span.
-			var traffic = total
-				? E('div', { 'class': 'cbi-progressbar',
-				             'title': fmtBytes(used) + ' / ' + fmtBytes(total) },
-					E('div', { 'style': 'width:' +
-						Math.min(100, Math.round(used / total * 100)) + '%' }))
-				: (used ? fmtBytes(used) : '—');
-			box.appendChild(E('div', { 'class': 'sb-dashboard-sub', 'data-sub': name }, [
-				E('b', { 'class': 'sb-dashboard-sub-name' }, s.title || name),
-				E('div', { 'class': 'sb-dashboard-facts' }, [
-					fact(_('Nodes'),   '' + (s.node_count || 0)),
-					fact(_('Updated'), agoText(s.last_update)),
-					fact(_('Traffic'), traffic),
-					fact(_('Expires'), fmtExpire(ui_.expire) || '—')
-				]),
-				E('button', { 'class': 'cbi-button cbi-button-action sb-dashboard-sub-update',
-					'click': ui.createHandlerFn(this, (function (n) {
-						return function () { return updateSub(n); };
-					})(name)) }, _('Update'))
-			]));
-		});
+	// DASH-3: the metadata strip is rendered for EVERY subscription (keyed by UCI
+	// section name), including one that was never expanded into a proxy group
+	// (sub_multi='0', the default) — otherwise its traffic cap / expiry would
+	// never surface even though sub_status returns the userinfo.
+	function subMetaStrip(name) {
+		var s = state.subs[name];
+		if (!s) return null;
+		var f = subFacts(s);
+		var facts = [
+			fact(_('Nodes'),   '' + (s.node_count || 0)),
+			fact(_('Updated'), agoText(s.last_update))
+		];
+		if (f.used || f.total)
+			facts.push(fact(_('Traffic'), prettyBytes(f.used) + ' / ' +
+				(f.unlimited ? '∞' : prettyBytes(f.total))));
+		if (f.expire) facts.push(fact(_('Expires'), f.expire));
+		if (f.refill) facts.push(fact(_('Refill'),  f.refill));
+
+		var actions = [
+			metaAction(_('Profile'), f.webPageUrl),
+			metaAction(_('Support'), f.supportUrl),
+			metaAction(_('More details'), f.announceUrl)
+		].filter(Boolean);
+
+		var kids = [
+			E('div', { 'class': 'sb-dashboard-meta-heading' }, _('Subscription info:')),
+			E('div', { 'class': 'sb-dashboard-meta-title' }, f.title),
+			E('div', { 'class': 'sb-dashboard-facts' }, facts)
+		];
+		if (actions.length)
+			kids.push(E('div', { 'class': 'sb-dashboard-meta-actions' }, actions));
+
+		var box = [ E('div', { 'class': 'sb-dashboard-meta-main' }, kids) ];
+		if (f.announce)
+			box.push(E('blockquote', { 'class': 'sb-dashboard-meta-announce' }, f.announce));
+		return E('div', { 'class': 'sb-dashboard-sub-meta', 'data-sub': name }, box);
 	}
 
 	function ingestConnections(data) {
 		var conns = (data && data.connections) || [];
 		state.conns = conns.length;
+		// mihomo (and sing-box builds that follow it) put the process RSS here; when
+		// the field is absent the widget simply omits the row.
+		state.memory = (data && +data.memory) || 0;
 		var down = (data && data.downloadTotal) || 0;
 		var up   = (data && data.uploadTotal)   || 0;
 		state.dRate = (state.lastDown == null) ? 0 : Math.max(0, down - state.lastDown);
@@ -330,29 +436,50 @@ function buildDashboard() {
 		state.totDown = down; state.totUp = up;
 	}
 
-	// A node is a card, not a table row: name on top, protocol and latency on the
-	// footer line. Cards tile into the same responsive grid as the widgets, so a
-	// 100-node subscription reads as a wall of chips instead of a 100-row scroll.
-	function nodeRow(groupName, isSelector, member, proxies, currentNow) {
+	// A node is a card, not a table row: display name (+ copy-link) on top,
+	// protocol and latency on the footer line. Cards tile into the same grid as
+	// the widgets, so a 100-node subscription reads as a wall of chips.
+	function nodeCard(groupName, isSelector, member, proxies, currentNow) {
 		var p = proxies[member] || {};
+		var m = nodeMeta(member);
 		var ms = memberDelay(p);
-		var attrs = { 'class': 'sb-dashboard-node', 'data-group': groupName,
-		              'data-name': member, 'title': member };
-		if (member === currentNow) attrs['class'] += ' sb-dashboard-node-current';
-		if (isSelector) {
-			attrs['class'] += ' sb-dashboard-node-sel';
-			attrs.click = ui.createHandlerFn(this, (function (g, m) {
-				return function () { return chooseNode(g, m); };
+		var active = (member === currentNow);
+		var switching = (state.switchingTag === member);
+		var selectable = isSelector && !active && !switching && !state.switchingTag;
+		var cls = 'sb-dashboard-node';
+		if (active)     cls += ' sb-dashboard-node--active sb-dashboard-node-current';
+		if (selectable) cls += ' sb-dashboard-node--selectable sb-dashboard-node-sel';
+		if (isSelector && !selectable) cls += ' sb-dashboard-node--disabled';
+		if (switching)  cls += ' sb-dashboard-node--switching';
+
+		var attrs = { 'class': cls, 'data-group': groupName, 'data-name': member,
+		              'title': member };
+		if (selectable)
+			attrs.click = ui.createHandlerFn(this, (function (g, mm) {
+				return function () { return chooseNode(g, mm); };
 			})(groupName, member));
-		}
-		return E('div', attrs, [
-			E('div', { 'class': 'sb-dashboard-node-head' },
-				E('b', { 'class': 'sb-dashboard-node-name' }, member)),
+
+		var head = [ E('b', { 'class': 'sb-dashboard-node-name' }, displayName(member)) ];
+		if (m.link && COPYABLE_RE.test(m.link))
+			head.push(E('button', { 'class': 'cbi-button sb-dashboard-node-copy',
+				'title': _('Copy proxy link'), 'aria-label': _('Copy proxy link'),
+				'click': (function (link) {
+					return function (ev) {
+						ev.stopPropagation();
+						return copyLink(link);
+					};
+				})(m.link) }, SbIcons.copy()));
+
+		var kids = [
+			E('div', { 'class': 'sb-dashboard-node-head' }, head),
 			E('div', { 'class': 'sb-dashboard-node-foot' }, [
-				E('span', { 'class': 'sb-dashboard-node-type' }, p.type || ''),
+				E('span', { 'class': 'sb-dashboard-node-type' }, m.type || p.type || ''),
 				E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
 			])
-		]);
+		];
+		var card = E('div', attrs, kids);
+		if (switching) card.appendChild(SbIcons.snake());
+		return card;
 	}
 
 	function sortMembers(members, proxies) {
@@ -364,50 +491,97 @@ function buildDashboard() {
 		});
 	}
 
-	function renderGroups() {
-		if (!state.ui) return;
+	// Sections = proxy groups, plus every subscription that produced no group
+	// (DASH-3) so its metadata strip still has a home.
+	function sections() {
 		var proxies = state.proxies || {};
-		var box = state.ui.groups;
-		box.innerHTML = '';
-		var names = Object.keys(proxies).filter(function (k) {
+		var out = Object.keys(proxies).filter(function (k) {
 			return isGroupType(proxies[k].type) && (proxies[k].all || []).length;
 		});
+		Object.keys(state.subs || {}).sort().forEach(function (n) {
+			if (!proxies[n]) out.push(n);
+		});
+		return out;
+	}
+
+	function sectionCard(gname) {
+		var proxies = state.proxies || {};
+		var grp = proxies[gname];
+		var isSel = grp && (grp.type || '').toLowerCase() === 'selector';
+		var busy  = !!state.testing[gname];
+		var actions = [];
+
+		if (grp)
+			actions.push(E('span', { 'class': 'sb-dashboard-grp-type' },
+				isSel ? _('selector') : _('auto')));
+
+		// "Update subscriptions" only where a subscription actually feeds the
+		// section — a hand-written selector has nothing to refresh.
+		if (state.subs[gname]) {
+			var upd = !!state.subUpdating[gname];
+			var uattrs = { 'class': 'cbi-button cbi-button-action sb-dashboard-sub-update' +
+				(upd ? ' busy' : ''),
+				'click': ui.createHandlerFn(this, (function (n) {
+					return function () { return updateSub(n); };
+				})(gname)) };
+			if (upd) uattrs.disabled = '';
+			actions.push(E('button', uattrs, upd
+				? [ SbIcons.loaderCircle(), E('span', {}, _('Update subscriptions')) ]
+				: E('span', {}, _('Update subscriptions'))));
+		}
+
+		if (grp) {
+			var label = E('span', { 'class': 'sb-dashboard-test-label' },
+				testLabel(busy ? state.progress[gname] : null));
+			state.ui.labels[gname] = label;
+			var tattrs = { 'class': 'cbi-button cbi-button-action sb-dashboard-test' +
+				(busy ? ' busy' : ''),
+				'click': ui.createHandlerFn(this, (function (g) {
+					return function () { return testGroup(g); };
+				})(gname)) };
+			if (busy) tattrs.disabled = '';
+			actions.push(E('button', tattrs,
+				busy ? [ SbIcons.loaderCircle(), label ] : label));
+		}
+
+		var grid = [];
+		var strip = subMetaStrip(gname);
+		if (strip) grid.push(strip);
+		if (grp)
+			sortMembers(grp.all || [], proxies).forEach(function (m) {
+				grid.push(nodeCard(gname, isSel, m, proxies, grp.now));
+			});
+
+		return E('div', { 'class': 'sb-dashboard-group', 'data-group': gname }, [
+			E('div', { 'class': 'sb-dashboard-grp-head' }, [
+				E('div', { 'class': 'sb-dashboard-grp-name' }, gname),
+				E('div', { 'class': 'sb-dashboard-grp-actions' }, actions)
+			]),
+			E('div', { 'class': 'sb-dashboard-grid' }, grid)
+		]);
+	}
+
+	function renderGroups() {
+		if (!state.ui) return;
+		var box = state.ui.groups;
+		box.innerHTML = '';
+		state.ui.labels = {};
+		if (!state.loaded) { box.appendChild(skeleton('sb-dashboard-group')); return; }
+		var names = sections();
 		if (!names.length) {
 			box.appendChild(E('em', {}, _('No proxy groups. Configure selector/urltest outbounds.')));
 			return;
 		}
-		names.forEach(function (gname) {
-			var grp = proxies[gname];
-			var isSel = (grp.type || '').toLowerCase() === 'selector';
-			var members = sortMembers(grp.all || [], proxies);
-			var busy = !!state.testing[gname];
-			var testBtnAttrs = {
-				'class': 'cbi-button cbi-button-action sb-dashboard-test' + (busy ? ' busy' : ''),
-				'click': ui.createHandlerFn(this, (function (g) {
-					return function () { return testGroup(g); };
-				})(gname))
-			};
-			if (busy) testBtnAttrs.disabled = '';
-			var header = E('div', { 'class': 'sb-dashboard-grp-head' }, [
-				E('div', { 'class': 'sb-dashboard-grp-name' }, gname),
-				E('div', { 'class': 'sb-dashboard-grp-actions' }, [
-					E('span', { 'class': 'sb-dashboard-grp-type' },
-						isSel ? _('selector') : _('auto')),
-					E('button', testBtnAttrs, busy ? _('Testing…') : _('Test'))
-				])
-			]);
-			var rows = members.map(function (m) {
-				return nodeRow(gname, isSel, m, proxies, grp.now);
-			});
-			box.appendChild(E('div', { 'class': 'sb-dashboard-group', 'data-group': gname },
-				[ header, E('div', { 'class': 'sb-dashboard-nodes' }, rows) ]));
-		});
+		names.forEach(function (gname) { box.appendChild(sectionCard(gname)); });
 	}
 
 	function repaint() {
 		if (!state.ui) mountChrome();
+		// The whole page collapses to a dashed plaque when the core is down — the
+		// widgets and the (stale) node grid would only lie about live state.
+		root.className = 'sb-dashboard' +
+			((state.loaded && !state.running) ? ' sb-dashboard--stopped' : '');
 		renderWidgets();
-		renderSubscriptions();
 		renderGroups();
 	}
 
@@ -418,7 +592,7 @@ function buildDashboard() {
 					var d; try { d = JSON.parse(res.body); } catch (e) { d = {}; }
 					ingestConnections(d);
 				}
-			}),
+			}, function () { /* core down: /version below flips the stopped plaque on */ }),
 			callClashGet('/version').then(function (res) {
 				if (res && res.status === 'ok') {
 					var d; try { d = JSON.parse(res.body); } catch (e) { d = {}; }
@@ -433,12 +607,15 @@ function buildDashboard() {
 			// Skip the /proxies refresh while a latency test is writing results
 			// into state.proxies[*].history: fetchProxies replaces state.proxies
 			// wholesale and would wipe them mid-run (button stuck "Testing…",
-			// collected latencies flicker back to "—"). The next tick refreshes.
+			// collected latencies flicker back to "N/A"). The next tick refreshes.
 			// Also skip while a node switch is pending to preserve the optimistic
 			// selection until refreshProxies completes (UIS-3).
-			if (!anyTesting() && !state.switchPending) p.push(fetchProxies());
+			if (!anyTesting() && !state.switchPending) { p.push(fetchProxies()); p.push(fetchMeta()); }
 		}
-		return Promise.all(p).then(repaint).catch(showUnreachable);
+		return Promise.all(p).then(function () {
+			state.loaded = true;   // first settled poll retires the skeletons
+			repaint();
+		}).catch(showUnreachable);
 	}
 
 	// SPA navigation away from this view never calls stop() (main.js only
