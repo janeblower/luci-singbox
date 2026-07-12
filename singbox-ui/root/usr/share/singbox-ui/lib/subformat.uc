@@ -738,11 +738,10 @@ function nodes_from_xray_configs(list) {
 			if (pc.destination != null && pc.destination !== "") g.url = "" + pc.destination;
 			if (pc.interval != null && pc.interval !== "") g.interval = "" + pc.interval;
 		}
-		if (type(bal) === "object" && type(bal.strategy) === "object" &&
-		    type(bal.strategy.settings) === "object") {
-			let tol = bal.strategy.settings.tolerance;
-			if (type(tol) === "int" || type(tol) === "double") g.tolerance = tol;
-		}
+		// Xray leastLoad balancer.strategy.settings.tolerance is a unitless load
+		// fraction (e.g. 0.8); sing-box urltest.tolerance is an integer ms delta.
+		// Not the same unit -> intentionally not carried; urltest's built-in
+		// default is fine.
 		push(groups, { group: g, name: name });
 	}
 	return { format: "xray", nodes: nodes, skipped: skipped, groups: groups };

@@ -519,6 +519,8 @@ describe("test_subformat", () => {
     expect(groups.Alpha.g.type).toBe("urltest");
     expect(groups.Alpha.m).toEqual(["A#1", "A#2"]);
     expect(groups.Alpha.g.url).toBe("https://www.gstatic.com/generate_204");
+    // leastLoad tolerance (0.8, a load fraction) must NOT leak into urltest.tolerance (ms)
+    expect(groups.Alpha.g.tolerance).toBeUndefined();
     expect(groups.Beta.m).toEqual(["B#1"]);
 
     const byName: Record<string, any> = {};
