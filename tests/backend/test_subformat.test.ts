@@ -433,7 +433,11 @@ describe("test_subformat", () => {
             tag: "A#2",
             settings: {
               vnext: [
-                { address: "a2.example.com", port: 443, users: [{ id: "uuid-a2" }] },
+                {
+                  address: "a2.example.com",
+                  port: 443,
+                  users: [{ id: "uuid-a2" }],
+                },
               ],
             },
             streamSettings: {
@@ -451,7 +455,10 @@ describe("test_subformat", () => {
                 // extra.xmux must be DROPPED (base xhttp dials without it), but
                 // extra.xPaddingBytes MUST be carried: sing-box-extended rejects
                 // an xhttp transport with no x_padding_bytes at load.
-                extra: { xmux: { maxConcurrency: 8 }, xPaddingBytes: "200-1000" },
+                extra: {
+                  xmux: { maxConcurrency: 8 },
+                  xPaddingBytes: "200-1000",
+                },
               },
             },
           },
@@ -485,7 +492,11 @@ describe("test_subformat", () => {
             tag: "B#1",
             settings: {
               vnext: [
-                { address: "b1.example.com", port: 443, users: [{ id: "uuid-b1" }] },
+                {
+                  address: "b1.example.com",
+                  port: 443,
+                  users: [{ id: "uuid-b1" }],
+                },
               ],
             },
             streamSettings: {
@@ -503,7 +514,11 @@ describe("test_subformat", () => {
             tag: "B#2",
             settings: {
               vnext: [
-                { address: "b2.example.com", port: 443, users: [{ id: "uuid-b2" }] },
+                {
+                  address: "b2.example.com",
+                  port: 443,
+                  users: [{ id: "uuid-b2" }],
+                },
               ],
             },
             streamSettings: {

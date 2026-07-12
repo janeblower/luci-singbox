@@ -1164,7 +1164,11 @@ describe("dashboard.js", () => {
     // Card-level button: stopPropagation() is load-bearing (must not also fire
     // the card's node-selection handler), so the handler expects an event.
     let stopped = false;
-    infoBtn.attrs.click({ stopPropagation: () => { stopped = true; } });
+    infoBtn.attrs.click({
+      stopPropagation: () => {
+        stopped = true;
+      },
+    });
     expect(stopped).toBe(true);
     const modal = ctx.__test.getModal();
     expect(!!modal).toBe(true);
