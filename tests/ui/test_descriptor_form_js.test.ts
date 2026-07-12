@@ -184,6 +184,30 @@ describe("descriptor_form.js — applyMaterialized", () => {
       expect(serverOpt?.rmempty).toBe(false);
     });
 
+    // attachValidator: validate:"port"/"host" map onto LuCI's own datatype
+    // (opt.datatype), not a hand-rolled opt.validate function; validate:"uuid"
+    // has no LuCI datatype and still gets an opt.validate callback.
+    it("validate:\"host\" → datatype='host' (no opt.validate)", () => {
+      const serverOpt = opts.find((o) => o._name === "server");
+      expect(serverOpt?.datatype).toBe("host");
+      expect(serverOpt?.validate).toBeUndefined();
+    });
+
+    it("validate:\"port\" → datatype='and(port,min(1))' (no opt.validate)", () => {
+      const portOpt = opts.find((o) => o._name === "server_port");
+      // Bare LuCI 'port' accepts 0, which the router silently treats as
+      // "no listen_port" (lib/builder/_shared/dial.uc drops the inbound).
+      // and(port,min(1)) restores the 1..65535 contract.
+      expect(portOpt?.datatype).toBe("and(port,min(1))");
+      expect(portOpt?.validate).toBeUndefined();
+    });
+
+    it('validate:"uuid" → opt.validate is a function (no LuCI datatype)', () => {
+      const uuidOpt = opts.find((o) => o._name === "server_uuid");
+      expect(typeof uuidOpt?.validate).toBe("function");
+      expect(uuidOpt?.datatype).toBeUndefined();
+    });
+
     it("enum values populated (2 entries for vless_flow)", () => {
       const flowOpt = opts.find((o) => o._name === "vless_flow");
       expect(flowOpt?._values.length).toBe(2);

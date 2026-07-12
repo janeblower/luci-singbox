@@ -32,9 +32,9 @@ msgstr "%d с назад"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:11
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:154
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:440
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:463
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:538
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:447
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:470
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:545
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr "(нет)"
@@ -409,7 +409,7 @@ msgstr "Глобальные настройки sing-box: кэш-файл, ло�
 msgid "HWID"
 msgstr "HWID"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:289
 msgid "Hide"
 msgstr "Скрыть"
 
@@ -417,10 +417,6 @@ msgstr "Скрыть"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:282
 msgid "Host"
 msgstr "Хост"
-
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:75
-msgid "Host must not be empty"
-msgstr "Поле «Хост» не должно быть пустым"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:20
 msgid "Hosts file"
@@ -510,7 +506,7 @@ msgstr "Внутренняя ошибка: необработанная схем
 msgid "Invalid JSON: "
 msgstr "Некорректный JSON: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:32
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:30
 msgid "Invalid UUID format"
 msgstr "Неверный формат UUID"
 
@@ -626,11 +622,7 @@ msgstr "Подробнее"
 msgid "Multiplex"
 msgstr "Мультиплекс"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:89
-msgid "Must be a valid IPv4 address, IPv6 address, or hostname"
-msgstr "Требуется корректный IPv4-адрес, IPv6-адрес или имя хоста"
-
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:102
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:44
 msgid "Must be an http:// or https:// URL"
 msgstr "Должен быть URL http:// или https://"
 
@@ -733,11 +725,6 @@ msgstr "Постоянный кэш для прокси, DNS-ответов и �
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:27
 msgid "Plugins"
 msgstr "Плагины"
-
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:22
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:25
-msgid "Port must be an integer between 1 and 65535"
-msgstr "Порт должен быть целым числом от 1 до 65535"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:324
 msgid ""
@@ -907,8 +894,8 @@ msgstr "Информация о сервисах"
 msgid "Shadowsocks link is missing method/password"
 msgstr "В Shadowsocks-ссылке отсутствует метод/пароль"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:284
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:289
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:291
 msgid "Show"
 msgstr "Показать"
 
@@ -987,7 +974,7 @@ msgstr "Тестирование задержки"
 msgid "Time"
 msgstr "Время"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:277
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:284
 msgid "Toggle visibility"
 msgstr "Переключить видимость"
 
@@ -1018,7 +1005,7 @@ msgstr "Тип"
 msgid "UI preferences"
 msgstr "Настройки интерфейса"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:100
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:42
 msgid "URL must not be empty"
 msgstr "URL не должен быть пустым"
 
@@ -1026,7 +1013,7 @@ msgstr "URL не должен быть пустым"
 msgid "URL-test URL"
 msgstr "URL для url-test"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:124
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:66
 msgid "Unknown ALPN protocol:"
 msgstr "Неизвестный ALPN-протокол:"
 
@@ -1097,7 +1084,7 @@ msgstr "в ссылке anytls отсутствует пароль"
 msgid "auto"
 msgstr "авто"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:125
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:67
 msgid "expected http/1.1, h2, or h3"
 msgstr "ожидается http/1.1, h2 или h3"
 
@@ -1110,7 +1097,7 @@ msgstr "группа"
 msgid "never"
 msgstr "никогда"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:359
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:366
 #, javascript-format
 msgid "nftables rules already active on inbound \"%s\""
 msgstr "правила nftables уже активны на инбаунде «%s»"
@@ -1371,6 +1358,9 @@ msgstr "В vmess-ссылке отсутствует server/port/uuid"
 #~ msgid "Hijack DNS"
 #~ msgstr "Перехват DNS"
 
+#~ msgid "Host must not be empty"
+#~ msgstr "Поле «Хост» не должно быть пустым"
+
 #~ msgid "IPv4 address"
 #~ msgstr "Адрес IPv4"
 
@@ -1463,6 +1453,9 @@ msgstr "В vmess-ссылке отсутствует server/port/uuid"
 #~ msgid "Multiplex protocol"
 #~ msgstr "Протокол мультиплекса"
 
+#~ msgid "Must be a valid IPv4 address, IPv6 address, or hostname"
+#~ msgstr "Требуется корректный IPv4-адрес, IPv6-адрес или имя хоста"
+
 #~ msgid "Network"
 #~ msgstr "Сеть"
 
@@ -1504,6 +1497,9 @@ msgstr "В vmess-ссылке отсутствует server/port/uuid"
 
 #~ msgid "Port"
 #~ msgstr "Порт"
+
+#~ msgid "Port must be an integer between 1 and 65535"
+#~ msgstr "Порт должен быть целым числом от 1 до 65535"
 
 #~ msgid "Protocol requires sing-box"
 #~ msgstr "Протокол требует sing-box"

@@ -706,12 +706,12 @@ Plugin manager section. Per-plugin enable flags live here as `<name>_enabled`.
 
 ## UI form validation (`lib/validators.js`)
 
-Pure-function validators consumed by LuCI form `.validate` callbacks. Each returns `true` on valid input or a non-empty error string that blocks "Save & Apply". Wired into `tabs/inbounds.js` and `tabs/outbounds.js`:
+Port and host fields use LuCI's own `validation.js` datatypes (`opt.datatype = 'and(port,min(1))'` / `'host'`), wired by `lib/descriptor_form.js::attachValidator` — no project validator function involved. Bare LuCI `port` accepts 0; `min(1)` is composed in to keep the 1..65535 contract (a 0 listen_port/server_port silently drops the inbound in `lib/builder/_shared/dial.uc`). `lib/validators.js` supplies pure-function `.validate` callbacks only for what LuCI has no datatype for; each returns `true` on valid input or a non-empty error string that blocks "Save & Apply". Wired into `tabs/inbounds.js` and `tabs/outbounds.js`:
 
 | Validator | Wired on |
 |---|---|
-| `isPort` | `listen_port` (inbound), `server_port` (outbound) |
-| `isUuid` | `server_uuid` (inbound vless, outbound vless) |
-| `isHost` | `server` (outbound), `tls_server_name` (inbound + outbound) |
+| LuCI `datatype: 'and(port,min(1))'` | `listen_port` (inbound), `server_port` (outbound) |
+| `uuid` (`lib/validators.js`) | `server_uuid` (inbound vless, outbound vless) |
+| LuCI `datatype: 'host'` | `server` (outbound), `tls_server_name` (inbound + outbound) |
 | `isAlpnNonEmpty` | `tls_alpn` DynamicList (inbound + outbound) |
 | `requiresWsPath` | `transport_path` (inbound + outbound), reads `transport_type` formvalue |

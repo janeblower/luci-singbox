@@ -225,7 +225,7 @@ function buildOutboundsMap() {
 		// depends() means this only renders for type=subscription; an empty
 		// value here is the required-field violation rmempty=false reports.
 		if (value == null || value === '') return true;
-		return SbValidators.isUrl(value);
+		return SbValidators.url(value);
 	};
 
 	// A panel serves a DIFFERENT body per User-Agent (Clash YAML here, a base64

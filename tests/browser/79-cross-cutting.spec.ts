@@ -56,6 +56,22 @@ test('xcut: bad port + bad UUID + empty required are flagged', async ({ page }) 
     await wait(400);
     assert('bad port flagged', await fieldError(page, 'Server port'), 'no error on bad port');
     assert('bad UUID flagged', await fieldError(page, 'UUID'), 'no error on bad uuid');
+    // Fail-open regression: LuCI's bare 'port' datatype accepts 0 (only
+    // and(port,min(1)) rejects it) — confirm 0 is actually flagged by a real form.
+    // Clear the 99999 error with a valid port FIRST, so the assertion below cannot
+    // pass on a stale invalid-state left over from 99999.
+    await setAndValidate(page, 'Server port', '443');
+    await wait(300);
+    assert('valid port clears the error', await fieldError(page, 'Server port') === null,
+        await fieldError(page, 'Server port'));
+    await setAndValidate(page, 'Server port', '0');
+    await wait(300);
+    assert('port 0 flagged', await fieldError(page, 'Server port'), 'no error on port 0');
+    // Malformed host shape: this is host validation's only end-to-end coverage
+    // now that the hand-rolled isHost unit tests are gone.
+    await setAndValidate(page, 'Server', 'not a host!');
+    await wait(300);
+    assert('bad host flagged', await fieldError(page, 'Server'), 'no error on bad host');
     // Required: clear Server and assert the widget flags the empty value.
     await setAndValidate(page, 'Server', '');
     await wait(300);

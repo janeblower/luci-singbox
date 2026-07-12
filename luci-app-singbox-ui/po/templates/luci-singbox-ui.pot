@@ -39,9 +39,9 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:11
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:154
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:440
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:463
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:538
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:447
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:470
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:545
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr ""
@@ -398,17 +398,13 @@ msgstr ""
 msgid "HWID"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:289
 msgid "Hide"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:223
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:282
 msgid "Host"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:75
-msgid "Host must not be empty"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:20
@@ -496,7 +492,7 @@ msgstr ""
 msgid "Invalid JSON: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:32
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:30
 msgid "Invalid UUID format"
 msgstr ""
 
@@ -607,11 +603,7 @@ msgstr ""
 msgid "Multiplex"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:89
-msgid "Must be a valid IPv4 address, IPv6 address, or hostname"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:102
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:44
 msgid "Must be an http:// or https:// URL"
 msgstr ""
 
@@ -705,11 +697,6 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:123
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:27
 msgid "Plugins"
-msgstr ""
-
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:22
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:25
-msgid "Port must be an integer between 1 and 65535"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:324
@@ -871,8 +858,8 @@ msgstr ""
 msgid "Shadowsocks link is missing method/password"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:284
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:289
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:291
 msgid "Show"
 msgstr ""
 
@@ -949,7 +936,7 @@ msgstr ""
 msgid "Time"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:277
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:284
 msgid "Toggle visibility"
 msgstr ""
 
@@ -980,7 +967,7 @@ msgstr ""
 msgid "UI preferences"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:100
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:42
 msgid "URL must not be empty"
 msgstr ""
 
@@ -988,7 +975,7 @@ msgstr ""
 msgid "URL-test URL"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:124
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:66
 msgid "Unknown ALPN protocol:"
 msgstr ""
 
@@ -1057,7 +1044,7 @@ msgstr ""
 msgid "auto"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:125
+#: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:67
 msgid "expected http/1.1, h2, or h3"
 msgstr ""
 
@@ -1070,7 +1057,7 @@ msgstr ""
 msgid "never"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:359
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:366
 #, javascript-format
 msgid "nftables rules already active on inbound \"%s\""
 msgstr ""

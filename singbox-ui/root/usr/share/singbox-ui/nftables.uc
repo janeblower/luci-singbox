@@ -376,9 +376,11 @@ function fwmark_pair(mark_raw, mask_raw) {
 // ("7893"), bare ints (7893), and rejects "", null, "abc", "99999", "0",
 // negative numbers. Callers must treat null as "skip tproxy emission".
 // Mirrors lib/sharelink.uc::safe_port so both code paths agree on the rule.
-// (Four port validators exist in total — this one, sharelink.uc::safe_port,
-// clash_safe_port in the rpcd handler, and isPort in lib/validators.js. Changing
-// the accepted range means changing all four.)
+// (Three port validators exist in total — this one, sharelink.uc::safe_port,
+// and clash_safe_port in the rpcd handler. The frontend delegates to LuCI's
+// own "port" datatype instead of a fourth hand-rolled copy — see
+// lib/descriptor_form.js::attachValidator. Changing the accepted range means
+// changing all three, and checking LuCI's datatype still agrees.)
 function validate_port(p) {
 	if (p == null || p === "") return null;
 	let n = (type(p) === "int") ? p : +p;

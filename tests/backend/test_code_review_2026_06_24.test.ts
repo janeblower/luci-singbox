@@ -95,6 +95,6 @@ print(sprintf("%J", {
     expect(out.cxc1_tailscale_minv).toBe("1.14");
     expect(out.prot3_rw_maxv).toBe("1.14");
     expect(out.prot3_rwc_maxv).toBe("1.14");
-    expect(out.alpn_validate).toBe("validateAlpn");
+    expect(out.alpn_validate).toBe("alpn");
   });
 });

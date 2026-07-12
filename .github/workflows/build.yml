@@ -241,9 +241,9 @@ jobs:
           # The template (.pot) must be byte-identical to what's committed.
           # regen-po pins POT-Creation-Date + sort order, so a clean tree diffs
           # empty. A non-empty diff means a forgotten regen — fail with the diff.
-          if ! git diff --quiet -- luci-singbox-ui/po/templates/luci-singbox-ui.pot; then
+          if ! git diff --quiet -- luci-app-singbox-ui/po/templates/luci-singbox-ui.pot; then
             echo "FAIL: luci-singbox-ui.pot is stale — run scripts/regen-po.sh and commit."
-            git --no-pager diff -- luci-singbox-ui/po/templates/luci-singbox-ui.pot
+            git --no-pager diff -- luci-app-singbox-ui/po/templates/luci-singbox-ui.pot
             exit 1
           fi
           echo "POT is up to date."

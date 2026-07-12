@@ -449,9 +449,9 @@ Descriptor: `plugins/awg_warp/lib/protocols/awg_warp.uc`. sing-box type: **`dire
 
 | Validator | Status | Phase |
 |---|---|---|
-| `isPort` (1-65535) | есть (`lib/validators.js`, wired on `listen_port` / `server_port`) | Phase 8 (B6) |
-| `isUuid` | есть (wired on `server_uuid` in vless inbound/outbound) | Phase 8 |
-| `isHost` (IP or domain) | есть (wired on `server`, `tls_server_name`) | Phase 8 |
+| LuCI `datatype: 'and(port,min(1))'` (1-65535) | есть (`lib/descriptor_form.js::attachValidator`, wired on `listen_port` / `server_port`) | Phase 8 (B6) |
+| `uuid` | есть (`lib/validators.js`, wired on `server_uuid` in vless inbound/outbound) | Phase 8 |
+| LuCI `datatype: 'host'` (IP or domain) | есть (`lib/descriptor_form.js::attachValidator`, wired on `server`, `tls_server_name`) | Phase 8 |
 | `isAlpnNonEmpty` | есть (wired on `tls_alpn` DynamicList) | Phase 8 |
 | `requiresWsPath` (transport_type=ws ⇒ path required) | есть (wired on `transport_path`) | Phase 8 |
 

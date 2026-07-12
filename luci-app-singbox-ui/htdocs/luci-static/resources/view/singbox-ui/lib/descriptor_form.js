@@ -251,15 +251,22 @@ function attachPkgNote(opt, pkg) {
     };
 }
 
-function attachValidator(opt, validateName) {
-    if (!validateName) return;
-    // Descriptors declare short names ("port"/"uuid"/"host"); the validators
-    // module exports them PascalCased with an `is` prefix (isPort/isUuid/
-    // isHost). Accept the literal name first, then fall back to the
-    // `is<Capitalized>` form — otherwise the custom range/format validators
-    // never attach and only LuCI's built-in non-empty/datatype check fires.
-    var fn = validators[validateName]
-        || validators['is' + validateName.charAt(0).toUpperCase() + validateName.slice(1)];
+// LuCI's own validation.js already ships these as datatypes; a descriptor that
+// says validate:"port" gets LuCI's port check, not a hand-rolled one. The rest
+// (uuid, alpn) have no LuCI equivalent and stay in lib/validators.js, whose
+// export names now match the descriptor strings — so no name mangling.
+//
+// port is composed as and(port,min(1)): LuCI's bare 'port' datatype accepts
+// 0 (validation.js: `p >= 0 && p <= 65535`), but 0 is not a usable
+// listen_port/server_port — lib/builder/_shared/dial.uc treats a falsy port
+// as "absent" and silently drops the whole inbound. min(1) restores the
+// 1..65535 contract the old hand-rolled isPort enforced.
+var DATATYPE = { port: 'and(port,min(1))', host: 'host' };
+
+function attachValidator(opt, name) {
+    if (typeof name !== 'string' || !name) return;
+    if (DATATYPE[name]) { opt.datatype = DATATYPE[name]; return; }
+    var fn = validators[name];
     if (typeof fn === 'function')
         opt.validate = function (_section_id, value) { return fn(value); };
 }
