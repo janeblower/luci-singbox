@@ -16,7 +16,7 @@ set -eu
 cd "$(dirname "$0")/.."
 
 CNAME=singbox-dev-stand
-IMG=singbox-dev-stand:1
+IMG=singbox-dev-stand:2
 PORT="${DEV_STAND_PORT:-8181}"
 # Long, slow downloads through the container's own SOCKS inbound. Anything with a
 # big body and no rate limit will do; the point is connections that stay OPEN so
@@ -30,9 +30,15 @@ build() {
     # the LuCI status panel talk to; the stock openwrt/rootfs image has no init.
     docker build -t "$IMG" -f - tests/browser-container <<'DOCKERFILE'
 FROM openwrt/rootfs:x86_64-25.12.3
+# sing-box-extended (shtorm-7 fork, our feed) — the project's DEFAULT core and the
+# only one that supports the xhttp transport providers ship. Stock sing-box
+# rejects an xhttp outbound at load ("unknown transport type: xhttp") and the whole
+# config fails — that's expected, not a bug; the fix is running extended.
 RUN apk update \
- && apk add luci uhttpd rpcd sing-box ucode-mod-fs ucode-mod-uci \
-            curl ca-bundle procd jsonfilter \
+ && apk add luci uhttpd rpcd ucode-mod-fs ucode-mod-uci curl ca-bundle procd jsonfilter \
+ && echo "https://janeblower.github.io/luci-singbox/25.12/x86_64/sing-box/packages.adb" >> /etc/apk/repositories \
+ && apk update --allow-untrusted \
+ && apk add --allow-untrusted sing-box-extended \
  && rm -rf /var/cache/apk/*
 COPY entrypoint.sh /sbin/entrypoint.sh
 RUN chmod +x /sbin/entrypoint.sh && \
