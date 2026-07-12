@@ -14,10 +14,19 @@
 //     only), kept as a NAME for later within-subscription resolution — a raw
 //     `detour` is never persisted on the outbound itself (see nodes_from_json).
 //
+// Group record (urltest/selector, sing-box JSON `outbounds` or Clash
+// `proxy-groups`): { group: { type: "urltest"|"selector", members: [name,…],
+// url?, interval?, tolerance?, default? }, name }. No consumer yet (B1 only
+// extracts and persists) — a raw provider group is never honoured as routing
+// policy, same trust-boundary reasoning as `detour`.
+//
 // On-disk form (sub_<name>.txt) stays LINE based:
-//   * a line starting with `{` is a JSON node record {"o":…,"n":…,"l":…,"d":…}
+//   * a line starting with `{"g"` is a group record {"g":…,"n":…,"m":…}
+//   * a line starting with `{` (anything else) is a JSON node record
+//     {"o":…,"n":…,"l":…,"d":…}
 //   * anything else is a share-link URI (unchanged, human-inspectable)
-// parse_node() below is the single reader for both, used by lib/outbound.uc.
+// parse_node()/parse_group() below are the single readers for these, used by
+// lib/outbound.uc and (once B1 lands a consumer) whoever reads groups.
 //
 // NB: lib/clash.uc is the clash_api CLIENT (controls a running sing-box over
 // HTTP). It has nothing to do with Clash YAML. This is the YAML parser.
@@ -34,6 +43,13 @@ const JSON_PROXY_TYPES = {
 	hysteria: true, hysteria2: true, tuic: true, anytls: true,
 	socks: true, http: true, ssh: true, wireguard: true,
 };
+
+// A provider's `urltest`/`selector` entries ARE local policy (see JSON_PROXY_TYPES'
+// comment) — we never honour them as outbounds. But the GROUPING they express
+// (which nodes belong together, and under what health-check) is useful data we
+// used to throw away with the rest of `skipped`. Task B1 extracts it as a
+// separate record; nothing downstream consumes it yet.
+const GROUP_TYPES = { urltest: true, selector: true };
 
 // ---------------------------------------------------------------- YAML subset
 
@@ -201,6 +217,26 @@ function yaml_proxies(body) {
 	for (let i = 0; i < length(L); i++) {
 		if (L[i].indent !== 0) continue;
 		if (!match(L[i].text, /^["']?proxies["']?:/)) continue;
+		let inline = trim(substr(L[i].text, index(L[i].text, ":") + 1));
+		if (substr(inline, 0, 1) === "[") {
+			let v = scalar(inline);
+			return (type(v) === "array") ? v : [];
+		}
+		if (i + 1 >= length(L)) return [];
+		let r = parse_any(L, i + 1, L[i + 1].indent);
+		return (type(r.val) === "array") ? r.val : [];
+	}
+	return [];
+}
+
+// yaml_proxy_groups(body) — mirrors yaml_proxies() for the top-level
+// `proxy-groups:` list (urltest/select groups). Everything else is still
+// ignored.
+function yaml_proxy_groups(body) {
+	let L = scan_lines(body);
+	for (let i = 0; i < length(L); i++) {
+		if (L[i].indent !== 0) continue;
+		if (!match(L[i].text, /^["']?proxy-groups["']?:/)) continue;
 		let inline = trim(substr(L[i].text, index(L[i].text, ":") + 1));
 		if (substr(inline, 0, 1) === "[") {
 			let v = scalar(inline);
@@ -547,6 +583,30 @@ function xray_to_outbound(o) {
 	return out;
 }
 
+// Clash `type` -> our GROUP_TYPES key. `url-test` health-checks its members;
+// `select` is a manual dropdown. Anything else (relay/fallback/load-balance,
+// …) is Clash-specific behaviour we do not represent — ignored, not skipped
+// (skipped counts NODES we dropped, not groups).
+const CLASH_GROUP_TYPES = { "url-test": "urltest", select: "selector" };
+
+// group_from_clash(p) — a Clash proxy-groups entry -> our group record, or
+// null. Mirrors group_from_json: only the fields we re-emit are kept.
+function group_from_clash(p) {
+	if (type(p) !== "object") return null;
+	let t = CLASH_GROUP_TYPES[lc(s_of(p.type))];
+	if (!t) return null;
+	let members = [];
+	if (type(p.proxies) === "array")
+		for (let m in p.proxies) if (m != null && m !== "") push(members, "" + m);
+	let g = { type: t, members: members };
+	if (p.url != null && p.url !== "") g.url = "" + p.url;
+	// Clash `interval` is a plain number of seconds; sing-box wants a duration
+	// string.
+	if (p.interval != null && p.interval !== "") g.interval = ("" + p.interval) + "s";
+	if (p.tolerance != null) g.tolerance = p.tolerance;
+	return g;
+}
+
 // ------------------------------------------------------------- format parsers
 
 function nodes_from_yaml(body) {
@@ -560,7 +620,17 @@ function nodes_from_yaml(body) {
 		let nm = (type(p) === "object" && p.name != null && p.name !== "") ? "" + p.name : null;
 		push(nodes, { outbound: ob, display_name: nm, link: null, detour_name: null });
 	}
-	return { format: "clash", nodes: nodes, skipped: skipped };
+	let groups = [];
+	let raw_groups = [];
+	try { raw_groups = yaml_proxy_groups(body); } catch (_) { raw_groups = []; }
+	for (let p in raw_groups) {
+		let g = null;
+		try { g = group_from_clash(p); } catch (_) { g = null; }
+		if (!g) continue;
+		let nm = (type(p) === "object" && p.name != null && p.name !== "") ? "" + p.name : null;
+		push(groups, { group: g, name: nm });
+	}
+	return { format: "clash", nodes: nodes, skipped: skipped, groups: groups };
 }
 
 // is_xray_list(list) — an Xray outbound has `protocol`, a sing-box one has
@@ -582,7 +652,24 @@ function nodes_from_xray(list) {
 		let nm = (type(o) === "object" && o.tag != null && o.tag !== "") ? "" + o.tag : null;
 		push(nodes, { outbound: ob, display_name: nm, link: null, detour_name: null });
 	}
-	return { format: "xray", nodes: nodes, skipped: skipped };
+	return { format: "xray", nodes: nodes, skipped: skipped, groups: [] };
+}
+
+// group_from_json(o) — a sing-box selector/urltest entry -> our group record, or
+// null. Only the fields we re-emit are kept; everything else the provider set on
+// a group is local policy we do not honour.
+function group_from_json(o) {
+	let t = lc(s_of(o.type));
+	if (!GROUP_TYPES[t]) return null;
+	let members = [];
+	if (type(o.outbounds) === "array")
+		for (let m in o.outbounds) if (m != null && m !== "") push(members, "" + m);
+	let g = { type: t, members: members };
+	if (o.url != null)       g.url = "" + o.url;
+	if (o.interval != null)  g.interval = "" + o.interval;
+	if (o.tolerance != null) g.tolerance = o.tolerance;
+	if (o["default"] != null) g["default"] = "" + o["default"];
+	return g;
 }
 
 function nodes_from_json(body) {
@@ -595,7 +682,13 @@ function nodes_from_json(body) {
 	else if (type(doc) === "object" && doc.type != null) list = [ doc ];
 	else if (type(doc) === "object" && doc.protocol != null) list = [ doc ];
 	if (is_xray_list(list)) return nodes_from_xray(list);
+	let groups = [];
 	for (let o in list) {
+		if (type(o) === "object" && GROUP_TYPES[lc(s_of(o.type))]) {
+			let g = group_from_json(o);
+			if (g) push(groups, { group: g, name: (o.tag != null && o.tag !== "") ? "" + o.tag : null });
+			continue;
+		}
 		if (type(o) !== "object" || !JSON_PROXY_TYPES[s_of(o.type)]) { skipped++; continue; }
 		let nm = (o.tag != null && o.tag !== "") ? "" + o.tag : null;
 		let ob = {};
@@ -611,7 +704,7 @@ function nodes_from_json(body) {
 		}
 		push(nodes, { outbound: ob, display_name: nm, link: null, detour_name: detour_name });
 	}
-	return { format: "singbox", nodes: nodes, skipped: skipped };
+	return { format: "singbox", nodes: nodes, skipped: skipped, groups: groups };
 }
 
 function nodes_from_uri_list(body) {
@@ -625,7 +718,7 @@ function nodes_from_uri_list(body) {
 		if (!p || !p.outbound) { skipped++; continue; }
 		push(nodes, p);
 	}
-	return { format: "uri", nodes: nodes, skipped: skipped };
+	return { format: "uri", nodes: nodes, skipped: skipped, groups: [] };
 }
 
 // detect(body) — first non-blank content decides. Deliberately cheap and in the
@@ -647,7 +740,7 @@ function detect(body) {
 const MAX_B64_DEPTH = 2;
 
 function parse_body(body, depth) {
-	if (body == null) return { format: "empty", nodes: [], skipped: 0 };
+	if (body == null) return { format: "empty", nodes: [], skipped: 0, groups: [] };
 	let f = detect(body);
 	if (f === "json")  return nodes_from_json(body);
 	if (f === "clash") return nodes_from_yaml(body);
@@ -657,7 +750,7 @@ function parse_body(body, depth) {
 		if (dec != null && length(dec))
 			return parse_body(dec, (depth ?? 0) + 1);
 	}
-	return { format: f, nodes: [], skipped: 0 };
+	return { format: f, nodes: [], skipped: 0, groups: [] };
 }
 
 // ---------------------------------------------------------- on-disk node lines
@@ -689,11 +782,38 @@ function parse_node(line) {
 	         detour_name: rec.d ?? null };
 }
 
+// encode_group(rec)/parse_group(line) — the group-record counterpart of
+// encode_node/parse_node. rec is { group, name } (group carries type/members/
+// url?/interval?/tolerance?/default?). On-disk: {"g":<group>,"n":<name>,
+// "m":<members>} — members duplicated at top level so a group line is
+// greppable/debuggable without reaching into `g`.
+function encode_group(rec) {
+	return sprintf("%J", { g: rec.group, n: rec.name, m: rec.group.members });
+}
+
+function parse_group(line) {
+	let t = trim(line);
+	// NB: not a literal '{"g"' prefix check — sprintf("%J", …) (see encode_group)
+	// pretty-prints with a space after the brace ('{ "g": …'), so the on-disk
+	// byte layout is not a stable prefix. Same JSON-then-inspect-shape approach
+	// parse_node() uses to tell a node line ({.o}) from anything else.
+	if (t === "" || substr(t, 0, 1) !== "{") return null;
+	let rec = null;
+	try { rec = json(t); } catch (_) { rec = null; }
+	if (type(rec) !== "object" || type(rec.g) !== "object") return null;
+	let g = rec.g;
+	if (!GROUP_TYPES[s_of(g.type)]) return null;
+	g.members = (type(rec.m) === "array") ? rec.m : (type(g.members) === "array" ? g.members : []);
+	return { group: g, name: rec.n ?? null };
+}
+
 return {
 	detect,
 	parse_body,
 	parse_node,
 	encode_node,
+	parse_group,
+	encode_group,
 	// test seams
 	_yaml_proxies: yaml_proxies,
 	_clash_to_outbound: clash_to_outbound,

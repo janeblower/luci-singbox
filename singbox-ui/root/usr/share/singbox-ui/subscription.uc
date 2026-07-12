@@ -596,24 +596,40 @@ function canon(v) {
 	return sprintf("%J", v);
 }
 
-// signature(nodes) — the semantic identity of a node set: sorted canonical
-// outbounds plus their display names, insensitive to ordering.
-function signature(nodes) {
+// group_sig(gr) — a group's contribution to signature(): type+name+sorted
+// members. Anything else the provider set (url/interval/tolerance/default) is
+// display-only and does not gate a reload.
+function group_sig(gr) {
+	let g = gr.group ?? {};
+	let members = (type(g.members) === "array") ? g.members : [];
+	return "G|" + (g.type ?? "") + "|" + (gr.name ?? "") + "|" + join(",", sort(members));
+}
+
+// signature(nodes, groups) — the semantic identity of a node set: sorted
+// canonical outbounds plus their display names, insensitive to ordering, plus
+// (B1) a sorted digest of the provider's groups. A body with no groups
+// (`groups` null/empty, the case for every subscription before B1) yields the
+// exact same string as before — no spurious reload for existing content.
+function signature(nodes, groups) {
 	let sigs = [];
 	for (let n in nodes)
 		push(sigs, canon(n.outbound) + "|" + (n.display_name ?? ""));
+	for (let gr in (groups ?? []))
+		push(sigs, group_sig(gr));
 	return join("\n", sort(sigs));
 }
 
 function signature_of_file(path) {
 	let body = _reader(path);
 	if (body == null) return null;
-	let nodes = [];
+	let nodes = [], groups = [];
 	for (let line in split(body, "\n")) {
 		let n = subformat.parse_node(line);
-		if (n) push(nodes, n);
+		if (n) { push(nodes, n); continue; }
+		let g = subformat.parse_group(line);
+		if (g) push(groups, g);
 	}
-	return signature(nodes);
+	return signature(nodes, groups);
 }
 
 // ua_candidates(cur, name) — rotation order. The manually chosen profile goes
@@ -712,13 +728,14 @@ function fetch_one(cur, name, timeout) {
 
 	let lines = [];
 	for (let n in parsed.nodes) push(lines, subformat.encode_node(n));
+	for (let gr in (parsed.groups ?? [])) push(lines, subformat.encode_group(gr));
 	let body = join("\n", lines) + "\n";
 
 	// C3: compare BEFORE overwriting. reload = stop+start = every connection
 	// dropped; doing that every 15 minutes for a subscription that did not change
 	// is the single most visible thing this file used to get wrong.
 	let old_sig = signature_of_file(t.txt);
-	let new_sig = signature(parsed.nodes);
+	let new_sig = signature(parsed.nodes, parsed.groups);
 	let changed = (old_sig !== new_sig);
 
 	if (!write_atomic(t.txt, body, 0o600)) {

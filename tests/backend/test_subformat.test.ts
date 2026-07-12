@@ -67,6 +67,19 @@ async function fetchBody(
   };
 }
 
+// isGroupLine(l) — a group record has a top-level "g" key; a node record has
+// "o" instead. NOT a literal '{"g"' prefix check: sprintf("%J", …) (the
+// on-disk encoder) pretty-prints with a space after the brace ('{ "g": …'),
+// so the byte layout is not a stable prefix — parse by shape instead.
+function isGroupLine(l: string): boolean {
+  if (!l.startsWith("{")) return false;
+  try {
+    return JSON.parse(l).g !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 const CLASH_YAML = `port: 7890
 mode: rule
 proxies:
@@ -128,6 +141,9 @@ proxies:
 proxy-groups:
   - name: PROXY
     type: select
+    proxies:
+      - "🇺🇸 US-1"
+      - SS-1
 `;
 
 describe("test_subformat", () => {
@@ -136,11 +152,20 @@ describe("test_subformat", () => {
   it("F1: Clash YAML proxies become sing-box nodes (ws/reality/grpc/hy2/socks)", async () => {
     const { lines, stat } = await fetchBody(CLASH_YAML);
     expect(stat.format).toBe("clash");
-    // 7 proxies, one (ssr) is not representable
-    expect(lines.length).toBe(6);
+    // 7 proxies, one (ssr) is not representable, plus 1 proxy-groups entry
+    expect(lines.length).toBe(7);
     expect(stat.skipped).toBe(1);
 
-    const nodes = lines.map((l) => JSON.parse(l));
+    const groupLine = lines.find(isGroupLine);
+    expect(groupLine).toBeTruthy();
+    const g = JSON.parse(groupLine as string);
+    expect(g.g.type).toBe("selector");
+    expect(g.n).toBe("PROXY");
+    expect(g.m).toEqual(["🇺🇸 US-1", "SS-1"]);
+
+    const nodes = lines
+      .filter((l) => !isGroupLine(l))
+      .map((l) => JSON.parse(l));
     const byName: Record<string, any> = {};
     for (const n of nodes) byName[n.n] = n.o;
 
@@ -201,13 +226,15 @@ describe("test_subformat", () => {
             server_port: 443,
             password: "p",
           },
-          { type: "selector", tag: "sel", outbounds: ["T1"] },
+          { type: "direct", tag: "dir" },
         ],
       }),
     );
     expect(wrapped.stat.format).toBe("singbox");
     expect(wrapped.lines.length).toBe(1);
-    // a subscription may not ship local policy (selector/direct/block) — skipped
+    // a subscription may not ship local policy (direct/block) — skipped.
+    // (urltest/selector are handled separately — see F-groups: extracted as
+    // group records, not skipped, and not counted as a node line either.)
     expect(wrapped.stat.skipped).toBe(1);
     const n = JSON.parse(wrapped.lines[0]);
     expect(n.n).toBe("T1");
@@ -383,7 +410,7 @@ describe("test_subformat", () => {
   it("F3+F1: gzip'd Clash YAML (both layers at once)", async () => {
     const { lines, stat } = await fetchBody(CLASH_YAML, { gzip: true });
     expect(stat.format).toBe("clash");
-    expect(lines.length).toBe(6);
+    expect(lines.length).toBe(7);
   });
 
   it("F4: base64 wrapping a base64 URI list is unwrapped (depth 1)", async () => {
@@ -399,7 +426,7 @@ describe("test_subformat", () => {
   it("F4: base64-wrapped Clash YAML decodes to nodes", async () => {
     const { lines, stat } = await fetchBody(CLASH_YAML, { b64: true });
     expect(stat.format).toBe("clash");
-    expect(lines.length).toBe(6);
+    expect(lines.length).toBe(7);
   });
 
   it("F5: skipped counts the links we could not parse", async () => {
@@ -415,15 +442,59 @@ describe("test_subformat", () => {
     expect(stat.skipped).toBe(2);
   });
 
+  it("F-groups: a sing-box urltest group is persisted as a group record", async () => {
+    const body = JSON.stringify({
+      outbounds: [
+        {
+          type: "vless",
+          tag: "LV 1",
+          server: "1.1.1.1",
+          server_port: 443,
+          uuid: "11111111-1111-1111-1111-111111111111",
+        },
+        {
+          type: "vless",
+          tag: "LV 2",
+          server: "2.2.2.2",
+          server_port: 443,
+          uuid: "22222222-2222-2222-2222-222222222222",
+        },
+        {
+          type: "urltest",
+          tag: "Latvia",
+          outbounds: ["LV 1", "LV 2"],
+          url: "https://example/gen_204",
+          interval: "3m",
+        },
+      ],
+    });
+    const { lines } = await fetchBody(body);
+    const groupLine = lines.find(isGroupLine);
+    expect(groupLine).toBeTruthy();
+    const g = JSON.parse(groupLine as string);
+    expect(g.g.type).toBe("urltest");
+    expect(g.n).toBe("Latvia");
+    expect(g.m).toEqual(["LV 1", "LV 2"]);
+    expect(g.g.url).toBe("https://example/gen_204");
+  });
+
   it("F-detour: a JSON node's detour is carried as a name, never as a raw outbound field", async () => {
-    const body = JSON.stringify({ outbounds: [
-      { type: "vless", tag: "Node A", server: "1.2.3.4", server_port: 443,
-        uuid: "11111111-1111-1111-1111-111111111111", detour: "direct" },
-    ]});
+    const body = JSON.stringify({
+      outbounds: [
+        {
+          type: "vless",
+          tag: "Node A",
+          server: "1.2.3.4",
+          server_port: 443,
+          uuid: "11111111-1111-1111-1111-111111111111",
+          detour: "direct",
+        },
+      ],
+    });
     const { lines } = await fetchBody(body);
     const rec = JSON.parse(lines[0]);
-    expect(rec.o.detour).toBeUndefined();   // never persisted as a live field
-    expect(rec.d).toBe("direct");           // preserved as the provider's name
+    expect(rec.o.detour).toBeUndefined(); // never persisted as a live field
+    expect(rec.d).toBe("direct"); // preserved as the provider's name
   });
 
   it("hostile body: garbage YAML/JSON yields no nodes and does not abort the fetch", async () => {
