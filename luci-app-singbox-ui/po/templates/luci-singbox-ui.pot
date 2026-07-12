@@ -171,6 +171,12 @@ msgstr ""
 msgid "Closed"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:305
+msgid ""
+"Comma-separated ISO country codes, matched against the flag emoji in the "
+"node name. Empty = all countries."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:381
 msgid "Connections are unavailable"
 msgstr ""
@@ -189,8 +195,12 @@ msgstr ""
 msgid "Copy failed — select the text and copy manually."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:465
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:469
 msgid "Copy proxy link"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:302
+msgid "Countries"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:119
@@ -277,6 +287,10 @@ msgstr ""
 msgid "Downlink"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:299
+msgid "Drop nodes whose name matches. Applied after the include filter."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:67
 msgid "Empty URL"
 msgstr ""
@@ -305,6 +319,10 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:154
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:167
 msgid "Error: "
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:296
+msgid "Exclude nodes (regex)"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:271
@@ -412,6 +430,10 @@ msgstr ""
 msgid "Inbounds"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:290
+msgid "Include nodes (regex)"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:235
 msgid "Incompatible with installed sing-box"
 msgstr ""
@@ -471,6 +493,10 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:148
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:150
 msgid "JSON"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:293
+msgid "Keep only nodes whose name matches. Empty = keep all."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:25
@@ -579,8 +605,12 @@ msgstr ""
 msgid "No closed connections"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:572
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:576
 msgid "No proxy groups. Configure selector/urltest outbounds."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:308
+msgid "Node name prefix"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:396
@@ -650,6 +680,11 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:22
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:25
 msgid "Port must be an integer between 1 and 65535"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:310
+msgid ""
+"Prepended to the display name of imported nodes. Does not change the tag."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:62
@@ -942,8 +977,8 @@ msgstr ""
 msgid "Update interval (s)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:529
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:530
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:533
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:534
 msgid "Update subscriptions"
 msgstr ""
 
@@ -978,7 +1013,7 @@ msgstr ""
 msgid "anytls link is missing the password"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:516
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:520
 msgid "auto"
 msgstr ""
 
@@ -1018,7 +1053,7 @@ msgstr ""
 msgid "requires"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:516
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:520
 msgid "selector"
 msgstr ""
 

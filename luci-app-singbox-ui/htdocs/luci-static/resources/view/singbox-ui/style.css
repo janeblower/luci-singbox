@@ -345,6 +345,11 @@ button.cbi-button.busy {
 	justify-content: space-between; gap: 8px; }
 .sb-dashboard-node-name { min-width: 0; line-height: 1.25;
 	overflow-wrap: anywhere; }
+/* Country badge (ISO code decoded from the name's flag emoji) — same chip as
+   Monitoring's route badge, sits right of the name. */
+.sb-dashboard-node-country { flex: 0 0 auto; margin-left: auto;
+	padding: 2px 6px; border-radius: 4px; background: rgba(128, 128, 128, .15);
+	font-size: 11px; font-weight: 500; line-height: 1.3; }
 .sb-dashboard-node-copy { width: 22px; height: 22px; min-width: 22px; padding: 1px;
 	margin: 0; box-sizing: border-box; display: flex; align-items: center;
 	justify-content: center; flex: 0 0 auto; line-height: 1; }

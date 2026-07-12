@@ -285,6 +285,31 @@ function buildOutboundsMap() {
 	o.placeholder = 'https://www.gstatic.com/generate_204';
 	o.depends({ type: 'subscription', sub_multi: '1', sub_selector_type: 'urltest' });
 
+	// Filters act on the node's display name (the provider's "🇳🇱 Amsterdam"),
+	// never on the tag — the tag is what a selector pick is pinned to.
+	o = s.taboption('basic', form.Value, 'sub_include_regex', _('Include nodes (regex)'));
+	o.modalonly   = true;
+	o.placeholder = 'Premium|Direct';
+	o.description = _('Keep only nodes whose name matches. Empty = keep all.');
+	o.depends({ type: 'subscription', sub_multi: '1' });
+
+	o = s.taboption('basic', form.Value, 'sub_exclude_regex', _('Exclude nodes (regex)'));
+	o.modalonly   = true;
+	o.placeholder = 'Trial|Expire';
+	o.description = _('Drop nodes whose name matches. Applied after the include filter.');
+	o.depends({ type: 'subscription', sub_multi: '1' });
+
+	o = s.taboption('basic', form.Value, 'sub_include_countries', _('Countries'));
+	o.modalonly   = true;
+	o.placeholder = 'NL,DE,SE';
+	o.description = _('Comma-separated ISO country codes, matched against the flag emoji in the node name. Empty = all countries.');
+	o.depends({ type: 'subscription', sub_multi: '1' });
+
+	o = s.taboption('basic', form.Value, 'sub_node_prefix', _('Node name prefix'));
+	o.modalonly   = true;
+	o.description = _('Prepended to the display name of imported nodes. Does not change the tag.');
+	o.depends({ type: 'subscription', sub_multi: '1' });
+
 	return m;
 }
 

@@ -482,6 +482,12 @@ A "last known good" copy of every node list also lives on flash in `/etc/singbox
 | `sub_multi` | bool | `0`/`1` | no | `type=subscription` | When `1`, all parsed proxy URLs are expanded into individual child outbounds grouped under a selector or urltest group. When `0`, only the first parseable URL is used. Read by `outbound.uc`. |
 | `sub_selector_type` | enum | `selector`, `urltest` | no | `sub_multi=1` | Group type for expanded proxies. Defaults to `selector`. Read by `outbound.uc`. |
 | `sub_urltest_url` | string | URL | no | `sub_selector_type=urltest` | Connectivity-test URL for the urltest group. Read by `outbound.uc`. |
+| `sub_include_regex` | string | regex | no | `sub_multi=1` | Keep only nodes whose **display name** matches. An invalid pattern is logged and ignored (never aborts generation). Read by `outbound.uc`. |
+| `sub_exclude_regex` | string | regex | no | `sub_multi=1` | Drop nodes whose **display name** matches; applied *after* `sub_include_regex`. Invalid pattern → logged and ignored. Read by `outbound.uc`. |
+| `sub_include_countries` | string | csv of ISO-3166 alpha-2 (`NL,DE,SE`) | no | `sub_multi=1` | Keep only nodes whose country — decoded from the flag emoji in the display name — is listed. Read by `outbound.uc`. |
+| `sub_node_prefix` | string | any | no | `sub_multi=1` | Prepended to the **display name** of imported nodes (side-car only). Never touches the tag. Read by `outbound.uc`. |
+
+If the three filters together match **zero** nodes, `outbound.uc` keeps **all** nodes and logs loudly: an empty group is dropped from the config, which would silently remove the subscription from routing — a bad regex must not take the tunnel down.
 
 ## `ruleset`
 

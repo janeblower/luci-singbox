@@ -167,6 +167,14 @@ msgstr "Закрыть соединение"
 msgid "Closed"
 msgstr "Закрытые"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:305
+msgid ""
+"Comma-separated ISO country codes, matched against the flag emoji in the "
+"node name. Empty = all countries."
+msgstr ""
+"ISO-коды стран через запятую; сверяются с флагом-эмодзи в имени ноды. Пусто "
+"— все страны."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:381
 msgid "Connections are unavailable"
 msgstr "Соединения недоступны"
@@ -185,9 +193,13 @@ msgstr "Копировать"
 msgid "Copy failed — select the text and copy manually."
 msgstr "Не удалось скопировать — выделите текст и скопируйте вручную."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:465
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:469
 msgid "Copy proxy link"
 msgstr "Скопировать ссылку"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:302
+msgid "Countries"
+msgstr "Страны"
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:119
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:41
@@ -277,6 +289,10 @@ msgstr "Загрузка"
 msgid "Downlink"
 msgstr "Входящий"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:299
+msgid "Drop nodes whose name matches. Applied after the include filter."
+msgstr "Исключить ноды, чьё имя совпало. Применяется после фильтра включения."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:67
 msgid "Empty URL"
 msgstr "Пустой URL"
@@ -309,6 +325,10 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:167
 msgid "Error: "
 msgstr "Ошибка: "
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:296
+msgid "Exclude nodes (regex)"
+msgstr "Исключить ноды (регексп)"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:271
 msgid "Expand to selector"
@@ -421,6 +441,10 @@ msgstr "Inbound"
 msgid "Inbounds"
 msgstr "Входящие"
 
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:290
+msgid "Include nodes (regex)"
+msgstr "Включить ноды (регексп)"
+
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:235
 msgid "Incompatible with installed sing-box"
 msgstr "Несовместимо с установленной версией sing-box"
@@ -481,6 +505,10 @@ msgstr "Некорректный up_mbps: "
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:150
 msgid "JSON"
 msgstr "JSON"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:293
+msgid "Keep only nodes whose name matches. Empty = keep all."
+msgstr "Оставить только ноды, чьё имя совпало. Пусто — оставить все."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:25
 msgid "Legacy (address string)"
@@ -594,9 +622,13 @@ msgstr "Нет активных соединений"
 msgid "No closed connections"
 msgstr "Нет закрытых соединений"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:572
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:576
 msgid "No proxy groups. Configure selector/urltest outbounds."
 msgstr "Нет прокси-групп. Настройте selector/urltest outbound'ы."
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:308
+msgid "Node name prefix"
+msgstr "Префикс имени ноды"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:396
 msgid "Nodes"
@@ -673,6 +705,13 @@ msgstr "Плагины"
 #: htdocs/luci-static/resources/view/singbox-ui/lib/validators.js:25
 msgid "Port must be an integer between 1 and 65535"
 msgstr "Порт должен быть целым числом от 1 до 65535"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:310
+msgid ""
+"Prepended to the display name of imported nodes. Does not change the tag."
+msgstr ""
+"Добавляется в начало отображаемого имени импортированных нод. Тег не "
+"меняется."
 
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:62
 msgid "Preview config"
@@ -973,8 +1012,8 @@ msgstr "Отдача"
 msgid "Update interval (s)"
 msgstr "Интервал обновления (с)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:529
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:530
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:533
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:534
 msgid "Update subscriptions"
 msgstr "Обновить подписки"
 
@@ -1011,7 +1050,7 @@ msgstr ""
 msgid "anytls link is missing the password"
 msgstr "в ссылке anytls отсутствует пароль"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:516
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:520
 msgid "auto"
 msgstr "авто"
 
@@ -1051,7 +1090,7 @@ msgstr "удалено в"
 msgid "requires"
 msgstr "требуется"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:516
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:520
 msgid "selector"
 msgstr "селектор"
 

@@ -460,6 +460,10 @@ function buildDashboard() {
 			})(groupName, member));
 
 		var head = [ E('b', { 'class': 'sb-dashboard-node-name' }, displayName(member)) ];
+		// Country comes from the flag emoji the provider put in the node name
+		// (backend: sharelink.country_from_flag_emoji); absent -> no badge.
+		if (m.country)
+			head.push(E('span', { 'class': 'sb-dashboard-node-country' }, m.country));
 		if (m.link && COPYABLE_RE.test(m.link))
 			head.push(E('button', { 'class': 'cbi-button sb-dashboard-node-copy',
 				'title': _('Copy proxy link'), 'aria-label': _('Copy proxy link'),

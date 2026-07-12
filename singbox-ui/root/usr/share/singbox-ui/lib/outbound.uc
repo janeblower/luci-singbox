@@ -98,6 +98,66 @@ function write_meta(meta) {
 	fs.chmod(META_PATH, 0o600);   // a pre-existing file keeps its old mode on open()
 }
 
+// meta_entry — one side-car record. `country` (ISO-3166 alpha-2, from the flag
+// emoji providers put in front of the node name) is what the dashboard turns
+// into a badge; omitted when the name carries no flag.
+function meta_entry(nm, ob, link) {
+	let e = { name: nm, type: ob.type, link: link };
+	let c = sharelink.country_from_flag_emoji(nm);
+	if (c) e.country = c;
+	return e;
+}
+
+// A user-supplied regex must never abort config generation: an unclosed bracket
+// throws out of regexp(). Compile once, warn, and treat a broken pattern as
+// "filter not set" — same as an empty field.
+function compile_filter(pat, what, sname) {
+	if (!length(pat ?? "")) return null;
+	try { return regexp(pat); }
+	catch (e) {
+		warn(sprintf("outbound.uc: subscription '%s': invalid %s /%s/: %s; ignoring this filter\n",
+			sname, what, pat, e));
+		return null;
+	}
+}
+
+// filter_nodes — sub_include_regex / sub_exclude_regex / sub_include_countries,
+// all applied to the human-readable display_name (never to the tag: the tag is
+// content-derived and is what the user's selector pick is pinned to).
+// If the filters leave NOTHING, that is a user error in the pattern, not an
+// intent to empty the group: an empty group is dropped downstream, taking the
+// subscription out of routing without a word. Keep every node and shout in the
+// log instead — a working tunnel plus a loud complaint beats a silent outage.
+function filter_nodes(nodes, s, sname) {
+	let inc = compile_filter(s.sub_include_regex, "sub_include_regex", sname);
+	let exc = compile_filter(s.sub_exclude_regex, "sub_exclude_regex", sname);
+
+	let want = {}, n_want = 0;
+	for (let c in split(s.sub_include_countries ?? "", ",")) {
+		let t = uc(trim(c));
+		if (length(t)) { want[t] = true; n_want++; }
+	}
+
+	if (!inc && !exc && !n_want) return nodes;
+
+	let kept = [];
+	for (let n in nodes) {
+		let dn = n.display_name ?? "";
+		if (inc && !match(dn, inc)) continue;
+		if (exc && match(dn, exc)) continue;
+		if (n_want && !want[sharelink.country_from_flag_emoji(dn) ?? ""]) continue;
+		push(kept, n);
+	}
+	if (!length(kept)) {
+		warn(sprintf("outbound.uc: subscription '%s': filters matched 0 of %d nodes; " +
+			"keeping ALL nodes (an empty group would drop the subscription from routing) — " +
+			"check sub_include_regex/sub_exclude_regex/sub_include_countries\n",
+			sname, length(nodes)));
+		return nodes;
+	}
+	return kept;
+}
+
 function build_outbounds(cur) {
 	let outbounds = [];
 	let meta = {};
@@ -132,29 +192,37 @@ function build_outbounds(cur) {
 			if (p) {
 				p.outbound.tag = name;
 				outbound = p.outbound;
-				meta[name] = { name: p.display_name || name, type: outbound.type, link: p.link };
+				meta[name] = meta_entry(p.display_name || name, outbound, p.link);
 			}
 		} else if (kind === "subscription") {
 			let urls = read_subscription_urls(name);
 			if (!length(urls)) return;
 
 			if (section.sub_multi === "1") {
-				let children = [];
+				let nodes = [];
 				for (let u in urls) {
 					let p = subformat.parse_node(u);
-					if (!p) continue;
+					if (p) push(nodes, p);
+				}
+				nodes = filter_nodes(nodes, section, name);
+				let prefix = section.sub_node_prefix ?? "";
+
+				let children = [];
+				for (let p in nodes) {
 					// Tag from CONTENT, not from position: a provider reordering
 					// its node list must not move the user's selector pick onto
 					// another server. Two nodes that really are identical collide
 					// on the same hash — suffix them instead of dropping one (a
 					// dropped member would just vanish from the group).
+					// sub_node_prefix decorates the DISPLAY name only: putting it in
+					// the tag would re-tag every node and move the user's pick.
 					let base = name + "__" + sharelink.content_tag(p.outbound);
 					let tag = base, n = 2;
 					while (seen_tags[tag]) { tag = sprintf("%s_%d", base, n); n++; }
 					p.outbound.tag = tag;
 					if (!add_ob(p.outbound)) continue;
 					push(children, tag);
-					meta[tag] = { name: p.display_name || tag, type: p.outbound.type, link: p.link };
+					meta[tag] = meta_entry(prefix + (p.display_name || tag), p.outbound, p.link);
 				}
 				if (length(children)) {
 					// GEN-3: only "selector"/"urltest" are valid sing-box group
@@ -176,7 +244,7 @@ function build_outbounds(cur) {
 				if (!p) continue;
 				p.outbound.tag = name;
 				outbound = p.outbound;
-				meta[name] = { name: p.display_name || name, type: outbound.type, link: p.link };
+				meta[name] = meta_entry(p.display_name || name, outbound, p.link);
 				break;
 			}
 		} else if (reg.get("outbound", kind)) {

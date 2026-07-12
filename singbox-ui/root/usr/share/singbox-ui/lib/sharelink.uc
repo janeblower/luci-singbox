@@ -747,6 +747,28 @@ function display_name_of(url) {
 	return length(n) ? n : null;
 }
 
+// country_from_flag_emoji(name) — providers prefix node names with a flag
+// ("🇳🇱 Amsterdam"); a flag is two regional-indicator code points (U+1F1E6..
+// U+1F1FF) that spell the ISO-3166 alpha-2 code. ucode strings are BYTES, so
+// scan the UTF-8 encoding directly: F0 9F 87 A6 ('A') .. F0 9F 87 BF ('Z').
+// Truncated/garbage UTF-8 just fails the byte test -> null, never throws.
+function flag_letter(s, i) {
+	if (ord(s, i) != 0xF0 || ord(s, i + 1) != 0x9F || ord(s, i + 2) != 0x87) return null;
+	let b = ord(s, i + 3);
+	if (b == null || b < 0xA6 || b > 0xBF) return null;
+	return chr(65 + b - 0xA6);
+}
+function country_from_flag_emoji(name) {
+	if (type(name) !== "string") return null;
+	for (let i = 0; i + 8 <= length(name); i++) {
+		let a = flag_letter(name, i);
+		if (a == null) continue;
+		let b = flag_letter(name, i + 4);
+		if (b != null) return a + b;
+	}
+	return null;
+}
+
 // content_tag(o) — stable, ASCII-safe tag suffix derived from what the node IS
 // (protocol + endpoint + credential), not from where it sits in the
 // subscription. A provider reordering its node list used to renumber every
@@ -797,4 +819,5 @@ return {
 	parse_proxy_link,
 	display_name_of,
 	content_tag,
+	country_from_flag_emoji,
 };
