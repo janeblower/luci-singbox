@@ -90,6 +90,15 @@ describe("lib/icons.js", () => {
     for (const c of el.children) expect(c.namespaceURI).toBe(SVG_NS);
   });
 
+  // Invariant from lib/icons.js's header: size comes from the .sb-icon CSS
+  // class, never from width/height attributes. An icon that hardcodes them
+  // renders at the wrong size because CSS no longer controls it.
+  it.each(NAMES)("%s does not hardcode width/height", (name) => {
+    const el: FakeEl = icons[name]();
+    expect(el.attrs.width).toBeUndefined();
+    expect(el.attrs.height).toBeUndefined();
+  });
+
   it("carries the shared stroke attributes", () => {
     const el: FakeEl = icons.copy();
     expect(el.attrs.viewBox).toBe("0 0 24 24");
