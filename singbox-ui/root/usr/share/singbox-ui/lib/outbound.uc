@@ -253,9 +253,14 @@ function build_outbounds(cur) {
 				// Resolve each detour STRICTLY to a same-subscription node. Unresolved
 				// (direct/block/foreign/typo) -> dropped, logged. This is the leak fix's
 				// generate-side half and the map groups will reuse (Phase C).
+				// A2 detour resolution; also record which leaf each resolved
+				// detour targets so sub_hide_grouped_nodes can hide detour-only
+				// leaves (a leaf reachable only as another node's detour is noise
+				// in the top-level selector).
+				let detour_target = {};
 				for (let pd in pending_detour) {
 					let target = name_to_tag[pd.name];
-					if (target != null) pd.ob.detour = target;
+					if (target != null) { pd.ob.detour = target; detour_target[target] = true; }
 					else warn(sprintf("outbound.uc: subscription '%s': dropping detour to '%s' (not a node of this subscription)\n", name, pd.name));
 				}
 				// Phase C: rebuild the provider's urltest/selector groups as
@@ -266,64 +271,63 @@ function build_outbounds(cur) {
 				let trust         = (section.sub_trust_provider === "1");
 				let max_depth     = int(section.sub_group_max_depth ?? "3") || 3;
 
-				let grouped_leaf = {};   // leaf tags claimed by some imported group
-				let group_tags = [];     // emitted group tags, provider order
-				let group_by_name = {};  // provider group name -> our group tag
+				let group_tags = [];   // emitted group tags, provider order
 
 				if (import_groups) {
 					let recs = read_subscription_groups(name);
-					// First pass: assign each group a namespaced tag so members can
-					// reference other groups (bounded nesting). Slug from the NAME —
-					// content_tag hashes node CONTENT fields (all empty for a group)
-					// and would collide every group onto one tag.
+					// Pass 1: give each group record a namespaced tag and index it by
+					// provider NAME (content_tag hashes node CONTENT fields, all empty
+					// for a group object, so it would collide every group onto one
+					// tag). Dedup on `assigned`, NOT seen_tags: no group tag is in
+					// seen_tags yet at pass-1 time, so two provider groups sharing a
+					// name must be told apart here or the second's add_ob silently
+					// loses to the first (M-1).
+					let group_rec_by_name = {};   // provider name -> record
+					let assigned = {};            // gtag -> true
 					let gi = 0;
 					for (let r in recs) {
-						let slug = sharelink.name_slug(r.name ?? sprintf("g%d", gi++));
+						let slug = sharelink.name_slug(r.name ?? sprintf("g%d", gi)); gi++;
 						let gtag = name + "__grp__" + slug, k = 2;
-						while (seen_tags[gtag]) { gtag = sprintf("%s__grp__%s_%d", name, slug, k); k++; }
+						while (assigned[gtag]) { gtag = sprintf("%s__grp__%s_%d", name, slug, k); k++; }
+						assigned[gtag] = true;
 						r._tag = gtag;
-						if (r.name != null && !(r.name in group_by_name)) group_by_name[r.name] = gtag;
+						if (r.name != null && !(r.name in group_rec_by_name)) group_rec_by_name[r.name] = r;
 					}
-					// resolve_member(nm) -> tag | null: a same-sub node, another
-					// imported group, or (only with sub_trust_provider) direct/block.
-					let resolve_member = function(nm) {
-						if (nm in name_to_tag) return name_to_tag[nm];
-						if (nm in group_by_name) return group_by_name[nm];
-						if (trust && (nm === "direct" || nm === "block")) return nm; // escape hatch
+					// Resolve a group-typed member by BUILDING it depth-first and
+					// using the return value (tag on success, null on drop) — NOT by a
+					// static tag lookup. A static tag would dangle the moment the child
+					// group drops (empty/add_ob-fail) and would make the depth/cycle
+					// guards inert (the recursion below is never entered). C-1 + I-1.
+					let built = {};       // gtag -> emitted tag | null (PERMANENT drop). Not set for depth/cycle PATH-drops.
+					let building = {};    // gtag -> true while on the DFS stack (cycle break)
+					let resolve_ref, build_group;   // forward: ucode resolves let-bound fns in order
+					resolve_ref = function(nm, depth) {
+						if (nm in name_to_tag) return name_to_tag[nm];                          // same-sub leaf
+						if (nm in group_rec_by_name) return build_group(group_rec_by_name[nm], depth + 1); // nested group, on demand
+						if (trust && (nm === "direct" || nm === "block")) return nm;            // escape hatch only
 						return null;
 					};
-					// Second pass: build each group, cycle/depth-guarded.
-					let building = {};   // gtag -> true while on the DFS stack (cycle guard)
-					let built = {};      // gtag -> true (emitted) | false (dropped)
-					let build_group;     // forward: ucode resolves let-bound fns in order
 					build_group = function(r, depth) {
-						if (built[r._tag] != null) return built[r._tag] ? r._tag : null;
-						if (depth > max_depth || building[r._tag]) { built[r._tag] = false; return null; } // depth/cycle
+						if (r._tag in built) return built[r._tag];   // memo: success or permanent drop
+						if (depth > max_depth) return null;          // depth: path-drop, do NOT memo (may build shallower elsewhere)
+						if (building[r._tag]) return null;           // cycle: break this path, do NOT memo
 						building[r._tag] = true;
 						let kids = [];
 						for (let mnm in r.group.members) {
-							let t = resolve_member(mnm);
-							if (t == null) {
-								// a nested group not yet resolvable (unnamed, or forward ref)
-								let nested = null;
-								for (let r2 in recs) if (r2.name === mnm) nested = r2;
-								if (nested) t = build_group(nested, depth + 1);
-							}
+							let t = resolve_ref(mnm, depth);
 							if (t == null) {
 								warn(sprintf("outbound.uc: subscription '%s': group '%s' drops member '%s' (unresolved)\n", name, r.name ?? r._tag, mnm));
 								continue;
 							}
 							push(kids, t);
-							if (t in seen_tags && substr(t, 0, length(name) + 6) === name + "__grp_") {} // group child
-							else grouped_leaf[t] = true; // a leaf child is "grouped"
 						}
 						building[r._tag] = false;
-						if (!length(kids)) { built[r._tag] = false; return null; }
+						if (!length(kids)) { built[r._tag] = null; return null; }   // empty group: permanent drop
 						let gt = (lc(r.group.type) === "selector") ? "selector" : "urltest";
 						let gob = { tag: r._tag, type: gt, outbounds: kids };
 						// url/interval/tolerance: user override (main-level field) wins,
 						// else provider, else builtin. selector `default` only when it
-						// resolves within the sub.
+						// resolves within the sub (build it too — no dangling default).
 						if (gt === "urltest") {
 							let u = (section.sub_urltest_url != null && section.sub_urltest_url !== "")
 								? section.sub_urltest_url : (r.group.url ?? null);
@@ -331,13 +335,13 @@ function build_outbounds(cur) {
 							if (r.group.interval != null)  gob.interval = r.group.interval;
 							if (r.group.tolerance != null) gob.tolerance = r.group.tolerance;
 						} else if (r.group["default"] != null) {
-							let d = resolve_member(r.group["default"]);
+							let d = resolve_ref(r.group["default"], depth);
 							if (d != null) gob["default"] = d;
 						}
-						if (!add_ob(gob)) { built[r._tag] = false; return null; }
+						if (!add_ob(gob)) { built[r._tag] = null; return null; }
 						push(group_tags, r._tag);
 						meta[r._tag] = { name: r.name ?? r._tag, type: gt, link: null };
-						built[r._tag] = true;
+						built[r._tag] = r._tag;
 						return r._tag;
 					};
 					for (let r in recs) build_group(r, 1);
@@ -349,20 +353,30 @@ function build_outbounds(cur) {
 				let selector_type = (section.sub_selector_type === "urltest") ? "urltest" : "selector";
 				let main_children;
 				if (import_groups && length(group_tags)) {
-					// main replaces the provider's top selector: its children are the
-					// top-level groups (not referenced by another imported group) plus
-					// leaves no group claimed (unless hidden). Hiding is view-only —
-					// every leaf is still emitted via add_ob above and stays routable.
-					let referenced = {};
+					// main replaces the provider's top selector. Classify every kid of
+					// every EMITTED group: a kid that is itself a group tag makes that
+					// group non-top-level (referenced); a leaf kid is a "grouped leaf".
+					let group_tag_set = {};
+					for (let gt in group_tags) group_tag_set[gt] = true;
+					let referenced = {};     // group tags used as a member of another group
+					let grouped_leaf = {};   // leaf tags claimed by some emitted group
 					for (let gt in group_tags) {
 						let ob = null; for (let x in outbounds) if (x.tag === gt) ob = x;
-						if (ob) for (let c in ob.outbounds) referenced[c] = true;
+						if (ob) for (let c in ob.outbounds) {
+							if (group_tag_set[c]) referenced[c] = true;
+							else grouped_leaf[c] = true;
+						}
 					}
+					// Children = top-level groups + leaves per the hide flag. Hiding is
+					// view-only: every leaf is still emitted via add_ob and stays
+					// routable. hide='1' (default) drops grouped + detour-only leaves;
+					// hide='0' also lists every leaf as a direct main child IN ADDITION
+					// to its group (valid in sing-box; matches forkop
+					// hide_urltest_group_outbounds).
 					main_children = [];
 					for (let gt in group_tags) if (!referenced[gt]) push(main_children, gt);
 					for (let lt in children) {
-						if (referenced[lt]) continue;                 // it's inside a group
-						if (hide_grouped && grouped_leaf[lt]) continue;
+						if (hide_grouped && (grouped_leaf[lt] || detour_target[lt])) continue;
 						push(main_children, lt);
 					}
 				} else {

@@ -45,6 +45,20 @@ describe("outbound_constructor (generate.uc outbounds[] + outbound.build_constru
     return r.stdout;
   }
 
+  // Like runGen but also returns generate.uc's stderr (warnings). The C-1 gate
+  // needs it: the pre-existing GEN-1/BLD-7 dangling-member prune rescues the
+  // final config either way, so its warning is the only observable proof that
+  // the buggy static resolve emitted a dangling group reference.
+  async function runGenErr(cfg: string): Promise<{ doc: Doc; stderr: string }> {
+    await putFile(cfg, `${tmpDir}/singbox-ui`);
+    const r = await exec(
+      `cd ${WORK} && UCI_CONFIG_DIR=${tmpDir} SINGBOX_TMPDIR=${sandboxDir}/subs SINGBOX_CONFIG=${sandboxConfig} ucode -L ${LIB} ${GENERATE_UC} >/dev/null 2>${tmpDir}/gen_err.txt; rc=$?; if [ $rc -eq 0 ]; then cat ${sandboxConfig}; else echo GENFAIL; fi; cat ${tmpDir}/gen_err.txt >&2`,
+    );
+    if (r.stdout.includes("GENFAIL"))
+      throw new Error(`generate.uc failed: ${r.stderr}`);
+    return { doc: JSON.parse(r.stdout) as Doc, stderr: r.stderr };
+  }
+
   async function canonNorm(jsonStr: string): Promise<string> {
     const tmpF = `/tmp/ob_cn_${pid}.json`;
     await putFile(jsonStr, tmpF);
@@ -59,7 +73,9 @@ describe("outbound_constructor (generate.uc outbounds[] + outbound.build_constru
   // under the sandbox subs/ dir, the way subscription.uc's fetch would.
   async function seed(subName: string, lines: string[]): Promise<void> {
     const body = lines.join("\n").replace(/'/g, "'\\''");
-    await exec(`printf '%s\\n' '${body}' > ${sandboxDir}/subs/sub_${subName}.txt`);
+    await exec(
+      `printf '%s\\n' '${body}' > ${sandboxDir}/subs/sub_${subName}.txt`,
+    );
   }
 
   it("vless with reality + grpc", async () => {
@@ -383,10 +399,20 @@ printf("%J", ob.build_constructor_for(s, "hysteria2"));
   it("subscription detour to a non-subscription tag is dropped (no leak)", async () => {
     await setup();
     // one node record with a provider detour pointing at the builtin direct
-    const line = JSON.stringify({ o: { type: "vless", server: "1.2.3.4",
-      server_port: 443, uuid: "11111111-1111-1111-1111-111111111111" },
-      n: "Node A", l: null, d: "direct" });
-    await exec(`printf '%s\\n' '${line.replace(/'/g, "'\\''")}' > ${sandboxDir}/subs/sub_s.txt`);
+    const line = JSON.stringify({
+      o: {
+        type: "vless",
+        server: "1.2.3.4",
+        server_port: 443,
+        uuid: "11111111-1111-1111-1111-111111111111",
+      },
+      n: "Node A",
+      l: null,
+      d: "direct",
+    });
+    await exec(
+      `printf '%s\\n' '${line.replace(/'/g, "'\\''")}' > ${sandboxDir}/subs/sub_s.txt`,
+    );
     const cfg = await runGen(`
 config outbound 's'
 \toption enabled '1'
@@ -404,14 +430,31 @@ config outbound 's'
     await setup();
     // Two nodes in the same subscription: "Main" detours to "Hop" by display name.
     const lines = [
-      JSON.stringify({ o: { type: "vless", server: "10.0.0.1",
-        server_port: 443, uuid: "11111111-1111-1111-1111-111111111111" },
-        n: "Hop", l: null }),
-      JSON.stringify({ o: { type: "vless", server: "10.0.0.2",
-        server_port: 443, uuid: "22222222-2222-2222-2222-222222222222" },
-        n: "Main", l: null, d: "Hop" }),
+      JSON.stringify({
+        o: {
+          type: "vless",
+          server: "10.0.0.1",
+          server_port: 443,
+          uuid: "11111111-1111-1111-1111-111111111111",
+        },
+        n: "Hop",
+        l: null,
+      }),
+      JSON.stringify({
+        o: {
+          type: "vless",
+          server: "10.0.0.2",
+          server_port: 443,
+          uuid: "22222222-2222-2222-2222-222222222222",
+        },
+        n: "Main",
+        l: null,
+        d: "Hop",
+      }),
     ].join("\n");
-    await exec(`printf '%s\\n' '${lines.replace(/'/g, "'\\''")}' > ${sandboxDir}/subs/sub_s.txt`);
+    await exec(
+      `printf '%s\\n' '${lines.replace(/'/g, "'\\''")}' > ${sandboxDir}/subs/sub_s.txt`,
+    );
     const cfg = await runGen(`
 config outbound 's'
 \toption enabled '1'
@@ -420,7 +463,9 @@ config outbound 's'
 \toption sub_multi '1'
 `);
     const doc = JSON.parse(cfg) as Doc;
-    const subNodes = doc.outbounds.filter((o) => (o.tag || "").startsWith("s__"));
+    const subNodes = doc.outbounds.filter((o) =>
+      (o.tag || "").startsWith("s__"),
+    );
     const hop = subNodes.find((o) => o.server === "10.0.0.1");
     const main = subNodes.find((o) => o.server === "10.0.0.2");
     expect(hop).toBeTruthy();
@@ -430,10 +475,26 @@ config outbound 's'
 
   // ---- C1: import provider urltest/selector groups -------------------------
 
-  const N1 = JSON.stringify({ o: { type: "vless", server: "1.1.1.1",
-    server_port: 443, uuid: "11111111-1111-1111-1111-111111111111" }, n: "LV 1", l: null });
-  const N2 = JSON.stringify({ o: { type: "vless", server: "2.2.2.2",
-    server_port: 443, uuid: "22222222-2222-2222-2222-222222222222" }, n: "LV 2", l: null });
+  const N1 = JSON.stringify({
+    o: {
+      type: "vless",
+      server: "1.1.1.1",
+      server_port: 443,
+      uuid: "11111111-1111-1111-1111-111111111111",
+    },
+    n: "LV 1",
+    l: null,
+  });
+  const N2 = JSON.stringify({
+    o: {
+      type: "vless",
+      server: "2.2.2.2",
+      server_port: 443,
+      uuid: "22222222-2222-2222-2222-222222222222",
+    },
+    n: "LV 2",
+    l: null,
+  });
 
   const leafTags = (doc: Doc): string[] =>
     doc.outbounds
@@ -442,17 +503,22 @@ config outbound 's'
 
   it("import on: a provider urltest group becomes an outbound and main's child", async () => {
     await setup();
-    const grp = JSON.stringify({ g: { type: "urltest", members: ["LV 1", "LV 2"],
-      url: "https://x/g" }, n: "Latvia", m: ["LV 1", "LV 2"] });
+    const grp = JSON.stringify({
+      g: { type: "urltest", members: ["LV 1", "LV 2"], url: "https://x/g" },
+      n: "Latvia",
+      m: ["LV 1", "LV 2"],
+    });
     await seed("s", [N1, N2, grp]);
-    const doc = JSON.parse(await runGen(`
+    const doc = JSON.parse(
+      await runGen(`
 config outbound 's'
 \toption enabled '1'
 \toption type 'subscription'
 \toption sub_url 'https://x/y'
 \toption sub_multi '1'
 \toption sub_import_groups '1'
-`)) as Doc;
+`),
+    ) as Doc;
     const grpOb = doc.outbounds.find(
       (o) => o.type === "urltest" && (o.tag || "").startsWith("s__grp__"),
     );
@@ -465,27 +531,39 @@ config outbound 's'
 
   it("import off (absent): no grp__ tag; main is the flat leaf list (regression)", async () => {
     await setup();
-    const grp = JSON.stringify({ g: { type: "urltest", members: ["LV 1", "LV 2"],
-      url: "https://x/g" }, n: "Latvia", m: ["LV 1", "LV 2"] });
+    const grp = JSON.stringify({
+      g: { type: "urltest", members: ["LV 1", "LV 2"], url: "https://x/g" },
+      n: "Latvia",
+      m: ["LV 1", "LV 2"],
+    });
     await seed("s", [N1, N2, grp]);
-    const doc = JSON.parse(await runGen(`
+    const doc = JSON.parse(
+      await runGen(`
 config outbound 's'
 \toption enabled '1'
 \toption type 'subscription'
 \toption sub_url 'https://x/y'
 \toption sub_multi '1'
-`)) as Doc;
-    expect(doc.outbounds.find((o) => (o.tag || "").startsWith("s__grp__"))).toBeUndefined();
+`),
+    ) as Doc;
+    expect(
+      doc.outbounds.find((o) => (o.tag || "").startsWith("s__grp__")),
+    ).toBeUndefined();
     const leaves = leafTags(doc);
     expect(leaves.length).toBe(2);
     const main = doc.outbounds.find((o) => o.tag === "s");
     // main selector = exactly the flat leaf list, as before groups existed.
-    expect((main?.outbounds ?? []).slice().sort()).toEqual(leaves.slice().sort());
+    expect((main?.outbounds ?? []).slice().sort()).toEqual(
+      leaves.slice().sort(),
+    );
   });
 
   it("member 'direct' is dropped by default but kept with sub_trust_provider=1", async () => {
-    const grp = JSON.stringify({ g: { type: "selector", members: ["LV 1", "direct"] },
-      n: "G", m: ["LV 1", "direct"] });
+    const grp = JSON.stringify({
+      g: { type: "selector", members: ["LV 1", "direct"] },
+      n: "G",
+      m: ["LV 1", "direct"],
+    });
     const base = `
 config outbound 's'
 \toption enabled '1'
@@ -505,7 +583,9 @@ config outbound 's'
 
     await setup();
     await seed("s", [N1, grp]);
-    doc = JSON.parse(await runGen(`${base}\toption sub_trust_provider '1'\n`)) as Doc;
+    doc = JSON.parse(
+      await runGen(`${base}\toption sub_trust_provider '1'\n`),
+    ) as Doc;
     g = doc.outbounds.find((o) => (o.tag || "").startsWith("s__grp__"));
     expect(g).toBeTruthy();
     expect(g?.outbounds).toContain("direct"); // trusted escape hatch
@@ -513,10 +593,14 @@ config outbound 's'
 
   it("sub_hide_grouped_nodes=1: grouped leaves leave main but stay in the config", async () => {
     await setup();
-    const grp = JSON.stringify({ g: { type: "urltest", members: ["LV 1", "LV 2"] },
-      n: "Latvia", m: ["LV 1", "LV 2"] });
+    const grp = JSON.stringify({
+      g: { type: "urltest", members: ["LV 1", "LV 2"] },
+      n: "Latvia",
+      m: ["LV 1", "LV 2"],
+    });
     await seed("s", [N1, N2, grp]);
-    const doc = JSON.parse(await runGen(`
+    const doc = JSON.parse(
+      await runGen(`
 config outbound 's'
 \toption enabled '1'
 \toption type 'subscription'
@@ -524,23 +608,186 @@ config outbound 's'
 \toption sub_multi '1'
 \toption sub_import_groups '1'
 \toption sub_hide_grouped_nodes '1'
-`)) as Doc;
+`),
+    ) as Doc;
     const leaves = leafTags(doc);
     expect(leaves.length).toBe(2);
     const main = doc.outbounds.find((o) => o.tag === "s");
     for (const lt of leaves) expect(main?.outbounds).not.toContain(lt); // hidden from view
     for (const lt of leaves)
       expect(doc.outbounds.some((o) => o.tag === lt)).toBe(true); // still emitted, still routable
-    const grpOb = doc.outbounds.find((o) => (o.tag || "").startsWith("s__grp__"));
+    const grpOb = doc.outbounds.find((o) =>
+      (o.tag || "").startsWith("s__grp__"),
+    );
     expect(main?.outbounds).toContain(grpOb?.tag);
+  });
+
+  // ---- Fix wave: C-1 (no dangling refs), I-1 (live depth guard), I-2 (hide) --
+
+  it("C-1 gate: a dropped child group is never referenced (no dangling ref)", async () => {
+    await setup();
+    // Alpha references Beta; Beta's only member is unresolvable, so Beta drops.
+    const alpha = JSON.stringify({
+      g: { type: "urltest", members: ["Beta", "LV 1"] },
+      n: "Alpha",
+      m: ["Beta", "LV 1"],
+    });
+    const beta = JSON.stringify({
+      g: { type: "urltest", members: ["ghost"] },
+      n: "Beta",
+      m: ["ghost"],
+    });
+    await seed("s", [N1, alpha, beta]);
+    const { doc, stderr } = await runGenErr(`
+config outbound 's'
+\toption enabled '1'
+\toption type 'subscription'
+\toption sub_url 'https://x/y'
+\toption sub_multi '1'
+\toption sub_import_groups '1'
+`);
+    // The fix builds Beta on demand: it drops at the SOURCE, so Alpha never
+    // references it. The buggy static resolve pushed Beta's tag into Alpha and
+    // relied on the GEN-1/BLD-7 prune to strip it — logging this exact warning.
+    // Its ABSENCE gates C-1 (RED when the fix is reverted).
+    expect(stderr).not.toContain("is not a defined outbound");
+    // No emitted group references a tag that isn't an emitted outbound.
+    const tags = new Set(doc.outbounds.map((o) => o.tag || ""));
+    tags.add("direct");
+    tags.add("block");
+    for (const o of doc.outbounds)
+      if (o.type === "urltest" || o.type === "selector")
+        for (const m of o.outbounds ?? []) expect(tags.has(m)).toBe(true);
+    // And the config stands on its own — valid without the prune's rescue.
+    const sbAvail = await exec(
+      "command -v sing-box >/dev/null 2>&1 && echo YES || echo NO",
+    );
+    if (sbAvail.stdout.trim() === "YES") {
+      const r = await exec(`sing-box check -c ${sandboxConfig} 2>&1`);
+      expect(r.exitCode).toBe(0);
+    }
+  });
+
+  it("I-1 gate: sub_group_max_depth actually drops over-deep nesting", async () => {
+    const outer = JSON.stringify({
+      g: { type: "urltest", members: ["Inner", "LV 2"] },
+      n: "Outer",
+      m: ["Inner", "LV 2"],
+    });
+    const inner = JSON.stringify({
+      g: { type: "urltest", members: ["LV 1"] },
+      n: "Inner",
+      m: ["LV 1"],
+    });
+    const base = `
+config outbound 's'
+\toption enabled '1'
+\toption type 'subscription'
+\toption sub_url 'https://x/y'
+\toption sub_multi '1'
+\toption sub_import_groups '1'
+`;
+    // Identify groups by content, not by hashed tag: Inner is the group holding
+    // the LV1 leaf, Outer the one holding the LV2 leaf.
+    const analyze = (doc: Doc) => {
+      const leaf = (srv: string) =>
+        doc.outbounds.find((o) => o.server === srv)?.tag as string;
+      const grp = (leafTag: string) =>
+        doc.outbounds.find(
+          (o) =>
+            (o.type === "urltest" || o.type === "selector") &&
+            (o.outbounds ?? []).includes(leafTag),
+        )?.tag as string;
+      const innerTag = grp(leaf("1.1.1.1"));
+      const outerTag = grp(leaf("2.2.2.2"));
+      const outerOb = doc.outbounds.find((o) => o.tag === outerTag);
+      const main = doc.outbounds.find((o) => o.tag === "s");
+      return {
+        innerTag,
+        outerMembers: outerOb?.outbounds ?? [],
+        main: main?.outbounds ?? [],
+      };
+    };
+
+    // Default depth: Outer nests Inner; Inner is not a direct main child.
+    await setup();
+    await seed("s", [N1, N2, outer, inner]);
+    const deep = analyze(JSON.parse(await runGen(base)) as Doc);
+    expect(deep.outerMembers).toContain(deep.innerTag);
+    expect(deep.main).not.toContain(deep.innerTag);
+
+    // Depth 1: Inner exceeds the limit inside Outer → dropped from Outer and
+    // promoted to a top-level main child. The flag changes the emitted set.
+    await setup();
+    await seed("s", [N1, N2, outer, inner]);
+    const shallow = analyze(
+      JSON.parse(
+        await runGen(`${base}\toption sub_group_max_depth '1'\n`),
+      ) as Doc,
+    );
+    expect(shallow.outerMembers).not.toContain(shallow.innerTag);
+    expect(shallow.main).toContain(shallow.innerTag);
+    expect(deep.outerMembers).not.toEqual(shallow.outerMembers);
+
+    // Both depths still produce a config sing-box accepts.
+    const sbAvail = await exec(
+      "command -v sing-box >/dev/null 2>&1 && echo YES || echo NO",
+    );
+    if (sbAvail.stdout.trim() === "YES") {
+      const r = await exec(`sing-box check -c ${sandboxConfig} 2>&1`);
+      expect(r.exitCode).toBe(0);
+    }
+  });
+
+  it("I-2 gate: sub_hide_grouped_nodes toggles a grouped leaf in/out of main", async () => {
+    const grp = JSON.stringify({
+      g: { type: "urltest", members: ["LV 1"] },
+      n: "G",
+      m: ["LV 1"],
+    });
+    const base = `
+config outbound 's'
+\toption enabled '1'
+\toption type 'subscription'
+\toption sub_url 'https://x/y'
+\toption sub_multi '1'
+\toption sub_import_groups '1'
+`;
+    // hide='0': the grouped leaf ALSO appears as a direct main child.
+    await setup();
+    await seed("s", [N1, grp]);
+    let doc = JSON.parse(
+      await runGen(`${base}\toption sub_hide_grouped_nodes '0'\n`),
+    ) as Doc;
+    let leaf = doc.outbounds.find((o) => o.server === "1.1.1.1")?.tag as string;
+    let main = doc.outbounds.find((o) => o.tag === "s");
+    expect(main?.outbounds).toContain(leaf);
+    expect(doc.outbounds.some((o) => o.tag === leaf)).toBe(true);
+
+    // hide='1': the grouped leaf leaves main but stays emitted in the config.
+    await setup();
+    await seed("s", [N1, grp]);
+    doc = JSON.parse(
+      await runGen(`${base}\toption sub_hide_grouped_nodes '1'\n`),
+    ) as Doc;
+    leaf = doc.outbounds.find((o) => o.server === "1.1.1.1")?.tag as string;
+    main = doc.outbounds.find((o) => o.tag === "s");
+    expect(main?.outbounds).not.toContain(leaf);
+    expect(doc.outbounds.some((o) => o.tag === leaf)).toBe(true);
   });
 
   it("a 2-cycle of imported groups still passes sing-box check", async () => {
     await setup();
-    const gA = JSON.stringify({ g: { type: "urltest", members: ["Beta", "LV 1"] },
-      n: "Alpha", m: ["Beta", "LV 1"] });
-    const gB = JSON.stringify({ g: { type: "urltest", members: ["Alpha", "LV 1"] },
-      n: "Beta", m: ["Alpha", "LV 1"] });
+    const gA = JSON.stringify({
+      g: { type: "urltest", members: ["Beta", "LV 1"] },
+      n: "Alpha",
+      m: ["Beta", "LV 1"],
+    });
+    const gB = JSON.stringify({
+      g: { type: "urltest", members: ["Alpha", "LV 1"] },
+      n: "Beta",
+      m: ["Alpha", "LV 1"],
+    });
     await seed("s", [N1, gA, gB]);
     await runGen(`
 config outbound 's'
@@ -550,7 +797,9 @@ config outbound 's'
 \toption sub_multi '1'
 \toption sub_import_groups '1'
 `);
-    const sbAvail = await exec("command -v sing-box >/dev/null 2>&1 && echo YES || echo NO");
+    const sbAvail = await exec(
+      "command -v sing-box >/dev/null 2>&1 && echo YES || echo NO",
+    );
     if (sbAvail.stdout.trim() !== "YES") return; // sing-box absent — nothing to check
     const r = await exec(`sing-box check -c ${sandboxConfig} 2>&1`);
     expect(r.exitCode).toBe(0);
