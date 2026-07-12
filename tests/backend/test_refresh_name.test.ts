@@ -78,7 +78,7 @@ describe("test_refresh_name", () => {
     const r = await exec(
       `printf '%s' '{"what":"subscriptions","name":"mysub","async":true}' | ` +
         `env SUBSCRIPTION_UC=${slow} RULESETS_UC=/bin/true ARGV_OUT=${ARGV_OUT} ` +
-        `SINGBOX_TMP=${tmp} ucode -L ${LIB} ${HANDLER} call refresh`,
+        `SINGBOX_TMPDIR=${tmp} ucode -L ${LIB} ${HANDLER} call refresh`,
     );
     const elapsed = Date.now() - t0;
 

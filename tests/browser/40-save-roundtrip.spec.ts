@@ -26,7 +26,7 @@ test('save-roundtrip: seed VLESS outbound and apply', async () => {
     console.log('restart:', restartOut.trim().slice(0, 200));
 
     // 4-package-split guard: the rpcd handler shells /etc/init.d/singbox-ui
-    // (SINGBOX_INIT), so the container must provide a no-op stub by THAT name (not
+    // (SINGBOX_INITD), so the container must provide a no-op stub by THAT name (not
     // /etc/init.d/sing-box). The real procd init script runs `sing-box run`, which
     // hangs without procd; mounting/stubbing the wrong name made restart fall
     // through to that. Assert the stub is in place and contains no `sing-box run`.

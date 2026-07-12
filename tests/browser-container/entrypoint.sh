@@ -55,7 +55,7 @@ SHIM
 }
 
 # Stub /etc/init.d/singbox-ui — the singbox-ui rpcd handler shells this on
-# restart/reload/generate paths (SINGBOX_INIT=/etc/init.d/singbox-ui). The real
+# restart/reload/generate paths (SINGBOX_INITD=/etc/init.d/singbox-ui). The real
 # init script runs `sing-box run` via procd, which is absent in this container,
 # so a no-op stub is mounted instead by test_browser.sh; if that mount is missing
 # (local ad-hoc run) seed one here so `ubus call singbox-ui restart` returns 0.

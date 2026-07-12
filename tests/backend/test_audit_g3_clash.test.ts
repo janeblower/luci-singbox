@@ -96,7 +96,7 @@ async function hdrFileExists(): Promise<boolean> {
   return check.stdout.trim() === "yes";
 }
 
-const BASE_ENV = `CLASH_CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=supersecrettoken`;
+const BASE_ENV = `CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=supersecrettoken`;
 
 describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / RPC-2 IPv6)", () => {
   useGuest();
@@ -155,7 +155,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     await runClash(
       "clash_get",
       '{"path":"/connections"}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN='evil.com/x?' CLASH_PORT=9090 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN='evil.com/x?' CLASH_PORT=9090 CLASH_SECRET=tok`,
     );
     const log = await readLog();
     expect(log).not.toContain("evil.com");
@@ -166,7 +166,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     await runClash(
       "clash_get",
       '{"path":"/connections"}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=99999 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=99999 CLASH_SECRET=tok`,
     );
     const log = await readLog();
     expect(log).not.toContain("99999");
@@ -179,7 +179,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     await runClash(
       "clash_get",
       '{"path":"/connections"}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN=192.168.1.1 CLASH_PORT=7890 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN=192.168.1.1 CLASH_PORT=7890 CLASH_SECRET=tok`,
     );
     const log = await readLog();
     expect(log).toContain("192.168.1.1");
@@ -193,7 +193,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     await runClash(
       "clash_get",
       '{"path":"/connections"}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN='::1' CLASH_PORT=9090 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN='::1' CLASH_PORT=9090 CLASH_SECRET=tok`,
     );
     const log = await readLog();
     expect(log).not.toContain("127.0.0.1");
@@ -210,7 +210,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     const r = await runClash(
       "clash_mutate",
       '{"method":"POST","path":"/configs","body":{"mode":"global"}}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
     );
     let out: Record<string, unknown> = {};
     try {
@@ -226,7 +226,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     const r = await runClash(
       "clash_mutate",
       '{"method":"POST","path":"/configs","body":42}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
     );
     let out: Record<string, unknown> = {};
     try {
@@ -243,7 +243,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     const r = await runClash(
       "clash_mutate",
       '{"method":"PATCH","path":"/configs","body":"{\\"mode\\":\\"global\\"}"}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
     );
     let out: Record<string, unknown> = {};
     try {
@@ -261,7 +261,7 @@ describe("audit_g3_clash (6.2 secret tmpfile / 6.3 SSRF guard / 6.4 body type / 
     const r = await runClash(
       "clash_mutate",
       '{"method":"DELETE","path":"/connections"}',
-      `CLASH_CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
+      `CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET=tok`,
     );
     let out: Record<string, unknown> = {};
     try {

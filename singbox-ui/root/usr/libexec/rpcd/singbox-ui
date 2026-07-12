@@ -14,8 +14,8 @@
 //   preview_config      dry-run: generate full config to a tmpfile, return body
 //
 // Env overrides (used by tests):
-//   NFTABLES_CMD GENERATE_UC SINGBOX_INIT SUBSCRIPTION_UC RULESETS_UC SINGBOX_TMP SINGBOX_CONFIG
-//   EXPORT_SECTION_UC CLASH_CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
+//   NFTABLES_CMD GENERATE_UC SINGBOX_INITD SUBSCRIPTION_UC RULESETS_UC SINGBOX_TMPDIR SINGBOX_CONFIG
+//   EXPORT_SECTION_UC CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
 //   SINGBOX_VARLIB
 
 'use strict';
@@ -25,14 +25,14 @@ let uci = require("uci");
 
 const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/nftables.uc";
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
-const SINGBOX_INIT = getenv("SINGBOX_INIT") || "/etc/init.d/singbox-ui";
+const SINGBOX_INITD = getenv("SINGBOX_INITD") || "/etc/init.d/singbox-ui";
 const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subscription.uc";
 const RULESETS_UC      = getenv("RULESETS_UC") || "/usr/share/singbox-ui/nft-rulesets.uc";
 const EXPORT_SECTION_UC = getenv("EXPORT_SECTION_UC") || "/usr/share/singbox-ui/export_section.uc";
 const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
-const TMPDIR       = getenv("SINGBOX_TMP")  || "/tmp/singbox-ui";
+const TMPDIR       = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
-const CLASH_CURL   = getenv("CLASH_CURL")   || "curl";
+const CURL         = getenv("CURL")         || "curl";
 const VARLIB       = getenv("SINGBOX_VARLIB") || "/var/lib/singbox-ui";
 // RPC-3: probe core_version via the same overridable binary path init.d uses
 // (etc/init.d/singbox-ui: SINGBOX_BIN), so a non-PATH install still reports a
@@ -228,7 +228,7 @@ function call_nftables() {
 
 function call_restart() {
 	drain_stdin();
-	if (run([SINGBOX_INIT, "restart"])) emit_ok();
+	if (run([SINGBOX_INITD, "restart"])) emit_ok();
 	else emit_err("service restart failed");
 }
 
@@ -671,7 +671,7 @@ function clash_proxy(method, path, body, curl_to) {
 	// argv, so a co-located unprivileged user can't read it from /proc/<pid>/cmdline.
 	let hdr = clash_header_tmp(p.secret);
 	if (hdr == null) { emit_err("clash request failed (header tmpfile)"); return; }
-	let argv = [ CLASH_CURL, "-s", "-m", sprintf("%d", to), "-X", method,
+	let argv = [ CURL, "-s", "-m", sprintf("%d", to), "-X", method,
 	             "-H", `@${hdr}`, url ];
 	if (body != null && length(body)) { push(argv, "--data"); push(argv, body); }
 	let resp = run_capture(argv);

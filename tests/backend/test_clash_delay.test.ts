@@ -6,7 +6,7 @@ import { exec, putFile } from "../helpers/ssh.ts";
 // percent-encoding an arbitrary (unicode/space-bearing) proxy name and the test
 // url, with a numeric timeout. The generic clash_path_ok allowlist rejects query
 // strings, so this path is built+validated by call_clash_delay itself. We stub
-// CLASH_CURL with a script that echoes the URL it was handed, so the handler's
+// CURL with a script that echoes the URL it was handed, so the handler's
 // {status:"ok",body:<url>} lets us assert the exact constructed URL.
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
@@ -44,7 +44,7 @@ describe("test_clash_delay", () => {
     jsonArgs: string,
   ): Promise<{ status: string; body: string }> {
     const r = await exec(
-      `printf '%s' ${JSON.stringify(jsonArgs)} | env CLASH_CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET="" ucode -L ${LIB} ${HANDLER} call clash_delay 2>/dev/null`,
+      `printf '%s' ${JSON.stringify(jsonArgs)} | env CURL=${CURL_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET="" ucode -L ${LIB} ${HANDLER} call clash_delay 2>/dev/null`,
     );
     try {
       return JSON.parse(r.stdout) as { status: string; body: string };
@@ -56,7 +56,7 @@ describe("test_clash_delay", () => {
   // Helper: call with argv stub to read the -m value
   async function callM(jsonArgs: string): Promise<number> {
     const r = await exec(
-      `printf '%s' ${JSON.stringify(jsonArgs)} | env CLASH_CURL=${CURL_ARGV_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET="" ucode -L ${LIB} ${HANDLER} call clash_delay 2>/dev/null | ucode -e 'let fs=require("fs");let d=json(fs.stdin.read("all")||"{}");print(d.body ?? "");'`,
+      `printf '%s' ${JSON.stringify(jsonArgs)} | env CURL=${CURL_ARGV_STUB} CLASH_LISTEN=127.0.0.1 CLASH_PORT=9090 CLASH_SECRET="" ucode -L ${LIB} ${HANDLER} call clash_delay 2>/dev/null | ucode -e 'let fs=require("fs");let d=json(fs.stdin.read("all")||"{}");print(d.body ?? "");'`,
     );
     return Number(r.stdout.trim());
   }

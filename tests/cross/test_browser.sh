@@ -63,7 +63,7 @@ CNAME="singbox-ui-test-$$"
 
 # 4-package split: the real etc/init.d/singbox-ui runs `sing-box run` via procd
 # (absent in this container). Mount a no-op stub by the SAME name the rpcd
-# handler shells (SINGBOX_INIT=/etc/init.d/singbox-ui), so restart/generate RPCs
+# handler shells (SINGBOX_INITD=/etc/init.d/singbox-ui), so restart/generate RPCs
 # return 0 without procd hanging.
 STUB_INIT="$(mktemp)"
 printf '#!/bin/sh\nexit 0\n' > "$STUB_INIT"; chmod +x "$STUB_INIT"
