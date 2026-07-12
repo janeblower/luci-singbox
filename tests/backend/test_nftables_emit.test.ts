@@ -167,6 +167,22 @@ describe("nftables_emit", () => {
     expect(r.stdout).toContain("set wan_ifaces {");
   });
 
+  // Axis inherited from the deleted build_ruleset characterisation test: with no
+  // listen_port there is nothing to redirect TO, so the tproxy block must be
+  // skipped entirely — emitting it anyway (port 0, or a truncated `tproxy ip to`)
+  // would blackhole every marked flow. The rest of the ruleset must still be
+  // emitted, so a failure here means "redirect without a port", not "no output".
+  // The needle is the bare statement keyword: the emitter pads the family to 3
+  // chars, so the v4 rule reads `tproxy ip  to` (TWO spaces) and any longer
+  // needle silently never matches.
+  it("empty port: no tproxy rule is emitted, the rest of the ruleset still is", async () => {
+    const r = await emit(`"" "198.18.0.0/15" "fc00::/18" "br-lan" 0x1 0x1`);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout).toContain("table inet singbox_ui");
+    expect(r.stdout).toContain("chain prerouting {");
+    expect(r.stdout).not.toContain("tproxy");
+  });
+
   it("emit with custom port and interface", async () => {
     const r = await emit('1234 "10.0.0.0/8" "" "eth0"');
     expect(r.exitCode).toBe(0);

@@ -147,10 +147,14 @@ describe("nftables_uc", () => {
   it("C2.1.4: invalid listen_port (0, 99999, notaport) produces no tproxy line", async () => {
     for (const port of ["0", "99999", "notaport"]) {
       const r = await emitArgs(`${port} '198.18.0.0/15' '' 'br-lan'`);
+      // Needle is the bare keyword, not "tproxy ip to": the emitter pads the
+      // family to 3 chars, so the v4 rule reads `tproxy ip  to` (TWO spaces).
+      // The old needle matched nothing the emitter can produce, so this
+      // assertion could not fail — it passed even when a rule WAS emitted.
       expect(
         r.stdout,
-        `port ${port} should not produce tproxy ip`,
-      ).not.toContain("tproxy ip to");
+        `port ${port} should not produce a tproxy rule`,
+      ).not.toContain("tproxy");
     }
   });
 
