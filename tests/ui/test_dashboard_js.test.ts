@@ -358,6 +358,54 @@ describe("dashboard.js", () => {
     ).toBe(true);
   });
 
+  // H4: subscription group-import nests provider per-location URLTest groups
+  // as members of the subscription's own selector. A group tag that is itself
+  // a member of another group must render as a CARD inside its parent, not as
+  // its own top-level section (else the same nodes render twice).
+  it("H4: a group nested inside another group's `all` is a card, not its own section", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    const PROXIES = {
+      proxies: {
+        sub: { type: "Selector", now: "sub__grp__aaa", all: ["sub__grp__aaa"] },
+        sub__grp__aaa: {
+          type: "URLTest",
+          now: "leaf1",
+          all: ["leaf1", "leaf2"],
+        },
+        leaf1: { type: "Vless", history: [{ delay: 80 }] },
+        leaf2: { type: "Vless", history: [{ delay: 120 }] },
+      },
+    };
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    const h = Dash.buildDashboard();
+    await h.poll();
+    await h.refreshProxies();
+    const isGroup = (n: any) =>
+      n.attrs && /sb-dashboard-group\b/.test(n.attrs.class || "");
+    const groupSections = findAll(h.node, isGroup);
+    expect(groupSections.length).toBe(1);
+    expect(groupSections[0].attrs["data-group"]).toBe("sub");
+    // The nested group still renders — as a card inside its parent section.
+    const nestedCard = findNode(
+      h.node,
+      (n: any) =>
+        n.attrs &&
+        n.attrs["data-group"] === "sub" &&
+        n.attrs["data-name"] === "sub__grp__aaa" &&
+        /sb-dashboard-node\b/.test(n.attrs.class || ""),
+    );
+    expect(!!nestedCard).toBe(true);
+  });
+
   it("poll() does not refetch /proxies while a latency test is in flight (regression: wiped results)", async () => {
     const ctx = loadDashboard();
     const Dash = ctx.__moduleExports;

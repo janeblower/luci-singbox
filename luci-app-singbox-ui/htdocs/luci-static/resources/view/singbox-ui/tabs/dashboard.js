@@ -574,10 +574,20 @@ function buildDashboard() {
 
 	// Sections = proxy groups, plus every subscription that produced no group
 	// (DASH-3) so its metadata strip still has a home.
+	// H4: a group that is itself a MEMBER of another group (subscription
+	// group-import nests provider per-location URLTest groups under the
+	// subscription's own selector) is a card inside its parent, not a section
+	// of its own — else the same nodes render twice.
 	function sections() {
 		var proxies = state.proxies || {};
+		var referenced = {};
+		Object.keys(proxies).forEach(function (k) {
+			if (!isGroupType(proxies[k].type)) return;
+			(proxies[k].all || []).forEach(function (m) { referenced[m] = true; });
+		});
 		var out = Object.keys(proxies).filter(function (k) {
-			return isGroupType(proxies[k].type) && (proxies[k].all || []).length;
+			return isGroupType(proxies[k].type) && (proxies[k].all || []).length &&
+				!referenced[k];
 		});
 		Object.keys(state.subs || {}).sort().forEach(function (n) {
 			if (!proxies[n]) out.push(n);
