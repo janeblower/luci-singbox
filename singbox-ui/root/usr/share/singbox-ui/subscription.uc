@@ -762,7 +762,10 @@ function fetch_one(cur, name, timeout) {
 	});
 	write_atomic(t.stat, stat_json, 0o600);
 
-	persist(name, profile, ua_used ?? "", body, meta_json, stat_json);
+	if (helpers.uci_get_or_empty(cur, name, "sub_cache_persist") !== "0")
+		persist(name, profile, ua_used ?? "", body, meta_json, stat_json);
+	else
+		log(sprintf("fetch_subs: %s cache-persist off (tmpfs only)", name));
 
 	log(sprintf("fetch_subs: %s -> %s (%d nodes, %d skipped, format=%s, changed=%s)",
 	            name, t.txt, length(parsed.nodes), parsed.skipped, parsed.format,
@@ -811,7 +814,8 @@ function cmd_fetch_subs(cur, only) {
 		// C1: restore the flash copy FIRST. init.d runs `fetch-subs` before
 		// generate.uc and waits for it, so a boot with no network still hands
 		// generate.uc the last known good node list instead of nothing.
-		restore(name, profile_of(cur, name));
+		if (helpers.uci_get_or_empty(cur, name, "sub_cache_persist") !== "0")
+			restore(name, profile_of(cur, name));
 
 		let r;
 		try { r = fetch_one(cur, name, timeout); }

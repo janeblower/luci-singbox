@@ -292,6 +292,20 @@ describe("test_subscription_cache", () => {
     await exec(`rm -rf ${dir}`);
   });
 
+  it("F1: sub_cache_persist=0 keeps the cache out of flash; default persists it", async () => {
+    const off = await setup({ sub_cache_persist: "0" });
+    await off.run("fetch-subs");
+    const offLs = await exec(`ls ${off.dir}/cache/sub_sub1.txt 2>/dev/null || echo MISSING`);
+    expect(offLs.stdout.trim()).toBe("MISSING");
+    await exec(`rm -rf ${off.dir}`);
+
+    const { dir, run } = await setup();
+    await run("fetch-subs");
+    const onLs = await exec(`ls ${dir}/cache/sub_sub1.txt`);
+    expect(onLs.stdout.trim()).toBe(`${dir}/cache/sub_sub1.txt`);
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("metadata: headers override the body preamble and reach sub_status normalized", async () => {
     const { dir, run } = await setup();
     // preamble in the body carries a title + support url; the header re-states
