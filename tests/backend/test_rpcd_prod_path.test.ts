@@ -15,6 +15,7 @@ const SRC = `${WORK}/singbox-ui/root`;
 const HANDLER_SRC = `${SRC}/usr/libexec/rpcd/singbox-ui`;
 const ACL_SRC = `${WORK}/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json`;
 const SEED_NAME = "prodpath_probe_in";
+const META_NAME = "prodpath_meta_out";
 
 const IN_VM = process.env.SINGBOX_TESTS_IN_VM === "1";
 
@@ -101,6 +102,7 @@ describe("test_rpcd_prod_path", () => {
       rm -f /tmp/sb-prod-uci-snap /tmp/sb-prod-uci-existed
       # Also clean up any seeded UCI section
       uci -q delete 'singbox-ui.${SEED_NAME}' 2>/dev/null || true
+      uci -q delete 'singbox-ui.${META_NAME}' 2>/dev/null || true
       uci commit singbox-ui 2>/dev/null || true
     `);
   });
@@ -156,6 +158,47 @@ describe("test_rpcd_prod_path", () => {
       );
       expect(r.exitCode).toBe(0);
       await assertClean("export_section", r.stdout);
+    },
+  );
+
+  it.skipIf(!IN_VM)(
+    "4e) outbound_meta serves human-readable node names via the side-car",
+    async () => {
+      // Phase 0: the sing-box tag is ASCII-safe (and, for subscriptions, a
+      // content hash) — the name a human reads comes from outbound_meta.
+      await exec(`
+        if [ ! -f /etc/config/singbox-ui ]; then
+          cp -f '${SRC}/etc/config/singbox-ui' /etc/config/singbox-ui 2>/dev/null || : > /etc/config/singbox-ui
+        fi
+        uci -q delete 'singbox-ui.${META_NAME}' 2>/dev/null || true
+        uci set 'singbox-ui.${META_NAME}=outbound'
+        uci set 'singbox-ui.${META_NAME}.enabled=1'
+        uci set 'singbox-ui.${META_NAME}.type=url'
+        uci set 'singbox-ui.${META_NAME}.proxy_url=trojan://pw@meta.example:443#NL%20Smart%20Node'
+        uci commit singbox-ui
+      `);
+      await exec("ubus call singbox-ui generate 2>/dev/null");
+      const r = await exec("ubus call singbox-ui outbound_meta 2>/dev/null");
+
+      await exec(
+        `uci -q delete 'singbox-ui.${META_NAME}' 2>/dev/null; uci commit singbox-ui 2>/dev/null || true`,
+      );
+
+      expect(r.exitCode).toBe(0);
+      await assertClean("outbound_meta", r.stdout);
+      const got = JSON.parse(r.stdout) as {
+        meta: Record<string, { name: string; type: string; link: string }>;
+      };
+      expect(got.meta[META_NAME].name).toBe("NL Smart Node");
+      expect(got.meta[META_NAME].type).toBe("trojan");
+      expect(got.meta[META_NAME].link).toContain("trojan://");
+
+      // The side-car embeds the share-link (password inside) — must not be
+      // world-readable (WARP-key audit class). BusyBox has no stat(1).
+      const m = await exec(
+        "ls -l /tmp/singbox-ui/outbound-meta.json | cut -c1-10",
+      );
+      expect(m.stdout.trim()).toBe("-rw-------");
     },
   );
 

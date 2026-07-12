@@ -6,6 +6,7 @@
 //   refresh {what}      subscriptions->subscription.uc, rulesets->nft-rulesets.uc, all->both (force)
 //   status              return JSON: { running, subscriptions[], rulesets[] }
 //   read_config         return JSON: { content: <stringified /tmp/singbox-ui.json> }
+//   outbound_meta       return JSON: { meta: { <tag>: {name,type,link} } } (display names)
 //   clash_get           proxy GET request to Clash API (read-side, read ACL)
 //   clash_mutate        proxy POST/PATCH/PUT/DELETE to Clash API (write ACL)
 //   clash_delay         proxy GET /proxies/<name>/delay?... (read ACL, query built server-side)
@@ -374,6 +375,19 @@ function call_protocol_schema() {
     try { require("outbound"); require("inbound"); }
     catch (e) { emit_err("registry load failed"); return; }
     emit({ status: "ok", version: 1, schema: dump.dump_all() });
+}
+
+// outbound_meta — serve the side-car written by lib/outbound.uc at generate
+// time: tag -> { name, type, link }. The sing-box tag is ASCII-safe and often
+// a content hash; this is where the human-readable node name (and its share
+// link, for copy-link) lives. Read-only, read-ACL.
+function call_outbound_meta() {
+	drain_stdin();
+	let obj;
+	try { obj = json(fs.readfile(`${TMPDIR}/outbound-meta.json`) || "{}"); }
+	catch (e) { obj = {}; }
+	if (type(obj) !== "object") obj = {};
+	emit({ status: "ok", meta: obj });
 }
 
 function call_read_config() {
@@ -774,6 +788,7 @@ const METHODS = {
 	status_detail:       { sig: {},                                                   handler: call_status_detail },
 	sub_status:          { sig: {},                                                   handler: call_sub_status },
 	read_config:         { sig: {},                                                   handler: call_read_config },
+	outbound_meta:       { sig: {},                                                   handler: call_outbound_meta },
 	clash_get:           { sig: { path: "string" },                                   handler: call_clash_get },
 	clash_mutate:        { sig: { method: "string", path: "string", body: "string" }, handler: call_clash_mutate },
 	clash_delay:         { sig: { name: "string", url: "string", timeout: "string" }, handler: call_clash_delay },

@@ -15,6 +15,7 @@ const SAFE_READ_METHODS = [
   "status_detail",
   "sub_status",
   "read_config",
+  "outbound_meta",
   "clash_get",
   "clash_delay",
   "export_section",

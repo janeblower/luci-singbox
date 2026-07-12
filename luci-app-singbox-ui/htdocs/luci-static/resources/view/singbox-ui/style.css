@@ -205,6 +205,13 @@ button.cbi-button.busy {
 	border-color: #2e7d32; }
 .sb-dashboard-node-current .sb-dashboard-node-name { font-weight: 700; }
 
+/* Inline SVG icons (lib/icons.js). Scoped to .sb-icon — a bare `svg {}` rule
+ * would leak into the LuCI theme's own icons. Size comes from the caller
+ * (font-size/width on the icon or its parent), not from width/height attrs. */
+svg.sb-icon { display: block; flex: 0 0 auto; width: 1em; height: 1em; }
+svg.sb-icon-spin { animation: sb-icon-spin 1s linear infinite; }
+@keyframes sb-icon-spin { to { transform: rotate(360deg); } }
+
 .sb-lat-good { color: #2e7d32; } .sb-lat-mid { color: #f9a825; }
 .sb-lat-bad { color: #c62828; } .sb-lat-none { opacity: .5; }
 .sb-dashboard-unavailable { display: block; margin: 1em 0; }

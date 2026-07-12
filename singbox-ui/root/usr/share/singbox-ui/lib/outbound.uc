@@ -76,8 +76,26 @@ function read_subscription_urls(name) {
 	return urls;
 }
 
+// outbound-meta side-car: tag -> { name, type, link }. The sing-box JSON has
+// nowhere to keep a human-readable node name (the tag must stay ASCII-safe and
+// is referenced by route rules), so the display name — plus the originating
+// share-link, for the dashboard's copy-link button — lives here and is served
+// by rpcd's `outbound_meta`. Mode 0600: `link` carries the node's password/uuid
+// (the WARP-key audit finding: never leave a credential world-readable).
+const META_PATH = `${TMPDIR}/outbound-meta.json`;
+
+function write_meta(meta) {
+	fs.mkdir(TMPDIR, 0o755);
+	let f = fs.open(META_PATH, "w", 0o600);
+	if (!f) { warn("outbound.uc: cannot write " + META_PATH + "\n"); return; }
+	f.write(sprintf("%J", meta));
+	f.close();
+	fs.chmod(META_PATH, 0o600);   // a pre-existing file keeps its old mode on open()
+}
+
 function build_outbounds(cur) {
 	let outbounds = [];
+	let meta = {};
 
 	// S1.5: guard against duplicate outbound tags. sing-box rejects the whole
 	// config at load on a duplicate tag (e.g. a user outbound literally named
@@ -89,10 +107,11 @@ function build_outbounds(cur) {
 		let t = ob.tag;
 		if (seen_tags[t]) {
 			warn(sprintf("outbound.uc: duplicate outbound tag '%s'; skipping (would break sing-box load)\n", t));
-			return;
+			return false;
 		}
 		seen_tags[t] = true;
 		push(outbounds, ob);
+		return true;
 	}
 
 	cur.foreach("singbox-ui", "outbound", function(section) {
@@ -104,23 +123,33 @@ function build_outbounds(cur) {
 		let outbound = null;
 
 		if (kind === "url") {
-			let parsed = parse_proxy_url(section.proxy_url ?? "");
-			if (parsed) { parsed.tag = name; outbound = parsed; }
+			let p = sharelink.parse_proxy_link(section.proxy_url ?? "");
+			if (p) {
+				p.outbound.tag = name;
+				outbound = p.outbound;
+				meta[name] = { name: p.display_name || name, type: outbound.type, link: p.link };
+			}
 		} else if (kind === "subscription") {
 			let urls = read_subscription_urls(name);
 			if (!length(urls)) return;
 
 			if (section.sub_multi === "1") {
 				let children = [];
-				let i = 0;
 				for (let u in urls) {
-					let parsed = parse_proxy_url(u);
-					if (!parsed) { i++; continue; }
-					let tag = name + "__" + i;
-					parsed.tag = tag;
-					add_ob(parsed);
+					let p = sharelink.parse_proxy_link(u);
+					if (!p) continue;
+					// Tag from CONTENT, not from position: a provider reordering
+					// its node list must not move the user's selector pick onto
+					// another server. Two nodes that really are identical collide
+					// on the same hash — suffix them instead of dropping one (a
+					// dropped member would just vanish from the group).
+					let base = name + "__" + sharelink.content_tag(p.outbound);
+					let tag = base, n = 2;
+					while (seen_tags[tag]) { tag = sprintf("%s_%d", base, n); n++; }
+					p.outbound.tag = tag;
+					if (!add_ob(p.outbound)) continue;
 					push(children, tag);
-					i++;
+					meta[tag] = { name: p.display_name || tag, type: p.outbound.type, link: p.link };
 				}
 				if (length(children)) {
 					// GEN-3: only "selector"/"urltest" are valid sing-box group
@@ -138,8 +167,12 @@ function build_outbounds(cur) {
 
 			// Single-URL fallback (sub_multi=0): pick the first parseable one.
 			for (let u in urls) {
-				let parsed = parse_proxy_url(u);
-				if (parsed) { parsed.tag = name; outbound = parsed; break; }
+				let p = sharelink.parse_proxy_link(u);
+				if (!p) continue;
+				p.outbound.tag = name;
+				outbound = p.outbound;
+				meta[name] = { name: p.display_name || name, type: outbound.type, link: p.link };
+				break;
 			}
 		} else if (reg.get("outbound", kind)) {
 			// Every descriptor-backed kind — the proxy protocols, `direct`, the raw
@@ -205,6 +238,11 @@ function build_outbounds(cur) {
 		pruned = next;
 		if (stable) break;
 	}
+
+	// Side-car only ever describes outbounds that actually survived the prune.
+	let live = {};
+	for (let ob in pruned) if (meta[ob.tag]) live[ob.tag] = meta[ob.tag];
+	write_meta(live);
 
 	return pruned;
 }

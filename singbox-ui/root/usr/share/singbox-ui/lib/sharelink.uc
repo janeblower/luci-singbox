@@ -498,6 +498,46 @@ function parse_vmess(url) {
 	return out;
 }
 
+// display_name_of(url) — the RAW UTF-8 node name a human sees: the #fragment
+// (percent-decoded, control chars scrubbed) or, for vmess, the `ps` field of
+// the base64 JSON body. Deliberately NOT run through safe_tag: emoji/Cyrillic
+// names ("🇳🇱 Умная локация") must survive intact. This never reaches the
+// sing-box JSON — it goes to the outbound-meta side-car (lib/outbound.uc) and
+// is rendered by the UI as untrusted content (E()/textContent only).
+// Placed after b64_decode: ucode resolves top-level function refs by definition
+// order.
+function display_name_of(url) {
+	if (match(url, /^vmess:\/\//)) {
+		let dec = b64_decode(substr(url, 8));
+		if (dec == null) return null;
+		let cfg;
+		try { cfg = json(drop_ctrl(dec)); } catch (e) { return null; }
+		if (type(cfg) !== "object") return null;
+		let ps = drop_ctrl(`${cfg.ps ?? ""}`);
+		return length(ps) ? ps : null;
+	}
+	// Every other scheme puts the name in the trailing #fragment; the parsers'
+	// regexes treat the FIRST '#' as its start (query is [^#]*), so do the same.
+	let h = index(url, "#");
+	if (h < 0) return null;
+	let n = url_decode(substr(url, h + 1));
+	return length(n) ? n : null;
+}
+
+// content_tag(o) — stable, ASCII-safe tag suffix derived from what the node IS
+// (protocol + endpoint + credential), not from where it sits in the
+// subscription. A provider reordering its node list used to renumber every
+// sub_<i> tag, silently moving the user's selector pick onto a different
+// server; hashing the content instead keeps the tag pinned to the node across
+// refreshes. Callers namespace it (`<section>__<hash>`) and resolve the
+// (rare, identical-node) collisions.
+function content_tag(o) {
+	if (o == null) return null;
+	return fnv1a32(sprintf("%s|%s|%s|%s|%s|%s",
+		o.type ?? "", o.server ?? "", o.server_port ?? "",
+		o.uuid ?? "", o.password ?? "", o.method ?? ""));
+}
+
 function parse_proxy_url(url) {
 	if (match(url, /^vless:\/\//))     return parse_vless(url);
 	if (match(url, /^vmess:\/\//))     return parse_vmess(url);
@@ -514,9 +554,23 @@ function parse_proxy_url(url) {
 	return null;
 }
 
-// Only parse_proxy_url is consumed externally (outbound.uc re-export). The
-// per-scheme parsers and sanitisers stay file-private — they are reached
-// solely through parse_proxy_url's dispatch below.
+// parse_proxy_link(url) — the full parse result: the sing-box outbound (tag =
+// safe_tag, ASCII), the human-readable display_name (raw UTF-8, may be null)
+// and the originating link (for the dashboard's copy-link button).
+// parse_proxy_url stays the outbound-only entry point every existing caller
+// (json_raw descriptor, export_section, tests) already uses.
+// Defined after parse_proxy_url — definition order is resolution order.
+function parse_proxy_link(url) {
+	let ob = parse_proxy_url(url);
+	if (!ob) return null;
+	return { outbound: ob, display_name: display_name_of(url), link: url };
+}
+
+// The per-scheme parsers and sanitisers stay file-private — they are reached
+// solely through parse_proxy_url's dispatch above.
 return {
 	parse_proxy_url,
+	parse_proxy_link,
+	display_name_of,
+	content_tag,
 };
