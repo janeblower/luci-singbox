@@ -1212,4 +1212,29 @@ describe("monitoring.js", () => {
     const closedBtn = ctx.__test.find(m.node, isTabBtn("closed"));
     expect(tabCount(closedBtn)).toBe("300");
   });
+
+  it("byte columns use the dashboard's decimal scale, not a 1024 one", async () => {
+    // The two tabs used to disagree: the dashboard divided by 1000 and printed
+    // "1 MB", the table divided by 1024 and printed "976.6KB" for the same
+    // number. 1e6 is the discriminator — only a 1024 divisor keeps it in KB.
+    const ctx = loadMonitoring();
+    ctx.__test.setClashGet(() =>
+      Promise.resolve({
+        status: "ok",
+        body: JSON.stringify({
+          connections: [
+            {
+              ...conn("c1", "10.0.0.5", "hostA"),
+              download: 1_000_000,
+              upload: 0,
+            },
+          ],
+        }),
+      }),
+    );
+    const m = ctx.__moduleExports.buildMonitoring();
+    await m.poll();
+    expect(m.node.textContent.indexOf("1 MB")).toBeGreaterThanOrEqual(0);
+    expect(m.node.textContent.indexOf("KB")).toBe(-1);
+  });
 });

@@ -272,18 +272,14 @@ button.cbi-button.busy {
 .sb-dashboard-widgets { margin-top: 10px; }
 .sb-dashboard-widget { min-height: 78px; }
 .sb-dashboard-widget-title { display: block; }
-.sb-dashboard-widget-rows { margin-top: .2em; }
-.sb-dashboard-widget-row { display: flex; gap: .4em; justify-content: space-between; }
-.sb-dashboard-widget-key { color: var(--text-color-medium, #888); }
-.sb-dashboard-widget-val { font-variant-numeric: tabular-nums;
-	overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* `key: value` reads as one sentence per line. Pushing the value to the right
+ * edge (flex + space-between) made a two-row widget look like a broken table. */
+.sb-dashboard-widget-row { line-height: 1.4; }
+.sb-dashboard-widget-val { font-variant-numeric: tabular-nums; }
 .sb-dashboard-widget-row.sb-row-success .sb-dashboard-widget-val {
 	color: var(--success-color-medium, #2e7d32); }
 .sb-dashboard-widget-row.sb-row-error .sb-dashboard-widget-val {
 	color: var(--error-color-medium, #c62828); }
-
-.sb-dashboard-toolbar { display: flex; justify-content: flex-end; margin-top: 10px; }
-.sb-dashboard-toolbar .cbi-button { margin: 0; }
 
 /* Outbound section: one wide card per proxy group; its nodes tile inside it on
  * the page grid. */
@@ -294,7 +290,6 @@ button.cbi-button.busy {
 	color: var(--text-color-high); overflow-wrap: anywhere; }
 .sb-dashboard-grp-actions { display: flex; align-items: center;
 	justify-content: flex-end; gap: 6px; flex: 0 0 auto; }
-.sb-dashboard-grp-type { font-size: .8em; opacity: .6; }
 .sb-dashboard-grp-head button { margin: 0; min-height: 28px;
 	display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .sb-dashboard-sub-update { min-width: 130px; }
@@ -345,19 +340,13 @@ button.cbi-button.busy {
 	justify-content: space-between; gap: 8px; }
 .sb-dashboard-node-name { min-width: 0; line-height: 1.25;
 	overflow-wrap: anywhere; }
-/* Country badge (ISO code decoded from the name's flag emoji) — same chip as
-   Monitoring's route badge, sits right of the name. */
-.sb-dashboard-node-country { flex: 0 0 auto; margin-left: auto;
-	padding: 2px 6px; border-radius: 4px; background: rgba(128, 128, 128, .15);
-	font-size: 11px; font-weight: 500; line-height: 1.3; }
 .sb-dashboard-node-copy { width: 22px; height: 22px; min-width: 22px; padding: 1px;
 	margin: 0; box-sizing: border-box; display: flex; align-items: center;
 	justify-content: center; flex: 0 0 auto; line-height: 1; }
 .sb-dashboard-node-copy svg.sb-icon { width: 13px; height: 13px; }
 .sb-dashboard-node-foot { display: flex; align-items: center;
 	justify-content: space-between; gap: 8px; margin-top: 10px; }
-.sb-dashboard-node-type { min-width: 0; overflow-wrap: anywhere;
-	color: var(--text-color-medium, #888); }
+.sb-dashboard-node-type { min-width: 0; overflow-wrap: anywhere; }
 .sb-dashboard-lat { font-variant-numeric: tabular-nums; flex: 0 0 auto; }
 .sb-dashboard-node--selectable { cursor: pointer; }
 .sb-dashboard-node--selectable:hover { border-color: var(--primary-color-high, dodgerblue); }
@@ -367,7 +356,7 @@ button.cbi-button.busy {
 .sb-dashboard-node--switching { border-color: transparent !important;
 	overflow: hidden; cursor: wait; }
 
-.sb-lat-none { color: var(--primary-color-low, lightgray); opacity: .6; }
+.sb-lat-none { color: var(--primary-color-low, lightgray); }
 .sb-lat-good { color: var(--success-color-medium, #2e7d32); }
 .sb-lat-mid  { color: var(--warn-color-medium, #f9a825); }
 .sb-lat-bad  { color: var(--error-color-medium, #c62828); }

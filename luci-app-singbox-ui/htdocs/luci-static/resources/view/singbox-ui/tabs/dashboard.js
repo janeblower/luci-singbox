@@ -141,11 +141,8 @@ function buildDashboard() {
 
 	function setSortByLatency(on) {
 		state.sortByLatency = !!on;
-		// The button is the only affordance telling the user which order is live,
-		// so it carries the state (LuCI's -positive = "on").
-		if (state.ui && state.ui.sortBtn)
-			state.ui.sortBtn.className = 'cbi-button sb-sort-btn ' +
-				(state.sortByLatency ? 'cbi-button-positive' : 'cbi-button-neutral');
+		// The button lives in every section header and is rebuilt by renderGroups()
+		// below, which reads state.sortByLatency for its pressed styling.
 		repaint();
 	}
 	function chooseNode(groupName, member) {
@@ -343,20 +340,13 @@ function buildDashboard() {
 	function mountChrome() {
 		var widgets = E('div', { 'class': 'sb-dashboard-widgets' });
 		var groups  = E('div', { 'class': 'sb-dashboard-sections' });
-		var sortBtn = E('button', { 'class': 'cbi-button cbi-button-neutral sb-sort-btn',
-			'click': function () { setSortByLatency(!state.sortByLatency); } },
-			_('Sort by latency'));
 		var stopped = E('div', { 'class': 'sb-dashboard-stopped', 'role': 'status' },
 			_('sing-box is stopped or its Clash API is unreachable. Start the service (and enable the API in General settings) to display the dashboard.'));
-		var content = E('div', { 'class': 'sb-dashboard-content' }, [
-			widgets,
-			E('div', { 'class': 'sb-dashboard-toolbar' }, sortBtn),
-			groups
-		]);
+		var content = E('div', { 'class': 'sb-dashboard-content' }, [ widgets, groups ]);
 		root.innerHTML = '';
 		root.appendChild(stopped);
 		root.appendChild(content);
-		state.ui = { widgets: widgets, groups: groups, sortBtn: sortBtn, labels: {} };
+		state.ui = { widgets: widgets, groups: groups, labels: {} };
 	}
 
 	function fact(key, value) {
@@ -367,7 +357,7 @@ function buildDashboard() {
 	}
 	function metaAction(label, url) {
 		if (!/^https?:\/\/\S+$/i.test(url || '')) return null;
-		return E('a', { 'class': 'cbi-button sb-dashboard-meta-action', 'href': url,
+		return E('a', { 'class': 'btn cbi-button sb-dashboard-meta-action', 'href': url,
 			'target': '_blank', 'rel': 'noopener noreferrer',
 			'title': label, 'aria-label': label }, SbIcons.link());
 	}
@@ -384,6 +374,10 @@ function buildDashboard() {
 		var unlimited = t ? (t.isUnlimited || !total) : !total;
 		return {
 			title: m.title || s.title || s.name,
+			// A provider that reports a quota of 0/0 is reporting "unlimited, nothing
+			// spent" — that is a fact worth printing, not an absent one. Keying the
+			// row off the numbers instead of off the block's presence hid it.
+			hasTraffic: !!(t || s.userinfo),
 			used: used, total: total, unlimited: unlimited,
 			expire: fmtExpire(m.expire || u.expire),
 			refill: fmtExpire(m.refillDate),
@@ -405,7 +399,7 @@ function buildDashboard() {
 			fact(_('Nodes'),   '' + (s.node_count || 0)),
 			fact(_('Updated'), agoText(s.last_update))
 		];
-		if (f.used || f.total)
+		if (f.hasTraffic)
 			facts.push(fact(_('Traffic'), prettyBytes(f.used) + ' / ' +
 				(f.unlimited ? '∞' : prettyBytes(f.total))));
 		if (f.expire) facts.push(fact(_('Expires'), f.expire));
@@ -468,13 +462,12 @@ function buildDashboard() {
 				return function () { return chooseNode(g, mm); };
 			})(groupName, member));
 
+		// No country badge: the provider already puts the flag emoji in the node
+		// name, so an ISO chip beside it is the same fact twice — and the 24px it
+		// costs is what wrapped "WolfPN | Нидерланды 1" onto a second line.
 		var head = [ E('b', { 'class': 'sb-dashboard-node-name' }, displayName(member)) ];
-		// Country comes from the flag emoji the provider put in the node name
-		// (backend: sharelink.country_from_flag_emoji); absent -> no badge.
-		if (m.country)
-			head.push(E('span', { 'class': 'sb-dashboard-node-country' }, m.country));
 		if (m.link && COPYABLE_RE.test(m.link))
-			head.push(E('button', { 'class': 'cbi-button sb-dashboard-node-copy',
+			head.push(E('button', { 'class': 'btn cbi-button sb-dashboard-node-copy',
 				'title': _('Copy proxy link'), 'aria-label': _('Copy proxy link'),
 				'click': (function (link) {
 					return function (ev) {
@@ -486,7 +479,9 @@ function buildDashboard() {
 		var kids = [
 			E('div', { 'class': 'sb-dashboard-node-head' }, head),
 			E('div', { 'class': 'sb-dashboard-node-foot' }, [
-				E('span', { 'class': 'sb-dashboard-node-type' }, m.type || p.type || ''),
+				// Clash's spelling first ("VLESS", "Direct") — our own meta carries the
+				// lowercase share-link scheme, which reads as a typo next to it.
+				E('span', { 'class': 'sb-dashboard-node-type' }, p.type || m.type || ''),
 				E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
 			])
 		];
@@ -524,15 +519,11 @@ function buildDashboard() {
 		var busy  = !!state.testing[gname];
 		var actions = [];
 
-		if (grp)
-			actions.push(E('span', { 'class': 'sb-dashboard-grp-type' },
-				isSel ? _('selector') : _('auto')));
-
 		// "Update subscriptions" only where a subscription actually feeds the
 		// section — a hand-written selector has nothing to refresh.
 		if (state.subs[gname]) {
 			var upd = !!state.subUpdating[gname];
-			var uattrs = { 'class': 'cbi-button cbi-button-action sb-dashboard-sub-update' +
+			var uattrs = { 'class': 'btn cbi-button sb-dashboard-sub-update' +
 				(upd ? ' busy' : ''),
 				'click': ui.createHandlerFn(this, (function (n) {
 					return function () { return updateSub(n); };
@@ -544,10 +535,19 @@ function buildDashboard() {
 		}
 
 		if (grp) {
+			// The sort toggle rides in the section header instead of a toolbar row of
+			// its own: forkop has no such row, and a lone button floating above the
+			// sections was the most obviously out-of-place thing on the page.
+			actions.push(E('button', { 'class': 'btn cbi-button sb-sort-btn' +
+				(state.sortByLatency ? ' cbi-button-active' : ''),
+				'aria-pressed': state.sortByLatency ? 'true' : 'false',
+				'click': function () { setSortByLatency(!state.sortByLatency); } },
+				_('Sort by latency')));
+
 			var label = E('span', { 'class': 'sb-dashboard-test-label' },
 				testLabel(busy ? state.progress[gname] : null));
 			state.ui.labels[gname] = label;
-			var tattrs = { 'class': 'cbi-button cbi-button-action sb-dashboard-test' +
+			var tattrs = { 'class': 'btn cbi-button sb-dashboard-test' +
 				(busy ? ' busy' : ''),
 				'click': ui.createHandlerFn(this, (function (g) {
 					return function () { return testGroup(g); };

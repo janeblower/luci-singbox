@@ -43,10 +43,15 @@ function buildMonitoring() {
 		}, 200);
 	}
 
+	// Same prettyBytes the dashboard uses: decimal divisor, 3 significant digits.
+	// The table used to mix 1024-based "1.5MB" with the dashboard's 1000-based
+	// "1.5 MB" — two byte scales in one app, one of them always wrong.
 	function fmtBytes(n) {
-		n = n || 0; var u = ['B','KB','MB','GB','TB']; var i = 0;
-		while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-		return n.toFixed(i ? 1 : 0) + u[i];
+		n = +n || 0;
+		if (n < 1000) return n + ' B';
+		var u = ['B','KB','MB','GB','TB','PB'];
+		var e = Math.min(Math.floor(Math.log(n) / Math.log(1000)), u.length - 1);
+		return Number((n / Math.pow(1000, e)).toPrecision(3)) + ' ' + u[e];
 	}
 	function pad2(n) { return (n < 10 ? '0' : '') + n; }
 	function fmtDuration(ms) {
@@ -206,7 +211,7 @@ function buildMonitoring() {
 		return E('td', { 'data-label': label }, content);
 	}
 	function val(text, cls) {
-		var t = text || '—';
+		var t = text || '-';
 		return E('span', { 'class': 'sb-mon-val ' + (cls || ''), 'title': t }, t);
 	}
 
@@ -224,11 +229,11 @@ function buildMonitoring() {
 			td(_('Type'),  val(networkOf(c), 'sb-mon-net')),
 			td(_('Route'), val(routeOf(c), 'sb-mon-route')),
 			td(_('Time'),  time),
-			td(_('Down'),  val(fmtBytes(c.download))),
-			td(_('Up'),    val(fmtBytes(c.upload))),
+			td(_('Downloaded'), val(fmtBytes(c.download))),
+			td(_('Uploaded'),   val(fmtBytes(c.upload))),
 			td(_('Source'), E('span', { 'class': 'sb-mon-val sb-mon-src',
 				'title': src.name + ' ' + src.ip }, [
-				E('span', { 'class': 'sb-mon-src-name' }, src.name || '—'),
+				E('span', { 'class': 'sb-mon-src-name' }, src.name || '-'),
 				(src.ip && src.name !== src.ip)
 					? E('span', { 'class': 'sb-mon-src-ip' }, src.ip) : ''
 			])),
@@ -246,7 +251,7 @@ function buildMonitoring() {
 				'click': ui.createHandlerFn(this, (function (cid) {
 					return function () { return closeConn(cid); };
 				})(c.id))
-			}, SbIcons.x()) : E('span', { 'class': 'sb-mon-val' }, '—'))
+			}, SbIcons.x()) : E('span', { 'class': 'sb-mon-val' }, '-'))
 		]);
 	}
 
@@ -280,8 +285,8 @@ function buildMonitoring() {
 		var table = E('table', { 'class': 'table cbi-section-table sb-mon-table' }, [
 			E('thead', {}, E('tr', { 'class': 'tr table-titles' }, [
 				E('th', {}, _('Host')), E('th', {}, _('Type')), E('th', {}, _('Route')),
-				E('th', {}, _('Time')), E('th', {}, '↓ ' + _('Down')),
-				E('th', {}, '↑ ' + _('Up')), E('th', {}, _('Source')), E('th', {}, _('Close'))
+				E('th', {}, _('Time')), E('th', {}, '↓ ' + _('Downloaded')),
+				E('th', {}, '↑ ' + _('Uploaded')), E('th', {}, _('Source')), E('th', {}, _('Close'))
 			])),
 			tbody
 		]);
@@ -355,7 +360,7 @@ function buildMonitoring() {
 			state.filterDevice = 'all';
 		var sel = state.ui.deviceSel;
 		sel.innerHTML = '';
-		sel.appendChild(E('option', { 'value': 'all' }, _('All devices')));
+		sel.appendChild(E('option', { 'value': 'all' }, _('All')));
 		Object.keys(devices).sort().forEach(function (ip) {
 			var attr = { 'value': ip };
 			if (state.filterDevice === ip) attr.selected = '';

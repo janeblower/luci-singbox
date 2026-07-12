@@ -692,6 +692,42 @@ describe("dashboard.js", () => {
     expect(strip.textContent.indexOf("3 GB / ∞") >= 0).toBe(true);
   });
 
+  it("a 0/0 quota still prints the Traffic fact (it means unlimited, not absent)", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: '{"proxies":{}}' });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    // Providers that meter nothing report every counter as 0. Keying the row off
+    // the numbers (`used || total`) made the whole Traffic fact vanish for them.
+    ctx.__test.setSub(() =>
+      Promise.resolve({
+        status: "ok",
+        subscriptions: [
+          {
+            name: "zero",
+            node_count: 2,
+            userinfo: { upload: 0, download: 0, total: 0, expire: 0 },
+          },
+        ],
+      }),
+    );
+    const dz = Dash.buildDashboard();
+    await dz.poll();
+    await dz.refreshSubs();
+    const strip = findNode(
+      dz.node,
+      (n: any) => n.attrs && n.attrs["data-sub"] === "zero",
+    );
+    expect(strip.textContent.indexOf("0 B / ∞") >= 0).toBe(true);
+  });
+
   it("DASH-2: 'updated ago' uses server clock, not browser clock", async () => {
     const ctx = loadDashboard();
     const Dash = ctx.__moduleExports;
