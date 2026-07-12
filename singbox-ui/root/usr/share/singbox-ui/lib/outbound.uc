@@ -254,9 +254,9 @@ function build_outbounds(cur) {
 				// (direct/block/foreign/typo) -> dropped, logged. This is the leak fix's
 				// generate-side half and the map groups will reuse (Phase C).
 				// A2 detour resolution; also record which leaf each resolved
-				// detour targets so sub_hide_grouped_nodes can hide detour-only
-				// leaves (a leaf reachable only as another node's detour is noise
-				// in the top-level selector).
+				// detour targets so sub_hide_grouped_nodes='1' hides EVERY resolved
+				// detour-target leaf from `main` (the code can't tell a detour-ONLY
+				// leaf apart). View-only: the leaf still stays emitted in `outbounds`.
 				let detour_target = {};
 				for (let pd in pending_detour) {
 					let target = name_to_tag[pd.name];
@@ -298,7 +298,7 @@ function build_outbounds(cur) {
 					// static tag lookup. A static tag would dangle the moment the child
 					// group drops (empty/add_ob-fail) and would make the depth/cycle
 					// guards inert (the recursion below is never entered). C-1 + I-1.
-					let built = {};       // gtag -> emitted tag | null (PERMANENT drop). Not set for depth/cycle PATH-drops.
+					let built = {};       // gtag -> emitted tag | null (PERMANENT add_ob tag-collision drop). Not set for depth/cycle/empty-kids drops (context-dependent, re-walkable).
 					let building = {};    // gtag -> true while on the DFS stack (cycle break)
 					let resolve_ref, build_group;   // forward: ucode resolves let-bound fns in order
 					resolve_ref = function(nm, depth) {
@@ -322,7 +322,8 @@ function build_outbounds(cur) {
 							push(kids, t);
 						}
 						building[r._tag] = false;
-						if (!length(kids)) { built[r._tag] = null; return null; }   // empty group: permanent drop
+						if (!length(kids)) return null;   // do NOT memo: emptiness may be caused by a depth/cycle
+						                                  // path-drop of a nested child and is not context-independent
 						let gt = (lc(r.group.type) === "selector") ? "selector" : "urltest";
 						let gob = { tag: r._tag, type: gt, outbounds: kids };
 						// url/interval/tolerance: user override (main-level field) wins,

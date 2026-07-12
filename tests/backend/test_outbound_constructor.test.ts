@@ -804,4 +804,85 @@ config outbound 's'
     const r = await exec(`sing-box check -c ${sandboxConfig} 2>&1`);
     expect(r.exitCode).toBe(0);
   });
+
+  // ---- Fix wave 2: empty-kids memo must not poison shallow-buildable groups --
+
+  it("empty-kids memo gate: deep-nested provider groups aren't poisoned by a too-deep first walk", async () => {
+    await setup();
+    // Chain X→A→B→C→Leaf1 of urltest groups, fed in on-disk order [X,A,B,C].
+    // Default depth 3. Building X first: C sits at depth 4 (>3) → path-dropped →
+    // B empty → A empty. The buggy memo froze those empties to PERMANENT null, so
+    // the outer retry build_group(A,1) — which builds A→B→C(d3)→Leaf1 fine from
+    // A's own shallow root — hit the poison and returned null: A and B vanished,
+    // only C survived. Not memoizing the empty-kids case lets A and B rebuild.
+    const leaf = JSON.stringify({
+      o: {
+        type: "vless",
+        server: "9.9.9.9",
+        server_port: 443,
+        uuid: "99999999-9999-9999-9999-999999999999",
+      },
+      n: "Leaf1",
+      l: null,
+    });
+    const gX = JSON.stringify({
+      g: { type: "urltest", members: ["A"] },
+      n: "X",
+      m: ["A"],
+    });
+    const gA = JSON.stringify({
+      g: { type: "urltest", members: ["B"] },
+      n: "A",
+      m: ["B"],
+    });
+    const gB = JSON.stringify({
+      g: { type: "urltest", members: ["C"] },
+      n: "B",
+      m: ["C"],
+    });
+    const gC = JSON.stringify({
+      g: { type: "urltest", members: ["Leaf1"] },
+      n: "C",
+      m: ["Leaf1"],
+    });
+    await seed("s", [leaf, gX, gA, gB, gC]);
+    const doc = JSON.parse(
+      await runGen(`
+config outbound 's'
+\toption enabled '1'
+\toption type 'subscription'
+\toption sub_url 'https://x/y'
+\toption sub_multi '1'
+\toption sub_import_groups '1'
+`),
+    ) as Doc;
+    // Identify the groups by structure (their tags are content hashes): C holds
+    // the Leaf1 leaf, B holds C, A holds B.
+    const leafTag = doc.outbounds.find((o) => o.server === "9.9.9.9")
+      ?.tag as string;
+    expect(leafTag).toBeTruthy();
+    const holderOf = (childTag: string) =>
+      doc.outbounds.find(
+        (o) =>
+          (o.type === "urltest" || o.type === "selector") &&
+          (o.outbounds ?? []).includes(childTag),
+      )?.tag as string;
+    const gCtag = holderOf(leafTag);
+    const gBtag = holderOf(gCtag); // group B — poisoned to null when memo reverted
+    const gAtag = holderOf(gBtag); // group A — poisoned to null when memo reverted
+    // BOTH A and B are emitted as s__grp__ outbounds (not poisoned away). With the
+    // memo reverted, B and A are absent, so these tags aren't s__grp__ and fail.
+    expect(gBtag).toBeTruthy();
+    expect(gBtag.startsWith("s__grp__")).toBe(true);
+    expect(gAtag).toBeTruthy();
+    expect(gAtag.startsWith("s__grp__")).toBe(true);
+    // And the config stands on its own.
+    const sbAvail = await exec(
+      "command -v sing-box >/dev/null 2>&1 && echo YES || echo NO",
+    );
+    if (sbAvail.stdout.trim() === "YES") {
+      const r = await exec(`sing-box check -c ${sandboxConfig} 2>&1`);
+      expect(r.exitCode).toBe(0);
+    }
+  });
 });
