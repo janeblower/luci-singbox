@@ -208,6 +208,8 @@ function build_outbounds(cur) {
 				let prefix = section.sub_node_prefix ?? "";
 
 				let children = [];
+				let name_to_tag = {};     // provider display-name -> our tag (same subscription only)
+				let pending_detour = [];  // { ob, name } resolved after all tags are known
 				for (let p in nodes) {
 					// Tag from CONTENT, not from position: a provider reordering
 					// its node list must not move the user's selector pick onto
@@ -222,7 +224,19 @@ function build_outbounds(cur) {
 					p.outbound.tag = tag;
 					if (!add_ob(p.outbound)) continue;
 					push(children, tag);
+					// First name wins on a duplicate display name (rare, provider-side).
+					let dn = p.display_name ?? tag;
+					if (!(dn in name_to_tag)) name_to_tag[dn] = tag;
+					if (p.detour_name != null) push(pending_detour, { ob: p.outbound, name: p.detour_name });
 					meta[tag] = meta_entry(prefix + (p.display_name || tag), p.outbound, p.link);
+				}
+				// Resolve each detour STRICTLY to a same-subscription node. Unresolved
+				// (direct/block/foreign/typo) -> dropped, logged. This is the leak fix's
+				// generate-side half and the map groups will reuse (Phase C).
+				for (let pd in pending_detour) {
+					let target = name_to_tag[pd.name];
+					if (target != null) pd.ob.detour = target;
+					else warn(sprintf("outbound.uc: subscription '%s': dropping detour to '%s' (not a node of this subscription)\n", name, pd.name));
 				}
 				if (length(children)) {
 					// GEN-3: only "selector"/"urltest" are valid sing-box group

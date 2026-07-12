@@ -360,4 +360,24 @@ printf("%J", ob.build_constructor_for(s, "hysteria2"));
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe(golden);
   });
+
+  it("subscription detour to a non-subscription tag is dropped (no leak)", async () => {
+    await setup();
+    // one node record with a provider detour pointing at the builtin direct
+    const line = JSON.stringify({ o: { type: "vless", server: "1.2.3.4",
+      server_port: 443, uuid: "11111111-1111-1111-1111-111111111111" },
+      n: "Node A", l: null, d: "direct" });
+    await exec(`printf '%s\\n' '${line.replace(/'/g, "'\\''")}' > ${sandboxDir}/subs/sub_s.txt`);
+    const cfg = await runGen(`
+config outbound 's'
+\toption enabled '1'
+\toption type 'subscription'
+\toption sub_url 'https://x/y'
+\toption sub_multi '1'
+`);
+    const doc = JSON.parse(cfg);
+    const node = doc.outbounds.find((o) => (o.tag || "").startsWith("s__"));
+    expect(node).toBeTruthy();
+    expect(node.detour).toBeUndefined();
+  });
 });
