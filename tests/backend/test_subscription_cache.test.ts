@@ -105,11 +105,11 @@ async function reloads(dir: string): Promise<number> {
 describe("test_subscription_cache", () => {
   useGuest();
 
-  it("U2: the default User-Agent is sing-box/<version>, not a browser UA", async () => {
+  it("U2/H2: the default User-Agent is Happ/1.0, not a browser UA", async () => {
     const { dir, run } = await setup();
     await run("fetch-subs");
     const log = await exec(`cat ${dir}/curl.log`);
-    expect(log.stdout).toContain("-A sing-box/1.11.0");
+    expect(log.stdout).toContain("-A Happ/1.0");
     expect(log.stdout).not.toContain("Chrome/");
     await exec(`rm -rf ${dir}`);
   });

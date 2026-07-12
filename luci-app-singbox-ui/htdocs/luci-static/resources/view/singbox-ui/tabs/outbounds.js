@@ -232,19 +232,21 @@ function buildOutboundsMap() {
 	// URI list there, an HTML "open in the app" stub for a browser UA). The
 	// backend therefore rotates through the known client profiles until a body
 	// actually parses — a free-text UA would only pin it to one guess. Pick a
-	// profile ID, not a UA string; empty = start with sing-box and rotate.
+	// profile ID, not a UA string; empty = start with Happ and rotate. New
+	// outbounds default to 'happ' explicitly (H2): Happ's per-location format
+	// groups nodes, where the sing-box UA yields a flat list.
 	o = s.taboption('basic', form.ListValue, 'sub_user_agent', _('User-Agent'));
 	o.modalonly = true;
 	o.depends('type', 'subscription');
 	o.description = _('Client profile whose User-Agent is sent when fetching. Tried first; if the provider answers with something unparseable, the other profiles are tried in turn.');
-	o.value('', _('Automatic (sing-box, then others)'));
+	o.value('', _('Automatic (Happ, then others)'));
 	o.value('sing-box', 'sing-box');
 	o.value('happ', 'Happ');
 	o.value('v2rayn', 'v2rayN');
 	o.value('v2rayng', 'v2rayNG');
 	o.value('mihomo', 'Mihomo');
 	o.value('clash.meta', 'Clash.Meta');
-	o.default = '';
+	o.default = 'happ';
 
 	// Remnawave/Happ-style panels bind a config to a device: without an X-HWID
 	// they hand back an empty body. The default is derived from the router's MAC

@@ -317,6 +317,30 @@ print(n);
     await exec(`rm -rf ${dir}`);
   });
 
+  it("H2: automatic UA rotation (empty sub_user_agent) tries Happ first", async () => {
+    // Providers serve a different body per UA; under Happ this one returns the
+    // rich grouped format, so the automatic rotation order now leads with Happ
+    // and falls back to sing-box/others exactly as before.
+    const dir = tmpDir();
+    await exec(`mkdir -p ${dir}/runtime ${dir}/subcache`);
+    await putFile(
+      uciSub("subA", { sub_url: "https://example.test/sub" }),
+      `${dir}/singbox-ui`,
+    );
+    const probe = `
+let sub = require("subscription");
+let uci = require("uci").cursor(getenv("UCI_CONFIG_DIR"));
+print(join(",", sub._ua_candidates_for_test(uci, "subA")) + "\\n");
+`;
+    const tmpUc = `/tmp/sb-ua-probe-${Date.now()}.uc`;
+    await putFile(probe, tmpUc);
+    const r = await exec(
+      `cd /tmp/work && env UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/runtime SINGBOX_SUB_CACHE=${dir}/subcache ucode -L ${LIB} -L ${SHARE} ${tmpUc}; rc=$?; rm -f ${tmpUc}; exit $rc`,
+    );
+    expect(r.stdout.trim().split(",")[0]).toBe("happ");
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("parse_ss: plain method:password@host:port#name", async () => {
     const tmpUc = `/tmp/sb-parse-${Date.now()}.uc`;
     await putFile(

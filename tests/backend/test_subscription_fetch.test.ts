@@ -79,10 +79,11 @@ print(sprintf("%J", captured));
 
     // mysub2: also picked up. An empty sub_user_agent no longer reaches the
     // fetcher as "": U2 resolves the profile BEFORE the job is built, so the
-    // first candidate is sing-box's own UA (not the old Chrome default).
+    // first candidate is the profile that leads UA_ORDER. H2: that's Happ's
+    // UA (grouped per-location bodies), not the old Chrome default.
     const job2 = cap.find((j) => j.url.includes("sub.example.com/y"));
     expect(job2).toBeDefined();
-    expect(job2?.ua).toBe("sing-box/1.11.0");
+    expect(job2?.ua).toBe("Happ/1.0");
     expect(job2?.has_cfg).toBe(false);
   });
 

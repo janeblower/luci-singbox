@@ -49,11 +49,11 @@ const CURL = getenv("CURL") || "/usr/bin/curl";
 const RETRY_SLEEP = (getenv("SINGBOX_RETRY_SLEEP") != null) ? +getenv("SINGBOX_RETRY_SLEEP") : 2;
 const RETRIES = 3;
 
-// U1/U2: User-Agent profiles. Panels routinely serve a DIFFERENT format (or a
+// U1/U2/H2: User-Agent profiles. Panels routinely serve a DIFFERENT format (or a
 // HTML "open in the app" stub) per UA — a Chrome UA, our old default, is the one
-// that gets the stub. We now default to sing-box's own UA and rotate through the
-// client UAs until a body actually PARSES.
-const UA_ORDER = [ "sing-box", "happ", "v2rayn", "v2rayng", "mihomo", "clash.meta" ];
+// that gets the stub. We now default to Happ's UA (richest per-location grouped
+// format) and rotate through the other client UAs until a body actually PARSES.
+const UA_ORDER = [ "happ", "sing-box", "v2rayn", "v2rayng", "mihomo", "clash.meta" ];
 const UA_STATIC = {
 	happ:        "Happ/1.0",
 	v2rayn:      "v2rayN/6.42",

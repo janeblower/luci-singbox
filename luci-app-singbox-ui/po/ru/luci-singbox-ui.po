@@ -79,7 +79,7 @@ msgstr "Дополнительно"
 msgid "All"
 msgstr "Все"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:350
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:352
 msgid ""
 "Allow the provider to route imported nodes directly (detour to direct/"
 "block), bypassing the proxy for those nodes. Unsafe — leave off unless you "
@@ -93,11 +93,11 @@ msgstr ""
 msgid "Auto-update subscriptions"
 msgstr "Авто-обновление подписок"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:240
-msgid "Automatic (sing-box, then others)"
-msgstr "Автоматически (sing-box, затем остальные)"
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:242
+msgid "Automatic (Happ, then others)"
+msgstr "Автоматически (Happ, затем остальные)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:252
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:254
 msgid "Automatic HWID"
 msgstr "Автоматический HWID"
 
@@ -148,7 +148,7 @@ msgstr "Не удалось разобрать URL vmess"
 msgid "Clash API"
 msgstr "Clash API"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:239
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:241
 msgid ""
 "Client profile whose User-Agent is sent when fetching. Tried first; if the "
 "provider answers with something unparseable, the other profiles are tried in "
@@ -178,7 +178,7 @@ msgstr "Закрыть соединение"
 msgid "Closed"
 msgstr "Закрытые"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:319
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:321
 msgid ""
 "Comma-separated ISO country codes, matched against the flag emoji in the "
 "node name. Empty = all countries."
@@ -209,7 +209,7 @@ msgstr "Не удалось скопировать — выделите текс
 msgid "Copy proxy link"
 msgstr "Скопировать ссылку"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:316
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:318
 msgid "Countries"
 msgstr "Страны"
 
@@ -301,7 +301,7 @@ msgstr "Входящий"
 msgid "Downloaded"
 msgstr "Загружено"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:313
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:315
 msgid "Drop nodes whose name matches. Applied after the include filter."
 msgstr "Исключить ноды, чьё имя совпало. Применяется после фильтра включения."
 
@@ -338,15 +338,15 @@ msgstr ""
 msgid "Error: "
 msgstr "Ошибка: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:310
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:312
 msgid "Exclude nodes (regex)"
 msgstr "Исключить ноды (регексп)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:285
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:287
 msgid "Expand to selector"
 msgstr "Развернуть в selector"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:276
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:278
 msgid "Expected scheme://host:port, e.g. socks5h://127.0.0.1:2080"
 msgstr "Ожидается scheme://host:port, например socks5h://127.0.0.1:2080"
 
@@ -381,7 +381,7 @@ msgstr ""
 msgid "Failed to switch node"
 msgstr "Не удалось переключить узел"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:272
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:274
 msgid ""
 "Fetch this subscription through a proxy (e.g. a local mixed/socks inbound), "
 "for providers whose panel is unreachable directly. Leave empty to fetch "
@@ -391,7 +391,7 @@ msgstr ""
 "inbound) — для провайдеров, чья панель недоступна напрямую. Пусто — загрузка "
 "напрямую."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:268
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:270
 msgid "Fetch via proxy"
 msgstr "Загружать через прокси"
 
@@ -417,7 +417,7 @@ msgstr "Создание…"
 msgid "Global sing-box settings: cache file, log."
 msgstr "Глобальные настройки sing-box: кэш-файл, лог."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:258
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:260
 msgid "HWID"
 msgstr "HWID"
 
@@ -425,11 +425,11 @@ msgstr "HWID"
 msgid "Hide"
 msgstr "Скрыть"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:333
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:335
 msgid "Hide grouped nodes"
 msgstr "Скрывать сгруппированные ноды"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:337
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:339
 msgid ""
 "Hide nodes that are already inside an imported group, or used only as a "
 "detour hop, from the top selector. They stay routable."
@@ -462,7 +462,7 @@ msgstr "Импорт"
 msgid "Import JSON"
 msgstr "Импорт JSON"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:331
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:333
 msgid ""
 "Import URLTest/selector groups the provider ships (country groups, detour "
 "cascades). Off by default: turning it on changes the selector membership, "
@@ -477,7 +477,7 @@ msgstr ""
 msgid "Import share-link"
 msgstr "Импорт share-link"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:327
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:329
 msgid "Import subscription groups"
 msgstr "Импортировать группы подписки"
 
@@ -503,7 +503,7 @@ msgstr "Inbound"
 msgid "Inbounds"
 msgstr "Входящие"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:304
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:306
 msgid "Include nodes (regex)"
 msgstr "Включить ноды (регексп)"
 
@@ -586,7 +586,7 @@ msgstr "Некорректный up_mbps: "
 msgid "JSON"
 msgstr "JSON"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:356
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:358
 msgid ""
 "Keep a last-known-good copy on flash so the subscription survives a reboot. "
 "Off = cache only in RAM (lost on reboot); avoids writing node passwords to "
@@ -596,7 +596,7 @@ msgstr ""
 "перезагрузку. Выключено — кэш только в RAM (теряется при перезагрузке); так "
 "пароли нод не попадают на флеш."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:307
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:309
 msgid "Keep only nodes whose name matches. Empty = keep all."
 msgstr "Оставить только ноды, чьё имя совпало. Пусто — оставить все."
 
@@ -662,7 +662,7 @@ msgstr ""
 "резолвируйте или комбинируйте с логическими правилами. Правила, поглощённые "
 "логическим или встроенным rule-set'ом, не применяются отдельно."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:339
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:341
 msgid "Max group nesting"
 msgstr "Макс. вложенность групп"
 
@@ -720,7 +720,7 @@ msgstr "Нет закрытых соединений"
 msgid "No proxy groups. Configure selector/urltest outbounds."
 msgstr "Нет прокси-групп. Настройте selector/urltest outbound'ы."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:322
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:324
 msgid "Node name prefix"
 msgstr "Префикс имени ноды"
 
@@ -754,7 +754,7 @@ msgstr "Исходящие"
 msgid "Output file (empty = procd stdout)"
 msgstr "Файл вывода (пусто = stdout procd)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:263
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:265
 msgid ""
 "Override the hardware ID sent to the provider. Leave empty to use the "
 "automatic one."
@@ -786,7 +786,7 @@ msgstr ""
 "Периодически обновлять подписки через cron (каждая подписка учитывает свой "
 "интервал обновления)."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:352
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:354
 msgid "Persist cache to flash"
 msgstr "Сохранять кэш на флеш"
 
@@ -799,7 +799,7 @@ msgstr "Постоянный кэш для прокси, DNS-ответов и �
 msgid "Plugins"
 msgstr "Плагины"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:324
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:326
 msgid ""
 "Prepended to the display name of imported nodes. Does not change the tag."
 msgstr ""
@@ -943,11 +943,11 @@ msgstr "Поиск"
 msgid "Selected"
 msgstr "Выбрано"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:290
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:292
 msgid "Selector type"
 msgstr "Тип селектора"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:256
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:258
 msgid ""
 "Send an X-HWID header derived from this router (MAC + model). Required by "
 "panels that bind a subscription to one device."
@@ -1076,7 +1076,7 @@ msgstr "Всего трафика"
 msgid "Transport"
 msgstr "Транспорт"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:346
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:348
 msgid "Trust provider routing"
 msgstr "Доверять маршрутизации провайдера"
 
@@ -1098,7 +1098,7 @@ msgstr "Настройки интерфейса"
 msgid "URL must not be empty"
 msgstr "URL не должен быть пустым"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:297
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:299
 msgid "URL-test URL"
 msgstr "URL для url-test"
 
@@ -1131,7 +1131,7 @@ msgstr "Неподдерживаемая схема: "
 msgid "Unsupported vless flow: "
 msgstr "Неподдерживаемый vless flow: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:279
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:281
 msgid "Update interval (s)"
 msgstr "Интервал обновления (с)"
 
@@ -1158,7 +1158,7 @@ msgstr "Отдано"
 msgid "Used by"
 msgstr "Используется в"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:236
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:238
 msgid "User-Agent"
 msgstr "User-Agent"
 
@@ -1276,6 +1276,9 @@ msgstr "В vmess-ссылке отсутствует server/port/uuid"
 #~ msgid "Auto-emits a hijack-dns route rule for this inbound."
 #~ msgstr ""
 #~ "Автоматически создаёт правило маршрутизации hijack-dns для этого inbound."
+
+#~ msgid "Automatic (sing-box, then others)"
+#~ msgstr "Автоматически (sing-box, затем остальные)"
 
 #~ msgid "Bearer token for the Clash API. Leave empty for no auth."
 #~ msgstr "Bearer-токен для Clash API. Пусто — без авторизации."

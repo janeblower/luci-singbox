@@ -86,7 +86,7 @@ msgstr ""
 msgid "All"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:350
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:352
 msgid ""
 "Allow the provider to route imported nodes directly (detour to direct/"
 "block), bypassing the proxy for those nodes. Unsafe — leave off unless you "
@@ -97,11 +97,11 @@ msgstr ""
 msgid "Auto-update subscriptions"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:240
-msgid "Automatic (sing-box, then others)"
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:242
+msgid "Automatic (Happ, then others)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:252
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:254
 msgid "Automatic HWID"
 msgstr ""
 
@@ -152,7 +152,7 @@ msgstr ""
 msgid "Clash API"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:239
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:241
 msgid ""
 "Client profile whose User-Agent is sent when fetching. Tried first; if the "
 "provider answers with something unparseable, the other profiles are tried in "
@@ -179,7 +179,7 @@ msgstr ""
 msgid "Closed"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:319
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:321
 msgid ""
 "Comma-separated ISO country codes, matched against the flag emoji in the "
 "node name. Empty = all countries."
@@ -208,7 +208,7 @@ msgstr ""
 msgid "Copy proxy link"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:316
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:318
 msgid "Countries"
 msgstr ""
 
@@ -296,7 +296,7 @@ msgstr ""
 msgid "Downloaded"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:313
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:315
 msgid "Drop nodes whose name matches. Applied after the include filter."
 msgstr ""
 
@@ -330,15 +330,15 @@ msgstr ""
 msgid "Error: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:310
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:312
 msgid "Exclude nodes (regex)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:285
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:287
 msgid "Expand to selector"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:276
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:278
 msgid "Expected scheme://host:port, e.g. socks5h://127.0.0.1:2080"
 msgstr ""
 
@@ -371,14 +371,14 @@ msgstr ""
 msgid "Failed to switch node"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:272
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:274
 msgid ""
 "Fetch this subscription through a proxy (e.g. a local mixed/socks inbound), "
 "for providers whose panel is unreachable directly. Leave empty to fetch "
 "directly."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:268
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:270
 msgid "Fetch via proxy"
 msgstr ""
 
@@ -403,7 +403,7 @@ msgstr ""
 msgid "Global sing-box settings: cache file, log."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:258
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:260
 msgid "HWID"
 msgstr ""
 
@@ -411,11 +411,11 @@ msgstr ""
 msgid "Hide"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:333
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:335
 msgid "Hide grouped nodes"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:337
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:339
 msgid ""
 "Hide nodes that are already inside an imported group, or used only as a "
 "detour hop, from the top selector. They stay routable."
@@ -445,7 +445,7 @@ msgstr ""
 msgid "Import JSON"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:331
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:333
 msgid ""
 "Import URLTest/selector groups the provider ships (country groups, detour "
 "cascades). Off by default: turning it on changes the selector membership, "
@@ -457,7 +457,7 @@ msgstr ""
 msgid "Import share-link"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:327
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:329
 msgid "Import subscription groups"
 msgstr ""
 
@@ -480,7 +480,7 @@ msgstr ""
 msgid "Inbounds"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:304
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:306
 msgid "Include nodes (regex)"
 msgstr ""
 
@@ -563,14 +563,14 @@ msgstr ""
 msgid "JSON"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:356
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:358
 msgid ""
 "Keep a last-known-good copy on flash so the subscription survives a reboot. "
 "Off = cache only in RAM (lost on reboot); avoids writing node passwords to "
 "flash."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:307
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:309
 msgid "Keep only nodes whose name matches. Empty = keep all."
 msgstr ""
 
@@ -631,7 +631,7 @@ msgid ""
 "standalone."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:339
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:341
 msgid "Max group nesting"
 msgstr ""
 
@@ -688,7 +688,7 @@ msgstr ""
 msgid "No proxy groups. Configure selector/urltest outbounds."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:322
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:324
 msgid "Node name prefix"
 msgstr ""
 
@@ -721,7 +721,7 @@ msgstr ""
 msgid "Output file (empty = procd stdout)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:263
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:265
 msgid ""
 "Override the hardware ID sent to the provider. Leave empty to use the "
 "automatic one."
@@ -747,7 +747,7 @@ msgid ""
 "interval)."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:352
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:354
 msgid "Persist cache to flash"
 msgstr ""
 
@@ -760,7 +760,7 @@ msgstr ""
 msgid "Plugins"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:324
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:326
 msgid ""
 "Prepended to the display name of imported nodes. Does not change the tag."
 msgstr ""
@@ -897,11 +897,11 @@ msgstr ""
 msgid "Selected"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:290
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:292
 msgid "Selector type"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:256
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:258
 msgid ""
 "Send an X-HWID header derived from this router (MAC + model). Required by "
 "panels that bind a subscription to one device."
@@ -1026,7 +1026,7 @@ msgstr ""
 msgid "Transport"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:346
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:348
 msgid "Trust provider routing"
 msgstr ""
 
@@ -1048,7 +1048,7 @@ msgstr ""
 msgid "URL must not be empty"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:297
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:299
 msgid "URL-test URL"
 msgstr ""
 
@@ -1081,7 +1081,7 @@ msgstr ""
 msgid "Unsupported vless flow: "
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:279
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:281
 msgid "Update interval (s)"
 msgstr ""
 
@@ -1108,7 +1108,7 @@ msgstr ""
 msgid "Used by"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:236
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:238
 msgid "User-Agent"
 msgstr ""
 
