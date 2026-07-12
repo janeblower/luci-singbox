@@ -62,16 +62,10 @@ const { exports: icons } = loadLuciModule(ICONS_JS, {
   },
 });
 
-const NAMES = [
-  "loaderCircle",
-  "copy",
-  "link",
-  "x",
-  "pause",
-  "play",
-  "search",
-  "snake",
-];
+// Derived from the module rather than hand-listed: a hand-maintained array
+// silently stops covering an icon added later. icons.js exports "svg" too
+// (the shared builder, not an icon) so it is the one name excluded.
+const NAMES = Object.keys(icons).filter((k) => k !== "svg");
 
 describe("lib/icons.js", () => {
   it.each(NAMES)("%s is exported", (name) => {

@@ -236,20 +236,55 @@ describe("build_apk_noarch", () => {
     },
   );
 
+  it.skipIf(!hasBash)(
+    "every file under luci-app-singbox-ui/{root,htdocs}/ lands in the built package root",
+    () => {
+      const { work } = ensureBuild();
+      const dst = resolve(work, ".build/pkg-root-luci-app");
+      // Same git-ls-files-as-ground-truth trick as the singbox-ui assertion
+      // above (a re-walk of the same tree the build reads from can never
+      // catch a build that drops a file — both sides would agree). This
+      // covers BOTH mappings populate_luciapp_root does: root/ -> pkgroot/
+      // (menu.d, acl.d) and htdocs/ -> pkgroot/www/ (the LuCI serving
+      // convention). Before this test, the singbox-ui package had this exact
+      // guard but the luci-app package — the entire frontend, every view JS
+      // plus style.css — had zero packaging coverage.
+      const mappings: [string, string][] = [
+        ["luci-app-singbox-ui/root", ""],
+        ["luci-app-singbox-ui/htdocs", "www/"],
+      ];
+      for (const [src, prefix] of mappings) {
+        const lsFiles = spawnSync("git", ["ls-files", "--", src], {
+          cwd: ROOT,
+          encoding: "utf8",
+        });
+        const want = lsFiles.stdout
+          .split("\n")
+          .filter(Boolean)
+          .map((f) => prefix + f.slice(src.length + 1));
+        expect(want.length).toBeGreaterThan(0);
+        for (const rel of want)
+          expect(existsSync(join(dst, rel)), `packaged: ${rel}`).toBe(true);
+      }
+    },
+  );
+
   // D4.5/E: the core backend package must ship ONLY plugin infrastructure
   // under lib/plugins/ — registry.uc + discovery.uc. Actual plugins ship
   // their own lib/plugins/<name>/ subtree from their own package (e.g.
-  // singbox-ui-plugin-awg_warp), never from core. Formerly guarded by
-  // reading the generated install manifest (tests/cross/test_install_manifest_fresh.test.ts,
-  // deleted alongside it); since populate_singbox_root now does a plain
-  // `cp -a` of singbox-ui/root/ into the package root, what core ships is
-  // identical to what's in the source tree, so this checks the source
-  // directly — no build required.
-  it("D4.5/E: core ships only plugin INFRASTRUCTURE under lib/plugins/ (registry.uc + discovery.uc); no plugin payloads", () => {
-    const dir = resolve(
-      ROOT,
-      "singbox-ui/root/usr/share/singbox-ui/lib/plugins",
-    );
-    expect(readdirSync(dir).sort()).toEqual(["discovery.uc", "registry.uc"]);
-  });
+  // singbox-ui-plugin-awg_warp), never from core. Checked on the BUILT
+  // package root, not the source tree: reading the source only proves the
+  // repo is clean, not that the packager ships it that way, and this
+  // invariant is about what actually lands on the router.
+  it.skipIf(!hasBash)(
+    "D4.5/E: core ships only plugin INFRASTRUCTURE under lib/plugins/ (registry.uc + discovery.uc); no plugin payloads",
+    () => {
+      const { work } = ensureBuild();
+      const dir = resolve(
+        work,
+        ".build/pkg-root-singbox-ui/usr/share/singbox-ui/lib/plugins",
+      );
+      expect(readdirSync(dir).sort()).toEqual(["discovery.uc", "registry.uc"]);
+    },
+  );
 });

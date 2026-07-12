@@ -535,11 +535,17 @@ jobs:
       # so installs upgrade cleanly while per-package -r<N> drives churn from here.
       #
       # Path-sets are intentionally append-only / stable: each is `git rev-list
-      # --count` over the package subtree + the packager (build-apk.sh) + its
-      # install manifest. We bias toward OVER-counting (a shared packager/manifest
-      # change re-versions everything) because under-counting is the dangerous
-      # direction — it would leave a CHANGED package on a stale version so the feed
-      # never ships the update.
+      # --count` over the package subtree + the packager (build-apk.sh). The
+      # count() calls below still also name the deleted
+      # scripts/install-manifest-*.txt pathspecs (build-apk.sh now lays down
+      # the tree with a plain `cp -a`; there is no manifest anymore). That is
+      # deliberate: they are kept as HISTORICAL pathspecs so the count can
+      # only go forward. `git rev-list --count` on a nonexistent path returns
+      # 0 harmlessly, whereas REMOVING the pathspec would make the count go
+      # DOWN — i.e. backwards. We bias toward OVER-counting (a shared
+      # packager change re-versions everything) because under-counting is the
+      # dangerous direction — it would leave a CHANGED package on a stale
+      # version so the feed never ships the update.
       - name: Derive version
         id: version
         run: |
