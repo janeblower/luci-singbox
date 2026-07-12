@@ -548,6 +548,19 @@ function buildDashboard() {
 						return copyLink(link);
 					};
 				})(m.link) }, SbIcons.copy()));
+		// H5: a provider-imported urltest group is a MEMBER card here (not a
+		// section of its own, see sections()'s `referenced` filter), so the
+		// "URLTest details" entry point has to live on the card, or the modal
+		// (still keyed by tag, see showUrltestModal) is unreachable for it.
+		if ((p.type || '').toLowerCase() === 'urltest')
+			head.push(E('button', { 'class': 'btn cbi-button sb-dashboard-node-copy sb-dashboard-grp-info',
+				'title': _('URLTest details'), 'aria-label': _('URLTest details'),
+				'click': (function (tag) {
+					return function (ev) {
+						ev.stopPropagation();
+						return showUrltestModal(tag);
+					};
+				})(member) }, SbIcons.info()));
 
 		var kids = [
 			E('div', { 'class': 'sb-dashboard-node-head' }, head),

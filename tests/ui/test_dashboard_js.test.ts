@@ -1106,4 +1106,79 @@ describe("dashboard.js", () => {
     expect(bodyText).toContain("LV #1");
     expect(bodyText).toContain("LV #2");
   });
+
+  // H5: since H4, a provider-imported urltest group renders as a MEMBER CARD
+  // inside its parent selector's section, not as a top-level section — so the
+  // info button used to only be wired into sectionCard() and was unreachable
+  // for it. The button (and the modal it opens) must live on the card itself.
+  it("H5: urltest group nested as a card carries the info button; a plain leaf card does not", async () => {
+    const ctx = loadDashboard();
+    const Dash = ctx.__moduleExports;
+    const PROXIES = {
+      proxies: {
+        sub: {
+          type: "Selector",
+          now: "sub__grp__aaa",
+          all: ["sub__grp__aaa", "leaf0"],
+        },
+        sub__grp__aaa: {
+          type: "urltest",
+          now: "leaf1",
+          all: ["leaf1", "leaf2"],
+        },
+        leaf0: { type: "Vless", history: [{ delay: 50 }] },
+        leaf1: { type: "Vless", history: [{ delay: 80 }] },
+        leaf2: { type: "Vless", history: [{ delay: 120 }] },
+      },
+    };
+    ctx.__test.setGet((path: string) => {
+      if (path === "/proxies")
+        return Promise.resolve({ status: "ok", body: JSON.stringify(PROXIES) });
+      if (path === "/connections")
+        return Promise.resolve({ status: "ok", body: '{"connections":[]}' });
+      if (path === "/version")
+        return Promise.resolve({ status: "ok", body: '{"version":"1.12.0"}' });
+      return Promise.resolve({ status: "ok", body: "{}" });
+    });
+    const d = Dash.buildDashboard();
+    await d.poll();
+    await d.refreshProxies();
+
+    const isInfoBtn = (n: any) =>
+      n.tag === "button" &&
+      /sb-dashboard-grp-info/.test(n.attrs?.class || "") &&
+      typeof n.attrs?.click === "function";
+
+    const grpCard = findNode(
+      d.node,
+      (n: any) =>
+        n.attrs &&
+        n.attrs["data-group"] === "sub" &&
+        n.attrs["data-name"] === "sub__grp__aaa" &&
+        /sb-dashboard-node\b/.test(n.attrs.class || ""),
+    );
+    expect(!!grpCard).toBe(true);
+    const infoBtn = findNode(grpCard, isInfoBtn);
+    expect(!!infoBtn).toBe(true);
+
+    // Card-level button: stopPropagation() is load-bearing (must not also fire
+    // the card's node-selection handler), so the handler expects an event.
+    let stopped = false;
+    infoBtn.attrs.click({ stopPropagation: () => { stopped = true; } });
+    expect(stopped).toBe(true);
+    const modal = ctx.__test.getModal();
+    expect(!!modal).toBe(true);
+    expect(String(modal.title)).toContain("URLTest details");
+
+    const leafCard = findNode(
+      d.node,
+      (n: any) =>
+        n.attrs &&
+        n.attrs["data-group"] === "sub" &&
+        n.attrs["data-name"] === "leaf0" &&
+        /sb-dashboard-node\b/.test(n.attrs.class || ""),
+    );
+    expect(!!leafCard).toBe(true);
+    expect(!!findNode(leafCard, isInfoBtn)).toBe(false);
+  });
 });
