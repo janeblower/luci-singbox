@@ -22,6 +22,7 @@ const SAFE_READ_METHODS = [
   "preview_config",
   "protocol_schema",
   "plugins",
+  "pkg_status",
 ];
 
 const EXPECTED_WRITE_METHODS = [
@@ -32,6 +33,7 @@ const EXPECTED_WRITE_METHODS = [
   "clash_mutate",
   "plugin_install",
   "plugin_enable",
+  "pkg_install",
 ];
 
 describe("test_acl_coverage", () => {

@@ -6,6 +6,7 @@
 'require view.singbox-ui.lib.validators as validators';
 'require view.singbox-ui.lib.view_state as SbViewState';
 'require view.singbox-ui.lib.common as SbCommon';
+'require view.singbox-ui.lib.rpc as SbRpc';
 
 // Phase E2: applyMaterialized(s, kind, protoName, materialized)
 //   materialized comes from the protocol_schema RPC after registry.materialize().
@@ -196,6 +197,58 @@ function disableWithNote(opt, note) {
             return node;
         };
     }
+}
+
+// `requires_pkg`: the field only works if an optional system package is present
+// (kTLS needs kmod-tls). Probe once per page — rpcd forks apk per call — and,
+// when it is missing, append an inline note carrying a one-click install button.
+// Fail-open: an unanswered probe leaves the note without a button rather than
+// nagging the user to install something that may already be there.
+var pkgProbe = {};
+function pkgInstalled(pkg) {
+    if (!pkgProbe[pkg])
+        pkgProbe[pkg] = SbRpc.callPkgStatus(pkg)
+            .then(function (r) { return !!(r && r.installed); })
+            .catch(function () { return true; });
+    return pkgProbe[pkg];
+}
+
+function attachPkgNote(opt, pkg) {
+    var orig = opt.renderWidget;
+    if (typeof orig !== 'function') return;
+    opt.renderWidget = function (section_id, option_index, cfgvalue) {
+        var node = orig.call(this, section_id, option_index, cfgvalue);
+        if (!node || typeof node.appendChild !== 'function') return node;
+        var note = E('div', { 'class': 'cbi-value-description' },
+                     _('Requires the %s package.').format(pkg) + ' ');
+        node.appendChild(note);
+        pkgInstalled(pkg).then(function (installed) {
+            if (installed) return;
+            var btn = E('button', {
+                'type': 'button',
+                'class': 'cbi-button cbi-button-action',
+                'click': function (ev) {
+                    ev.preventDefault();
+                    btn.disabled = true;
+                    btn.textContent = _('Installing…');
+                    SbRpc.callPkgInstall(pkg).then(function (r) {
+                        if (r && r.status === 'ok') {
+                            pkgProbe[pkg] = Promise.resolve(true);
+                            btn.parentNode.removeChild(btn);
+                            note.appendChild(document.createTextNode(_('Installed.')));
+                            return;
+                        }
+                        btn.disabled = false;
+                        btn.textContent = _('Install');
+                        ui.addNotification(null,
+                            E('p', _('Failed to install %s').format(pkg)), 'error');
+                    });
+                }
+            }, _('Install'));
+            note.appendChild(btn);
+        });
+        return node;
+    };
 }
 
 function attachValidator(opt, validateName) {
@@ -429,6 +482,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
 
         if (f.virtual) makeVirtual(opt);
         if (f.exclusive) makeExclusive(opt, f.name, discr);
+        if (f.requires_pkg) attachPkgNote(opt, f.requires_pkg);
 
         attachValidator(opt, f.validate);
         if (gate.mode === 'disable') disableWithNote(opt, gate.note);
@@ -487,6 +541,7 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         // input, so a multiline secret stays a plain textarea.
         if (f.secret && !f.multiline) { opt.password = true; decorateSecretInput(opt); }
         if (f.virtual) makeVirtual(opt);
+        if (f.requires_pkg) attachPkgNote(opt, f.requires_pkg);
         attachValidator(opt, f.validate);
         if (gate.mode === 'disable') disableWithNote(opt, gate.note);
         tagField(opt, f.name, controlKindFor(widgetFor(f)));
@@ -497,4 +552,5 @@ return L.Class.extend({
     applyMaterialized:      applyMaterialized,
     applyMaterializedNamed: applyMaterializedNamed,
     tagField:               tagField,
+    attachPkgNote:          attachPkgNote,
 });

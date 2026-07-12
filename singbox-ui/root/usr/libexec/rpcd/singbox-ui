@@ -811,6 +811,34 @@ function call_plugin_install() {
 	if (rc === 0) emit_ok(); else emit_err(sprintf("apk add failed (rc=%d)", rc));
 }
 
+// pkg_status / pkg_install — probe and install the optional system packages a
+// descriptor field can declare via `requires_pkg` (kTLS needs kmod-tls, whose
+// `tls` module autoloads on setsockopt(TCP_ULP) once the package is on disk).
+// The allowlist IS the validation: apk runs as root, so no caller-supplied name
+// ever reaches it — same lesson as call_plugin_install, drawn tighter.
+const INSTALLABLE_PKGS = [ "kmod-tls" ];
+
+function pkg_arg() {
+	let pkg = parse_args().package;
+	return (type(pkg) === "string" && index(INSTALLABLE_PKGS, pkg) >= 0) ? pkg : null;
+}
+
+function call_pkg_status() {
+	let pkg = pkg_arg();
+	if (!pkg) return emit_err("unknown package");
+	// `apk list --installed <pkg>` reads the local installed-DB (no network) and
+	// prints nothing when the package is absent.
+	let line = trim(run_capture([APK_CMD, "list", "--installed", pkg]) ?? "");
+	emit({ status: "ok", package: pkg, installed: length(line) > 0 });
+}
+
+function call_pkg_install() {
+	let pkg = pkg_arg();
+	if (!pkg) return emit_err("unknown package");
+	let rc = system(sprintf("%s add -- %s >/dev/null 2>&1", APK_CMD, sq(pkg)));
+	if (rc === 0) emit_ok(); else emit_err(sprintf("apk add failed (rc=%d)", rc));
+}
+
 // METHODS — единый источник правды: имя метода → { sig, handler }. `sig`
 // уходит в emit_list() (rpcd читает сигнатуры), `handler` — в диспетчер.
 // Порядок ключей load-bearing: %J сохраняет порядок вставки (проверено на
@@ -836,6 +864,8 @@ const METHODS = {
 	plugins:             { sig: {},                                                   handler: call_plugins },
 	plugin_enable:       { sig: { name: "string", enabled: "boolean" },               handler: call_plugin_enable },
 	plugin_install:      { sig: { package: "string" },                                handler: call_plugin_install },
+	pkg_status:          { sig: { package: "string" },                                handler: call_pkg_status },
+	pkg_install:         { sig: { package: "string" },                                handler: call_pkg_install },
 };
 
 // Phase E: merge plugin-contributed rpcd methods. Discovery require()s each

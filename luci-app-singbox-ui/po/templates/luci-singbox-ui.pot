@@ -38,10 +38,10 @@ msgid "%ds ago"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:11
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:153
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:387
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:410
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:484
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:154
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:440
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:463
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:538
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr ""
@@ -54,7 +54,7 @@ msgstr ""
 msgid "AWG WARP (Cloudflare WARP + AmneziaWG)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:24
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:25
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:96
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:41
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:124
@@ -98,7 +98,7 @@ msgstr ""
 msgid "Automatic HWID"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:22
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:23
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:124
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:116
@@ -265,7 +265,7 @@ msgid ""
 "proxy constructor."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:28
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:29
 msgid "Dial"
 msgstr ""
 
@@ -347,6 +347,11 @@ msgstr ""
 msgid "Export JSON — %s %s"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:244
+#, javascript-format
+msgid "Failed to install %s"
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:41
 msgid ""
 "Failed to load protocol schema. Some forms may be incomplete; restart rpcd "
@@ -393,7 +398,7 @@ msgstr ""
 msgid "HWID"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
 msgid "Hide"
 msgstr ""
 
@@ -461,6 +466,8 @@ msgstr ""
 msgid "Inline"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:242
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:247
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:45
 msgid "Install"
 msgstr ""
@@ -469,8 +476,16 @@ msgstr ""
 msgid "Installed"
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:238
+msgid "Installed."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:42
 msgid "Installed. Reload the page."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:233
+msgid "Installing…"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:383
@@ -558,7 +573,7 @@ msgid ""
 "importer."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:23
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:24
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:95
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:40
 msgid "Match"
@@ -588,7 +603,7 @@ msgstr ""
 msgid "More details"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:27
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:28
 msgid "Multiplex"
 msgstr ""
 
@@ -775,6 +790,11 @@ msgid ""
 "Remote (.srs/.json), local, or inline rule-sets referenced by route rules."
 msgstr ""
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:223
+#, javascript-format
+msgid "Requires the %s package."
+msgstr ""
+
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:58
 msgid "Restart failed"
 msgstr ""
@@ -851,8 +871,8 @@ msgstr ""
 msgid "Shadowsocks link is missing method/password"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:231
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:284
 msgid "Show"
 msgstr ""
 
@@ -915,7 +935,7 @@ msgstr ""
 msgid "System info"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:25
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:26
 msgid "TLS"
 msgstr ""
 
@@ -929,7 +949,7 @@ msgstr ""
 msgid "Time"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:224
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:277
 msgid "Toggle visibility"
 msgstr ""
 
@@ -942,7 +962,7 @@ msgstr ""
 msgid "Traffic Total"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:26
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:27
 msgid "Transport"
 msgstr ""
 
@@ -1050,7 +1070,7 @@ msgstr ""
 msgid "never"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:306
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:359
 #, javascript-format
 msgid "nftables rules already active on inbound \"%s\""
 msgstr ""
@@ -1064,12 +1084,12 @@ msgid "preview failed"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:216
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:176
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:177
 msgid "removed in"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:214
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:173
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:174
 msgid "requires"
 msgstr ""
 

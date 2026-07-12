@@ -31,10 +31,10 @@ msgid "%ds ago"
 msgstr "%d с назад"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:11
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:153
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:387
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:410
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:484
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:154
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:440
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:463
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:538
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr "(нет)"
@@ -47,7 +47,7 @@ msgstr "Логическое правило не может ссылаться �
 msgid "AWG WARP (Cloudflare WARP + AmneziaWG)"
 msgstr "AWG WARP (Cloudflare WARP + AmneziaWG)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:24
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:25
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:96
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:41
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:124
@@ -91,7 +91,7 @@ msgstr "Автоматически (sing-box, затем остальные)"
 msgid "Automatic HWID"
 msgstr "Автоматический HWID"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:22
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:23
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:60
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:124
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:116
@@ -267,7 +267,7 @@ msgstr ""
 "Настройка outbound: прямое подключение через интерфейс, share-link URL, "
 "подписка или конструктор прокси."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:28
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:29
 msgid "Dial"
 msgstr "Исходящее подключение"
 
@@ -352,6 +352,11 @@ msgstr "Экспорт"
 msgid "Export JSON — %s %s"
 msgstr "Экспорт JSON — %s %s"
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:244
+#, javascript-format
+msgid "Failed to install %s"
+msgstr "Не удалось установить %s"
+
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:41
 msgid ""
 "Failed to load protocol schema. Some forms may be incomplete; restart rpcd "
@@ -370,8 +375,9 @@ msgid ""
 "for providers whose panel is unreachable directly. Leave empty to fetch "
 "directly."
 msgstr ""
-"Загружать эту подписку через прокси (например, локальный mixed/socks-inbound) "
-"— для провайдеров, чья панель недоступна напрямую. Пусто — загрузка напрямую."
+"Загружать эту подписку через прокси (например, локальный mixed/socks-"
+"inbound) — для провайдеров, чья панель недоступна напрямую. Пусто — загрузка "
+"напрямую."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:268
 msgid "Fetch via proxy"
@@ -403,7 +409,7 @@ msgstr "Глобальные настройки sing-box: кэш-файл, ло�
 msgid "HWID"
 msgstr "HWID"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
 msgid "Hide"
 msgstr "Скрыть"
 
@@ -474,6 +480,8 @@ msgstr "Независимый кэш"
 msgid "Inline"
 msgstr "Встроенный"
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:242
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:247
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:45
 msgid "Install"
 msgstr "Установить"
@@ -482,9 +490,17 @@ msgstr "Установить"
 msgid "Installed"
 msgstr "Установлено"
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:238
+msgid "Installed."
+msgstr "Установлено."
+
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:42
 msgid "Installed. Reload the page."
 msgstr "Установлено. Перезагрузите страницу."
+
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:233
+msgid "Installing…"
+msgstr "Установка…"
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:383
 msgid "Internal: unhandled scheme"
@@ -573,7 +589,7 @@ msgstr ""
 "Похоже на outbound (есть поле \"server\" без \"listen\"). Используйте импорт "
 "outbound."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:23
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:24
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:95
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:40
 msgid "Match"
@@ -606,7 +622,7 @@ msgstr "Мониторинг"
 msgid "More details"
 msgstr "Подробнее"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:27
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:28
 msgid "Multiplex"
 msgstr "Мультиплекс"
 
@@ -806,6 +822,11 @@ msgstr ""
 "Удалённые (.srs/.json), локальные или встроенные rule-set'ы, на которые "
 "ссылаются правила маршрутизации."
 
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:223
+#, javascript-format
+msgid "Requires the %s package."
+msgstr "Требуется пакет %s."
+
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:58
 msgid "Restart failed"
 msgstr "Ошибка перезапуска"
@@ -886,8 +907,8 @@ msgstr "Информация о сервисах"
 msgid "Shadowsocks link is missing method/password"
 msgstr "В Shadowsocks-ссылке отсутствует метод/пароль"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:229
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:231
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:282
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:284
 msgid "Show"
 msgstr "Показать"
 
@@ -952,7 +973,7 @@ msgstr "Поддержка"
 msgid "System info"
 msgstr "Системная информация"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:25
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:26
 msgid "TLS"
 msgstr "TLS"
 
@@ -966,7 +987,7 @@ msgstr "Тестирование задержки"
 msgid "Time"
 msgstr "Время"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:224
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:277
 msgid "Toggle visibility"
 msgstr "Переключить видимость"
 
@@ -979,7 +1000,7 @@ msgstr "Трафик"
 msgid "Traffic Total"
 msgstr "Всего трафика"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:26
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:27
 msgid "Transport"
 msgstr "Транспорт"
 
@@ -1089,7 +1110,7 @@ msgstr "группа"
 msgid "never"
 msgstr "никогда"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:306
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:359
 #, javascript-format
 msgid "nftables rules already active on inbound \"%s\""
 msgstr "правила nftables уже активны на инбаунде «%s»"
@@ -1103,12 +1124,12 @@ msgid "preview failed"
 msgstr "ошибка предпросмотра"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:216
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:176
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:177
 msgid "removed in"
 msgstr "удалено в"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:214
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:173
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:174
 msgid "requires"
 msgstr "требуется"
 

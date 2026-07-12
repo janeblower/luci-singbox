@@ -4,7 +4,7 @@ const FIELD_WHITELIST = [
     "name", "type", "tab", "required", "default", "validate",
     "ui_label", "ui_help", "secret", "values", "dynamic",
     "advanced", "depends", "parent_enabled", "placeholder", "virtual",
-    "multiline", "min_version", "max_version", "exclusive",
+    "multiline", "min_version", "max_version", "exclusive", "requires_pkg",
 ];
 
 function project_field(f) {

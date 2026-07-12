@@ -22,6 +22,12 @@ return L.Class.extend({
     callExportSection: rpc.declare({ object: 'singbox-ui', method: 'export_section',
                                      params: [ 'kind', 'name' ] }),
     callPreviewConfig: rpc.declare({ object: 'singbox-ui', method: 'preview_config' }),
+    // Optional system packages a descriptor field declares via `requires_pkg`
+    // (kmod-tls for kTLS). The backend only accepts names from its allowlist.
+    callPkgStatus:  rpc.declare({ object: 'singbox-ui', method: 'pkg_status',
+                                  params: [ 'package' ] }),
+    callPkgInstall: rpc.declare({ object: 'singbox-ui', method: 'pkg_install',
+                                  params: [ 'package' ] }),
     callDhcpLeases: rpc.declare({ object: 'luci-rpc',   method: 'getDHCPLeases',
                                   expect: { '': {} } }),
 

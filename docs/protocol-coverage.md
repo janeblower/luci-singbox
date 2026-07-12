@@ -40,6 +40,9 @@ Implemented by `_shared/tls.uc` (Phase E2 DSL). The two are intentionally distin
 | `tls.fragment` (bool, flat field) | `tls_fragment` | n/a | есть | — |
 | `tls.fragment_fallback_delay` | `tls_fragment_fallback_delay` | n/a | есть | — |
 | `tls.record_fragment` | `tls_record_fragment` | n/a | есть | — |
+| **kTLS (Since 1.13)** | | | | |
+| `tls.kernel_tx` | `tls_kernel_tx` | есть | есть | требует `kmod-tls` (`requires_pkg`), Linux 5.1+, TLS 1.3 |
+| `tls.kernel_rx` | `tls_kernel_rx` | есть | есть | то же; апстрим: деградация производительности |
 | **Reality** | | | | |
 | `tls.reality.enabled` | `security == "reality"` | есть | есть | — |
 | `tls.reality.public_key` | `reality_public_key` | n/a (server) | есть | — |

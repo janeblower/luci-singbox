@@ -397,6 +397,8 @@ Applies to `type=vless`, `trojan` (selectable via `tls_enabled`/`reality_enabled
 | `tls_fragment` | bool | `0`/`1` | no | `type=vless/trojan/hysteria2` | Enable TLS handshake fragmentation. Since sing-box 1.12. Flat field `tls.fragment`. |
 | `tls_fragment_fallback_delay` | string | duration (e.g. `500ms`) | no | `tls_fragment=1` | Fragment fallback delay. Defaults to `500ms` in sing-box. |
 | `tls_record_fragment` | bool | `0`/`1` | no | `type=vless/trojan/hysteria2` | Split handshake across multiple TLS records. Since sing-box 1.12. Flat field `tls.record_fragment`. |
+| `tls_kernel_tx` | bool | `0`/`1` | no | `tls_enabled=1` | kTLS transmit (`tls.kernel_tx`). Since sing-box 1.13; Linux 5.1+, TLS 1.3 only, needs `kmod-tls`. |
+| `tls_kernel_rx` | bool | `0`/`1` | no | `tls_enabled=1` | kTLS receive (`tls.kernel_rx`). Same requirements; upstream reports it degrades throughput. |
 
 ### Transport fields
 

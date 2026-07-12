@@ -62,6 +62,22 @@ return {
           ui_label: "Record fragment",
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
 
+        // kTLS (sing-box 1.13+): TLS records are en/decrypted by the kernel.
+        // Linux 5.1+, TLS 1.3 only, and the `tls` kernel module must exist —
+        // it autoloads on setsockopt(TCP_ULP), but only if kmod-tls is installed.
+        // RX is documented as a pessimisation; TX only pays off when splice(2)
+        // applies. Both stay off by default.
+        { name: "tls_kernel_tx", type: "bool", tab: "tls",
+          ui_label: "kTLS transmit (kernel_tx)", default: 0,
+          ui_help: "Kernel TLS for sending. Linux 5.1+, TLS 1.3 only. Speeds things up only when splice(2) applies, otherwise it slows them down.",
+          requires_pkg: "kmod-tls", min_version: "1.13",
+          parent_enabled: "tls_enabled", advanced: true },
+        { name: "tls_kernel_rx", type: "bool", tab: "tls",
+          ui_label: "kTLS receive (kernel_rx)", default: 0,
+          ui_help: "Kernel TLS for receiving. Upstream reports it degrades performance even with splice(2) — enable only to measure.",
+          requires_pkg: "kmod-tls", min_version: "1.13",
+          parent_enabled: "tls_enabled", advanced: true },
+
         { name: "tls_ech_enabled", type: "bool", tab: "tls",
           ui_label: "Enable ECH",
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
@@ -129,6 +145,8 @@ return {
             { name: "tls_fragment",                json_key: "fragment",                coerce: "bool" },
             { name: "tls_fragment_fallback_delay", json_key: "fragment_fallback_delay" },
             { name: "tls_record_fragment",         json_key: "record_fragment",         coerce: "bool" },
+            { name: "tls_kernel_tx",               json_key: "kernel_tx",               coerce: "bool" },
+            { name: "tls_kernel_rx",               json_key: "kernel_rx",               coerce: "bool" },
             { json_key: "reality", gate: { flag: "reality_enabled" }, fields: [
                 { json_key: "enabled", const: true },
                 { name: "reality_public_key", json_key: "public_key" },
@@ -145,6 +163,8 @@ return {
             { name: "tls_cipher_suites", json_key: "cipher_suites",  coerce: "array" },
             { name: "tls_certificate_path", json_key: "certificate_path" },
             { name: "tls_key_path",         json_key: "key_path" },
+            { name: "tls_kernel_tx",        json_key: "kernel_tx",        coerce: "bool" },
+            { name: "tls_kernel_rx",        json_key: "kernel_rx",        coerce: "bool" },
             { json_key: "ech", gate: { flag: "tls_ech_enabled" }, fields: [
                 { json_key: "enabled", const: true },
                 { name: "tls_ech_key",      json_key: "key",      coerce: "array" },
