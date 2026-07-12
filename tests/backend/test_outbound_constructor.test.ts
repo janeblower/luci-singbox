@@ -380,4 +380,32 @@ config outbound 's'
     expect(node).toBeTruthy();
     expect(node.detour).toBeUndefined();
   });
+
+  it("subscription detour to a same-subscription node resolves to that node's tag", async () => {
+    await setup();
+    // Two nodes in the same subscription: "Main" detours to "Hop" by display name.
+    const lines = [
+      JSON.stringify({ o: { type: "vless", server: "10.0.0.1",
+        server_port: 443, uuid: "11111111-1111-1111-1111-111111111111" },
+        n: "Hop", l: null }),
+      JSON.stringify({ o: { type: "vless", server: "10.0.0.2",
+        server_port: 443, uuid: "22222222-2222-2222-2222-222222222222" },
+        n: "Main", l: null, d: "Hop" }),
+    ].join("\n");
+    await exec(`printf '%s\\n' '${lines.replace(/'/g, "'\\''")}' > ${sandboxDir}/subs/sub_s.txt`);
+    const cfg = await runGen(`
+config outbound 's'
+\toption enabled '1'
+\toption type 'subscription'
+\toption sub_url 'https://x/y'
+\toption sub_multi '1'
+`);
+    const doc = JSON.parse(cfg);
+    const subNodes = doc.outbounds.filter((o) => (o.tag || "").startsWith("s__"));
+    const hop = subNodes.find((o) => o.server === "10.0.0.1");
+    const main = subNodes.find((o) => o.server === "10.0.0.2");
+    expect(hop).toBeTruthy();
+    expect(main).toBeTruthy();
+    expect(main.detour).toBe(hop.tag);
+  });
 });
