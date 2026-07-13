@@ -2,23 +2,34 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// Guard the SHIPPED default UCI config (etc/config/singbox-ui) against the
-// route schema. Runs route.uc/ruleset.uc against the real shipped config and
-// asserts the emitted route block uses only valid sing-box rule actions and
-// resolves its rule-set references.
+// Guard the SHIPPED default UCI config (etc/config/singbox-ui): it must carry NO
+// routing opinion at all — no outbound, no route_rule, no route_default, no
+// dns_rule.
+//
+// It used to ship some, and they were wrong in the direction that silently does
+// nothing: `defaults_direct` sent `russia_inside` straight out the WAN. But
+// russia_inside is not "Russian domains, send them direct" — it is itdoginfo's
+// list of what is BLOCKED for a user inside Russia (a superset of anime, block,
+// geoblock, news, porn, hdrezka, meta, tiktok, twitter, youtube, discord). Those
+// are precisely the domains that need a proxy, and the seed routed them around it.
+//
+// A correct default cannot be shipped either: it would have to point at a proxy,
+// and a fresh install has none — route.uc drops an action=route rule with no
+// outbound. So the box comes up with the 25 built-in rule-sets ready and no
+// opinion about how to use them.
+//
+// This guard exists so nobody quietly re-adds a broken default. If a real one is
+// ever designed, this test is where the intent gets written down.
 describe("route default config guard (shipped singbox-ui config)", () => {
   useGuest();
 
-  it("shipped default config produces valid route rules with expected actions, rulesets, and final", async () => {
-    // The shipped config is read from the in-tree path on the guest.
+  it("ships no outbound, no route rules and no default route", async () => {
     const cfgPath = "/tmp/work/singbox-ui/root/etc/config/singbox-ui";
     const src = `
       let uci = require("uci");
       let fs  = require("fs");
-      let route   = require("route");
-      let ruleset = require("ruleset");
+      let route = require("route");
 
-      // Stage the shipped config as a UCI fixture dir named after the package.
       let dir = "/tmp/route_default_cfg";
       fs.mkdir(dir);
       let src = fs.open("${cfgPath}", "r");
@@ -27,49 +38,48 @@ describe("route default config guard (shipped singbox-ui config)", () => {
       dst.write(body); dst.close();
 
       let cur = uci.cursor(dir);
+
+      // Count the sections that would express a routing opinion.
+      let counts = { outbound: 0, route_rule: 0, route_default: 0, dns_rule: 0, ruleset: 0 };
+      for (let kind in keys(counts))
+        cur.foreach("singbox-ui", kind, function(_s) { counts[kind]++; });
+
+      // route.uc over the shipped config: the only rules it may produce are the
+      // hijack-dns ones DERIVED from the inbounds (tproxy hijack_dns + the direct
+      // DNS listener). No final, and nothing referencing a rule-set.
       let r = route.build_route_rules(cur, null);
+      let actions = [];
+      for (let rule in (r.rules ?? [])) push(actions, rule.action);
 
-      const VALID = { route:1, "route-options":1, reject:1, "hijack-dns":1, sniff:1, resolve:1, bypass:1 };
-      let ok = (length(r.rules) > 0);
-
-      // Every emitted rule must carry a valid sing-box action.
-      for (let rule in r.rules) {
-        if (!VALID[rule.action]) { print(sprintf("BAD action %J\\n", rule)); ok = false; }
-      }
-
-      // The shipped defaults_direct rule -> action route, outbound wan (the
-      // built-in WAN outbound), rule_set [russia_inside, discord].
-      let found = null;
-      for (let rule in r.rules) if (rule.outbound === "wan" && rule.action === "route") found = rule;
-      ok = ok && (found != null);
-      ok = ok && (found != null && type(found.rule_set) === "array" && length(found.rule_set) === 2);
-
-      // route_default ships action=bypass -> a TRAILING matcher-less rule carrying
-      // the outbound, NOT a final. (final is only a tag; it cannot carry an
-      // action.) The guest has no sing-box binary, so helpers.core_at_least()
-      // fails open and bypass survives — the degrade-to-route path on an old core
-      // is covered by test_route_default_bypass.
-      let last = r.rules[length(r.rules) - 1];
-      ok = ok && (last != null && last.action === "bypass" && last.outbound === "wan");
-      ok = ok && (r.final == null);
-
-      // referenced must include both shipped rulesets; build_rule_sets must emit them.
-      let refset = {}; for (let n in r.referenced) refset[n] = true;
-      ok = ok && refset["russia_inside"] && refset["discord"];
-      let sets = ruleset.build_rule_sets(cur, r.referenced);
-      let tags = {}; for (let e in sets) tags[e.tag] = true;
-      ok = ok && tags["russia_inside"] && tags["discord"];
-
-      print(ok ? "OK\\n" : sprintf("FAILED rules=%J final=%J referenced=%J\\n", r.rules, r.final, r.referenced));
+      print(sprintf("%J\\n", {
+        counts: counts,
+        actions: actions,
+        final: r.final,
+        referenced: r.referenced,
+      }));
     `;
-    // Pin the core version: the guest installs sing-box from the stock OpenWrt apk
-    // feed, which is still 1.12, and route.uc would then degrade the shipped
-    // action=bypass to action=route. That degrade is deliberate (1.12 REFUSES a
-    // config with an unknown action, so a fresh install would come up dead) and is
-    // covered by test_route_default_bypass. Here we want the shipped config's own
-    // shape, so we ask for a core that supports it.
-    const r = await runUcode(src, [], [], { SINGBOX_CORE_VERSION: "1.13.0" });
+    const r = await runUcode(src);
     expect(r.exitCode).toBe(0);
-    expect(r.stdout.trim()).toBe("OK");
+
+    const got = JSON.parse(r.stdout) as {
+      counts: Record<string, number>;
+      actions: string[];
+      final: string | null;
+      referenced: string[];
+    };
+
+    // No routing opinion whatsoever.
+    expect(got.counts.outbound).toBe(0);
+    expect(got.counts.route_rule).toBe(0);
+    expect(got.counts.route_default).toBe(0);
+    expect(got.counts.dns_rule).toBe(0);
+    // The rule-sets are created by uci-defaults/92-*, not by the config file, so
+    // there is exactly one source of truth for them.
+    expect(got.counts.ruleset).toBe(0);
+
+    // The only rules are the ones derived from the inbounds themselves.
+    expect(got.actions).toEqual(["hijack-dns", "hijack-dns"]);
+    expect(got.final).toBeNull();
+    expect(got.referenced).toEqual([]);
   });
 });

@@ -44,23 +44,27 @@ check '"type": "tproxy"'  'tproxy inbound'
 check '"listen_port": 7893'  'tproxy port'
 check '"action": "hijack-dns"'  'hijack-dns'
 
-# -- rule-sets: russia_inside + discord
-check '"tag": "russia_inside"'  'russia_inside tag'
-check '"tag": "discord"'  'discord tag'
+# -- The shipped config carries NO routing opinion: no outbound, no route rule,
+# no route_default, no dns_rule. The routing it used to ship was wrong in the
+# direction that silently does nothing: it sent russia_inside — the itdoginfo list
+# of what is BLOCKED for a user in Russia — straight out the WAN, i.e. around the
+# proxy. A correct default cannot be shipped either: it must point at a proxy, and
+# a fresh install has none. So the box comes up with the 25 built-in rule-sets
+# ready and no opinion about how to use them.
+#
+# The one outbound in the config is the implicit "direct" that generate.uc injects,
+# and sing-box is happy with that: traffic flows, nothing is proxied.
+echo "$OUT" | grep -q '"rule_set":' && { echo "CHECK_FAIL: the shipped config must reference no rule-sets"; exit 1; }
+echo "$OUT" | grep -q '"tag": "wan"' && { echo "CHECK_FAIL: the shipped config must ship no wan outbound"; exit 1; }
+echo "$OUT" | grep -q '"final":.*"wan"' && { echo "CHECK_FAIL: the shipped config must set no default route"; exit 1; }
+check '"tag": "direct"'  'the implicit direct outbound is injected'
 
-# -- built-in wan outbound + route rule. It is a plain type=direct with NO
-# bind_interface, deliberately: sing-box hands bind_interface to SO_BINDTODEVICE,
-# so it wants an OS netdev (eth0 / pppoe-wan), not the OpenWrt logical name — and
-# that netdev changes under you on a pppoe reconnect. Without a bind, egress
-# follows the system routing table, which IS the WAN, and survives all of it.
-check '"tag": "wan"'  'built-in wan outbound tag'
-echo "$OUT" | grep -q '"bind_interface"' && { echo "CHECK_FAIL: the wan outbound must have no bind_interface"; exit 1; }
-check '"outbound": "wan"'  'route to wan'
-
-# -- dns: fakeip + google + rule + final
+# -- dns: fakeip + google + final. fakeip is DEFINED but nothing points at it:
+# fakeip without routing hands the client a 198.18.x.x address that only means
+# something once the connection is captured and mapped back, so a fakeip dns_rule
+# with no matching route rule would simply kill those domains.
 check '"type": "fakeip"'  'fakeip server'
 check '"server": "8.8.8.8"'  'google server'
-check '"action": "route"'  'dns rule'
 check '"final": "google"'  'dns final'
 check '"strategy": "prefer_ipv4"'  'dns strategy'
 

@@ -7,57 +7,25 @@ config inbound 'tproxy_in'
 	option hijack_dns '1'
 	option nft_rules '1'
 
-# The two built-in rule-sets the default route/DNS rules actually reference, so
-# they ship enabled. The other 23 from itdoginfo/allow-domains are seeded
-# disabled by uci-defaults/92-singbox-ui-rulesets. `builtin '1'` makes the UI
-# render them read-only and puts them under the main.default_rulesets switch.
-config ruleset 'russia_inside'
-	option builtin '1'
-	option enabled '1'
-	option type 'remote'
-	option url 'https://github.com/itdoginfo/allow-domains/releases/latest/download/russia_inside.srs'
-	option nft_rules '0'
-	option update_interval '86400'
-
-config ruleset 'discord'
-	option builtin '1'
-	option enabled '1'
-	option type 'remote'
-	option url 'https://github.com/itdoginfo/allow-domains/releases/latest/download/discord.srs'
-	option nft_rules '1'
-	option update_interval '86400'
-
-# Built-in WAN outbound: a plain `direct`, deliberately with NO bind_interface.
-# sing-box's bind_interface takes an OS netdev (eth0 / pppoe-wan / br-wan), not
-# an OpenWrt logical interface name, and the netdev changes under you (pppoe
-# reconnect, DHCP, multi-wan). Without a bind, egress follows the system routing
-# table — which IS the WAN — and survives all of that.
+# NO default routing is shipped: no outbound, no route rules, no route_default.
 #
-# `builtin '1'` makes the UI lock the row (no Edit/Delete). generate.uc drops it
-# from the config entirely once nothing references it, so pointing the Default
-# route somewhere else makes it go away instead of lingering undeletable.
-config outbound 'wan'
-	option builtin '1'
-	option enabled '1'
-	option type 'direct'
-
-config route_rule 'defaults_direct'
-	option enabled '1'
-	option type 'default'
-	list   rule_set 'russia_inside'
-	list   rule_set 'discord'
-	option action 'route'
-	option outbound 'wan'
-
-# bypass (sing-box 1.13+) with an outbound behaves exactly like `route` for every
-# connection that did not come from auto_redirect, and lets the kernel take the
-# short path for the ones that did — sing-box picks whichever is better. On a core
-# older than 1.13 the action is fatal (the config is refused outright, not
-# ignored), so route.uc degrades it to `route` rather than let a fresh install
-# come up with no service.
-config route_default 'route_default'
-	option action 'bypass'
-	option outbound 'wan'
+# The routing this used to ship was wrong, and wrong in the direction that
+# silently does nothing. It sent `russia_inside` straight out the WAN — but
+# `russia_inside` is not "Russian domains, send them direct", it is
+# itdoginfo's list of what is BLOCKED for a user inside Russia (a superset of
+# anime/block/geoblock/news/porn/hdrezka/meta/tiktok/twitter/youtube/discord).
+# Those are exactly the domains that need a proxy, and the seed routed them
+# around it.
+#
+# A correct default cannot be shipped either: it would have to point at a proxy,
+# and a fresh install has none (route.uc drops an action=route rule with no
+# outbound). So the box comes up with the 25 built-in rule-sets ready and no
+# opinion about how to use them. sing-box accepts a config with no outbounds —
+# generate.uc injects the implicit `direct` and traffic flows normally.
+#
+# The rule-sets themselves are created by uci-defaults/92-singbox-ui-rulesets
+# (all 25, enabled). An enabled rule-set nobody references is neither emitted into
+# the config nor downloaded, so this costs nothing and needs no wiring here.
 
 config inbound 'dns_in'
 	option enabled '1'
@@ -85,13 +53,13 @@ config dns_server 'google'
 	option server_port '443'
 	option path '/dns-query'
 
-config dns_rule 'defaults_fakeip'
-	option enabled '1'
-	option type 'default'
-	list   rule_set 'russia_inside'
-	list   rule_set 'discord'
-	option action 'route'
-	option server 'fakeip'
+# The fakeip DNS server is defined and ready, but NO dns_rule points anything at
+# it. It used to send russia_inside/discord queries there — the DNS half of the
+# same broken default. And fakeip without routing is worse than useless: it hands
+# the client a 198.18.x.x address that only means something once the connection is
+# captured and mapped back, so the moment the capture is off (or the route rule is
+# missing, as it now is) those domains are simply dead. Point a dns_rule at it
+# once you have a proxy to route the answers through.
 
 config dns 'dns'
 	option final 'google'

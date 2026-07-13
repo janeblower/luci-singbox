@@ -45,9 +45,9 @@ uci_ -q get singbox-ui.main.default_rulesets >/dev/null \
 	|| uci_ -q set singbox-ui.main.default_rulesets='1'
 
 for name in $SETS; do
-	# Already present (fresh install seeds russia_inside/discord from
-	# etc/config, or this script ran on a previous upgrade): only stamp the
-	# builtin marker, never touch enabled/url — that is the user's to own.
+	# Already present — this script ran on a previous install/upgrade, or the
+	# user created a set with that name themselves. Only stamp the builtin
+	# marker; never touch enabled/url, those are theirs to own.
 	if uci_ -q get "singbox-ui.$name" >/dev/null; then
 		uci_ -q set "singbox-ui.$name.builtin"='1'
 		continue
