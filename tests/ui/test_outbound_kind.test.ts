@@ -58,7 +58,9 @@ class SelectEl {
     return sel === ".cbi-value" ? this.row : null;
   }
   addEventListener(ev: string, fn: () => void) {
-    (this.listeners[ev] ??= []).push(fn);
+    const fns = this.listeners[ev] ?? [];
+    fns.push(fn);
+    this.listeners[ev] = fns;
   }
   dispatchEvent(ev: { type: string }) {
     for (const fn of this.listeners[ev.type] ?? []) fn();
