@@ -53,6 +53,19 @@ var SB_OUTBOUND_PROTOCOLS = [
 	['subscription', 'Subscription URL']
 ];
 
+// The Type dropdown mixes three unrelated things: 17 hand-configured protocols, a
+// subscription URL, and the two group kinds. `_kind` splits them into a first
+// step, and `type` is then filtered down to that step's members.
+//
+// The kind is DERIVED from `type` rather than stored: a second persisted
+// discriminator would be a second thing that can disagree with the first. Plugin
+// outbound types fall through to `manual`, which is what they are.
+function kindOfType(t) {
+	if (t === 'subscription')                 return 'subscription';
+	if (t === 'selector' || t === 'urltest')  return 'group';
+	return 'manual';
+}
+
 function openShareLinkModal(m) {
 	var ta = E('textarea', {
 		'rows': 4, 'class': 'cbi-input-textarea',
@@ -220,6 +233,38 @@ function buildOutboundsMap() {
 		return srv && prt ? srv + ':' + prt : (srv || '—');
 	};
 
+	// --- Step 1 of the type picker: the mode. ------------------------------
+	// Session-only: the mode is derived from `type` on every open and never
+	// written. `type` has to stay the ONE discriminator — every descriptor
+	// depends() arm keys off it — and a second persisted field would just be a
+	// second thing that can disagree with the first.
+	var typeApply = {};   // section_id -> fn(kind, reset) installed by `type` below
+
+	o = s.taboption('basic', form.ListValue, '_kind', _('Mode'));
+	o.modalonly = true;
+	o.value('manual',       _('Manual'));
+	o.value('group',        _('Groups (URLTest/Selector)'));
+	o.value('subscription', _('Subscription'));
+	o.write    = function () {};
+	o.remove   = function () {};
+	o.cfgvalue = function (section_id) {
+		return kindOfType(uci.get('singbox-ui', section_id, 'type') || '');
+	};
+	var origKindRender = o.renderWidget;
+	o.renderWidget = function (section_id, option_index, cfgvalue) {
+		var node = origKindRender.call(this, section_id, option_index, cfgvalue);
+		var sel = (node.tagName === 'SELECT') ? node
+			: (node.querySelector && node.querySelector('select'));
+		// The listener only ever fires on user interaction, long after `type` has
+		// registered its apply fn — so declaring _kind first is safe.
+		if (sel) sel.addEventListener('change', function () {
+			var apply = typeApply[section_id];
+			if (apply) apply(sel.value, true);
+		});
+		return node;
+	};
+
+	// --- Step 2: the type itself, filtered down to the chosen mode. ---------
 	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
 	var allTypes = SB_OUTBOUND_PROTOCOLS.concat(_pluginTypes);
 	allTypes.forEach(function (e) { o.value(e[0], _(e[1])); });
@@ -227,6 +272,49 @@ function buildOutboundsMap() {
 	SbCommon.applyVersionGate(o,
 		(SbViewState.getSchema() || {}).outbound || {},
 		SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
+
+	// Wrap AFTER applyVersionGate so we filter the node the gate produced.
+	// The gate owns `disabled` (it greys out types the running core is too old
+	// for); we own `hidden`. Clearing `disabled` here would silently re-offer a
+	// type sing-box would reject.
+	var origTypeRender = o.renderWidget;
+	o.renderWidget = function (section_id, option_index, cfgvalue) {
+		var node = origTypeRender.call(this, section_id, option_index, cfgvalue);
+		var sel = (node.tagName === 'SELECT') ? node
+			: (node.querySelector && node.querySelector('select'));
+		if (!sel) return node;
+
+		function apply(kind, reset) {
+			var first = null;
+			Array.prototype.slice.call(sel.options).forEach(function (opt) {
+				var ok = (kindOfType(opt.value) === kind);
+				opt.hidden = !ok;
+				if (ok && !opt.disabled && first === null) first = opt.value;
+			});
+			if (reset && kindOfType(sel.value) !== kind && first !== null) {
+				sel.value = first;
+				// LuCI's ui.Select re-dispatches a native `change` on the <select>
+				// as `widget-change`, which is what drives depends() — so the
+				// descriptor fields for the new type appear.
+				sel.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+			// `subscription` is the only member of its kind, and a one-item
+			// dropdown is noise. Hide the ROW — never a depends(), which would make
+			// LuCI treat `type` as inactive and parse() would then DELETE it.
+			var row = sel.closest ? sel.closest('.cbi-value') : null;
+			if (row) row.style.display = (kind === 'subscription') ? 'none' : '';
+		}
+		typeApply[section_id] = apply;
+
+		var kind = kindOfType(cfgvalue || sel.value || '');
+		apply(kind, false);
+		// renderWidget returns before CBI wraps the widget in its .cbi-value row,
+		// so the row is not reachable yet on this first pass — re-run once the DOM
+		// is assembled, otherwise an existing subscription opens with a pointless
+		// one-item Type dropdown showing.
+		window.setTimeout(function () { apply(kind, false); }, 0);
+		return node;
+	};
 
 	// E2: descriptor-driven UI for all stored outbound types.
 	// subscription has its own UCI shape and is handled by the fields below.
@@ -416,6 +504,7 @@ function buildOutboundsMap() {
 
 return L.Class.extend({
 	SB_OUTBOUND_PROTOCOLS:    SB_OUTBOUND_PROTOCOLS,
+	kindOfType:               kindOfType,
 	openShareLinkModal:       openShareLinkModal,
 	buildOutboundsMap:        buildOutboundsMap,
 	setPluginOutboundTypes:   setPluginOutboundTypes,
