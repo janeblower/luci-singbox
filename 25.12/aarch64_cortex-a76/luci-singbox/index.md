@@ -5,8 +5,8 @@ title: luci-singbox - aarch64_cortex-a76 - OpenWrt 25.12
 
 # luci-singbox - aarch64_cortex-a76 - OpenWrt 25.12
 
-- [luci-app-singbox-ui-0.1.0-r425.apk](luci-app-singbox-ui-0.1.0-r425.apk)
-- [luci-i18n-singbox-ui-ru-0.1.0-r74.apk](luci-i18n-singbox-ui-ru-0.1.0-r74.apk)
+- [luci-app-singbox-ui-0.1.0-r426.apk](luci-app-singbox-ui-0.1.0-r426.apk)
+- [luci-i18n-singbox-ui-ru-0.1.0-r75.apk](luci-i18n-singbox-ui-ru-0.1.0-r75.apk)
 - [packages.adb](packages.adb)
 - [singbox-ui-0.1.0-r70.apk](singbox-ui-0.1.0-r70.apk)
 - [singbox-ui-plugin-awg_warp-0.1.0-r35.apk](singbox-ui-plugin-awg_warp-0.1.0-r35.apk)
