@@ -66,10 +66,22 @@ up() {
         -v "$PWD/luci-app-singbox-ui/root/usr/share/rpcd/acl.d/luci-singbox-ui.json:/usr/share/rpcd/acl.d/luci-singbox-ui.json:ro" \
         "$IMG" >/dev/null
 
+    # Wait for BOTH ubus objects the stand depends on:
+    #   singbox-ui — rpcd's handler, what the UI talks to;
+    #   service    — procd's, what /etc/init.d/singbox-ui talks to.
+    # Waiting only for rpcd was a race: `start` then ran before procd had
+    # registered, failed with a bare "Command failed: Not found", and the stand
+    # came up with no sing-box — which read as a config problem and was not one.
     i=0
-    while ! docker exec "$CNAME" ubus list 2>/dev/null | grep -q '^singbox-ui$'; do
+    while ! docker exec "$CNAME" sh -c \
+            'ubus list 2>/dev/null | grep -qx singbox-ui && ubus list 2>/dev/null | grep -qx service'; do
         i=$((i + 1))
-        [ "$i" -lt 30 ] || { echo "FAIL: rpcd never registered singbox-ui" >&2; docker logs "$CNAME" >&2; exit 1; }
+        [ "$i" -lt 30 ] || {
+            echo "FAIL: ubus never registered singbox-ui (rpcd) and service (procd)" >&2
+            docker exec "$CNAME" ubus list >&2 2>/dev/null || true
+            docker logs "$CNAME" >&2
+            exit 1
+        }
         sleep 1
     done
 
@@ -129,16 +141,39 @@ EOF
             ubus call singbox-ui refresh "{\"what\":\"subscriptions\"}" >/dev/null'
     fi
 
-    docker exec "$CNAME" /etc/init.d/singbox-ui start >/dev/null 2>&1 || true
-    sleep 5
-    # A config sing-box refuses leaves the Dashboard permanently on its "service
-    # stopped" plaque, which looks like a UI bug and isn't one. Say why instead.
-    if ! docker exec "$CNAME" sh -c 'curl -sf -m3 http://127.0.0.1:9090/version >/dev/null'; then
-        echo
-        echo "  !! sing-box did not come up. Its own verdict on the generated config:"
-        docker exec "$CNAME" sh -c 'sing-box check -c /tmp/singbox-ui.json 2>&1 | head -3' \
-            | sed 's/^/     /'
-    fi
+    # Keep the start output: when the service does not come up, this is the first
+    # thing you want to read, and it used to go to /dev/null.
+    start_out=$(docker exec "$CNAME" /etc/init.d/singbox-ui start 2>&1 || true)
+
+    # Poll, don't sleep-and-hope. `start` runs the boot fetch first (rule-sets,
+    # subscriptions), and a curl that has to time out takes far longer than the
+    # flat 5s this used to wait — so a perfectly healthy stand reported
+    # "sing-box did not come up" while sing-box was, in fact, still starting.
+    i=0
+    while ! docker exec "$CNAME" sh -c \
+            'curl -sf -m2 http://127.0.0.1:9090/version >/dev/null' 2>/dev/null; do
+        i=$((i + 1))
+        if [ "$i" -ge 30 ]; then
+            # A config sing-box refuses leaves the Dashboard permanently on its
+            # "service stopped" plaque, which looks like a UI bug and isn't one.
+            # Say why instead — and say it with sing-box's own words.
+            echo
+            echo "  !! sing-box did not come up after 30s."
+            [ -n "$start_out" ] && {
+                echo "  init.d start said:"
+                printf '%s\n' "$start_out" | sed 's/^/     /'
+            }
+            echo "  its own verdict on the generated config:"
+            docker exec "$CNAME" sh -c \
+                'sing-box check -c /tmp/singbox-ui.json 2>&1 | head -5' \
+                | sed 's/^/     /'
+            echo "  last log lines:"
+            docker exec "$CNAME" sh -c 'logread 2>/dev/null | tail -5' \
+                | sed 's/^/     /'
+            break
+        fi
+        sleep 1
+    done
     echo
     echo "  http://localhost:${PORT}/cgi-bin/luci      root / admin"
     echo "  edits in the checkout are live — just reload the page"

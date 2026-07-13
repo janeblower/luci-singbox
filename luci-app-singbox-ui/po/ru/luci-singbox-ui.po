@@ -868,6 +868,8 @@ msgid ""
 "Optional feature plugins. Each plugin is a separate package from this feed; "
 "some pull additional system components on first setup."
 msgstr ""
+"Дополнительные плагины. Каждый плагин — отдельный пакет из этого фида; "
+"некоторые при первой настройке доустанавливают системные компоненты."
 
 # Outbound modal
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:123
@@ -1389,6 +1391,8 @@ msgid ""
 "sing-box is stopped or its Clash API is unreachable. Start the service (and "
 "enable the API in General settings) to display the dashboard."
 msgstr ""
+"sing-box остановлен, либо его Clash API недоступен. Запустите сервис (и "
+"включите API в Основных настройках), чтобы увидеть Дашборд."
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:313
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:317
