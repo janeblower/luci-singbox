@@ -4,6 +4,7 @@
 'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 'require view.singbox-ui.lib.view_state as SbViewState';
+'require view.singbox-ui.lib.json_editor as SbJsonEditor';
 
 var addRenameField   = SbCommon.addRenameField;
 var loadOutboundList = SbCommon.loadOutboundList;
@@ -47,6 +48,7 @@ function buildRouteRulesMap() {
 	s.tab('action', _('Action'));
 
 	addRenameField(s, 'match');
+	SbJsonEditor.addJsonButtons(s, 'route_rule', form);
 
 	var o = s.taboption('match', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 
@@ -108,6 +110,7 @@ function buildRuleSetsMap() {
 	s.tab('basic', _('Basic'));
 
 	addRenameField(s, 'basic');
+	SbJsonEditor.addJsonButtons(s, 'ruleset', form);
 
 	var o = s.taboption('basic', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 

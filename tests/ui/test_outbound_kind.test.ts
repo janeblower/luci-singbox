@@ -177,6 +177,7 @@ function loadOutbounds(widgets: Record<string, () => unknown> = {}) {
     SbValidators: { url: () => true },
     descriptor_form: { applyMaterialized: () => {} },
     SbImpOutbound: {},
+    SbJsonEditor: { addJsonButtons: () => {} },
     SbTabInbounds: { openJsonImportModal: () => {} },
     SbViewState: {
       getSchema: () => ({}),

@@ -4,6 +4,7 @@
 'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 'require view.singbox-ui.lib.view_state as SbViewState';
+'require view.singbox-ui.lib.json_editor as SbJsonEditor';
 
 var addRenameField = SbCommon.addRenameField;
 
@@ -58,6 +59,7 @@ function buildDnsMap() {
 	// tab guard probes s.tabs and skips re-declaring 'basic', so this is safe.
 	s.tab('basic', _('Basic'));
 	addRenameField(s, 'basic');
+	SbJsonEditor.addJsonButtons(s, 'dns_server', form);
 	o = s.taboption('basic', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
 	DNS_SERVER_TYPES.forEach(function (kv) { o.value(kv[0], kv[1]); });
@@ -94,6 +96,7 @@ function buildDnsMap() {
 	s.tab('match', _('Match'));
 	s.tab('action', _('Action'));
 	addRenameField(s, 'match');
+	SbJsonEditor.addJsonButtons(s, 'dns_rule', form);
 	o = s.taboption('match', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 	o = s.taboption('match', form.ListValue, 'type', _('Type'));
 	o.value('default', _('Default')); o.value('logical', _('Logical'));

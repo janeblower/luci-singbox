@@ -19,6 +19,11 @@ const SAFE_READ_METHODS = [
   "clash_get",
   "clash_delay",
   "export_section",
+  // Pure read despite the name: it parses an edited section JSON against the
+  // section's descriptor and RETURNS the UCI fields to write. It writes nothing —
+  // lib/json_editor.js applies the result into LuCI's own uci changeset, so Save &
+  // Apply and Revert behave exactly as they do for a hand-edited form.
+  "import_section",
   "preview_config",
   "protocol_schema",
   "plugins",

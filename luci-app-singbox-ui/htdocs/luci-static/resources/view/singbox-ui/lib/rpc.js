@@ -21,6 +21,12 @@ return L.Class.extend({
     callOutboundMeta: rpc.declare({ object: 'singbox-ui', method: 'outbound_meta' }),
     callExportSection: rpc.declare({ object: 'singbox-ui', method: 'export_section',
                                      params: [ 'kind', 'name' ] }),
+    // The inverse of export_section, and equally side-effect-free: it parses the
+    // edited JSON against the section's descriptor and returns the UCI fields to
+    // write. It writes nothing — lib/json_editor.js applies the result into
+    // LuCI's own changeset, so Save & Apply / Revert behave as they always do.
+    callImportSection: rpc.declare({ object: 'singbox-ui', method: 'import_section',
+                                     params: [ 'kind', 'name', 'json' ] }),
     callPreviewConfig: rpc.declare({ object: 'singbox-ui', method: 'preview_config' }),
     // Optional system packages a descriptor field declares via `requires_pkg`
     // (kmod-tls for kTLS). The backend only accepts names from its allowlist.

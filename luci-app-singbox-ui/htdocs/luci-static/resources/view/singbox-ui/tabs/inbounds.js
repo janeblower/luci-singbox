@@ -9,6 +9,7 @@
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 'require view.singbox-ui.lib.view_state as SbViewState';
+'require view.singbox-ui.lib.json_editor as SbJsonEditor';
 
 var addRenameField   = SbCommon.addRenameField;
 
@@ -144,18 +145,8 @@ function buildInboundsMap() {
 	o = s.taboption('basic', form.Flag, 'enabled', _('Enable'));
 	o.default = '1'; o.editable = true;
 
-	// Per-row Export JSON button. Rendered inline by GridSection as a column
-	// (form.Button is the LuCI primitive for non-input action cells). Click
-	// dispatches export_section RPC and opens the modal with the JSON.
-	o = s.taboption('basic', form.Button, '_export', _('JSON'));
-	o.editable = true;
-	o.modalonly = false;
-	o.inputtitle = _('Export');
-	o.inputstyle = 'action';
-	o.onclick = function (ev, section_id) {
-		SbImpInbound.jsonExportInbound(section_id);
-		return false;
-	};
+	// Per-row Export JSON column + the "JSON editor" button inside the modal.
+	SbJsonEditor.addJsonButtons(s, 'inbound', form);
 
 	o = s.taboption('basic', form.ListValue, 'protocol', _('Protocol'));
 	var allTypes = SB_INBOUND_PROTOCOLS.concat(_pluginTypes);

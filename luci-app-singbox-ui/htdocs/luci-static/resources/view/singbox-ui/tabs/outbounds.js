@@ -10,6 +10,7 @@
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
 'require view.singbox-ui.lib.view_state as SbViewState';
+'require view.singbox-ui.lib.json_editor as SbJsonEditor';
 
 var addRenameField      = SbCommon.addRenameField;
 var openJsonImportModal = SbTabInbounds.openJsonImportModal;
@@ -194,18 +195,10 @@ function buildOutboundsMap() {
 	o.default  = '1';
 	o.editable = true;
 
-	// Per-row Export JSON button. Mirror of the inbound grid: GridSection
-	// renders form.Button as an inline action cell so users get the JSON for
-	// the row they clicked, not the whole config.
-	o = s.taboption('basic', form.Button, '_export', _('JSON'));
-	o.editable = true;
-	o.modalonly = false;
-	o.inputtitle = _('Export');
-	o.inputstyle = 'action';
-	o.onclick = function (ev, section_id) {
-		SbImpOutbound.jsonExportOutbound(section_id);
-		return false;
-	};
+	// Per-row Export JSON column + the "JSON editor" button inside the modal.
+	// Both are greyed out on a subscription: it is a URL that expands into many
+	// outbounds, so there is no single object to show or to edit.
+	SbJsonEditor.addJsonButtons(s, 'outbound', form);
 
 	o = s.taboption('basic', form.DummyValue, '_address', _('Address'));
 	o.modalonly = false;

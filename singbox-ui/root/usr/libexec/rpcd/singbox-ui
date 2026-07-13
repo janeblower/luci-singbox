@@ -10,12 +10,13 @@
 //   clash_get           proxy GET request to Clash API (read-side, read ACL)
 //   clash_mutate        proxy POST/PATCH/PUT/DELETE to Clash API (write ACL)
 //   clash_delay         proxy GET /proxies/<name>/delay?... (read ACL, query built server-side)
-//   export_section      return sing-box JSON for ONE inbound/outbound section
+//   export_section      return sing-box JSON for ONE section (in/out/dns/route/ruleset)
+//   import_section      parse edited section JSON back into UCI fields (pure read)
 //   preview_config      dry-run: generate full config to a tmpfile, return body
 //
 // Env overrides (used by tests):
 //   NFTABLES_CMD GENERATE_UC SINGBOX_INITD SUBSCRIPTION_UC RULESETS_UC SINGBOX_TMPDIR SINGBOX_CONFIG
-//   EXPORT_SECTION_UC CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
+//   EXPORT_SECTION_UC IMPORT_SECTION_UC CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
 //   SINGBOX_VARLIB
 
 'use strict';
@@ -29,6 +30,7 @@ const SINGBOX_INITD = getenv("SINGBOX_INITD") || "/etc/init.d/singbox-ui";
 const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subscription.uc";
 const RULESETS_UC      = getenv("RULESETS_UC") || "/usr/share/singbox-ui/nft-rulesets.uc";
 const EXPORT_SECTION_UC = getenv("EXPORT_SECTION_UC") || "/usr/share/singbox-ui/export_section.uc";
+const IMPORT_SECTION_UC = getenv("IMPORT_SECTION_UC") || "/usr/share/singbox-ui/import_section.uc";
 const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
 const TMPDIR       = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
@@ -502,16 +504,23 @@ function clash_params() {
 	return { listen: listen, port: port, secret: secret };
 }
 
-// export_section(kind, name) — pure read of a single inbound/outbound UCI
-// section, dispatched through the shared lib builder. The actual JSON shape
-// comes from export_section.uc (which has access to lib/ via -L); we just
-// forward its stdout verbatim. No side effects: no file writes, no service
-// restart, no nftables touch.
+// The UCI section kinds that have a JSON representation (lib/section_json.uc
+// KINDS). Validated here as well as there: rpcd is the trust boundary, and `kind`
+// reaches a shell argv.
+const JSON_KINDS = {
+	inbound: 1, outbound: 1, dns_server: 1, dns_rule: 1, route_rule: 1, ruleset: 1,
+};
+
+// export_section(kind, name) — pure read of a single UCI section, dispatched
+// through the shared lib builder. The actual JSON shape comes from
+// export_section.uc (which has access to lib/ via -L); we just forward its stdout
+// verbatim. No side effects: no file writes, no service restart, no nftables
+// touch.
 function call_export_section() {
 	let args = parse_args();
 	let kind = args.kind || "";
 	let name = args.name || "";
-	if (kind !== "inbound" && kind !== "outbound") {
+	if (!JSON_KINDS[kind]) {
 		emit_err("invalid kind: " + (length(kind) ? kind : "<missing>"));
 		return;
 	}
@@ -532,6 +541,55 @@ function call_export_section() {
 	// a re-stringified payload).
 	let trimmed = trim(body);
 	if (!length(trimmed)) { emit_err("export_section helper produced no output"); return; }
+	print(trimmed + "\n");
+}
+
+// import_section(kind, name, json) — the inverse of export_section, and equally
+// side-effect-free: it parses the JSON against the section's descriptor and
+// returns the UCI fields to write ({fields, known, extra, tag}). It writes
+// NOTHING itself. The frontend applies the result into LuCI's own uci changeset,
+// so Save & Apply and Revert work exactly as they do for a hand-edited form —
+// which is why this lives on the READ ACL despite its name.
+//
+// The body goes to the helper on STDIN via a 0600 tmpfile, never on the command
+// line: a section's JSON carries passwords/UUIDs, and argv is world-readable in
+// /proc. mktemp(1) is O_EXCL under the hood, so there is no symlink race.
+// Cleanup is unconditional — a partial write must not linger on disk.
+function call_import_section() {
+	let args = parse_args();
+	let kind = args.kind || "";
+	let name = args.name || "";
+	let body = args.json;
+	if (!JSON_KINDS[kind]) {
+		emit_err("invalid kind: " + (length(kind) ? kind : "<missing>"));
+		return;
+	}
+	if (!valid_section_name(name)) { emit_err("invalid or missing name"); return; }
+	if (type(body) !== "string" || !length(body)) { emit_err("missing json"); return; }
+
+	let path = run_capture(["mktemp", "-p", "/tmp", "singbox-ui-import.XXXXXX"]);
+	if (path == null) { emit_err("mktemp failed"); return; }
+	path = trim(path);
+	if (!length(path)) { emit_err("mktemp failed"); return; }
+
+	let ok = false;
+	try {
+		let f = fs.open(path, "w");
+		if (f) { f.write(body); f.close(); ok = true; }
+	} catch (e) { ok = false; }
+	if (!ok) { try { fs.unlink(path); } catch (_) {} emit_err("cannot stage import body"); return; }
+
+	let argv = [];
+	for (let a in uc_argv(IMPORT_SECTION_UC, kind, name)) push(argv, sq(a));
+	let out = null;
+	let p = fs.popen(join(" ", argv) + " < " + sq(path) + " 2>/dev/null", "r");
+	if (p) { out = p.read("all") ?? ""; p.close(); }
+	try { fs.unlink(path); } catch (_) {}
+
+	if (out == null) { emit_err("import_section helper failed"); return; }
+	let trimmed = trim(out);
+	if (!length(trimmed)) { emit_err("import_section helper produced no output"); return; }
+	// Pass through verbatim so fields/known/extra stay real JSON values.
 	print(trimmed + "\n");
 }
 
@@ -859,6 +917,7 @@ const METHODS = {
 	clash_mutate:        { sig: { method: "string", path: "string", body: "string" }, handler: call_clash_mutate },
 	clash_delay:         { sig: { name: "string", url: "string", timeout: "string" }, handler: call_clash_delay },
 	export_section:      { sig: { kind: "string", name: "string" },                   handler: call_export_section },
+	import_section:      { sig: { kind: "string", name: "string", json: "string" },   handler: call_import_section },
 	preview_config:      { sig: {},                                                   handler: call_preview_config },
 	protocol_schema:     { sig: {},                                                   handler: call_protocol_schema },
 	plugins:             { sig: {},                                                   handler: call_plugins },

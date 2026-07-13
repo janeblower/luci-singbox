@@ -2,15 +2,42 @@
 	"luci-singbox-ui": {
 		"description": "Grant LuCI access to singbox-ui",
 		"read": {
-			"uci": [ "singbox-ui" ],
+			"uci": [
+				"singbox-ui"
+			],
 			"ubus": {
-				"singbox-ui": [ "status", "status_detail", "sub_status", "read_config", "outbound_meta", "clash_get", "clash_delay", "export_section", "preview_config", "protocol_schema", "plugins", "pkg_status" ]
+				"singbox-ui": [
+					"status",
+					"status_detail",
+					"sub_status",
+					"read_config",
+					"outbound_meta",
+					"clash_get",
+					"clash_delay",
+					"export_section",
+					"import_section",
+					"preview_config",
+					"protocol_schema",
+					"plugins",
+					"pkg_status"
+				]
 			}
 		},
 		"write": {
-			"uci": [ "singbox-ui" ],
+			"uci": [
+				"singbox-ui"
+			],
 			"ubus": {
-				"singbox-ui": [ "generate", "nftables", "restart", "refresh", "clash_mutate", "plugin_install", "plugin_enable", "pkg_install" ]
+				"singbox-ui": [
+					"generate",
+					"nftables",
+					"restart",
+					"refresh",
+					"clash_mutate",
+					"plugin_install",
+					"plugin_enable",
+					"pkg_install"
+				]
 			}
 		}
 	}

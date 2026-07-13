@@ -199,10 +199,28 @@ function _emit_shared(out, s, kind, d) {
     }
 }
 
+// _deep_merge(dst, src) — recursive object merge; arrays and scalars REPLACE.
+// Used for `json_extra` only. Replace-not-append for arrays is deliberate: the
+// user edited an array in the JSON editor, so what they typed is what they meant.
+function _deep_merge(dst, src) {
+    for (let k in src) {
+        let v = src[k];
+        if (type(v) === "object" && type(dst[k]) === "object") _deep_merge(dst[k], v);
+        else dst[k] = v;
+    }
+    return dst;
+}
+
 // build(d, s) — construct the sing-box JSON object for descriptor d from
 // section s. Order: type/tag (or inbound base), declared fields (declaration
 // order), declared groups (declaration order), declared shared blocks
-// (declaration order), then optional post() escape-hatch.
+// (declaration order), then optional post() escape-hatch, then `json_extra`.
+//
+// `json_extra` is a raw JSON object written ONLY by the JSON editor: it carries
+// the keys the descriptor tree does not model, which _unfiller.parse() could not
+// turn into UCI fields. It is merged last so what the user typed wins — they were
+// shown the list of unknown keys and confirmed it. Bad JSON here is ignored
+// rather than allowed to abort the whole config build.
 function build(d, s) {
     let out;
     const HEADERLESS = { route_rule: 1, dns_rule: 1, cache: 1, clash_api: 1 };
@@ -229,6 +247,17 @@ function build(d, s) {
     }
     _emit_shared(out, s, d.kind, d);
     if (type(d.post) === "function") d.post(out, s);
+
+    let raw = s_opt(s, "json_extra");
+    if (length(raw)) {
+        let obj = null;
+        try { obj = json(raw); } catch (e) {
+            warn(sprintf("_filler: '%s' has unparseable json_extra; ignoring\n", s[".name"] ?? "?"));
+        }
+        if (type(obj) === "object") _deep_merge(out, obj);
+        else if (obj != null)
+            warn(sprintf("_filler: '%s' json_extra is not an object; ignoring\n", s[".name"] ?? "?"));
+    }
     return out;
 }
 

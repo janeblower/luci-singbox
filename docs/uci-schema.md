@@ -2,6 +2,15 @@
 
 Source of truth: this file. Everything read by `lib/*.uc` or written by the LuCI UI should be reflected here.
 
+## Cross-cutting fields
+
+These may appear on any descriptor-built section (`inbound`, `outbound`, `dns_server`, `dns_rule`, `route_rule`, `ruleset`).
+
+| Field | Type | Values | Description |
+|---|---|---|---|
+| `builtin` | bool | `0`/`1` | Package-owned section (the `uci-defaults`-seeded rule-sets, the `wan` outbound). The grid disables Edit/Delete and tints the row; `enabled` stays a normal toggle. See [`ruleset`](#ruleset) and [`outbound`](#outbound). |
+| `json_extra` | string | a JSON **object** | Written ONLY by the JSON editor (`lib/section_json.uc` ← `builder/_unfiller.uc`). Holds the keys of a hand-edited section JSON that no descriptor models — the user is shown the list and confirms it, so nothing is dropped silently. `builder/_filler.uc build()` deep-merges it into the built object LAST, so what the user typed wins over what the form produced. Unparseable content is warned about and ignored rather than allowed to abort the whole config build. Arrays and scalars replace on merge; objects merge recursively. |
+
 ## Sections
 
 - [`inbound`](#inbound)
