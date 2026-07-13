@@ -29,6 +29,13 @@ const SHARED_DISPATCH = {
 // json_key / coerce / omit_when / skip_value / requires / default_when_empty.
 // Fields without json_key never reach here (filtered in build()).
 function _emit_scalar(out, s, f) {
+    // A key the core does not know is not ignored — sing-box refuses the WHOLE
+    // config with `json: unknown field`. So min_version gates EMISSION, not just
+    // the UI, on every path _emit_scalar serves (own fields, groups, shared-block
+    // emit_spec). Fail-open: core_at_least() returns true when the version is
+    // unknown, so an undetectable core emits everything rather than silently
+    // shipping a crippled config.
+    if (f.min_version != null && !helpers.core_at_least(f.min_version)) return;
     if (f.requires != null) {
         // String-form `requires` gates on NON-EMPTINESS of the named sibling, so a
         // UCI bool OFF value "0" (length 1) SATISFIES it. Only safe when the
@@ -163,32 +170,6 @@ _emit_group = function(out, s, g) {
     if (length(keys(sub)) > 0 || g.emit_empty) out[g.json_key] = sub;
 };
 
-// _version_gate_seq(seq) — drop top-level emit_spec entries whose declared
-// min_version the running core (helpers.core_at_least) doesn't meet.
-//
-// Scoped to SHARED-BLOCK seq processing only (_build_block below), not to
-// _emit_scalar generally. Elsewhere in the descriptor tree — match.uc's route/
-// dns_rule matchers, tls.uc's kTLS fields, naive/ssh/shadowtls's own fields —
-// `min_version` is, by established convention, a UI-hiding hint ONLY: it
-// reaches the frontend's "hide incompatible fields" filter via schema_dump,
-// but a value that IS set still emits regardless of the probed core. tls.uc
-// proves this is deliberate, not an oversight: tls_kernel_tx/tls_kernel_rx
-// carry min_version in `fields:` (for the UI) but their emit_spec entries
-// omit it on purpose. Gating _emit_scalar itself (as a first draft of this
-// change did) silently stripped fields from naive/ssh/dns_rule matcher
-// goldens that were passing on main — collateral damage far outside this
-// block's scope. listen.uc is the first shared block whose fields are
-// unknown-field-FATAL on an old core (sing-box 1.12 refuses the whole config
-// on `bind_interface` et al.), so it earns its own emission-time gate here.
-function _version_gate_seq(seq) {
-    let out = [];
-    for (let e in (seq || [])) {
-        if (e.min_version != null && !helpers.core_at_least(e.min_version)) continue;
-        push(out, e);
-    }
-    return out;
-}
-
 // _build_block(s, spec, kind, opts) — build a shared-block object from its
 // declarative emit_spec. Returns the object, or null when gated out.
 //   spec: { gate?, merge?, variant?, outbound?:[seq], inbound?:[seq], seq?:[seq] }
@@ -201,7 +182,7 @@ function _build_block(s, spec, kind, opts) {
         if (entries == null) return null;
         let obj = {};
         obj[v.emit_selector_as] = sel;
-        _emit_seq(obj, s, _version_gate_seq(entries));
+        _emit_seq(obj, s, entries);
         return obj;
     }
     if (!_gate(s, spec.gate, opts)) return (spec.merge ? {} : null);
@@ -212,7 +193,7 @@ function _build_block(s, spec, kind, opts) {
     let seq = spec[kind] != null ? spec[kind]
               : (spec.seq != null ? spec.seq
                  : (kind === "inbound" ? spec.inbound : spec.outbound));
-    _emit_seq(obj, s, _version_gate_seq(seq));
+    _emit_seq(obj, s, seq);
     return obj;
 }
 

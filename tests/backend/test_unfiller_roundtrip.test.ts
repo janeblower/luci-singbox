@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
-import { runUcodeJSON } from "../helpers/ucode.ts";
+import { buildParity } from "../helpers/parity.ts";
 
 // COVERAGE GUARD for the JSON editor's reverse mapping.
 //
@@ -134,7 +134,14 @@ describe("_unfiller round-trips the whole parity corpus", () => {
   let rows: Row[] = [];
 
   it("runs every fixture through build -> parse -> build", async () => {
-    rows = (await runUcodeJSON(DRIVER, [], ["tests/parity"])) as Row[];
+    // Same pin as the parity lane (buildParity: SINGBOX_CORE_VERSION=99.0). The
+    // corpus carries version-gated fields (kTLS 1.13, QUIC 1.14); on the guest's
+    // real 1.12 core _filler would gate them out of j1 entirely and this guard
+    // would quietly stop round-tripping them. Pinned high, every field is present
+    // on both sides. The gated direction — a key _filler won't emit must land in
+    // `extra` and be re-emitted verbatim, never be silently dropped from `known` —
+    // is pinned per-case in test_listen_shared_version_gate.test.ts.
+    rows = (await buildParity(DRIVER, ["tests/parity"])) as Row[];
     // 76 protocol fixtures + the 8 covering the other four kinds.
     expect(rows.length).toBeGreaterThan(80);
     expect(

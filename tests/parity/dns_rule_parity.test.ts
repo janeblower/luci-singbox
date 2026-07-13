@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { useGuest } from "../helpers/guest.ts";
-import { goldenDrift } from "../helpers/parity.ts";
-import { runUcodeJSON } from "../helpers/ucode.ts";
+import { buildParity, goldenDrift } from "../helpers/parity.ts";
 
 // Builds every dns_rule_corpus fixture via reg.get("dns_rule", type) +
 // filler.build(d, section), returns {name: built} map.
@@ -26,11 +25,7 @@ describe("dns rule parity", () => {
   useGuest();
 
   it("every corpus fixture deep-equals its golden", async () => {
-    const built = await runUcodeJSON<Record<string, unknown>>(
-      DRIVER,
-      [],
-      ["tests/parity"],
-    );
+    const built = await buildParity(DRIVER, ["tests/parity"]);
 
     expect(goldenDrift(built)).toEqual([]);
   });

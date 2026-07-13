@@ -27,6 +27,7 @@ var TAB_TITLES = {
     transport: _('Transport'),
     multiplex: _('Multiplex'),
     dial:      _('Dial'),
+    listen:    _('Listen'),
 };
 
 function widgetFor(field) {

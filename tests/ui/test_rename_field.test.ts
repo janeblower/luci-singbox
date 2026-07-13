@@ -226,6 +226,33 @@ describe("renameRefs", () => {
     expect(state.dns.default_resolver).toBe("goog");
   });
 
+  it("rewrites an inbound's detour when the inbound it points at is renamed", () => {
+    // The shared listen block gives every inbound a `detour` naming ANOTHER
+    // inbound. sing-box does not catch a dangling one — `sing-box check` returns
+    // 0 and the daemon starts, the detour simply never happens — so an inbound
+    // rename that skips this ref fails silently.
+    const state: Record<string, UciSection> = {
+      other_in: { ".name": "other_in", ".type": "inbound", protocol: "mixed" },
+      mx: {
+        ".name": "mx",
+        ".type": "inbound",
+        protocol: "mixed",
+        detour: "other_in",
+      },
+      keep: {
+        ".name": "keep",
+        ".type": "inbound",
+        protocol: "socks",
+        detour: "someone_else",
+      },
+    };
+    const { common } = loadCommon(state);
+    common.renameRefs("inbound", "other_in", "injectme");
+
+    expect(state.mx.detour).toBe("injectme");
+    expect(state.keep.detour).toBe("someone_else");
+  });
+
   it("leaves unrelated kinds alone", () => {
     const state: Record<string, UciSection> = {
       rr: { ".name": "rr", ".type": "route_rule", outbound: "wan" },

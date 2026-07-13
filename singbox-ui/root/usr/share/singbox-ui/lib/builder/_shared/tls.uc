@@ -145,8 +145,12 @@ return {
             { name: "tls_fragment",                json_key: "fragment",                coerce: "bool" },
             { name: "tls_fragment_fallback_delay", json_key: "fragment_fallback_delay" },
             { name: "tls_record_fragment",         json_key: "record_fragment",         coerce: "bool" },
-            { name: "tls_kernel_tx",               json_key: "kernel_tx",               coerce: "bool" },
-            { name: "tls_kernel_rx",               json_key: "kernel_rx",               coerce: "bool" },
+            // min_version repeated from `fields` above: _emit_scalar gates on the
+            // entry IT is handed, and for a shared block that is this emit_spec
+            // entry, never the UI field. kernel_tx/kernel_rx are 1.13 keys, and an
+            // unknown key is not ignored — a 1.12 core refuses the whole config.
+            { name: "tls_kernel_tx",               json_key: "kernel_tx",               coerce: "bool", min_version: "1.13" },
+            { name: "tls_kernel_rx",               json_key: "kernel_rx",               coerce: "bool", min_version: "1.13" },
             { json_key: "reality", gate: { flag: "reality_enabled" }, fields: [
                 { json_key: "enabled", const: true },
                 { name: "reality_public_key", json_key: "public_key" },
@@ -163,8 +167,8 @@ return {
             { name: "tls_cipher_suites", json_key: "cipher_suites",  coerce: "array" },
             { name: "tls_certificate_path", json_key: "certificate_path" },
             { name: "tls_key_path",         json_key: "key_path" },
-            { name: "tls_kernel_tx",        json_key: "kernel_tx",        coerce: "bool" },
-            { name: "tls_kernel_rx",        json_key: "kernel_rx",        coerce: "bool" },
+            { name: "tls_kernel_tx",        json_key: "kernel_tx",        coerce: "bool", min_version: "1.13" },
+            { name: "tls_kernel_rx",        json_key: "kernel_rx",        coerce: "bool", min_version: "1.13" },
             { json_key: "ech", gate: { flag: "tls_ech_enabled" }, fields: [
                 { json_key: "enabled", const: true },
                 { name: "tls_ech_key",      json_key: "key",      coerce: "array" },

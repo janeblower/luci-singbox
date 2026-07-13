@@ -1,8 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { existsSync, readFileSync } from "node:fs";
 import { useGuest } from "../helpers/guest.ts";
-import { goldenDrift } from "../helpers/parity.ts";
-import { runUcodeJSON } from "../helpers/ucode.ts";
+import { buildParity, goldenDrift } from "../helpers/parity.ts";
 
 // Builds every route_corpus fixture via write_uci + uci.cursor +
 // route.build_route_rules / ruleset.build_rule_sets.
@@ -67,11 +66,7 @@ describe("route parity", () => {
   useGuest();
 
   it("every corpus fixture deep-equals its golden", async () => {
-    const built = await runUcodeJSON<Record<string, unknown>>(
-      DRIVER,
-      [],
-      ["tests/parity"],
-    );
+    const built = await buildParity(DRIVER, ["tests/parity"]);
 
     expect(goldenDrift(built)).toEqual([]);
   });

@@ -36,6 +36,8 @@
 // that use it (clash_api, dns/legacy, shadowsocks) only reshape or delete keys
 // the spec already describes; none of them invents one.
 
+let helpers = require("helpers");
+
 const SHARED_DISPATCH = {
     tls:       { key: "tls" },
     transport: { key: "transport" },
@@ -44,6 +46,22 @@ const SHARED_DISPATCH = {
     dial:      { merge: true },
     listen:    { merge: true },
 };
+
+// _gated(e) — the mirror of _filler._emit_scalar's min_version check: an entry the
+// running core is too old for is one _filler will NOT emit, so this file must not
+// claim it either. It is skipped in BOTH walks, and that pairing is the point:
+//
+//   * out of `known`  => the diff-apply rule ("known, but absent from the JSON =>
+//     delete from UCI") can no longer wipe a value that was set on a newer core
+//     and is merely invisible on this one. Silent data loss, otherwise.
+//   * out of `parse`  => the same key ARRIVING in pasted JSON is not consumed, so
+//     it lands in `extra` -> json_extra -> re-emitted verbatim. That is the right
+//     trade: the user's data survives, and if they really did paste a 1.14 key
+//     onto a 1.12 core the failure is LOUD (init.d's `sing-box check` refuses the
+//     start and says which field) instead of the value quietly vanishing.
+function _gated(e) {
+    return e.min_version != null && !helpers.core_at_least(e.min_version);
+}
 
 // _uncoerce(f, v) — JSON value -> UCI value. Mirrors _filler._emit_scalar's
 // coerce switch. UCI has no types: everything is a string, and a list is an
@@ -80,6 +98,7 @@ function _uncoerce(f, v) {
 // because only this frame knows where they came from.
 function _parse_seq(fields, obj, seq, seen, extra) {
     for (let e in (seq ?? [])) {
+        if (_gated(e)) continue;                      // not emittable here -> not ours
         // A const is emitted by the builder, never stored — consume, don't map.
         if ("const" in e) { seen[e.json_key] = true; continue; }
 
@@ -112,6 +131,7 @@ function _parse_seq(fields, obj, seq, seen, extra) {
 // sequence can reach, whether or not the JSON at hand carries it.
 function _seq_names(known, seq) {
     for (let e in (seq ?? [])) {
+        if (_gated(e)) continue;                      // see _gated() above
         if ("const" in e) continue;
         if (e.fields != null) {
             if (e.gate != null && e.gate.flag != null) known[e.gate.flag] = true;
@@ -238,7 +258,7 @@ function _parse_shared(fields, json, kind, d, seen, extra) {
 function field_names(d) {
     let known = {};
     if (d.kind === "inbound") { known.listen = true; known.listen_port = true; }
-    for (let f in (d.fields ?? [])) if (f.json_key != null) known[f.name] = true;
+    for (let f in (d.fields ?? [])) if (f.json_key != null && !_gated(f)) known[f.name] = true;
     _seq_names(known, d.groups ?? []);
     if (d.users != null) {
         if (_users_list_invertible(d.users)) known[d.users.from] = true;
@@ -306,7 +326,7 @@ function parse(d, json) {
     }
 
     for (let f in (d.fields ?? [])) {
-        if (f.json_key == null) continue;             // UI-only field
+        if (f.json_key == null || _gated(f)) continue;   // UI-only, or not emittable here
         seen[f.json_key] = true;
         let v = json[f.json_key];
         if (v == null) continue;                      // absent -> caller removes it

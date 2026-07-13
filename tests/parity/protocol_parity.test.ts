@@ -1,8 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
-import { goldenDrift } from "../helpers/parity.ts";
+import { buildParity, goldenDrift } from "../helpers/parity.ts";
 import { exec } from "../helpers/ssh.ts";
-import { runUcodeJSON } from "../helpers/ucode.ts";
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 
@@ -61,11 +60,7 @@ describe("protocol parity", () => {
     // `-L`, never installed at that system path, so the glob never finds
     // awg_warp/init.uc and the handler never advertises the plugin's rpcd methods.
     // Shell equivalent: ucode -L tests/parity -L "<plugin-lib-root>" -L "$LIB" -e '...'
-    const built = await runUcodeJSON<Record<string, unknown>>(
-      DRIVER,
-      [],
-      ["tests/parity", PLUGIN_LIB_ROOT],
-    );
+    const built = await buildParity(DRIVER, ["tests/parity", PLUGIN_LIB_ROOT]);
 
     expect(goldenDrift(built)).toEqual([]);
   });

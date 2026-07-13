@@ -33,6 +33,13 @@ var RENAME_REFS = {
 		['dns_server',    'detour',           false],
 		['ruleset',       'download_detour',  false],
 	],
+	// An inbound's `detour` (shared listen block) names ANOTHER INBOUND. sing-box
+	// does not catch a dangling one: `sing-box check` passes, the daemon starts,
+	// and the detour just never happens — so a rename that skips this table fails
+	// silently and invisibly, worse than the dropped-with-warn cases above.
+	inbound: [
+		['inbound', 'detour', false],
+	],
 	ruleset: [
 		['route_rule', 'rule_set', true],
 		['dns_rule',   'rule_set', true],

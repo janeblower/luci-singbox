@@ -7,6 +7,12 @@ import { runUcode } from "../helpers/ucode.ts";
 // on both sides, and the kmod-tls dependency the fields declare (`requires_pkg`)
 // is probed/installed through the pkg_status + pkg_install rpcd methods, whose
 // package allowlist IS their input validation (apk runs as root).
+//
+// The core is PINNED at 1.13: kernel_tx/kernel_rx are 1.13 keys and _filler gates
+// emission on min_version (an unknown key makes sing-box refuse the whole config,
+// so a 1.12 core must not see them). Unpinned, this test would assert against
+// whatever core the guest happens to have installed — it reads 1.12 today.
+const CORE_113 = { SINGBOX_CORE_VERSION: "1.13.0" };
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB =
@@ -25,7 +31,7 @@ describe("kTLS TLS fields", () => {
       );
       print(sprintf("%s|%s", got.tls.kernel_tx, got.tls.kernel_rx));
     `;
-    const r = await runUcode(src);
+    const r = await runUcode(src, [], [], CORE_113);
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("true|true");
   });
@@ -39,7 +45,7 @@ describe("kTLS TLS fields", () => {
       );
       print(sprintf("%s|%s", got.tls.kernel_tx, got.tls.kernel_rx == null ? "ABSENT" : "PRESENT"));
     `;
-    const r = await runUcode(src);
+    const r = await runUcode(src, [], [], CORE_113);
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("true|ABSENT");
   });

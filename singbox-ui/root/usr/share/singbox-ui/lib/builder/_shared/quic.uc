@@ -12,11 +12,15 @@ return {
           min_version: "1.14" },
     ],
 
+    // min_version is repeated here, not inherited from `fields` above: _emit_scalar
+    // gates on the entry IT is handed, and for a shared block that is the emit_spec
+    // entry, never the UI field. Without it, a 1.14 key would emit on a 1.12 core —
+    // and an unknown key is not ignored, sing-box refuses the whole config.
     emit_spec: {
         merge: true,
         seq: [
-            { name: "quic_initial_packet_size",        json_key: "initial_packet_size", coerce: "num" },
-            { name: "quic_disable_path_mtu_discovery", json_key: "disable_path_mtu_discovery", coerce: "bool" },
+            { name: "quic_initial_packet_size",        json_key: "initial_packet_size", coerce: "num", min_version: "1.14" },
+            { name: "quic_disable_path_mtu_discovery", json_key: "disable_path_mtu_discovery", coerce: "bool", min_version: "1.14" },
         ],
     },
 };

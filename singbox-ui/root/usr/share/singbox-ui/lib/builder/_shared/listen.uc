@@ -12,6 +12,12 @@
 // domain_strategy / udp_disable_domain_unmapping) is intentionally NOT emitted:
 // since 1.11 those are route actions, not inbound fields.
 //
+// The fields live on their OWN tab ("listen"), exactly as dial.uc's identical set
+// lives on "dial". `advanced: true` is inert on an inbound — registry.materialize()
+// skips _inject_advanced_flags() for inbound/outbound, and descriptor_form sets
+// noAdvGate for them — so without a tab of their own all twelve would render
+// unconditionally on Basic, taking the `mixed` modal from 3 fields to 15.
+//
 // `listen` and `listen_port` deliberately stay in the individual descriptors.
 // They look like the most shared fields of all, but the default port is part of
 // each protocol's identity — 443 for the TLS-ish ones, 1080 for socks/mixed,
@@ -24,39 +30,39 @@ return {
     applies_to: { kinds: [ "inbound" ] },
 
     fields: [
-        { name: "tcp_fast_open", type: "bool", tab: "basic", default: 0,
+        { name: "tcp_fast_open", type: "bool", tab: "listen", default: 0,
           ui_label: "TCP fast open", advanced: true },
-        { name: "tcp_multi_path", type: "bool", tab: "basic", default: 0,
+        { name: "tcp_multi_path", type: "bool", tab: "listen", default: 0,
           ui_label: "TCP MPTCP", advanced: true },
-        { name: "udp_fragment", type: "bool", tab: "basic", default: 0,
+        { name: "udp_fragment", type: "bool", tab: "listen", default: 0,
           ui_label: "UDP fragment", advanced: true },
-        { name: "udp_timeout", type: "string", tab: "basic",
+        { name: "udp_timeout", type: "string", tab: "listen",
           ui_label: "UDP NAT timeout", placeholder: "5m", advanced: true },
-        { name: "detour", type: "string", tab: "basic",
+        { name: "detour", type: "string", tab: "listen",
           ui_label: "Detour to inbound", placeholder: "another_inbound",
           ui_help: "Forward accepted connections to another inbound. The target inbound must be injectable.",
           advanced: true },
 
         // sing-box hands bind_interface to SO_BINDTODEVICE: an OS netdev
         // (eth0 / br-lan / pppoe-wan), NOT an OpenWrt logical interface.
-        { name: "bind_interface", type: "string", tab: "basic",
+        { name: "bind_interface", type: "string", tab: "listen",
           ui_label: "Bind interface (netdev)", placeholder: "eth0",
           ui_help: "OS network device, e.g. eth0 or pppoe-wan — not the OpenWrt interface name (wan/lan).",
           dynamic: "devices", advanced: true, min_version: "1.12" },
-        { name: "routing_mark", type: "number", tab: "basic",
+        { name: "routing_mark", type: "number", tab: "listen",
           ui_label: "Routing mark (fwmark)", advanced: true, min_version: "1.12" },
-        { name: "reuse_addr", type: "bool", tab: "basic", default: 0,
+        { name: "reuse_addr", type: "bool", tab: "listen", default: 0,
           ui_label: "SO_REUSEADDR", advanced: true, min_version: "1.12" },
-        { name: "netns", type: "string", tab: "basic",
+        { name: "netns", type: "string", tab: "listen",
           ui_label: "Network namespace", placeholder: "/var/run/netns/xx",
           advanced: true, min_version: "1.12" },
 
-        { name: "disable_tcp_keep_alive", type: "bool", tab: "basic", default: 0,
+        { name: "disable_tcp_keep_alive", type: "bool", tab: "listen", default: 0,
           ui_label: "Disable TCP keep-alive", advanced: true, min_version: "1.13" },
-        { name: "tcp_keep_alive", type: "string", tab: "basic",
+        { name: "tcp_keep_alive", type: "string", tab: "listen",
           ui_label: "TCP keep-alive period", placeholder: "5m",
           advanced: true, min_version: "1.13" },
-        { name: "tcp_keep_alive_interval", type: "string", tab: "basic",
+        { name: "tcp_keep_alive_interval", type: "string", tab: "listen",
           ui_label: "TCP keep-alive interval", placeholder: "75s",
           advanced: true, min_version: "1.13" },
     ],

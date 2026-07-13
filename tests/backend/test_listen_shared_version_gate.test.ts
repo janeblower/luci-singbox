@@ -2,19 +2,15 @@ import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { runUcode } from "../helpers/ucode.ts";
 
-// _filler._build_block's _version_gate_seq drops a shared-block emit_spec
-// entry whose min_version the probed core doesn't meet, BEFORE _emit_scalar
-// ever sees it. This is scoped to shared blocks only (see the comment above
-// _version_gate_seq in _filler.uc) — the listen block is the first shared
-// block to actually need it, because its 1.12/1.13 fields are unknown-field
-// FATAL on an older sing-box (the whole config gets rejected), unlike e.g.
-// tls.uc's kTLS fields, which stay UI-hint-only on purpose.
+// _filler._emit_scalar drops any entry — own field, group member or shared-block
+// emit_spec entry — whose declared min_version the probed core doesn't meet. An
+// unknown key is not ignored: sing-box refuses the WHOLE config, so a 1.13 key on
+// a 1.12 core means the service does not start at all.
 //
-// tests/parity/corpus.uc's mixed_in_listen_shared fixture only exercises the
-// "blocked" half of this (the guest's real installed core is 1.12, so the
-// 1.13 trio is silently absent from that golden). This test pins
-// SINGBOX_CORE_VERSION explicitly and checks BOTH directions: blocked below
-// min_version, present at/above it.
+// Version gating is tested HERE, with the core pinned per case, and nowhere else:
+// the parity lane pins SINGBOX_CORE_VERSION=99.0 precisely so its goldens assert
+// what a descriptor emits with every field present, instead of silently reshaping
+// themselves around whatever core the guest happens to install.
 
 const SRC = `
   let filler = require("builder._filler");
@@ -28,8 +24,34 @@ const SRC = `
   print(sprintf("%J\\n", o));
 `;
 
+// The other half of the gate: _unfiller must skip exactly what _filler skips.
+// A 1.13 key on a 1.12 core is NOT "known" (or the JSON editor's diff-apply — the
+// rule is "known but absent from the JSON => delete from UCI" — would wipe a value
+// set on a newer core: silent data loss), and is NOT consumed by parse() either,
+// so it survives in `extra` -> json_extra -> re-emitted verbatim.
+const UNFILL_SRC = `
+  let unf = require("builder._unfiller");
+  let d = { kind:"inbound", sing_box_type:"mixed", shared:{ listen:true } };
+  let r = unf.parse(d, { type:"mixed", tag:"m1", listen:"::", listen_port:1080,
+                         tcp_fast_open:true, tcp_keep_alive:"5m" });
+  // Presence as an explicit bool: sprintf("%J") renders an absent key as null,
+  // which would make "did the walk claim it?" indistinguishable from a null value.
+  print(sprintf("%J\\n", {
+    known_gated:   r.known.tcp_keep_alive  != null,
+    known_ungated: r.known.tcp_fast_open   != null,
+    field_gated:   r.fields.tcp_keep_alive != null,
+    extra_gated:   r.extra.tcp_keep_alive,
+  }));
+`;
+
 async function build(core: string) {
   const r = await runUcode(SRC, [], [], { SINGBOX_CORE_VERSION: core });
+  expect(r.exitCode).toBe(0);
+  return JSON.parse(r.stdout.trim());
+}
+
+async function unfill(core: string) {
+  const r = await runUcode(UNFILL_SRC, [], [], { SINGBOX_CORE_VERSION: core });
   expect(r.exitCode).toBe(0);
   return JSON.parse(r.stdout.trim());
 }
@@ -69,5 +91,24 @@ describe("listen shared block: emission-time version gate", () => {
     expect(o.tcp_keep_alive).toBe("5m");
     expect(o.tcp_keep_alive_interval).toBe("75s");
     expect(o.disable_tcp_keep_alive).toBe(true);
+  });
+});
+
+describe("listen shared block: _unfiller gates `known` the same way", () => {
+  useGuest();
+
+  it("at 1.12: a 1.13 key is neither known nor consumed — it survives in extra", async () => {
+    const r = await unfill("1.12.0");
+    expect(r.known_gated).toBe(false); // NOT known => diff-apply can't delete it
+    expect(r.known_ungated).toBe(true); // ungated siblings are unaffected
+    expect(r.field_gated).toBe(false);
+    expect(r.extra_gated).toBe("5m"); // -> json_extra -> re-emitted verbatim
+  });
+
+  it("at 1.13: the same key is known, consumed into a field, and not extra", async () => {
+    const r = await unfill("1.13.0");
+    expect(r.known_gated).toBe(true);
+    expect(r.field_gated).toBe(true);
+    expect(r.extra_gated).toBeNull();
   });
 });
