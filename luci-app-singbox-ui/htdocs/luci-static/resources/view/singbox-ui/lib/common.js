@@ -112,14 +112,33 @@ function addRenameField(s, tab) {
 // point of shipping the rule-sets.
 function isBuiltin(sid) { return uci.get('singbox-ui', sid, 'builtin') === '1'; }
 
+// tintBuiltinRow(td, trEl) — add .sb-builtin-row to the row owning the action cell.
+//
+// LuCI master hands renderRowActions the <tr> it is building. The LuCI shipped in
+// OpenWrt 25.12 does NOT: its GridSection override is
+// `renderRowActions(section_id) { return this.super(..., [section_id, _('Edit')]) }`,
+// which drops every argument but the id, and TableSection.renderContents calls it
+// without the row either. So trEl is undefined on a real router, and relying on it
+// meant the buttons greyed out but the row was never tinted.
+//
+// The version-independent handle is the cell we just returned: the caller does
+// `trEl.appendChild(this.renderRowActions(...))`, so one tick later td.parentNode
+// IS the row. Looking the row up in the document instead would NOT work — LuCI
+// assembles the whole table in memory and only inserts it later, so a
+// getElementById on the next tick still finds nothing.
+function tintBuiltinRow(td, trEl) {
+	if (trEl && trEl.classList) { trEl.classList.add('sb-builtin-row'); return; }
+	if (!td) return;
+	window.setTimeout(function () {
+		var tr = td.parentNode;
+		if (tr && tr.classList) tr.classList.add('sb-builtin-row');
+	}, 0);
+}
+
 // lockBuiltinRow(s, note, hideFn) — make every builtin row of a GridSection
 // read-only. `disabled` is what greys the buttons out, so no extra CSS is needed
 // for that; .sb-builtin-row only carries the row tint. `hideFn` is optional and
 // filters the rows away entirely (the rule-sets' master switch uses it).
-//
-// LuCI hands renderRowActions the <tr> it is building (form.js
-// renderRowActions(section_id, more_label, trEl)), which is what lets one hook
-// both disable the buttons and tag the row.
 function lockBuiltinRow(s, note, hideFn) {
 	if (typeof hideFn === 'function') {
 		var origFilter = s.filter;
@@ -133,7 +152,7 @@ function lockBuiltinRow(s, note, hideFn) {
 	s.renderRowActions = function (section_id, more_label, trEl) {
 		var td = origRowActions.apply(this, arguments);
 		if (!isBuiltin(section_id)) return td;
-		if (trEl && trEl.classList) trEl.classList.add('sb-builtin-row');
+		tintBuiltinRow(td, trEl);
 		if (td && td.querySelectorAll)
 			td.querySelectorAll('button').forEach(function (b) {
 				// The drag handle only reorders; it mutates nothing the package owns.

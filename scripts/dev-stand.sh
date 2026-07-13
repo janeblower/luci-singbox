@@ -74,9 +74,25 @@ up() {
     done
 
     # uci-defaults never run here (nothing installs the package), so seed the
-    # shipped config by hand. Clash API on, tproxy off (no LAN to intercept), a
-    # SOCKS inbound so `traffic` has somewhere to dial.
+    # shipped config by hand.
     docker cp singbox-ui/root/etc/config/singbox-ui "$CNAME:/etc/config/singbox-ui"
+
+    # ...and then REPLAY the uci-defaults, because a real install lays the config
+    # down and runs them next. Skipping this is why the stand showed only the two
+    # rule-sets from the shipped config: the other 23 built-ins are created by
+    # 92-*, not by the config file. 99-* is skipped on purpose — it only migrates
+    # legacy UCI shapes, which a freshly-copied shipped config cannot have.
+    # SINGBOX_UCI is the seam the scripts take for exactly this (the uci CLI does
+    # not honour UCI_CONFIG_DIR).
+    docker cp singbox-ui/root/etc/uci-defaults "$CNAME:/tmp/uci-defaults" >/dev/null
+    docker exec "$CNAME" sh -c '
+        for f in /tmp/uci-defaults/9[0-8]-*; do
+            [ -f "$f" ] || continue
+            sh "$f" >/dev/null 2>&1 || echo "WARN: uci-defaults $(basename "$f") failed" >&2
+        done'
+
+    # Stand-local overrides, AFTER the defaults so they win: Clash API on, tproxy
+    # off (no LAN to intercept), a SOCKS inbound so `traffic` has somewhere to dial.
     docker exec "$CNAME" sh -c '
         uci -q batch <<EOF
 set singbox-ui.clash_api.enabled=1

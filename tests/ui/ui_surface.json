@@ -27,6 +27,8 @@
   { "id": "grid.outbound.sharelink",  "tab": "outbounds", "kind": "grid-op", "label": "Outbound: Import share-link" },
   { "id": "grid.outbound.enable",     "tab": "outbounds", "kind": "grid-op", "label": "Outbound: Enable/Disable toggle" },
 
+  { "id": "grid.builtin.locked",      "tab": "outbounds", "kind": "grid-op", "label": "Built-in row: Edit/Delete locked + tinted" },
+
   { "id": "grid.route_rule.add",   "tab": "route", "kind": "grid-op", "label": "Route Rule: Add" },
   { "id": "grid.route_rule.edit",  "tab": "route", "kind": "grid-op", "label": "Route Rule: Edit" },
   { "id": "grid.route_rule.logical", "tab": "route", "kind": "grid-op", "label": "Route Rule: logical sub-rules" },

@@ -51,13 +51,24 @@ button.cbi-button.busy {
 .sb-error { color: #c33; }
 
 /* Package-owned grid rows (built-in rule-sets, the built-in WAN outbound).
- * Their Edit/Delete buttons are `disabled`, which the theme already greys out;
- * this is only the "you don't own this row" tint. A neutral grey alpha reads the
- * same on a light and a dark theme, so no prefers-color-scheme branch is needed
- * — and it must stay quiet: the row is still a normal, usable row (Enable is
- * toggled right there). Zebra striping is `background` on the tr, so tint the
- * cells to win without !important. */
-.sb-builtin-row > .td { background: rgba(127, 127, 127, .07); }
+ *
+ * The "you don't own this row" tint. A neutral grey alpha reads the same on a
+ * light and a dark theme, so no prefers-color-scheme branch is needed — and it
+ * must stay quiet: the row is still a normal, usable row (Enable is toggled right
+ * there). Zebra striping sets `background` on the tr, so tint the cells to win
+ * without !important. */
+.sb-builtin-row > .td { background: rgba(127, 127, 127, .13); }
+
+/* …and the buttons the row does not own must LOOK dead, not just be dead.
+ * `disabled` alone was not enough: bootstrap/luci only drops a disabled button to
+ * opacity .7, which leaves a saturated blue Edit and a red Delete reading as
+ * perfectly clickable. grayscale(1) desaturates whatever colour the active theme
+ * painted them, so this holds without hard-coding any theme's palette. */
+.sb-builtin-row button:disabled {
+	filter: grayscale(1);
+	opacity: .45;
+	cursor: not-allowed;
+}
 
 /* ==========================================================================
  * Monitoring tab.

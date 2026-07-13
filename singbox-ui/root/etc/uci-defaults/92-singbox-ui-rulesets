@@ -17,6 +17,14 @@
 # Idempotent: a section that already exists is left alone (a user who enabled
 # `porn` must not have it flipped back off by a package upgrade). Honours the
 # master switch: with default_rulesets=0 nothing is created at all.
+#
+# SINGBOX_UCI is a test/dev seam. The uci CLI does NOT honour UCI_CONFIG_DIR
+# (only `-c <dir>`), so without it this script could only ever be exercised
+# against the live /etc/config — which means it could not be tested at all, and
+# scripts/dev-stand.sh could not replay it into a sandbox container.
+# shellcheck disable=SC2086  # SINGBOX_UCI deliberately carries flags (-c <dir>)
+UCI="${SINGBOX_UCI:-uci}"
+uci_() { $UCI "$@"; }
 
 BASE='https://github.com/itdoginfo/allow-domains/releases/latest/download'
 INTERVAL='86400'
@@ -28,28 +36,28 @@ SETS='anime block cloudflare cloudfront digitalocean discord geoblock google_ai
       google_meet google_play hdrezka hetzner hodca meta news ovh porn roblox
       russia_inside russia_outside telegram tiktok twitter ukraine_inside youtube'
 
-[ "$(uci -q get singbox-ui.main.default_rulesets)" = "0" ] && exit 0
+[ "$(uci_ -q get singbox-ui.main.default_rulesets)" = "0" ] && exit 0
 
-uci -q get singbox-ui.main >/dev/null || uci -q set singbox-ui.main='singbox-ui'
-uci -q get singbox-ui.main.default_rulesets >/dev/null \
-	|| uci -q set singbox-ui.main.default_rulesets='1'
+uci_ -q get singbox-ui.main >/dev/null || uci_ -q set singbox-ui.main='singbox-ui'
+uci_ -q get singbox-ui.main.default_rulesets >/dev/null \
+	|| uci_ -q set singbox-ui.main.default_rulesets='1'
 
 for name in $SETS; do
 	# Already present (fresh install seeds russia_inside/discord from
 	# etc/config, or this script ran on a previous upgrade): only stamp the
 	# builtin marker, never touch enabled/url — that is the user's to own.
-	if uci -q get "singbox-ui.$name" >/dev/null; then
-		uci -q set "singbox-ui.$name.builtin"='1'
+	if uci_ -q get "singbox-ui.$name" >/dev/null; then
+		uci_ -q set "singbox-ui.$name.builtin"='1'
 		continue
 	fi
-	uci -q set "singbox-ui.$name"='ruleset'
-	uci -q set "singbox-ui.$name.builtin"='1'
-	uci -q set "singbox-ui.$name.enabled"='0'
-	uci -q set "singbox-ui.$name.type"='remote'
-	uci -q set "singbox-ui.$name.url"="$BASE/$name.srs"
-	uci -q set "singbox-ui.$name.nft_rules"='0'
-	uci -q set "singbox-ui.$name.update_interval"="$INTERVAL"
+	uci_ -q set "singbox-ui.$name"='ruleset'
+	uci_ -q set "singbox-ui.$name.builtin"='1'
+	uci_ -q set "singbox-ui.$name.enabled"='0'
+	uci_ -q set "singbox-ui.$name.type"='remote'
+	uci_ -q set "singbox-ui.$name.url"="$BASE/$name.srs"
+	uci_ -q set "singbox-ui.$name.nft_rules"='0'
+	uci_ -q set "singbox-ui.$name.update_interval"="$INTERVAL"
 done
 
-uci -q commit singbox-ui
+uci_ -q commit singbox-ui
 exit 0

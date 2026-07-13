@@ -40,6 +40,10 @@ class BtnStub {
 }
 
 class TdStub {
+  // LuCI does `trEl.appendChild(this.renderRowActions(...))`, so the row becomes
+  // this cell's parent one tick after we hand it back. That is the only handle on
+  // the row that works across LuCI versions.
+  parentNode: TrStub | null = null;
   constructor(readonly buttons: BtnStub[]) {}
   querySelectorAll(sel: string): BtnStub[] {
     return sel === "button" ? this.buttons : [];
@@ -52,8 +56,11 @@ class TrStub {
 }
 
 interface GridStub {
+  uciconfig?: string;
   filter?: (sid: string) => boolean;
-  renderRowActions: (sid: string, label: string | null, tr: TrStub) => TdStub;
+  // trEl is OPTIONAL on purpose: the LuCI shipped in OpenWrt 25.12 does not pass
+  // it (its GridSection override drops every argument but section_id).
+  renderRowActions: (sid: string, label?: string | null, tr?: TrStub) => TdStub;
 }
 
 function mkUci(state: Record<string, UciSection>) {
@@ -99,8 +106,6 @@ function evalModule(
     ui: {},
     SbRpc: {},
     E: () => ({}),
-    window: {},
-    document: {},
     console,
     ...extra,
   };
@@ -114,10 +119,29 @@ interface CommonMod {
   lockBuiltinRow: (s: GridStub, note: string, hideFn?: () => boolean) => void;
 }
 
-function loadCommon(state: Record<string, UciSection>): CommonMod {
-  return evalModule("lib/common.js", {
+// The tint is deferred by a tick (the row is only the cell's parent AFTER
+// renderRowActions returns), so the test drives the clock by hand.
+class Clock {
+  private readonly deferred: (() => void)[] = [];
+  get seams() {
+    return {
+      window: { setTimeout: (fn: () => void) => this.deferred.push(fn) },
+    };
+  }
+  tick(): void {
+    for (const fn of this.deferred.splice(0)) fn();
+  }
+}
+
+function loadCommon(
+  state: Record<string, UciSection>,
+  clock = new Clock(),
+): CommonMod & { clock: Clock } {
+  const mod = evalModule("lib/common.js", {
     uci: mkUci(state),
+    ...clock.seams,
   }) as unknown as CommonMod;
+  return Object.assign(mod, { clock });
 }
 
 function loadRoute(state: Record<string, UciSection>): {
@@ -198,6 +222,46 @@ describe("builtin rows", () => {
 
     expect(tr.classes).toEqual([]);
     expect(td.buttons.every((b) => !b.disabled)).toBe(true);
+  });
+
+  it("tints the row even when LuCI does not pass the <tr> (the real-router path)", () => {
+    // The LuCI in OpenWrt 25.12 calls renderRowActions(section_id) — its
+    // GridSection override drops more_label AND the row — so trEl is undefined
+    // and relying on it meant the buttons greyed out but the row never tinted.
+    // Looking the row up in the document would not have worked either: LuCI
+    // assembles the whole table in memory and inserts it later. The cell's
+    // parentNode is the one handle that holds across versions.
+    const clock = new Clock();
+    const c = loadCommon(STATE, clock);
+    const g = makeGrid();
+    c.lockBuiltinRow(g, "locked");
+
+    // NOTE: no second or third argument — exactly how the shipped LuCI calls it.
+    const td = g.renderRowActions("discord");
+
+    // The buttons are disabled synchronously...
+    expect(td.buttons[1].disabled).toBe(true);
+    expect(td.buttons[2].disabled).toBe(true);
+
+    // ...and the tint lands a tick later, once LuCI has appended the cell.
+    const tr = new TrStub();
+    td.parentNode = tr;
+    expect(tr.classes).toEqual([]);
+    clock.tick();
+    expect(tr.classes).toContain("sb-builtin-row");
+  });
+
+  it("does not tint a user-owned row through the fallback either", () => {
+    const clock = new Clock();
+    const c = loadCommon(STATE, clock);
+    const g = makeGrid();
+    c.lockBuiltinRow(g, "locked");
+
+    const td = g.renderRowActions("mine");
+    const tr = new TrStub();
+    td.parentNode = tr;
+    clock.tick();
+    expect(tr.classes).toEqual([]);
   });
 
   it("installs no filter when no hide predicate is given (the wan outbound)", () => {
