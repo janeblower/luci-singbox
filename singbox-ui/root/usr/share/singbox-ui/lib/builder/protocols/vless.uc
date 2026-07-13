@@ -35,7 +35,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "vless", sing_box_type: "vless",
-    shared: { tls: {}, transport: {}, multiplex: {} },
+    shared: { tls: {}, transport: {}, multiplex: {}, listen: true },
 
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::",

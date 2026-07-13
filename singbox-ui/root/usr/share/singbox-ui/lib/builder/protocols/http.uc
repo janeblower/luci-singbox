@@ -19,7 +19,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "http", sing_box_type: "http",
-    shared: { tls: {} },
+    shared: { tls: {}, listen: true },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,

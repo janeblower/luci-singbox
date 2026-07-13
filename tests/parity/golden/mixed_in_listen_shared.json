@@ -1,0 +1,1 @@
+{ "bind_interface": "eth0", "detour": "other_in", "listen": "127.0.0.1", "listen_port": 1080, "reuse_addr": true, "routing_mark": 1234, "tag": "mx_ls", "tcp_fast_open": true, "tcp_multi_path": true, "type": "mixed", "udp_fragment": true, "udp_timeout": "5m" }

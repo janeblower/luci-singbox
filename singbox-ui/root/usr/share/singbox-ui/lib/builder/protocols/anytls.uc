@@ -28,7 +28,7 @@ reg.register({
 reg.register({
     kind: "inbound", type: "anytls", sing_box_type: "anytls",
     min_version: "1.12",
-    shared: { tls: { force_enabled: true } },
+    shared: { tls: { force_enabled: true }, listen: true },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,

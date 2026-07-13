@@ -31,7 +31,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "vmess", sing_box_type: "vmess",
-    shared: { tls: {}, transport: {}, multiplex: {} },
+    shared: { tls: {}, transport: {}, multiplex: {}, listen: true },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,

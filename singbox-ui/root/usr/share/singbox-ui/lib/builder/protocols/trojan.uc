@@ -28,7 +28,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "trojan", sing_box_type: "trojan",
-    shared: { tls: {}, transport: {}, multiplex: {} },
+    shared: { tls: {}, transport: {}, multiplex: {}, listen: true },
 
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::",

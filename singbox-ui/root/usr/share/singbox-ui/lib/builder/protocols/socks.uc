@@ -26,6 +26,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "socks", sing_box_type: "socks",
+    shared: { listen: true },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,

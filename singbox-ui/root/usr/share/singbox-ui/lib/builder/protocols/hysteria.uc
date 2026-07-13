@@ -41,7 +41,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "hysteria", sing_box_type: "hysteria",
-    shared: { tls: { force_enabled: true }, quic: {} },
+    shared: { tls: { force_enabled: true }, quic: {}, listen: true },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,

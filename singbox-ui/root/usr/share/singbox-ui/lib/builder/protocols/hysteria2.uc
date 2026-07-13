@@ -49,7 +49,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "hysteria2", sing_box_type: "hysteria2",
-    shared: { tls: { force_enabled: true } },
+    shared: { tls: { force_enabled: true }, listen: true },
 
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::",

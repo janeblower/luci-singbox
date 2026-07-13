@@ -42,6 +42,7 @@ const SHARED_DISPATCH = {
     multiplex: { key: "multiplex" },
     quic:      { merge: true },
     dial:      { merge: true },
+    listen:    { merge: true },
 };
 
 // _uncoerce(f, v) — JSON value -> UCI value. Mirrors _filler._emit_scalar's

@@ -41,7 +41,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "shadowsocks", sing_box_type: "shadowsocks",
-    shared: { multiplex: {} },
+    shared: { multiplex: {}, listen: true },
 
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::",

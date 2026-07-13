@@ -33,7 +33,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "tuic", sing_box_type: "tuic",
-    shared: { tls: { force_enabled: true }, quic: {} },
+    shared: { tls: { force_enabled: true }, quic: {}, listen: true },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,

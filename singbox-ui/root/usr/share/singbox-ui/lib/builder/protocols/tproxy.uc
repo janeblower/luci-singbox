@@ -4,6 +4,7 @@ let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "inbound", type: "tproxy", sing_box_type: "tproxy",
+    shared: { listen: true },
 
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::",
@@ -13,12 +14,6 @@ reg.register({
         { name: "network", type: "enum", tab: "basic",
           values: ["", "tcp", "udp"], default: "",
           ui_label: "Network", json_key: "network", only_values: ["tcp", "udp"] },
-        { name: "tcp_fast_open", type: "bool", tab: "basic",
-          ui_label: "TCP fast open", default: 0, advanced: true,
-          json_key: "tcp_fast_open", coerce: "bool" },
-        { name: "udp_fragment", type: "bool", tab: "basic",
-          ui_label: "UDP fragment", default: 0, advanced: true,
-          json_key: "udp_fragment", coerce: "bool" },
         // UI-only (no json_key) — persisted to UCI, consumed by nftables.uc,
         // NOT emitted to sing-box JSON. Must NOT be `virtual`:
         // descriptor_form.makeVirtual() write-suppresses virtual fields, which

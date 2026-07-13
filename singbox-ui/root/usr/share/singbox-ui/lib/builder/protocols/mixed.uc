@@ -4,6 +4,7 @@ let reg = require("builder.protocols.registry");
 
 reg.register({
 	kind: "inbound", type: "mixed", sing_box_type: "mixed",
+	shared: { listen: true },
 
 	fields: [
 		{ name: "listen", type: "string", tab: "basic", default: "::",

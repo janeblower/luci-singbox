@@ -3,6 +3,7 @@ let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "inbound", type: "redirect", sing_box_type: "redirect",
+    shared: { listen: true },
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::", ui_label: "Listen address" },
         { name: "listen_port", type: "number", tab: "basic", required: true,

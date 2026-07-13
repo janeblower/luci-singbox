@@ -22,6 +22,7 @@ const SHARED_DISPATCH = {
     multiplex: { key: "multiplex" },
     quic:      { merge: true },
     dial:      { merge: true },
+    listen:    { merge: true },
 };
 
 // _emit_scalar(out, s, f) — write one scalar field per its metadata:
@@ -162,6 +163,32 @@ _emit_group = function(out, s, g) {
     if (length(keys(sub)) > 0 || g.emit_empty) out[g.json_key] = sub;
 };
 
+// _version_gate_seq(seq) — drop top-level emit_spec entries whose declared
+// min_version the running core (helpers.core_at_least) doesn't meet.
+//
+// Scoped to SHARED-BLOCK seq processing only (_build_block below), not to
+// _emit_scalar generally. Elsewhere in the descriptor tree — match.uc's route/
+// dns_rule matchers, tls.uc's kTLS fields, naive/ssh/shadowtls's own fields —
+// `min_version` is, by established convention, a UI-hiding hint ONLY: it
+// reaches the frontend's "hide incompatible fields" filter via schema_dump,
+// but a value that IS set still emits regardless of the probed core. tls.uc
+// proves this is deliberate, not an oversight: tls_kernel_tx/tls_kernel_rx
+// carry min_version in `fields:` (for the UI) but their emit_spec entries
+// omit it on purpose. Gating _emit_scalar itself (as a first draft of this
+// change did) silently stripped fields from naive/ssh/dns_rule matcher
+// goldens that were passing on main — collateral damage far outside this
+// block's scope. listen.uc is the first shared block whose fields are
+// unknown-field-FATAL on an old core (sing-box 1.12 refuses the whole config
+// on `bind_interface` et al.), so it earns its own emission-time gate here.
+function _version_gate_seq(seq) {
+    let out = [];
+    for (let e in (seq || [])) {
+        if (e.min_version != null && !helpers.core_at_least(e.min_version)) continue;
+        push(out, e);
+    }
+    return out;
+}
+
 // _build_block(s, spec, kind, opts) — build a shared-block object from its
 // declarative emit_spec. Returns the object, or null when gated out.
 //   spec: { gate?, merge?, variant?, outbound?:[seq], inbound?:[seq], seq?:[seq] }
@@ -174,7 +201,7 @@ function _build_block(s, spec, kind, opts) {
         if (entries == null) return null;
         let obj = {};
         obj[v.emit_selector_as] = sel;
-        _emit_seq(obj, s, entries);
+        _emit_seq(obj, s, _version_gate_seq(entries));
         return obj;
     }
     if (!_gate(s, spec.gate, opts)) return (spec.merge ? {} : null);
@@ -185,7 +212,7 @@ function _build_block(s, spec, kind, opts) {
     let seq = spec[kind] != null ? spec[kind]
               : (spec.seq != null ? spec.seq
                  : (kind === "inbound" ? spec.inbound : spec.outbound));
-    _emit_seq(obj, s, seq);
+    _emit_seq(obj, s, _version_gate_seq(seq));
     return obj;
 }
 

@@ -27,6 +27,7 @@ reg.register({
 
 reg.register({
 	kind: "inbound", type: "direct", sing_box_type: "direct",
+	shared: { listen: true },
 
 	fields: [
 		{ name: "listen", type: "string", tab: "basic", default: "::",
@@ -43,12 +44,6 @@ reg.register({
 		{ name: "override_port", type: "number", tab: "basic",
 		  ui_label: "Override destination port", advanced: true,
 		  json_key: "override_port", coerce: "num" },
-		{ name: "tcp_fast_open", type: "bool", tab: "basic",
-		  ui_label: "TCP fast open", default: 0, advanced: true,
-		  json_key: "tcp_fast_open", coerce: "bool" },
-		{ name: "udp_fragment", type: "bool", tab: "basic",
-		  ui_label: "UDP fragment", default: 0, advanced: true,
-		  json_key: "udp_fragment", coerce: "bool" },
 	],
 });
 
