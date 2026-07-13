@@ -13,6 +13,44 @@ var RULE_SET_TYPES   = [['remote', _('Remote')], ['local', _('Local')], ['inline
 
 function toArray(v) { return (v == null) ? [] : (Array.isArray(v) ? v : [v]); }
 
+// Built-in rule-sets (itdoginfo/allow-domains, seeded by uci-defaults) carry
+// `builtin '1'`. They are ordinary UCI sections — the package owns their url and
+// name, so the UI refuses to edit or delete them — but `enabled` stays a normal
+// per-row toggle: turning the ones you want on is the whole point of shipping 25.
+function isBuiltin(sid) { return uci.get('singbox-ui', sid, 'builtin') === '1'; }
+
+// The master switch. Unset means ON — mirrors helpers.builtin_rulesets_on() in
+// the backend, which must agree or the grid and the generated config diverge.
+function builtinsOn() {
+	return uci.get('singbox-ui', 'main', 'default_rulesets') !== '0';
+}
+
+// Make a grid row read-only: keep LuCI's own action cell (so the layout and the
+// drag handle stay intact) but disable the buttons that mutate the section.
+// `disabled` is what greys them out — no extra CSS needed for that part.
+function lockBuiltinRow(s, note) {
+	var origFilter = s.filter;
+	s.filter = function (section_id) {
+		if (isBuiltin(section_id) && !builtinsOn()) return false;
+		return origFilter ? origFilter.apply(this, arguments) : true;
+	};
+
+	var origRowActions = s.renderRowActions;
+	s.renderRowActions = function (section_id, more_label, trEl) {
+		var td = origRowActions.apply(this, arguments);
+		if (!isBuiltin(section_id)) return td;
+		if (trEl && trEl.classList) trEl.classList.add('sb-builtin-row');
+		if (td && td.querySelectorAll)
+			td.querySelectorAll('button').forEach(function (b) {
+				// The drag handle only reorders; it mutates nothing the package owns.
+				if (b.classList && b.classList.contains('drag-handle')) return;
+				b.disabled = true;
+				b.title = note;
+			});
+		return td;
+	};
+}
+
 // Map default route_rule name -> ["logical:<name>", "inline:<name>", ...].
 function consumedMap() {
 	var m = {};
@@ -94,6 +132,7 @@ function buildRuleSetsMap() {
 	var s = m.section(form.GridSection, 'ruleset', null);
 	s.anonymous = false; s.addremove = true; s.sortable = true;
 	s.modaltitle = function (id) { return _('Rule-Set') + ': ' + id; };
+	lockBuiltinRow(s, _('Built-in rule-set — managed by the package. Toggle Enable, or turn the whole set off in General.'));
 
 	s.tab('basic', _('Basic'));
 
@@ -138,4 +177,7 @@ return L.Class.extend({
 	buildRouteRulesMap:   buildRouteRulesMap,
 	buildRuleSetsMap:     buildRuleSetsMap,
 	buildRouteDefaultMap: buildRouteDefaultMap,
+	isBuiltin:            isBuiltin,
+	builtinsOn:           builtinsOn,
+	lockBuiltinRow:       lockBuiltinRow,
 });

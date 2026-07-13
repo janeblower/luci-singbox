@@ -18,6 +18,11 @@ function buildGeneralMap() {
 	o.rmempty = false;
 	o.description = _('When on, version-incompatible fields are hidden instead of shown disabled. Takes effect after save/reload.');
 
+	o = s.option(form.Flag, 'default_rulesets', _('Enable default rule-sets'));
+	o.default = '1';
+	o.rmempty = false;
+	o.description = _('Ship the itdoginfo/allow-domains rule-sets as read-only entries in the Rule-Sets tab. When off they are hidden and never referenced, fetched, or written to the config.');
+
 	// --- Cache file (descriptor-driven) ---
 	s = m.section(form.NamedSection, 'cache', 'cache', _('Cache file'),
 		_('Persistent cache for proxies, DNS responses, and fakeip mappings.'));

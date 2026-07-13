@@ -295,7 +295,11 @@ function cmd_fetch_rulesets(cur) {
 	let jobs = [];   // each: { name, raw_path, out_path, rs_type, target,
 	                 //         download? (remote only): url, outpath, opts }
 	for (let name in names) {
-		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") {
+		// Same predicate the config path uses (route.uc / dns.uc): a builtin
+		// rule-set that the master switch turned off must not be fetched either,
+		// or cron keeps pulling .srs files nothing references.
+		let sec = cur.get_all("singbox-ui", name);
+		if (sec == null || !helpers.ruleset_active(cur, sec)) {
 			log_err(`fetch_rulesets: ${name} disabled, skipping`);
 			continue;
 		}

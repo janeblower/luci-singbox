@@ -124,6 +124,24 @@ function is_stale(path, interval_s, force) {
 	return (time() - st.mtime) >= interval_s;
 }
 
+// builtin_rulesets_on(cur) — the `singbox-ui.main.default_rulesets` master
+// switch. Unset means ON (NO-migration: an install that predates the option must
+// not silently lose its rule-sets); only an explicit "0" turns them off.
+function builtin_rulesets_on(cur) {
+	return uci_get_or_empty(cur, "main", "default_rulesets") !== "0";
+}
+
+// ruleset_active(cur, s) — the ONE predicate for "is this rule-set live".
+// Three call sites decide this (route.uc's rs_enabled map, dns.uc's
+// ruleset_enabled_map, nft-rulesets.uc's fetch loop); each used to test
+// `enabled !== "0"` on its own, so a builtin gate added to one would have left
+// the other two fetching and referencing a rule-set the UI no longer shows.
+function ruleset_active(cur, s) {
+	if (s.enabled === "0") return false;
+	if (s.builtin === "1" && !builtin_rulesets_on(cur)) return false;
+	return true;
+}
+
 return {
 	uci_get_or_empty,
 	s_opt,
@@ -138,4 +156,6 @@ return {
 	b64_decode,
 	unlink_quiet,
 	is_stale,
+	builtin_rulesets_on,
+	ruleset_active,
 };

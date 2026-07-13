@@ -40,9 +40,10 @@ function build_servers(cur) {
 }
 
 // ruleset_enabled_map(cur) -> { name: bool } for every ruleset section.
+// helpers.ruleset_active also honours the builtin master switch — see route.uc.
 function ruleset_enabled_map(cur) {
 	let rs_enabled = {};
-	cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = (s.enabled !== "0"); });
+	cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = helpers.ruleset_active(cur, s); });
 	return rs_enabled;
 }
 

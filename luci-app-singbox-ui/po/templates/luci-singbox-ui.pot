@@ -56,8 +56,8 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:25
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:95
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:40
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:126
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:78
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:165
 msgid "Action"
 msgstr ""
 
@@ -93,7 +93,7 @@ msgid ""
 "trust the feed."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:53
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:58
 msgid "Auto-update subscriptions"
 msgstr ""
 
@@ -109,11 +109,17 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:59
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:122
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:114
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:98
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:137
 msgid "Basic"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:22
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:135
+msgid ""
+"Built-in rule-set — managed by the package. Toggle Enable, or turn the whole "
+"set off in General."
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:27
 msgid "Cache file"
 msgstr ""
 
@@ -148,7 +154,7 @@ msgstr ""
 msgid "Cannot parse vmess URL"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:44
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:49
 msgid "Clash API"
 msgstr ""
 
@@ -253,8 +259,8 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:99
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:133
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:11
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:120
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:123
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:159
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:162
 msgid "Default"
 msgstr ""
 
@@ -306,20 +312,24 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:61
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:97
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:31
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:36
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:144
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:174
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:58
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:44
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:102
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:82
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:141
 msgid "Enable"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:21
+msgid "Enable default rule-sets"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:55
 msgid "Enabled. Reload the page."
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:45
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:50
 msgid ""
 "Enables sing-box experimental.clash_api. Required by the Dashboard tab. "
 "Restart the service after changing."
@@ -382,7 +392,7 @@ msgstr ""
 msgid "Fetch via proxy"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:121
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:160
 msgid "Final route applied to traffic that does not match any rule."
 msgstr ""
 
@@ -578,7 +588,7 @@ msgstr ""
 msgid "Legacy (address string)"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:34
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:39
 msgid "Level"
 msgstr ""
 
@@ -599,7 +609,7 @@ msgstr ""
 msgid "Local system"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:29
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:34
 msgid "Log"
 msgstr ""
 
@@ -620,11 +630,11 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:24
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:94
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:39
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:77
 msgid "Match"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:32
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:70
 msgid ""
 "Match traffic and route, reject, sniff, resolve, or compose with logical "
 "rules. Rules consumed by a logical rule or inline rule-set are not applied "
@@ -709,7 +719,7 @@ msgid ""
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:109
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:130
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:169
 msgid "Outbound"
 msgstr ""
 
@@ -718,7 +728,7 @@ msgstr ""
 msgid "Outbounds"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:40
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:45
 msgid "Output file (empty = procd stdout)"
 msgstr ""
 
@@ -742,7 +752,7 @@ msgstr ""
 msgid "Pause updates"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:55
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:60
 msgid ""
 "Periodically refresh subscriptions via cron (each sub honors its own update "
 "interval)."
@@ -752,7 +762,7 @@ msgstr ""
 msgid "Persist cache to flash"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:23
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:28
 msgid "Persistent cache for proxies, DNS responses, and fakeip mappings."
 msgstr ""
 
@@ -826,7 +836,7 @@ msgstr ""
 msgid "Refreshing… %d/%d"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:127
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:166
 msgid "Reject"
 msgstr ""
 
@@ -834,7 +844,7 @@ msgstr ""
 msgid "Remote"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:92
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:130
 msgid ""
 "Remote (.srs/.json), local, or inline rule-sets referenced by route rules."
 msgstr ""
@@ -863,25 +873,25 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:118
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:230
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:287
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:127
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:166
 msgid "Route"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:37
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:75
 msgid "Route Rule"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:106
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:31
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:69
 msgid "Route Rules"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:96
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:134
 msgid "Rule-Set"
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:107
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:91
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:129
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:50
 msgid "Rule-Sets"
 msgstr ""
@@ -922,6 +932,13 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/outbound.js:357
 msgid "Shadowsocks link is missing method/password"
+msgstr ""
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:24
+msgid ""
+"Ship the itdoginfo/allow-domains rule-sets as read-only entries in the Rule-"
+"Sets tab. When off they are hidden and never referenced, fetched, or written "
+"to the config."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:289
@@ -975,7 +992,7 @@ msgstr ""
 msgid "Subscription update failed"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:52
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:57
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:48
 msgid "Subscriptions"
 msgstr ""
@@ -1036,8 +1053,8 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:229
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:287
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:217
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:46
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:104
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:84
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:143
 msgid "Type"
 msgstr ""
 
@@ -1106,7 +1123,7 @@ msgstr ""
 msgid "Uploaded"
 msgstr ""
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:57
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:95
 msgid "Used by"
 msgstr ""
 

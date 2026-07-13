@@ -7,7 +7,12 @@ config inbound 'tproxy_in'
 	option hijack_dns '1'
 	option nft_rules '1'
 
+# The two built-in rule-sets the default route/DNS rules actually reference, so
+# they ship enabled. The other 23 from itdoginfo/allow-domains are seeded
+# disabled by uci-defaults/92-singbox-ui-rulesets. `builtin '1'` makes the UI
+# render them read-only and puts them under the main.default_rulesets switch.
 config ruleset 'russia_inside'
+	option builtin '1'
 	option enabled '1'
 	option type 'remote'
 	option url 'https://github.com/itdoginfo/allow-domains/releases/latest/download/russia_inside.srs'
@@ -15,6 +20,7 @@ config ruleset 'russia_inside'
 	option update_interval '86400'
 
 config ruleset 'discord'
+	option builtin '1'
 	option enabled '1'
 	option type 'remote'
 	option url 'https://github.com/itdoginfo/allow-domains/releases/latest/download/discord.srs'
@@ -94,6 +100,7 @@ config subscriptions 'subscriptions'
 
 config singbox-ui 'main'
 	option ui_compat_only '0'
+	option default_rulesets '1'
 
 config singbox-ui 'plugins'
 	# Phase E plugin manager. Per-plugin enable flags live here as

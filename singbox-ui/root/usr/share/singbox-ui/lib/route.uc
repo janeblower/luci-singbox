@@ -8,6 +8,7 @@ let reg      = require("builder.route.registry");   // eager-loads route_rule/ru
 let filler   = require("builder._filler");
 let headless = require("builder.route.headless");
 let match    = require("builder._shared.match");
+let helpers  = require("helpers");
 
 // Matcher json_keys a route rule can carry (the single match.uc source), minus
 // `invert` which is a modifier, not a matcher. Used to detect a rule left with
@@ -37,9 +38,9 @@ function build_route_rules(cur, valid_ob) {
         push(rules, { inbound: s[".name"], action: "hijack-dns" });
     });
 
-    // ruleset enabled lookup.
+    // ruleset enabled lookup (honours the builtin master switch — helpers.ruleset_active).
     let rs_enabled = {};
-    cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = (s.enabled !== "0"); });
+    cur.foreach("singbox-ui", "ruleset", function(s) { rs_enabled[s[".name"]] = helpers.ruleset_active(cur, s); });
 
     // index route_rule sections; collect the consumed set (refs from logical
     // route_rules and inline rulesets) so consumed default rules are NOT emitted

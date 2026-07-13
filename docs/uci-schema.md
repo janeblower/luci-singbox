@@ -510,6 +510,7 @@ UI write: `tabs/rulesets.js` — `buildRulesetsMap()`.
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `enabled` | bool | `0`/`1` | yes | — | Disabled rulesets are silently dropped by both `ruleset.uc` and `subscription.uc`. |
+| `builtin` | bool | `0`/`1` | no | — | Package-owned rule-set (the itdoginfo/allow-domains set seeded by `uci-defaults/92-singbox-ui-rulesets`). The UI disables Edit/Delete and tints the row; `enabled` stays a normal per-row toggle. Gated by `main.default_rulesets`: with the switch off, `helpers.ruleset_active()` reports the set as inactive, so it is neither referenced (`route.uc`, `dns.uc`) nor fetched (`nft-rulesets.uc`). Default absent = user-owned. |
 | `type` | enum | `remote`, `local` | yes | — | Source type. Defaults to `remote` if absent. |
 | `url` | string | HTTPS URL | yes | `type=remote` | Download URL for the rule-set file (`.srs` or `.json`). Read by `subscription.uc` during fetch; stored path used by `ruleset.uc`. |
 | `path` | string | absolute file path | yes | `type=local` | Path to the local rule-set file on the router filesystem. Read by `ruleset.uc` to emit `path` in the sing-box config. |
@@ -696,6 +697,7 @@ Named section `singbox-ui.@global[0]`, seeded by `90-singbox-ui-fwmark`. Securit
 | Field | Type | Values | Required | Description |
 |---|---|---|---|---|
 | `ui_compat_only` | bool | `0`/`1` | no | UI-only. When `1`, fields outside the running core's version window are HIDDEN instead of shown disabled. `generate.uc` ignores it. |
+| `default_rulesets` | bool | `0`/`1` | no | Master switch for the built-in (`builtin=1`) rule-sets. Read by `helpers.builtin_rulesets_on()`; **absent means ON** (NO-migration: an install predating the option must not silently lose its rule-sets). With `0`, `uci-defaults/92-singbox-ui-rulesets` creates nothing, the Rule-Sets grid filters the rows out, and the backend treats every builtin as inactive. |
 
 ---
 
