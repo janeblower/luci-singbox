@@ -108,12 +108,12 @@ function buildOutboundsMap() {
 		var t = uci.get('singbox-ui', section_id, 'type') || '';
 		return _('Outbound') + ': ' + section_id + (t ? ' (' + _(t) + ')' : '');
 	};
-	addRenameField(s);
-
 	// E2: only the basic tab here. TLS/Transport/Multiplex/Dial tabs are
 	// created on demand by descriptor_form.applyMaterialized after the
 	// per-protocol fields are attached (see inbounds.js note).
 	s.tab('basic', _('Basic'));
+
+	addRenameField(s, 'basic');
 
 	var origRenderSectionAddOut = s.renderSectionAdd;
 	s.renderSectionAdd = function () {

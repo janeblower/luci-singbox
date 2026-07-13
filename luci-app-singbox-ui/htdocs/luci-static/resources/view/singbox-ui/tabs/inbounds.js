@@ -114,14 +114,16 @@ function buildInboundsMap() {
 		var p = uci.get('singbox-ui', section_id, 'protocol') || '';
 		return _('Inbound') + ': ' + section_id + (p ? ' (' + p + ')' : '');
 	};
-	addRenameField(s);
-
 	// E2: register only the basic tab here. Shared tabs (TLS/Transport/
 	// Multiplex/Dial) are created on demand by descriptor_form.applyMaterialized
 	// AFTER fields are attached, so LuCI's tab-disabled heuristic (which fires
 	// at tab-creation time based on then-known field set) doesn't lock them
 	// disabled before fields arrive.
 	s.tab('basic', _('Basic'));
+
+	// Name goes through taboption (an untabbed option is never rendered in a
+	// tabbed modal) and is declared first so it heads the Basic pane.
+	addRenameField(s, 'basic');
 
 	var origRenderSectionAdd = s.renderSectionAdd;
 	s.renderSectionAdd = function () {

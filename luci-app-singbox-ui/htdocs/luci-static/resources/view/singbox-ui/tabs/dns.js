@@ -49,7 +49,6 @@ function buildDnsMap() {
 		var t = uci.get('singbox-ui', id, 'type') || '';
 		return _('DNS Server') + ': ' + id + (t ? ' (' + t + ')' : '');
 	};
-	addRenameField(s);
 	var dnsSchema = (SbViewState.getSchema() || {}).dns || {};
 	// Declare the 'basic' tab up front and route the discriminator fields
 	// (enabled/type) through it, mirroring inbounds.js/outbounds.js. Otherwise
@@ -58,6 +57,7 @@ function buildDnsMap() {
 	// in a 'basic' tab pane — a split-region modal (UX-1). applyMaterialized's
 	// tab guard probes s.tabs and skips re-declaring 'basic', so this is safe.
 	s.tab('basic', _('Basic'));
+	addRenameField(s, 'basic');
 	o = s.taboption('basic', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 	o = s.taboption('basic', form.ListValue, 'type', _('Type'));
 	DNS_SERVER_TYPES.forEach(function (kv) { o.value(kv[0], kv[1]); });
@@ -82,7 +82,6 @@ function buildDnsMap() {
 	s = m.section(form.GridSection, 'dns_rule', _('DNS Rules'));
 	s.anonymous = false; s.addremove = true; s.sortable = true;
 	s.modaltitle = function (id) { return _('DNS Rule') + ': ' + id; };
-	addRenameField(s);
 	// MODAL-CRASH: the dns_rule descriptor materialises its fields into the
 	// 'match'/'action' tabs (match.uc/dns_action.uc/dns_rule/logical.uc), so the
 	// discriminator fields enabled/type MUST be routed through taboption too.
@@ -94,6 +93,7 @@ function buildDnsMap() {
 	// the lone holdout. Regression: tests/browser/73-dns.mjs opens the modal.
 	s.tab('match', _('Match'));
 	s.tab('action', _('Action'));
+	addRenameField(s, 'match');
 	o = s.taboption('match', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 	o = s.taboption('match', form.ListValue, 'type', _('Type'));
 	o.value('default', _('Default')); o.value('logical', _('Logical'));

@@ -35,10 +35,11 @@ function buildRouteRulesMap() {
 	var s = m.section(form.GridSection, 'route_rule', null);
 	s.anonymous = false; s.addremove = true; s.sortable = true;
 	s.modaltitle = function (id) { return _('Route Rule') + ': ' + id; };
-	addRenameField(s);
 
 	s.tab('match', _('Match'));
 	s.tab('action', _('Action'));
+
+	addRenameField(s, 'match');
 
 	var o = s.taboption('match', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 
@@ -93,9 +94,10 @@ function buildRuleSetsMap() {
 	var s = m.section(form.GridSection, 'ruleset', null);
 	s.anonymous = false; s.addremove = true; s.sortable = true;
 	s.modaltitle = function (id) { return _('Rule-Set') + ': ' + id; };
-	addRenameField(s);
 
 	s.tab('basic', _('Basic'));
+
+	addRenameField(s, 'basic');
 
 	var o = s.taboption('basic', form.Flag, 'enabled', _('Enable')); o.default = '1'; o.editable = true;
 

@@ -18,30 +18,89 @@ function loadOutboundList(o, includeNone) {
 	};
 }
 
-function addRenameField(s) {
-	var o = s.option(form.Value, '__rename', _('Name'));
+// Every UCI option that holds a reference to a section BY NAME, grouped by the
+// kind of section being pointed at. A rename that doesn't rewrite these leaves a
+// dangling reference, which the backend then silently drops with a warn() —
+// route.uc: "outbound '<old>' is not a defined outbound; dropping". Entries are
+// [sectiontype, option, isList].
+var RENAME_REFS = {
+	outbound: [
+		['route_rule',    'outbound',         false],
+		['route_default', 'outbound',         false],
+		['outbound',      'group_outbounds',  true ],
+		['outbound',      'group_default',    false],
+		['outbound',      'detour',           false],
+		['dns_server',    'detour',           false],
+		['ruleset',       'download_detour',  false],
+	],
+	ruleset: [
+		['route_rule', 'rule_set', true],
+		['dns_rule',   'rule_set', true],
+	],
+	route_rule: [
+		['route_rule', 'rules', true],
+		['ruleset',    'rules', true],
+	],
+	dns_rule: [
+		['dns_rule', 'rules', true],
+	],
+	dns_server: [
+		['dns',      'final',            false],
+		['dns',      'default_resolver', false],
+		['dns_rule', 'server',           false],
+	],
+};
+
+// renameRefs(kind, oldName, newName) — rewrite every reference to oldName in the
+// uci changeset. Call BEFORE uci.rename() so the sections are still addressable
+// by their current ids. UCI section names are unique across the whole package
+// (not per-type), so no cross-kind name can be hit by accident.
+function renameRefs(kind, oldName, newName) {
+	(RENAME_REFS[kind] || []).forEach(function (ref) {
+		var stype = ref[0], opt = ref[1], isList = ref[2];
+		(uci.sections('singbox-ui', stype) || []).forEach(function (sec) {
+			var v = sec[opt];
+			if (v == null) return;
+			if (isList) {
+				var arr = Array.isArray(v) ? v : [v];
+				if (arr.indexOf(oldName) < 0) return;
+				uci.set('singbox-ui', sec['.name'], opt, arr.map(function (n) {
+					return (n === oldName) ? newName : n;
+				}));
+			} else if (v === oldName) {
+				uci.set('singbox-ui', sec['.name'], opt, newName);
+			}
+		});
+	});
+}
+
+// addRenameField(s, tab) — the section-name editor. `tab` is REQUIRED for a
+// tabbed section: LuCI only renders options that carry a tab, so the untabbed
+// s.option() form never showed up in the modal at all (same trap tabs/dns.js
+// documents for enabled/type). Declare it right after s.tab() and before any
+// other taboption so "Name" lands first in the pane.
+function addRenameField(s, tab) {
+	var o = tab
+		? s.taboption(tab, form.Value, '__rename', _('Name'))
+		: s.option(form.Value, '__rename', _('Name'));
 	o.modalonly = true;
 	o.rmempty   = false;
 	o.datatype  = 'and(minlength(1), uciname)';
 	o.cfgvalue  = function (section_id) { return section_id; };
-	// Reject duplicate names within the same section kind — sing-box
-	// section ids must be unique and the rename silently collides
-	// otherwise (spec C2.2.12).
+	// Reject duplicate names. UCI section names live in ONE namespace per config
+	// file, so an outbound may not take a dns_server's name either — checking
+	// only same-kind siblings let a cross-kind collision through (spec C2.2.12).
 	o.validate = function (section_id, value) {
 		if (!value) return _('Name must not be empty');
 		if (value === section_id) return true;
-		var kind = s.sectiontype;
-		var siblings = uci.sections('singbox-ui', kind) || [];
-		for (var i = 0; i < siblings.length; i++) {
-			var name = siblings[i] && siblings[i]['.name'];
-			if (name === value && name !== section_id)
-				return _('Name already in use by another') + ' ' + kind;
-		}
+		if (uci.get('singbox-ui', value) != null)
+			return _('Name already in use');
 		return true;
 	};
 	o.write     = function (section_id, value) {
-		if (value && value !== section_id)
-			uci.rename('singbox-ui', section_id, value);
+		if (!value || value === section_id) return;
+		renameRefs(s.sectiontype, section_id, value);
+		uci.rename('singbox-ui', section_id, value);
 	};
 	o.remove = function () {};
 }
@@ -299,6 +358,7 @@ return L.Class.extend({
     loadOutboundList:  loadOutboundList,
     waitSubRefresh:    waitSubRefresh,
     addRenameField:    addRenameField,
+    renameRefs:        renameRefs,
     wireTabs:          wireTabs,
     notify:            notify,
     showJsonModal:     showJsonModal,
