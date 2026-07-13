@@ -9,13 +9,18 @@
 # release is picked up without touching the config; sing-box re-fetches each
 # .srs on its own update_interval.
 #
-# Nothing is downloaded here, and nothing is downloaded later either unless a
-# route/DNS rule actually references the set — ruleset.uc only emits
-# route.rule_set entries for referenced tags. Everything but the two the seed
-# config already wires up therefore ships disabled.
+# They all ship ENABLED, and that costs nothing: an enabled rule-set nobody
+# references is neither emitted into the config (ruleset.uc only builds the
+# referenced tags) nor downloaded (nft-rulesets.uc only fetches nft_rules=1).
 #
-# Idempotent: a section that already exists is left alone (a user who enabled
-# `porn` must not have it flipped back off by a package upgrade). Honours the
+# Shipping them disabled was a footgun, not a saving. Point a route rule at a
+# DISABLED rule-set and route.uc drops the whole rule — a matcher-less rule would
+# match all traffic, so the catch-all guard kills it — leaving only a warn in
+# logread. "I referenced youtube and nothing happens" with no visible cause.
+# Enabled-by-default means referencing a set is all it takes.
+#
+# Idempotent: a section that already exists is left alone (a user who turned
+# `porn` OFF must not have it switched back on by a package upgrade). Honours the
 # master switch: with default_rulesets=0 nothing is created at all.
 #
 # SINGBOX_UCI is a test/dev seam. The uci CLI does NOT honour UCI_CONFIG_DIR
@@ -29,9 +34,6 @@ uci_() { $UCI "$@"; }
 BASE='https://github.com/itdoginfo/allow-domains/releases/latest/download'
 INTERVAL='86400'
 
-# The two the seed config already references (etc/config/singbox-ui:
-# defaults_direct / defaults_fakeip) ship enabled; the rest are inert until the
-# user points a rule at them.
 SETS='anime block cloudflare cloudfront digitalocean discord geoblock google_ai
       google_meet google_play hdrezka hetzner hodca meta news ovh porn roblox
       russia_inside russia_outside telegram tiktok twitter ukraine_inside youtube'
@@ -52,7 +54,7 @@ for name in $SETS; do
 	fi
 	uci_ -q set "singbox-ui.$name"='ruleset'
 	uci_ -q set "singbox-ui.$name.builtin"='1'
-	uci_ -q set "singbox-ui.$name.enabled"='0'
+	uci_ -q set "singbox-ui.$name.enabled"='1'
 	uci_ -q set "singbox-ui.$name.type"='remote'
 	uci_ -q set "singbox-ui.$name.url"="$BASE/$name.srs"
 	uci_ -q set "singbox-ui.$name.nft_rules"='0'

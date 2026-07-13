@@ -91,12 +91,21 @@ describe("92-singbox-ui-rulesets seeds the built-in rule-sets", () => {
     for (const n of ALL_SETS) expect(u[`${n}.builtin`]).toBe("1");
   });
 
-  it("only the two the seed config actually references ship enabled", async () => {
+  it("ships every one of them ENABLED", async () => {
     const u = await rulesets(DIR);
-    // Nothing is downloaded until a rule references the set, so the other 23 are
-    // inert — shipping them all enabled would put 25 .srs fetches on a fresh box.
-    const enabled = ALL_SETS.filter((n) => u[`${n}.enabled`] !== "0");
-    expect(enabled.sort()).toEqual(["discord", "russia_inside"]);
+    const disabled = ALL_SETS.filter((n) => u[`${n}.enabled`] === "0");
+    expect(disabled).toEqual([]);
+  });
+
+  it("an enabled-but-unreferenced set costs nothing, which is why they all ship on", async () => {
+    // The reason this is safe, asserted rather than assumed: a rule-set nobody
+    // references is neither emitted into the config (ruleset.uc only builds the
+    // referenced tags) nor downloaded (nft-rulesets.uc only fetches nft_rules=1).
+    const u = await rulesets(DIR);
+    for (const n of ALL_SETS) {
+      if (n === "discord") continue; // the seed's nft example
+      expect(u[`${n}.nft_rules`]).toBe("0");
+    }
   });
 
   it("points every URL at the allow-domains latest-release alias", async () => {
@@ -109,16 +118,17 @@ describe("92-singbox-ui-rulesets seeds the built-in rule-sets", () => {
     }
   });
 
-  it("is idempotent, and an upgrade never flips a set the user turned on back off", async () => {
-    // A package upgrade re-runs uci-defaults. If it reset `enabled`, everyone who
-    // had switched `porn` or `youtube` on would silently lose it.
+  it("is idempotent, and an upgrade never re-enables a set the user turned OFF", async () => {
+    // A package upgrade re-runs uci-defaults. Now that everything ships enabled,
+    // the direction that matters is the other one: someone who deliberately
+    // switched `porn` off must not have it silently switched back on.
     await exec(
-      `uci -c ${DIR} set singbox-ui.porn.enabled=1 && uci -c ${DIR} commit singbox-ui`,
+      `uci -c ${DIR} set singbox-ui.porn.enabled=0 && uci -c ${DIR} commit singbox-ui`,
     );
     expect(await runScript(DIR)).toBe(0);
 
     const u = await rulesets(DIR);
-    expect(u["porn.enabled"]).toBe("1");
+    expect(u["porn.enabled"]).toBe("0");
     expect(ALL_SETS.filter((n) => u[n] === "ruleset").length).toBe(25);
   });
 
