@@ -70,6 +70,58 @@ function scrub_dangling_detours(config) {
 	return config;
 }
 
+// prune_unreferenced_builtins(config, opts) — drop package-owned (`builtin '1'`)
+// outbounds that nothing points at.
+//
+// opts.builtin_tags is the set of builtin outbound tags, read from UCI by
+// generate.uc. The built-in `wan` outbound exists so the Default route has
+// something sane to point at; the moment the user routes somewhere else, it
+// becomes a section they cannot delete (the UI locks builtin rows) sitting in
+// their outbound list and on the Dashboard forever. So it is emitted only while
+// it is actually referenced.
+//
+// Nothing can be broken by removing an outbound nobody references — that is the
+// definition of the set — but the scan has to see EVERY place a tag can be
+// referenced from, so it walks the built config rather than a hand-kept UCI list:
+// route rules/final, rule-set download_detour, group membership, selector
+// default, outbound + dns detours.
+function prune_unreferenced_builtins(config, opts) {
+	if (config == null || type(config.outbounds) !== "array") return config;
+	let builtin = (opts != null && type(opts.builtin_tags) === "object")
+		? opts.builtin_tags : {};
+	if (!length(keys(builtin))) return config;
+
+	let referenced = {};
+	function ref(t) { if (type(t) === "string" && length(t)) referenced[t] = true; }
+
+	for (let o in config.outbounds) {
+		ref(o.detour);
+		ref(o.default);                       // selector's default pick
+		if (type(o.outbounds) === "array")    // selector/urltest members
+			for (let t in o.outbounds) ref(t);
+	}
+	if (config.route != null) {
+		ref(config.route.final);
+		if (type(config.route.rules) === "array")
+			for (let r in config.route.rules) ref(r.outbound);
+		if (type(config.route.rule_set) === "array")
+			for (let rs in config.route.rule_set) ref(rs.download_detour);
+	}
+	if (config.dns != null) {
+		ref(config.dns.detour);
+		if (type(config.dns.servers) === "array")
+			for (let s in config.dns.servers) ref(s.detour);
+	}
+
+	let kept = [];
+	for (let o in config.outbounds) {
+		if (builtin[o.tag] && !referenced[o.tag]) continue;
+		push(kept, o);
+	}
+	config.outbounds = kept;
+	return config;
+}
+
 function run_pipeline(config, opts) {
 	config = scrub_implicit_refs(config, opts);
 	config = scrub_dangling_detours(config);
@@ -79,7 +131,10 @@ function run_pipeline(config, opts) {
 		let plugins = require("plugins.registry");
 		plugins.invoke_on_generate_post(config, opts);
 	} catch (_) { /* registry not available — no plugins, no-op */ }
+	// Runs LAST so a plugin that adds a reference to a builtin outbound (or adds
+	// outbounds of its own) is seen by the scan.
+	config = prune_unreferenced_builtins(config, opts);
 	return config;
 }
 
-return { scrub_implicit_refs, scrub_dangling_detours, run_pipeline };
+return { scrub_implicit_refs, scrub_dangling_detours, prune_unreferenced_builtins, run_pipeline };

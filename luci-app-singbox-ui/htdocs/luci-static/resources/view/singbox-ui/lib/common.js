@@ -105,6 +105,46 @@ function addRenameField(s, tab) {
 	o.remove = function () {};
 }
 
+// Package-owned sections carry `builtin '1'`: the built-in rule-sets
+// (uci-defaults/92-singbox-ui-rulesets) and the built-in `wan` outbound. The
+// package owns their name and their settings, so the grid refuses to edit or
+// delete them — but `enabled` stays a normal per-row toggle, which is the whole
+// point of shipping the rule-sets.
+function isBuiltin(sid) { return uci.get('singbox-ui', sid, 'builtin') === '1'; }
+
+// lockBuiltinRow(s, note, hideFn) — make every builtin row of a GridSection
+// read-only. `disabled` is what greys the buttons out, so no extra CSS is needed
+// for that; .sb-builtin-row only carries the row tint. `hideFn` is optional and
+// filters the rows away entirely (the rule-sets' master switch uses it).
+//
+// LuCI hands renderRowActions the <tr> it is building (form.js
+// renderRowActions(section_id, more_label, trEl)), which is what lets one hook
+// both disable the buttons and tag the row.
+function lockBuiltinRow(s, note, hideFn) {
+	if (typeof hideFn === 'function') {
+		var origFilter = s.filter;
+		s.filter = function (section_id) {
+			if (isBuiltin(section_id) && hideFn()) return false;
+			return origFilter ? origFilter.apply(this, arguments) : true;
+		};
+	}
+
+	var origRowActions = s.renderRowActions;
+	s.renderRowActions = function (section_id, more_label, trEl) {
+		var td = origRowActions.apply(this, arguments);
+		if (!isBuiltin(section_id)) return td;
+		if (trEl && trEl.classList) trEl.classList.add('sb-builtin-row');
+		if (td && td.querySelectorAll)
+			td.querySelectorAll('button').forEach(function (b) {
+				// The drag handle only reorders; it mutates nothing the package owns.
+				if (b.classList && b.classList.contains('drag-handle')) return;
+				b.disabled = true;
+				b.title = note;
+			});
+		return td;
+	};
+}
+
 function wireTabs(root, headerSelector, paneByTab, defaultTab) {
 	var headerLis = root.querySelectorAll(headerSelector + ' > li');
 	function activate(tab) {
@@ -359,6 +399,8 @@ return L.Class.extend({
     waitSubRefresh:    waitSubRefresh,
     addRenameField:    addRenameField,
     renameRefs:        renameRefs,
+    isBuiltin:         isBuiltin,
+    lockBuiltinRow:    lockBuiltinRow,
     wireTabs:          wireTabs,
     notify:            notify,
     showJsonModal:     showJsonModal,

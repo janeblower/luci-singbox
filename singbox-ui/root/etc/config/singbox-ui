@@ -27,7 +27,17 @@ config ruleset 'discord'
 	option nft_rules '1'
 	option update_interval '86400'
 
-config outbound 'direct_wan'
+# Built-in WAN outbound: a plain `direct`, deliberately with NO bind_interface.
+# sing-box's bind_interface takes an OS netdev (eth0 / pppoe-wan / br-wan), not
+# an OpenWrt logical interface name, and the netdev changes under you (pppoe
+# reconnect, DHCP, multi-wan). Without a bind, egress follows the system routing
+# table — which IS the WAN — and survives all of that.
+#
+# `builtin '1'` makes the UI lock the row (no Edit/Delete). generate.uc drops it
+# from the config entirely once nothing references it, so pointing the Default
+# route somewhere else makes it go away instead of lingering undeletable.
+config outbound 'wan'
+	option builtin '1'
 	option enabled '1'
 	option type 'direct'
 
@@ -37,11 +47,11 @@ config route_rule 'defaults_direct'
 	list   rule_set 'russia_inside'
 	list   rule_set 'discord'
 	option action 'route'
-	option outbound 'direct_wan'
+	option outbound 'wan'
 
 config route_default 'route_default'
 	option action 'route'
-	option outbound 'direct_wan'
+	option outbound 'wan'
 
 config inbound 'dns_in'
 	option enabled '1'

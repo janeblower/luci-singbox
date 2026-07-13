@@ -26,9 +26,17 @@ return {
     applies_to: { kinds: [ "outbound", "dns" ] },
 
     fields: [
+        // sing-box hands this straight to SO_BINDTODEVICE, so it is an OS netdev
+        // name (eth0 / br-lan / pppoe-wan), NOT an OpenWrt logical interface. The
+        // dropdown used to be filled from uci network.interface (wan/lan), which
+        // meant every value it offered bound the dialer to a device that does not
+        // exist — the outbound then failed to connect, silently. `devices` lists
+        // real netdevs; free entry stays possible (eth0.100 and friends aren't
+        // enumerable).
         { name: "bind_interface", type: "string", tab: "dial",
-          ui_label: "Bind interface", placeholder: "wan",
-          dynamic: "interfaces" },
+          ui_label: "Bind interface (netdev)", placeholder: "eth0",
+          ui_help: "OS network device, e.g. eth0 or pppoe-wan — not the OpenWrt interface name (wan/lan). Leave empty to follow the system routing table.",
+          dynamic: "devices" },
 
         { name: "inet4_bind_address", type: "string", tab: "dial",
           ui_label: "IPv4 bind address", placeholder: "0.0.0.0", advanced: true },

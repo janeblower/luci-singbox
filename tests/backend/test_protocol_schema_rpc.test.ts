@@ -148,6 +148,10 @@ describe("protocol_schema RPC", () => {
     expect(rawResponse).not.toContain('"emit"');
   });
 
+  // bind_interface's source is `devices` (real netdevs), not `interfaces` (the
+  // OpenWrt logical names wan/lan). sing-box passes the value to
+  // SO_BINDTODEVICE, so a logical name binds the dialer to a device that does
+  // not exist. `interfaces` no longer exists as a dynamic source at all.
   it("8. dynamic selector sources survive whitelist projection (detour/bind_interface)", async () => {
     if (!rawResponse) rawResponse = await callSchema();
     // mat.fields is a flat array; iterate entry.fields directly (not entry.tabs as object)
@@ -156,15 +160,20 @@ describe("protocol_schema RPC", () => {
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
       let schema = j && j.schema;
       let found_outbounds = false;
-      let found_interfaces = false;
+      let bind_src = "<missing>";
+      let stale_interfaces = false;
       for (let proto, entry in (schema && schema.outbound)) {
         if (type(entry.fields) !== "array") continue;
         for (let f in entry.fields) {
           if (f.dynamic === "outbounds") found_outbounds = true;
-          if (f.dynamic === "interfaces") found_interfaces = true;
+          if (f.name === "bind_interface") bind_src = f.dynamic ?? "<none>";
+          if (f.dynamic === "interfaces") stale_interfaces = true;
         }
       }
-      print(found_outbounds && found_interfaces ? "OK" : sprintf("FAIL outbounds:%s interfaces:%s", found_outbounds, found_interfaces));
+      print(found_outbounds && bind_src === "devices" && !stale_interfaces
+        ? "OK"
+        : sprintf("FAIL outbounds:%s bind_interface:%s stale_interfaces:%s",
+                  found_outbounds, bind_src, stale_interfaces));
     `);
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("OK");

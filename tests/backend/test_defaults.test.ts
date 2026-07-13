@@ -48,12 +48,14 @@ check '"action": "hijack-dns"'  'hijack-dns'
 check '"tag": "russia_inside"'  'russia_inside tag'
 check '"tag": "discord"'  'discord tag'
 
-# -- outbound direct_wan + route rule. direct_wan is now a plain type=direct
-# outbound (legacy type=interface removed, code review #2) so it must carry NO
-# bind_interface — the UI iface abstraction is gone.
-check '"tag": "direct_wan"'  'direct_wan tag'
-echo "$OUT" | grep -q '"bind_interface"' && { echo "CHECK_FAIL: direct_wan must have no bind_interface"; exit 1; }
-check '"outbound": "direct_wan"'  'route to wan'
+# -- built-in wan outbound + route rule. It is a plain type=direct with NO
+# bind_interface, deliberately: sing-box hands bind_interface to SO_BINDTODEVICE,
+# so it wants an OS netdev (eth0 / pppoe-wan), not the OpenWrt logical name — and
+# that netdev changes under you on a pppoe reconnect. Without a bind, egress
+# follows the system routing table, which IS the WAN, and survives all of it.
+check '"tag": "wan"'  'built-in wan outbound tag'
+echo "$OUT" | grep -q '"bind_interface"' && { echo "CHECK_FAIL: the wan outbound must have no bind_interface"; exit 1; }
+check '"outbound": "wan"'  'route to wan'
 
 # -- dns: fakeip + google + rule + final
 check '"type": "fakeip"'  'fakeip server'

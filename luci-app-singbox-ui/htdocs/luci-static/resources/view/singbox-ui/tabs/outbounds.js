@@ -113,6 +113,12 @@ function buildOutboundsMap() {
 	// per-protocol fields are attached (see inbounds.js note).
 	s.tab('basic', _('Basic'));
 
+	// The built-in `wan` outbound: same read-only treatment as the built-in
+	// rule-sets. No hide predicate — it has no master switch; generate.uc simply
+	// stops emitting it once nothing references it.
+	SbCommon.lockBuiltinRow(s,
+		_('Built-in outbound — managed by the package. It is dropped from the config as soon as nothing routes to it.'));
+
 	addRenameField(s, 'basic');
 
 	var origRenderSectionAddOut = s.renderSectionAdd;

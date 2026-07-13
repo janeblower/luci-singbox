@@ -7,7 +7,7 @@
 // modal tab, so we clickTab into it before filling them. A default rule with
 // action=route but no outbound is DROPPED by route.uc (action_ok), so the
 // default rule MUST route to a defined outbound — the seed config ships
-// `direct_wan`, which we use.
+// `wan`, which we use.
 import { test, assert, wait, clickTopTab, clickSubTab,
          openAddModal, openEditModalBySid, setProtocolInModal, fillField,
          clickTab, saveAndReload, fetchPreviewConfig, containerExec } from './fixtures';
@@ -19,17 +19,17 @@ test('route: add default rule + logical rule, emit route.rules', async ({ page }
     await clickTopTab(page, 'route');
     await clickSubTab(page, 'routerules');
 
-    // --- Add a Default rule: match a domain, route to `direct_wan`. ----------
+    // --- Add a Default rule: match a domain, route to `wan`. ----------
     await openAddModal(page, 'route_rule', 'rr_default');
     await setProtocolInModal(page, 'default', 'Type');
     await wait(400);
     // Match tab is active first; `domain` field label = "Domain".
     await fillField(page, 'Domain', 'example.com');
-    // Action tab → action=route, outbound=direct_wan (exists in seed config).
+    // Action tab → action=route, outbound=wan (exists in seed config).
     await clickTab(page, 'action');
     await fillField(page, 'Action', 'route', { kind: 'select' });
     await wait(300);
-    await fillField(page, 'Outbound', 'direct_wan', { kind: 'select' });
+    await fillField(page, 'Outbound', 'wan', { kind: 'select' });
     await saveAndReload(page);
 
     let json = await fetchPreviewConfig(page);
@@ -39,8 +39,8 @@ test('route: add default rule + logical rule, emit route.rules', async ({ page }
         ? r.domain.includes('example.com')
         : r.domain === 'example.com');
     assert('default rule emits our domain matcher', ours != null, JSON.stringify(rr));
-    assert('default rule routes to direct_wan',
-        ours && ours.outbound === 'direct_wan', JSON.stringify(ours));
+    assert('default rule routes to wan',
+        ours && ours.outbound === 'wan', JSON.stringify(ours));
 
     // --- Edit a logical rule that references the default rule. ---------------
     // Seed a logical route_rule via UCI (the grid Edit path is what we exercise);
@@ -55,7 +55,7 @@ test('route: add default rule + logical rule, emit route.rules', async ({ page }
         'uci set singbox-ui.rr_logical.mode=or; ' +
         'uci add_list singbox-ui.rr_logical.rules=rr_default; ' +
         'uci set singbox-ui.rr_logical.action=route; ' +
-        'uci set singbox-ui.rr_logical.outbound=direct_wan; ' +
+        'uci set singbox-ui.rr_logical.outbound=wan; ' +
         'uci commit singbox-ui');
 
     // Reload so the freshly-seeded logical row renders in the grid.

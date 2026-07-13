@@ -248,7 +248,17 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
   });
 
-  describe("2. dynamic:interfaces → ListValue, drops loopback", () => {
+  // A dynamic source says WHERE the choices come from; the field's `type` says
+  // which widget. `devices` used to force a DynamicList regardless, so a scalar
+  // netdev field (bind_interface, dns/dhcp `interface`) rendered as a
+  // multi-value list.
+  //
+  // bind_interface itself used to be dynamic:"interfaces" — a dropdown of
+  // OpenWrt LOGICAL interfaces (wan/lan). sing-box passes the value to
+  // SO_BINDTODEVICE, which wants an OS netdev, so every value that dropdown
+  // offered bound the dialer to a device that does not exist. The source is now
+  // `devices`, and dynamic:"interfaces" no longer exists at all.
+  describe("2. dynamic:devices + type:string → Value (free-entry combobox of netdevs)", () => {
     const { s, opts } = makeSection();
     applyMaterialized(s, "outbound", "vless", {
       tabs: ["dial"],
@@ -257,22 +267,26 @@ describe("descriptor_form.js — dynamic selectors", () => {
           name: "bind_interface",
           type: "string",
           tab: "dial",
-          dynamic: "interfaces",
+          dynamic: "devices",
         },
       ],
     });
     const o = findOpt(opts, "bind_interface");
 
-    it("widget is ListValue", () => {
-      expect(o?._widget).toBe(form.ListValue);
+    it("widget is Value, not DynamicList (it is a scalar) and not a strict ListValue", () => {
+      expect(o?._widget).toBe(form.Value);
     });
 
-    it("load() lists logical ifaces, drops loopback", () => {
-      o.load.call(o, "sid");
+    it("load() resolves real netdev suggestions (async), not logical names", async () => {
+      const r = o.load.call(o, "sid");
+      expect(r && typeof r.then).toBe("function");
+      await r;
       const k = keysOf(o);
-      expect(k.indexOf("lan")).toBeGreaterThanOrEqual(0);
-      expect(k.indexOf("wan")).toBeGreaterThanOrEqual(0);
-      expect(k.indexOf("loopback")).toBe(-1);
+      expect(k.indexOf("br-lan")).toBeGreaterThanOrEqual(0);
+      expect(k.indexOf("eth0")).toBeGreaterThanOrEqual(0);
+      // The logical names the old dropdown offered are gone.
+      expect(k.indexOf("wan")).toBe(-1);
+      expect(k.indexOf("lan")).toBe(-1);
     });
   });
 

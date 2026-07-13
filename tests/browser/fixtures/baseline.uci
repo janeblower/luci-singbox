@@ -21,7 +21,13 @@ config ruleset 'discord'
 	option nft_rules '1'
 	option update_interval '86400'
 
-config outbound 'direct_wan'
+# Mirrors the shipped seed: the built-in WAN outbound is a plain type=direct with
+# NO bind_interface (sing-box would pass that to SO_BINDTODEVICE, which wants an
+# OS netdev, not the OpenWrt logical name). `builtin '1'` makes the grid lock the
+# row; it survives generate.uc's unreferenced-builtin prune because
+# defaults_direct routes to it.
+config outbound 'wan'
+	option builtin '1'
 	option enabled '1'
 	option type 'direct'
 
@@ -30,7 +36,7 @@ config route_rule 'defaults_direct'
 	list   rule_set 'russia_inside'
 	list   rule_set 'discord'
 	option action 'route'
-	option outbound 'direct_wan'
+	option outbound 'wan'
 
 config route_default 'route_default'
 	option action 'route'

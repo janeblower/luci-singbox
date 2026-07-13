@@ -33,13 +33,18 @@ function widgetFor(field) {
     var t = field.type;
     if (t === 'bool') return form.Flag;
     // Dynamic selectors populate their choices at load() time (see
-    // attachDynamic). `devices` is a free-entry multi list; every other
-    // source is a single-select reference to an existing section.
+    // attachDynamic). The source decides WHERE the choices come from; the
+    // field's own `type` decides the widget.
+    //
+    // `devices` used to force a DynamicList regardless of type, which rendered
+    // every SCALAR netdev field (dns/dhcp.uc `interface`, dial.uc
+    // `bind_interface`) as a multi-value list. Netdev names aren't fully
+    // enumerable (eth0.100, pppoe-wan), so a scalar one is a free-entry Value —
+    // LuCI turns a Value with choices into a Combobox: suggestions, not a
+    // whitelist. Section references stay strict single-selects.
     if (field.dynamic) {
-        if (field.dynamic === 'devices') return form.DynamicList;
-        // Any list-typed dynamic source is a free-entry DynamicList with
-        // suggestions; single-typed dynamic sources are single-select.
         if (field.type === 'list') return form.DynamicList;
+        if (field.dynamic === 'devices') return form.Value;
         return form.ListValue;
     }
     if (t === 'enum') return form.ListValue;
@@ -96,10 +101,6 @@ function dynamicChoices(source) {
     if (source === 'dns_servers')
         return uci.sections('singbox-ui', 'dns_server')
             .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
-    if (source === 'interfaces')
-        return uci.sections('network', 'interface')
-            .filter(function (s) { return s['.name'] !== 'loopback'; })
-            .map(function (s) { return [s['.name'], s['.name']]; });
     if (source === 'rulesets')
         return uci.sections('singbox-ui', 'ruleset')
             .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
@@ -117,8 +118,11 @@ function dynamicChoices(source) {
 function attachDynamic(opt, field) {
     // Device suggestions need the async network runtime and must NOT restrict
     // input: netdev names like eth0.100 / pppoe-wan aren't all enumerable, so
-    // they render as free-entry DynamicList datalist hints.
+    // they render as free-entry hints on whichever widget the field's type asked
+    // for (DynamicList for a list, Combobox for a scalar) — hence the prototype
+    // is taken from widgetFor(), not hardcoded.
     if (field.dynamic === 'devices') {
+        var Widget = widgetFor(field);
         opt.load = function (section_id) {
             var self = this, args = arguments;
             return network.getDevices().then(function (devs) {
@@ -126,7 +130,7 @@ function attachDynamic(opt, field) {
                     var n = d.getName ? d.getName() : String(d);
                     if (n) self.value(n, n);
                 });
-                return form.DynamicList.prototype.load.apply(self, args);
+                return Widget.prototype.load.apply(self, args);
             });
         };
         return;

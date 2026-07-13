@@ -146,6 +146,16 @@ if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
 	}
 }
 
+// Package-owned outbound tags (`builtin '1'` — today just `wan`). The pipeline
+// drops the ones nothing references: the built-in WAN outbound exists to give the
+// Default route a sane target, and must not linger in the config (or on the
+// Dashboard) once the user has routed somewhere else — they cannot delete it
+// themselves, the UI locks builtin rows.
+let builtin_tags = {};
+uci.foreach("singbox-ui", "outbound", function(s) {
+	if (s.builtin === "1") builtin_tags[s[".name"]] = true;
+});
+
 // Centralised post-processing pipeline. See lib/post_process.uc.
 // GEN-2: must run AFTER config.route is fully assembled (route rules/final +
 // default_domain_resolver above) — at the previous call site (right after
@@ -153,7 +163,10 @@ if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
 // implicit-ref scrub branches were dead code. The scrub only mutates dns/route
 // references, never config.outbounds, so the valid_ob set built above is
 // unaffected; plugins' on_generate_post now also see the complete config.
-config = post_process.run_pipeline(config, { implicit_tags: implicit_tags });
+config = post_process.run_pipeline(config, {
+	implicit_tags: implicit_tags,
+	builtin_tags:  builtin_tags,
+});
 
 let experimental = {};
 let cache_block = cache_mod.build_cache(uci);

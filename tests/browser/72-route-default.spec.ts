@@ -64,20 +64,20 @@ test('route: default action/outbound emits route.final', async ({ page }) => {
     await clickSubTab(page, 'routedef');
     await wait(400);
 
-    // Action = route, Outbound = direct_wan (a defined seed outbound, so it is
+    // Action = route, Outbound = wan (a defined seed outbound, so it is
     // NOT dropped by route.uc's ob_ok() check).
     const a = await setPageSelectByLabel(page, 'Action', 'route');
     assert('Default Action set to route', a === 'route', a);
     // The Outbound select depends('action','route'); after the change above it
     // is visible and populated from outbound sections.
-    const o = await setPageSelectByLabel(page, 'Outbound', 'direct_wan');
-    assert('Default Outbound set to direct_wan', o === 'direct_wan', o);
+    const o = await setPageSelectByLabel(page, 'Outbound', 'wan');
+    assert('Default Outbound set to wan', o === 'wan', o);
 
     await savePageUci(page);
 
     const json = await fetchPreviewConfig(page);
     assert('route.final emitted from route_default',
-        json.route && json.route.final === 'direct_wan',
+        json.route && json.route.final === 'wan',
         JSON.stringify(json.route));
 
     // Cleanup: restore the baseline route_default values so re-runs start clean.

@@ -29,7 +29,7 @@ describe("route default config guard (shipped singbox-ui config)", () => {
       let cur = uci.cursor(dir);
       let r = route.build_route_rules(cur, null);
 
-      const VALID = { route:1, "route-options":1, reject:1, "hijack-dns":1, sniff:1, resolve:1 };
+      const VALID = { route:1, "route-options":1, reject:1, "hijack-dns":1, sniff:1, resolve:1, bypass:1 };
       let ok = (length(r.rules) > 0);
 
       // Every emitted rule must carry a valid sing-box action.
@@ -37,15 +37,15 @@ describe("route default config guard (shipped singbox-ui config)", () => {
         if (!VALID[rule.action]) { print(sprintf("BAD action %J\\n", rule)); ok = false; }
       }
 
-      // The shipped defaults_direct rule -> action route, outbound direct_wan,
-      // rule_set [russia_inside, discord].
+      // The shipped defaults_direct rule -> action route, outbound wan (the
+      // built-in WAN outbound), rule_set [russia_inside, discord].
       let found = null;
-      for (let rule in r.rules) if (rule.outbound === "direct_wan" && rule.action === "route") found = rule;
+      for (let rule in r.rules) if (rule.outbound === "wan" && rule.action === "route") found = rule;
       ok = ok && (found != null);
       ok = ok && (found != null && type(found.rule_set) === "array" && length(found.rule_set) === 2);
 
-      // route_default -> final direct_wan.
-      ok = ok && (r.final === "direct_wan");
+      // route_default -> final wan.
+      ok = ok && (r.final === "wan");
 
       // referenced must include both shipped rulesets; build_rule_sets must emit them.
       let refset = {}; for (let n in r.referenced) refset[n] = true;

@@ -3,16 +3,21 @@ import { resolve } from "node:path";
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
 
-// Built-in rule-sets render as ordinary grid rows the user does not own:
+// Package-owned grid rows (`builtin '1'`): the 25 allow-domains rule-sets and
+// the built-in `wan` outbound. They render as ordinary rows the user does not
+// own:
 //   * Edit / Delete are disabled (greyed), the drag handle is not;
 //   * the row gets .sb-builtin-row so style.css can tint it;
-//   * `enabled` stays a live per-row toggle — turning the ones you want on is
-//     the entire point of shipping 25 of them;
-//   * with singbox-ui.main.default_rulesets = 0 the rows are filtered out.
+//   * `enabled` stays a live per-row toggle — turning the rule-sets you want on
+//     is the entire point of shipping 25 of them;
+//   * an optional hide predicate filters the rows away entirely. The rule-sets
+//     pass one (main.default_rulesets); the wan outbound does not — it has no
+//     master switch, generate.uc just stops emitting it once nothing references
+//     it.
 //
-// builtinsOn() must agree with helpers.builtin_rulesets_on() in the backend
-// (unset = ON). If the two drift, the grid shows rows the generated config does
-// not contain, or hides rows it does.
+// route.js builtinsOn() must agree with helpers.builtin_rulesets_on() in the
+// backend (unset = ON). If the two drift, the grid shows rows the generated
+// config does not contain, or hides rows it does.
 
 const VIEW_ROOT = resolve(
   import.meta.dirname,
@@ -22,12 +27,6 @@ const VIEW_ROOT = resolve(
 interface UciSection {
   ".name": string;
   [k: string]: unknown;
-}
-
-interface RouteMod {
-  isBuiltin: (sid: string) => boolean;
-  builtinsOn: () => boolean;
-  lockBuiltinRow: (s: GridStub, note: string) => void;
 }
 
 // A <button> stand-in: only the bits lockBuiltinRow touches.
@@ -57,8 +56,22 @@ interface GridStub {
   renderRowActions: (sid: string, label: string | null, tr: TrStub) => TdStub;
 }
 
-function load(state: Record<string, UciSection>) {
-  const src = readFileSync(resolve(VIEW_ROOT, "tabs/route.js"), "utf8");
+function mkUci(state: Record<string, UciSection>) {
+  return {
+    get: (_cfg: string, sid: string, opt?: string) =>
+      opt === undefined ? (state[sid] ?? null) : (state[sid]?.[opt] ?? null),
+    set: () => {},
+    rename: () => {},
+    sections: (_cfg: string, stype?: string) =>
+      Object.values(state).filter((s) => !stype || s[".type"] === stype),
+  };
+}
+
+function evalModule(
+  file: string,
+  extra: Record<string, unknown>,
+): Record<string, unknown> {
+  const src = readFileSync(resolve(VIEW_ROOT, file), "utf8");
   const body = src
     .replace(/^'use strict';\s*/, "")
     .replace(/^'require [^']+';\s*/gm, "")
@@ -66,14 +79,6 @@ function load(state: Record<string, UciSection>) {
       /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
       "__moduleExports = $1;",
     );
-
-  const uci = {
-    get: (_cfg: string, sid: string, opt?: string) =>
-      opt === undefined ? (state[sid] ?? null) : (state[sid]?.[opt] ?? null),
-    sections: (_cfg: string, stype?: string) =>
-      Object.values(state).filter((s) => !stype || s[".type"] === stype),
-  };
-
   const sandbox: Record<string, unknown> = {
     __moduleExports: null,
     _: (s: unknown) => s,
@@ -91,69 +96,86 @@ function load(state: Record<string, UciSection>) {
       ListValue: "ListValue",
       DummyValue: "DummyValue",
     },
-    uci,
-    SbCommon: { addRenameField: () => {}, applyVersionGate: () => {} },
-    descriptor_form: { applyMaterialized: () => {} },
-    SbViewState: { getSchema: () => ({}) },
+    ui: {},
+    SbRpc: {},
+    E: () => ({}),
+    window: {},
+    document: {},
     console,
+    ...extra,
   };
   vm.createContext(sandbox);
-  vm.runInContext(`(function() {${body}})();`, sandbox, {
-    filename: "route.js",
-  });
-  return sandbox.__moduleExports as RouteMod;
+  vm.runInContext(`(function() {${body}})();`, sandbox, { filename: file });
+  return sandbox.__moduleExports as Record<string, unknown>;
+}
+
+interface CommonMod {
+  isBuiltin: (sid: string) => boolean;
+  lockBuiltinRow: (s: GridStub, note: string, hideFn?: () => boolean) => void;
+}
+
+function loadCommon(state: Record<string, UciSection>): CommonMod {
+  return evalModule("lib/common.js", {
+    uci: mkUci(state),
+  }) as unknown as CommonMod;
+}
+
+function loadRoute(state: Record<string, UciSection>): {
+  builtinsOn: () => boolean;
+} {
+  return evalModule("tabs/route.js", {
+    uci: mkUci(state),
+    SbCommon: {
+      addRenameField: () => {},
+      applyVersionGate: () => {},
+      lockBuiltinRow: () => {},
+      loadOutboundList: () => {},
+    },
+    descriptor_form: { applyMaterialized: () => {} },
+    SbViewState: { getSchema: () => ({}), getCoreVersion: () => "" },
+  }) as unknown as { builtinsOn: () => boolean };
 }
 
 // The stock LuCI action cell: drag handle + Edit ("More…") + Delete.
-function makeGrid(): GridStub & { lastTd?: TdStub } {
-  const g: GridStub & { lastTd?: TdStub } = {
+function makeGrid(): GridStub {
+  return {
     renderRowActions() {
-      const td = new TdStub([
+      return new TdStub([
         new BtnStub(["cbi-button", "drag-handle"]),
         new BtnStub(["cbi-button", "cbi-button-edit"]),
         new BtnStub(["cbi-button", "cbi-button-remove"]),
       ]);
-      g.lastTd = td;
-      return td;
     },
   };
-  return g;
 }
 
 const STATE: Record<string, UciSection> = {
   main: { ".name": "main", ".type": "singbox-ui" },
   discord: { ".name": "discord", ".type": "ruleset", builtin: "1" },
   mine: { ".name": "mine", ".type": "ruleset" },
+  wan: { ".name": "wan", ".type": "outbound", builtin: "1" },
+  vless_out: { ".name": "vless_out", ".type": "outbound" },
 };
 
-describe("builtin rule-set rows", () => {
-  it("isBuiltin only fires on builtin='1'", () => {
-    const r = load(STATE);
-    expect(r.isBuiltin("discord")).toBe(true);
-    expect(r.isBuiltin("mine")).toBe(false);
-    expect(r.isBuiltin("nonexistent")).toBe(false);
-  });
+const OFF: Record<string, UciSection> = {
+  ...STATE,
+  main: { ".name": "main", ".type": "singbox-ui", default_rulesets: "0" },
+};
 
-  it("builtinsOn treats an unset switch as ON (matches the backend)", () => {
-    expect(load(STATE).builtinsOn()).toBe(true);
-    expect(
-      load({
-        ...STATE,
-        main: { ".name": "main", ".type": "singbox-ui", default_rulesets: "1" },
-      }).builtinsOn(),
-    ).toBe(true);
-    expect(
-      load({
-        ...STATE,
-        main: { ".name": "main", ".type": "singbox-ui", default_rulesets: "0" },
-      }).builtinsOn(),
-    ).toBe(false);
+describe("builtin rows", () => {
+  it("isBuiltin only fires on builtin='1'", () => {
+    const c = loadCommon(STATE);
+    expect(c.isBuiltin("discord")).toBe(true);
+    expect(c.isBuiltin("wan")).toBe(true);
+    expect(c.isBuiltin("mine")).toBe(false);
+    expect(c.isBuiltin("vless_out")).toBe(false);
+    expect(c.isBuiltin("nonexistent")).toBe(false);
   });
 
   it("disables Edit/Delete but not the drag handle, and tints the row", () => {
-    const r = load(STATE);
+    const c = loadCommon(STATE);
     const g = makeGrid();
-    r.lockBuiltinRow(g, "locked");
+    c.lockBuiltinRow(g, "locked");
 
     const tr = new TrStub();
     const td = g.renderRowActions("discord", "More…", tr);
@@ -167,9 +189,9 @@ describe("builtin rule-set rows", () => {
   });
 
   it("leaves a user-owned row completely alone", () => {
-    const r = load(STATE);
+    const c = loadCommon(STATE);
     const g = makeGrid();
-    r.lockBuiltinRow(g, "locked");
+    c.lockBuiltinRow(g, "locked");
 
     const tr = new TrStub();
     const td = g.renderRowActions("mine", "More…", tr);
@@ -178,20 +200,32 @@ describe("builtin rule-set rows", () => {
     expect(td.buttons.every((b) => !b.disabled)).toBe(true);
   });
 
-  it("filters builtin rows out when the master switch is off", () => {
-    const on = load(STATE);
-    const gOn = makeGrid();
-    on.lockBuiltinRow(gOn, "locked");
-    expect(gOn.filter?.("discord")).toBe(true);
-    expect(gOn.filter?.("mine")).toBe(true);
+  it("installs no filter when no hide predicate is given (the wan outbound)", () => {
+    const c = loadCommon(STATE);
+    const g = makeGrid();
+    c.lockBuiltinRow(g, "locked");
+    // The built-in outbound must stay visible whatever the rule-set switch says.
+    expect(g.filter).toBeUndefined();
+  });
 
-    const off = load({
-      ...STATE,
-      main: { ".name": "main", ".type": "singbox-ui", default_rulesets: "0" },
-    });
-    const gOff = makeGrid();
-    off.lockBuiltinRow(gOff, "locked");
-    expect(gOff.filter?.("discord")).toBe(false);
-    expect(gOff.filter?.("mine")).toBe(true);
+  it("filters builtin rows out when the hide predicate says so", () => {
+    const c = loadCommon(OFF);
+    const g = makeGrid();
+    c.lockBuiltinRow(g, "locked", () => true);
+    expect(g.filter?.("discord")).toBe(false);
+    expect(g.filter?.("mine")).toBe(true);
+  });
+});
+
+describe("route.js builtinsOn", () => {
+  it("treats an unset switch as ON (matches helpers.builtin_rulesets_on)", () => {
+    expect(loadRoute(STATE).builtinsOn()).toBe(true);
+    expect(
+      loadRoute({
+        ...STATE,
+        main: { ".name": "main", ".type": "singbox-ui", default_rulesets: "1" },
+      }).builtinsOn(),
+    ).toBe(true);
+    expect(loadRoute(OFF).builtinsOn()).toBe(false);
   });
 });

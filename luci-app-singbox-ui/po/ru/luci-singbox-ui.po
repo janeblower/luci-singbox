@@ -31,15 +31,15 @@ msgid "%ds ago"
 msgstr "%d с назад"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:11
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:154
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:447
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:470
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:545
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:158
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:451
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:474
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:549
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:32
 msgid "(none)"
 msgstr "(нет)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:328
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:368
 msgid "A logical rule cannot reference itself."
 msgstr "Логическое правило не может ссылаться само на себя."
 
@@ -49,8 +49,8 @@ msgstr "AWG WARP (Cloudflare WARP + AmneziaWG)"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:25
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:95
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:78
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:165
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:47
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:136
 msgid "Action"
 msgstr "Действие"
 
@@ -63,7 +63,7 @@ msgid "Active Connections"
 msgstr "Активные соединения"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:168
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:191
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:197
 msgid "Address"
 msgstr "Адрес"
 
@@ -79,7 +79,7 @@ msgstr "Дополнительно"
 msgid "All"
 msgstr "Все"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:400
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:406
 msgid ""
 "Allow the provider to route imported nodes directly (detour to direct/"
 "block), bypassing the proxy for those nodes. Unsafe — leave off unless you "
@@ -93,11 +93,11 @@ msgstr ""
 msgid "Auto-update subscriptions"
 msgstr "Авто-обновление подписок"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:273
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:279
 msgid "Automatic (Happ, then others)"
 msgstr "Автоматически (Happ, затем остальные)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:285
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:291
 msgid "Automatic HWID"
 msgstr "Автоматический HWID"
 
@@ -105,17 +105,39 @@ msgstr "Автоматический HWID"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:59
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:122
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:114
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:137
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:108
 msgid "Basic"
 msgstr "Основное"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:135
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:120
+msgid ""
+"Built-in outbound — managed by the package. It is dropped from the config as "
+"soon as nothing routes to it."
+msgstr ""
+"Встроенный outbound — им управляет пакет. Он исчезает из конфига, как только "
+"на него никто не маршрутизирует."
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:105
 msgid ""
 "Built-in rule-set — managed by the package. Toggle Enable, or turn the whole "
 "set off in General."
 msgstr ""
 "Встроенный rule-set — им управляет пакет. Можно только включить/выключить, "
 "либо отключить весь набор в Основных настройках."
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:138
+msgid "Bypass"
+msgstr "Bypass (в обход)"
+
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:141
+msgid ""
+"Bypass leaves the connection to the kernel — but only for auto-redirect "
+"(TUN) traffic, which this package does not use. With an outbound set it "
+"behaves exactly like Route; without one the rule is skipped."
+msgstr ""
+"Bypass отдаёт соединение ядру — но только для трафика из auto-redirect (TUN), "
+"которого в этом пакете нет. Если outbound задан, ведёт себя ровно как Route; "
+"если не задан — правило пропускается."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:27
 msgid "Cache file"
@@ -156,7 +178,7 @@ msgstr "Не удалось разобрать URL vmess"
 msgid "Clash API"
 msgstr "Clash API"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:272
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:278
 msgid ""
 "Client profile whose User-Agent is sent when fetching. Tried first; if the "
 "provider answers with something unparseable, the other profiles are tried in "
@@ -166,7 +188,7 @@ msgstr ""
 "Пробуется первым; если провайдер отдаёт нераспознаваемый ответ, по очереди "
 "пробуются остальные профили."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:217
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:257
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dashboard.js:350
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:242
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:289
@@ -186,7 +208,7 @@ msgstr "Закрыть соединение"
 msgid "Closed"
 msgstr "Закрытые"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:369
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:375
 msgid ""
 "Comma-separated ISO country codes, matched against the flag emoji in the "
 "node name. Empty = all countries."
@@ -198,17 +220,17 @@ msgstr ""
 msgid "Connections are unavailable"
 msgstr "Соединения недоступны"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:141
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:153
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:181
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:193
 msgid "Copied to clipboard."
 msgstr "Скопировано в буфер обмена."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:220
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:260
 msgid "Copy"
 msgstr "Копировать"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:142
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:145
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:182
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:185
 msgid "Copy failed — select the text and copy manually."
 msgstr "Не удалось скопировать — выделите текст и скопируйте вручную."
 
@@ -217,7 +239,7 @@ msgstr "Не удалось скопировать — выделите текс
 msgid "Copy proxy link"
 msgstr "Скопировать ссылку"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:366
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:372
 msgid "Countries"
 msgstr "Страны"
 
@@ -262,8 +284,8 @@ msgstr "Дашборд сейчас недоступен"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:99
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:133
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:11
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:159
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:162
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:130
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:133
 msgid "Default"
 msgstr "По умолчанию"
 
@@ -309,7 +331,7 @@ msgstr "Входящий"
 msgid "Downloaded"
 msgstr "Загружено"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:363
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:369
 msgid "Drop nodes whose name matches. Applied after the include filter."
 msgstr "Исключить ноды, чьё имя совпало. Применяется после фильтра включения."
 
@@ -322,10 +344,10 @@ msgstr "Пустой URL"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:97
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:36
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:144
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:174
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:180
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:58
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:82
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:141
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:51
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:112
 msgid "Enable"
 msgstr "Включить"
 
@@ -346,19 +368,19 @@ msgstr ""
 "После изменения перезапустите сервис."
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:154
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:227
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:267
 msgid "Error: "
 msgstr "Ошибка: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:360
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:366
 msgid "Exclude nodes (regex)"
 msgstr "Исключить ноды (регексп)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:335
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:341
 msgid "Expand to selector"
 msgstr "Развернуть в selector"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:326
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:332
 msgid "Expected scheme://host:port, e.g. socks5h://127.0.0.1:2080"
 msgstr "Ожидается scheme://host:port, например socks5h://127.0.0.1:2080"
 
@@ -367,7 +389,7 @@ msgid "Expires"
 msgstr "Истекает"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:153
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:184
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:190
 msgid "Export"
 msgstr "Экспорт"
 
@@ -376,7 +398,7 @@ msgstr "Экспорт"
 msgid "Export JSON — %s %s"
 msgstr "Экспорт JSON — %s %s"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:244
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:248
 #, javascript-format
 msgid "Failed to install %s"
 msgstr "Не удалось установить %s"
@@ -393,7 +415,7 @@ msgstr ""
 msgid "Failed to switch node"
 msgstr "Не удалось переключить узел"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:322
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:328
 msgid ""
 "Fetch this subscription through a proxy (e.g. a local mixed/socks inbound), "
 "for providers whose panel is unreachable directly. Leave empty to fetch "
@@ -403,11 +425,11 @@ msgstr ""
 "inbound) — для провайдеров, чья панель недоступна напрямую. Пусто — загрузка "
 "напрямую."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:318
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:324
 msgid "Fetch via proxy"
 msgstr "Загружать через прокси"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:160
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:131
 msgid "Final route applied to traffic that does not match any rule."
 msgstr "Финальное правило для трафика, не совпавшего ни с одним правилом."
 
@@ -429,19 +451,19 @@ msgstr "Создание…"
 msgid "Global sing-box settings: cache file, log."
 msgstr "Глобальные настройки sing-box: кэш-файл, лог."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:291
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:297
 msgid "HWID"
 msgstr "HWID"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:289
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:293
 msgid "Hide"
 msgstr "Скрыть"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:383
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:389
 msgid "Hide grouped nodes"
 msgstr "Скрывать сгруппированные ноды"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:387
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:393
 msgid ""
 "Hide nodes that are already inside an imported group, or used only as a "
 "detour hop, from the top selector. They stay routable."
@@ -470,11 +492,11 @@ msgstr "Импорт"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:93
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:138
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:128
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:134
 msgid "Import JSON"
 msgstr "Импорт JSON"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:381
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:387
 msgid ""
 "Import URLTest/selector groups the provider ships (country groups, detour "
 "cascades). Off by default: turning it on changes the selector membership, "
@@ -485,11 +507,11 @@ msgstr ""
 "селектора, из-за чего может слететь сохранённый выбор ноды."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:88
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:137
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:143
 msgid "Import share-link"
 msgstr "Импорт share-link"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:377
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:383
 msgid "Import subscription groups"
 msgstr "Импортировать группы подписки"
 
@@ -515,11 +537,11 @@ msgstr "Inbound"
 msgid "Inbounds"
 msgstr "Входящие"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:354
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:360
 msgid "Include nodes (regex)"
 msgstr "Включить ноды (регексп)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:295
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:335
 msgid "Incompatible with installed sing-box"
 msgstr "Несовместимо с установленной версией sing-box"
 
@@ -531,8 +553,8 @@ msgstr "Независимый кэш"
 msgid "Inline"
 msgstr "Встроенный"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:242
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:247
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:246
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:251
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:45
 msgid "Install"
 msgstr "Установить"
@@ -541,7 +563,7 @@ msgstr "Установить"
 msgid "Installed"
 msgstr "Установлено"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:238
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:242
 msgid "Installed."
 msgstr "Установлено."
 
@@ -549,7 +571,7 @@ msgstr "Установлено."
 msgid "Installed. Reload the page."
 msgstr "Установлено. Перезагрузите страницу."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:233
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:237
 msgid "Installing…"
 msgstr "Установка…"
 
@@ -594,11 +616,11 @@ msgid "Invalid up_mbps: "
 msgstr "Некорректный up_mbps: "
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/inbounds.js:150
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:181
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:187
 msgid "JSON"
 msgstr "JSON"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:406
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:412
 msgid ""
 "Keep a last-known-good copy on flash so the subscription survives a reboot. "
 "Off = cache only in RAM (lost on reboot); avoids writing node passwords to "
@@ -608,7 +630,7 @@ msgstr ""
 "перезагрузку. Выключено — кэш только в RAM (теряется при перезагрузке); так "
 "пароли нод не попадают на флеш."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:357
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:363
 msgid "Keep only nodes whose name matches. Empty = keep all."
 msgstr "Оставить только ноды, чьё имя совпало. Пусто — оставить все."
 
@@ -624,7 +646,7 @@ msgstr "Уровень"
 msgid "Loading connections"
 msgstr "Загрузка соединений"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:199
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:239
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/action-bar.js:64
 msgid "Loading…"
 msgstr "Загрузка…"
@@ -660,11 +682,11 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:24
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:94
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:77
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:46
 msgid "Match"
 msgstr "Условия"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:70
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:39
 msgid ""
 "Match traffic and route, reject, sniff, resolve, or compose with logical "
 "rules. Rules consumed by a logical rule or inline rule-set are not applied "
@@ -674,7 +696,7 @@ msgstr ""
 "резолвируйте или комбинируйте с логическими правилами. Правила, поглощённые "
 "логическим или встроенным rule-set'ом, не применяются отдельно."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:389
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:395
 msgid "Max group nesting"
 msgstr "Макс. вложенность групп"
 
@@ -733,7 +755,7 @@ msgstr "Нет закрытых соединений"
 msgid "No proxy groups. Configure selector/urltest outbounds."
 msgstr "Нет прокси-групп. Настройте selector/urltest outbound'ы."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:372
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:378
 msgid "Node name prefix"
 msgstr "Префикс имени ноды"
 
@@ -754,7 +776,7 @@ msgstr ""
 
 # Outbound modal
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:109
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:169
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:149
 msgid "Outbound"
 msgstr "Outbound"
 
@@ -767,7 +789,7 @@ msgstr "Исходящие"
 msgid "Output file (empty = procd stdout)"
 msgstr "Файл вывода (пусто = stdout procd)"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:296
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:302
 msgid ""
 "Override the hardware ID sent to the provider. Leave empty to use the "
 "automatic one."
@@ -799,7 +821,7 @@ msgstr ""
 "Периодически обновлять подписки через cron (каждая подписка учитывает свой "
 "интервал обновления)."
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:402
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:408
 msgid "Persist cache to flash"
 msgstr "Сохранять кэш на флеш"
 
@@ -812,7 +834,7 @@ msgstr "Постоянный кэш для прокси, DNS-ответов и �
 msgid "Plugins"
 msgstr "Плагины"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:374
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:380
 msgid ""
 "Prepended to the display name of imported nodes. Does not change the tag."
 msgstr ""
@@ -845,7 +867,7 @@ msgid "Proxy link copied"
 msgstr "Ссылка скопирована"
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:157
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:241
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:281
 msgid "RPC failed: "
 msgstr "Ошибка RPC: "
 
@@ -880,7 +902,7 @@ msgstr "Обновление…"
 msgid "Refreshing… %d/%d"
 msgstr "Обновление… %d/%d"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:166
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:139
 msgid "Reject"
 msgstr "Отклонить"
 
@@ -888,14 +910,14 @@ msgstr "Отклонить"
 msgid "Remote"
 msgstr "Удалённый"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:130
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:99
 msgid ""
 "Remote (.srs/.json), local, or inline rule-sets referenced by route rules."
 msgstr ""
 "Удалённые (.srs/.json), локальные или встроенные rule-set'ы, на которые "
 "ссылаются правила маршрутизации."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:223
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:227
 #, javascript-format
 msgid "Requires the %s package."
 msgstr "Требуется пакет %s."
@@ -919,27 +941,27 @@ msgstr "Возобновить обновление"
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:118
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:230
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:287
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:166
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:137
 msgid "Route"
 msgstr "Маршрутизация"
 
 # Route rule modal
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:75
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:44
 msgid "Route Rule"
 msgstr "Правило маршрутизации"
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:106
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:69
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:38
 msgid "Route Rules"
 msgstr "Правила маршрутизации"
 
 # Rule-set modal
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:134
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:103
 msgid "Rule-Set"
 msgstr "Набор правил"
 
 #: htdocs/luci-static/resources/view/singbox-ui/main.js:107
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:129
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:98
 #: htdocs/luci-static/resources/view/singbox-ui/widgets/status-panel.js:50
 msgid "Rule-Sets"
 msgstr "Наборы правил"
@@ -956,11 +978,11 @@ msgstr "Поиск"
 msgid "Selected"
 msgstr "Выбрано"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:340
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:346
 msgid "Selector type"
 msgstr "Тип селектора"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:289
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:295
 msgid ""
 "Send an X-HWID header derived from this router (MAC + model). Required by "
 "panels that bind a subscription to one device."
@@ -990,12 +1012,12 @@ msgid ""
 "Sets tab. When off they are hidden and never referenced, fetched, or written "
 "to the config."
 msgstr ""
-"Добавляет rule-set'ы из itdoginfo/allow-domains как нередактируемые записи на "
-"вкладке Rule-Sets. Если выключено — они скрыты и никогда не используются, не "
-"скачиваются и не попадают в конфиг."
+"Добавляет rule-set'ы из itdoginfo/allow-domains как нередактируемые записи "
+"на вкладке Rule-Sets. Если выключено — они скрыты и никогда не используются, "
+"не скачиваются и не попадают в конфиг."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:289
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:291
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:293
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:295
 msgid "Show"
 msgstr "Показать"
 
@@ -1031,11 +1053,11 @@ msgstr "Остановлен"
 msgid "Strategy"
 msgstr "Стратегия"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:330
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:370
 msgid "Sub-rules must be Default rules: "
 msgstr "Под-правила должны быть правилами типа Default: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:244
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:250
 msgid "Subscription URL"
 msgstr "URL подписки"
 
@@ -1078,7 +1100,7 @@ msgstr "URL проверки"
 msgid "Time"
 msgstr "Время"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:284
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:288
 msgid "Toggle visibility"
 msgstr "Переключить видимость"
 
@@ -1099,7 +1121,7 @@ msgstr "Всего трафика"
 msgid "Transport"
 msgstr "Транспорт"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:396
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:402
 msgid "Trust provider routing"
 msgstr "Доверять маршрутизации провайдера"
 
@@ -1107,9 +1129,9 @@ msgstr "Доверять маршрутизации провайдера"
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/dns.js:98
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:229
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/monitoring.js:287
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:217
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:84
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:143
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:223
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:53
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:114
 msgid "Type"
 msgstr "Тип"
 
@@ -1121,7 +1143,7 @@ msgstr "Настройки интерфейса"
 msgid "URL must not be empty"
 msgstr "URL не должен быть пустым"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:347
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:353
 msgid "URL-test URL"
 msgstr "URL для url-test"
 
@@ -1155,7 +1177,7 @@ msgstr "Неподдерживаемая схема: "
 msgid "Unsupported vless flow: "
 msgstr "Неподдерживаемый vless flow: "
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:329
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:335
 msgid "Update interval (s)"
 msgstr "Интервал обновления (с)"
 
@@ -1178,11 +1200,11 @@ msgstr "Исходящий"
 msgid "Uploaded"
 msgstr "Отдано"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:95
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:64
 msgid "Used by"
 msgstr "Используется в"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:269
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:275
 msgid "User-Agent"
 msgstr "User-Agent"
 
@@ -1210,7 +1232,7 @@ msgstr "в ссылке anytls отсутствует пароль"
 msgid "expected http/1.1, h2, or h3"
 msgstr "ожидается http/1.1, h2 или h3"
 
-#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:210
+#: htdocs/luci-static/resources/view/singbox-ui/tabs/outbounds.js:216
 msgid "group"
 msgstr "группа"
 
@@ -1219,7 +1241,7 @@ msgstr "группа"
 msgid "never"
 msgstr "никогда"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:366
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:370
 #, javascript-format
 msgid "nftables rules already active on inbound \"%s\""
 msgstr "правила nftables уже активны на инбаунде «%s»"
@@ -1232,13 +1254,13 @@ msgstr "не сгенерировано"
 msgid "preview failed"
 msgstr "ошибка предпросмотра"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:275
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:177
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:315
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:181
 msgid "removed in"
 msgstr "удалено в"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:273
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:174
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:313
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:178
 msgid "requires"
 msgstr "требуется"
 
@@ -1254,8 +1276,8 @@ msgid "tuic link needs uuid:password"
 msgstr "ссылка tuic требует uuid:password"
 
 #: htdocs/luci-static/resources/view/singbox-ui/importers/inbound.js:154
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:305
-#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:313
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:345
+#: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:353
 msgid "unknown error"
 msgstr "неизвестная ошибка"
 

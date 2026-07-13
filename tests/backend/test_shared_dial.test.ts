@@ -89,6 +89,11 @@ describe("shared dial block", () => {
     expect(got.inet6_bind_address).toBe("::");
   });
 
+  // bind_interface goes straight to SO_BINDTODEVICE, so it is an OS netdev name
+  // (eth0 / pppoe-wan), NOT an OpenWrt logical interface. It used to be sourced
+  // from `interfaces` (a dropdown of wan/lan), which meant every value the UI
+  // offered bound the dialer to a device that does not exist — and the outbound
+  // then silently failed to connect.
   it("Test 5: detour and bind_interface carry dynamic selector sources", async () => {
     const src = `
       let d = require("builder._shared.dial");
@@ -98,6 +103,6 @@ describe("shared dial block", () => {
     `;
     const r = await runUcode(src);
     expect(r.exitCode).toBe(0);
-    expect(r.stdout.trim()).toBe("outbounds|interfaces");
+    expect(r.stdout.trim()).toBe("outbounds|devices");
   });
 });
