@@ -1,18 +1,20 @@
 // lib/ruleset.uc — sing-box route.rule_set definitions for referenced rule-sets.
-// remote/local entries are built declaratively (url/path/download_detour via the
-// descriptor + filler); format + update_interval are post-processed here
-// (auto-detect / "<n>s"). inline entries embed headless rules built from the
-// referenced default route_rule sections.
+//
+// remote/local entries are built ENTIRELY by the descriptor + filler now, `format`
+// and `update_interval` included (post() sniffs the format from the source's
+// extension; coerce:"duration" spells the interval as "<n>s"). They used to be
+// bolted on here, after the filler had run — which meant the JSON editor exported
+// a rule-set object the generated config did not match, and could not invert those
+// two keys at all.
+//
+// What is left here is what genuinely CANNOT live in a descriptor, because it
+// depends on other sections: inline entries embed headless rules built from the
+// referenced default route_rule sections, and a dangling download_detour is
+// dropped against the set of outbounds that actually exist.
 
-let helpers  = require("helpers");
 let reg      = require("builder.route.registry");
 let filler   = require("builder._filler");
 let headless = require("builder.route.headless");
-
-function detect_format(rs) {
-    let src = (rs.type === "local") ? (rs.path ?? "") : (rs.url ?? "");
-    return helpers.detect_rs_format(src);
-}
 
 // build_rule_sets(cur, referenced_names) -> [{tag, type, ...}, ...]
 function build_rule_sets(cur, referenced_names, valid_ob) {
@@ -30,16 +32,7 @@ function build_rule_sets(cur, referenced_names, valid_ob) {
         let d = reg.get("rule_set", t);
         let entry = (d != null) ? filler.build(d, rs) : { type: t, tag: name };
 
-        if (t === "remote") {
-            entry.format = detect_format(rs);
-            let iv = +(rs.update_interval ?? "0");
-            if (iv > 0) entry.update_interval = sprintf("%ds", int(iv));
-            else if (length(rs.update_interval ?? "") && iv != iv)   // non-empty but NaN
-                warn(sprintf("ruleset.uc: '%s' update_interval '%s' is not numeric seconds; omitting\n", name, rs.update_interval));
-        } else if (t === "local") {
-            entry.format = detect_format(rs);
-        } else if (t === "inline") {
-            delete entry.format;          // inline has no format
+        if (t === "inline") {
             let refs = rs.rules ?? [];
             if (type(refs) === "string") refs = [ refs ];
             // Guards mirror route.uc's logical-inlining loop (null/logical/disabled).

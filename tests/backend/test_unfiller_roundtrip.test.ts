@@ -23,19 +23,61 @@ import { runUcodeJSON } from "../helpers/ucode.ts";
 
 // Key order is not load-bearing (the project's parity invariant is semantic), and
 // json_extra merges last, so canonicalise before comparing.
+// The parity corpus is inbound/outbound only, but the JSON editor works on six
+// kinds. These cover the other four — every one of them exercising the shapes the
+// inverse could get wrong: a derived key (rule-set `format`, sniffed from the
+// url/path extension and not a UCI option at all), a duration coerce
+// ("86400s" <-> "86400"), a headerless descriptor (route_rule/dns_rule carry
+// neither type nor tag), list matchers, and the tls shared block resolved through
+// the OUTBOUND sequence (a DNS server is a TLS client).
+const EXTRA_FIXTURES = `[
+  { name: "rs_remote_srs", kind: "rule_set", type: "remote",
+    section: { ".name": "geosite", type: "remote",
+               url: "https://example.com/geosite.srs", update_interval: "86400",
+               download_detour: "proxy", nft_rules: "1" } },
+  { name: "rs_remote_json_no_interval", kind: "rule_set", type: "remote",
+    section: { ".name": "gs2", type: "remote", url: "https://example.com/g.json" } },
+  { name: "rs_local", kind: "rule_set", type: "local",
+    section: { ".name": "cn", type: "local", path: "/etc/rules/cn.srs" } },
+  { name: "dns_https_tls", kind: "dns", type: "https",
+    section: { ".name": "goog", type: "https", server: "8.8.8.8", server_port: "443",
+               path: "/dns-query", detour: "proxy",
+               tls_enabled: "1", tls_server_name: "dns.google", tls_alpn: [ "h2" ] } },
+  { name: "dns_fakeip", kind: "dns", type: "fakeip",
+    section: { ".name": "fk", type: "fakeip", inet4_range: "198.18.0.0/15",
+               inet6_range: "fc00::/18" } },
+  { name: "route_rule_default", kind: "route_rule", type: "default",
+    section: { ".name": "r1", type: "default", action: "route", outbound: "proxy",
+               domain_suffix: [ "example.com", ".ru" ], port: [ "443" ],
+               invert: "1" } },
+  { name: "route_rule_reject", kind: "route_rule", type: "default",
+    section: { ".name": "r2", type: "default", action: "reject", method: "drop",
+               no_drop: "1", ip_cidr: [ "10.0.0.0/8" ] } },
+  { name: "dns_rule_default", kind: "dns_rule", type: "default",
+    section: { ".name": "dr1", type: "default", action: "route", server: "goog",
+               domain_suffix: [ ".ru" ] } }
+]`;
+
 const DRIVER = `
   let filler   = require("builder._filler");
   let unfiller = require("builder._unfiller");
   require("inbound");
   require("outbound");
+  require("builder.dns.registry");
+  require("builder.dns_rule.registry");
+  require("builder.route.registry");
   let reg    = require("builder.protocols.registry");
-  let corpus = require("corpus");
+  let corpus = [ ...require("corpus"), ...${EXTRA_FIXTURES} ];
 
   function canon(v) {
     if (type(v) === "array")  { let a = []; for (let x in v) push(a, canon(x)); return a; }
     if (type(v) === "object") { let o = {}; for (let k in sort(keys(v))) o[k] = canon(v[k]); return o; }
     return v;
   }
+
+  // The UCI discriminator is "protocol" for inbounds and "type" for everything
+  // else; a headerless kind (route_rule / dns_rule) has no tag in its JSON.
+  function discr(kind) { return kind === "inbound" ? "protocol" : "type"; }
 
   let out = [];
   for (let fx in corpus) {
@@ -49,7 +91,7 @@ const DRIVER = `
 
     // Exactly what the JSON editor writes back — nothing else.
     let s2 = { ".name": fx.section[".name"] };
-    s2[fx.kind === "inbound" ? "protocol" : "type"] = fx.type;
+    s2[discr(fx.kind)] = fx.type;
     for (let k in r.fields) s2[k] = r.fields[k];
     if (length(keys(r.extra))) s2.json_extra = sprintf("%J", r.extra);
 
@@ -93,7 +135,8 @@ describe("_unfiller round-trips the whole parity corpus", () => {
 
   it("runs every fixture through build -> parse -> build", async () => {
     rows = (await runUcodeJSON(DRIVER, [], ["tests/parity"])) as Row[];
-    expect(rows.length).toBeGreaterThan(70);
+    // 76 protocol fixtures + the 8 covering the other four kinds.
+    expect(rows.length).toBeGreaterThan(80);
     expect(
       rows
         .filter((r) => r.skipped)
@@ -128,5 +171,40 @@ describe("_unfiller round-trips the whole parity corpus", () => {
     const withUsers = rows.filter((r) => r.extra?.includes("users"));
     expect(withUsers.length).toBeGreaterThan(0);
     for (const r of withUsers) expect(r.type).toBe("shadowsocks");
+  });
+
+  it("covers all six kinds the JSON editor works on", () => {
+    // The parity corpus is inbound/outbound only. If the editor grows a kind
+    // whose inverse nothing exercises, that is exactly the blind spot this guard
+    // exists to prevent.
+    const kinds = new Set(rows.filter((r) => !r.skipped).map((r) => r.kind));
+    expect([...kinds].sort()).toEqual([
+      "dns",
+      "dns_rule",
+      "inbound",
+      "outbound",
+      "route_rule",
+      "rule_set",
+    ]);
+  });
+
+  it("round-trips a rule-set's derived format and its duration interval", () => {
+    // `format` is sniffed from the source's extension and is not a UCI option at
+    // all; `update_interval` is stored as plain seconds and emitted as "86400s".
+    // Both used to be bolted on AFTER the filler in ruleset.uc, which meant the
+    // editor exported an object the real config did not match and could not invert
+    // those two keys — they would have round-tripped into json_extra and then been
+    // emitted twice.
+    const srs = rows.find((r) => r.name === "rs_remote_srs");
+    expect(srs?.same).toBe(true);
+    expect(srs?.extra).toEqual([]);
+    expect(srs?.j1).toContain('"format": "binary"');
+    expect(srs?.j1).toContain('"update_interval": "86400s"');
+
+    // .json source -> format "source", and no interval means no key at all.
+    const js = rows.find((r) => r.name === "rs_remote_json_no_interval");
+    expect(js?.same).toBe(true);
+    expect(js?.j1).toContain('"format": "source"');
+    expect(js?.j1).not.toContain("update_interval");
   });
 });

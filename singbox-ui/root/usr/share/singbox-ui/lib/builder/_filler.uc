@@ -76,6 +76,22 @@ function _emit_scalar(out, s, f) {
         if (omit === "never" || length(nums)) out[f.json_key] = nums;
         return;
     }
+    if (coerce === "duration") {
+        // UCI stores plain seconds ("86400"); sing-box wants a duration string
+        // ("86400s"). Kept declarative so _unfiller can invert it — the JSON editor
+        // has to be able to turn "86400s" back into the UCI value, which it cannot
+        // do for a conversion buried in a builder's post-processing.
+        let raw = s_opt(s, f.name);
+        if (!length(raw)) return;
+        let n = +raw;
+        if (n != n) {                       // NaN
+            warn(sprintf("_filler: '%s' %s '%s' is not numeric seconds; omitting\n",
+                         s[".name"] ?? "?", f.name, raw));
+            return;
+        }
+        if (n > 0) out[f.json_key] = sprintf("%ds", int(n));
+        return;
+    }
     if (coerce === "num") {
         // Use raw `+` conversion instead of s_num(): non-numeric strings become
         // NaN. For omit:empty we DROP NaN (don't coerce garbage to 0). For

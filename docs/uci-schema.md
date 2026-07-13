@@ -512,7 +512,9 @@ If the three filters together match **zero** nodes, `outbound.uc` keeps **all** 
 
 UCI section type: `ruleset`. Named (non-anonymous) sections. Describes remote or local rule-set files referenced by route rules and DNS rules.
 
-Backend: `lib/ruleset.uc` — `build_rule_sets(cur, referenced_names)`. Only rulesets whose name appears in `referenced_names` (computed by `route.uc`) **and** whose `enabled` is not `"0"` are emitted. `format` is **not stored as a UCI field**; it is auto-detected from the file extension at runtime (`detect_format` in `helpers.uc`): `.srs` → `binary`, `.json` → `source`. `subscription.uc` also reads `enabled`, `update_interval`, and `nft_rules` to decide when to re-download.
+Backend: `lib/ruleset.uc` — `build_rule_sets(cur, referenced_names)`. Only rulesets whose name appears in `referenced_names` (computed by `route.uc`) **and** whose `enabled` is not `"0"` are emitted. `format` is **not stored as a UCI field**; the `remote`/`local` descriptors derive it from the source's extension in `post()` (`helpers.detect_rs_format`: `.srs` → `binary`, `.json` → `source`) and list it in `derived_keys`, so the JSON editor consumes it instead of treating it as an unknown key. `subscription.uc` also reads `enabled`, `update_interval`, and `nft_rules` to decide when to re-download.
+
+`ruleset.uc` now only does what genuinely CANNOT live in a descriptor because it depends on other sections: inlining an `inline` rule-set's referenced route rules as headless rules, and dropping a `download_detour` that names an outbound which does not exist.
 
 UI write: `tabs/rulesets.js` — `buildRulesetsMap()`.
 
@@ -525,7 +527,7 @@ UI write: `tabs/rulesets.js` — `buildRulesetsMap()`.
 | `path` | string | absolute file path | yes | `type=local` | Path to the local rule-set file on the router filesystem. Read by `ruleset.uc` to emit `path` in the sing-box config. |
 | `download_detour` | string | outbound section name | no | `type=remote` | Outbound tag through which sing-box fetches the rule-set (dropdown of existing outbounds; empty = direct). Emitted as `download_detour` in the `route.rule_set` entry. Deprecated in sing-box (removed in 1.16) but valid on all targeted versions (1.12+), so not version-gated. |
 | `nft_rules` | bool | `0`/`1` | no | — | UI-only flag: `subscription.uc` iterates over rulesets with `nft_rules=1` to decide which to keep fresh. **Not read by `ruleset.uc`** (nftables integration is handled outside generate.uc). Default `0`. |
-| `update_interval` | integer | seconds | no | `type=remote` | Auto-update interval. Two consumers: (1) `subscription.uc` uses it as the minimum age before re-downloading the `rs_*.json` for `nft_rules=1` rulesets (defaults to `86400`/24 h when absent or `0`); (2) `ruleset.uc` emits it into the sing-box `route.rule_set` entry as a duration (`"<n>s"`) when `> 0`, so sing-box auto-updates the rule-set itself — independent of `nft_rules`. Without it, a routing-only (`nft_rules=0`) rule-set would never auto-update. |
+| `update_interval` | integer | seconds | no | `type=remote` | Auto-update interval. Two consumers: (1) `subscription.uc` uses it as the minimum age before re-downloading the `rs_*.json` for `nft_rules=1` rulesets (defaults to `86400`/24 h when absent or `0`); (2) the descriptor emits it into the sing-box `route.rule_set` entry as a duration (`"<n>s"`) via `coerce: "duration"`, so sing-box auto-updates the rule-set itself — independent of `nft_rules`. Without it, a routing-only (`nft_rules=0`) rule-set would never auto-update. Declarative on purpose: a conversion buried in a builder could not be inverted, and the JSON editor has to turn `"86400s"` back into `86400`. |
 
 ---
 

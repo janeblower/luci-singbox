@@ -56,6 +56,14 @@ function _uncoerce(f, v) {
         for (let x in a) push(out, "" + x);
         return out;
     }
+    if (coerce === "duration") {
+        // "86400s" -> "86400". UCI stores plain seconds; the filler spells it as a
+        // sing-box duration. A value we cannot read (a unit other than seconds, or
+        // junk) is passed through verbatim rather than silently zeroed — the form
+        // will then reject it, which is louder than losing it.
+        let m = match("" + v, /^([0-9]+)s?$/);
+        return m ? m[1] : ("" + v);
+    }
     return "" + v;
 }
 
@@ -282,6 +290,12 @@ function parse(d, json) {
     // into a field. HEADERLESS descriptors carry neither.
     const HEADERLESS = { route_rule: 1, dns_rule: 1, cache: 1, clash_api: 1 };
     if (!HEADERLESS[kind]) { seen.type = true; seen.tag = true; }
+
+    // `derived_keys` are keys the builder COMPUTES rather than reads (a rule-set's
+    // `format` is sniffed from its url/path extension, and is not a UCI option at
+    // all). They must be consumed, or the editor would report them as unknown and
+    // stash them in json_extra — where the next build would then emit them twice.
+    for (let k in (d.derived_keys ?? [])) seen[k] = true;
     if (kind === "inbound") {
         // build_listen_base owns these two — they have no json_key of their own.
         seen.listen = true;
