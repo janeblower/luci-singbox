@@ -94,6 +94,67 @@ describe("listen shared block: emission-time version gate", () => {
   });
 });
 
+// The gate is not decoration: on a 1.12 core these keys make sing-box refuse the
+// WHOLE config ("json: unknown field") and the daemon never starts. Assert their
+// ABSENCE through the real descriptors — delete the min_version from
+// _shared/quic.uc or _shared/tls.uc's emit_spec entries and these go red, which
+// is the whole point (the parity lane pins 99.0 and cannot notice).
+const QUIC_SRC = `
+  require("builder.protocols.tuic");
+  let reg = require("builder.protocols.registry");
+  let filler = require("builder._filler");
+  let s = { [".name"]:"t1", server:"e.com", server_port:"443",
+            server_uuid:"aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", server_password:"p",
+            quic_initial_packet_size:"1200", quic_disable_path_mtu_discovery:"1" };
+  print(sprintf("%J\\n", filler.build(reg.get("outbound","tuic"), s)));
+`;
+
+const KTLS_SRC = `
+  require("builder.protocols.trojan");
+  let reg = require("builder.protocols.registry");
+  let filler = require("builder._filler");
+  let s = { [".name"]:"tr1", server:"e.com", server_port:"443", server_password:"p",
+            tls_enabled:"1", tls_server_name:"e.com",
+            tls_kernel_tx:"1", tls_kernel_rx:"1" };
+  print(sprintf("%J\\n", filler.build(reg.get("outbound","trojan"), s)));
+`;
+
+async function buildSrc(src: string, core: string) {
+  const r = await runUcode(src, [], [], { SINGBOX_CORE_VERSION: core });
+  expect(r.exitCode).toBe(0);
+  return JSON.parse(r.stdout.trim());
+}
+
+describe("quic + tls shared blocks: the same gate, on a real 1.12 core", () => {
+  useGuest();
+
+  it("quic (1.14 keys) are NOT emitted on 1.12 — tuic outbound", async () => {
+    const o = await buildSrc(QUIC_SRC, "1.12.0");
+    expect(o.initial_packet_size).toBeUndefined();
+    expect(o.disable_path_mtu_discovery).toBeUndefined();
+    expect(o.type).toBe("tuic"); // the rest of the descriptor still built
+  });
+
+  it("quic (1.14 keys) ARE emitted on 1.14", async () => {
+    const o = await buildSrc(QUIC_SRC, "1.14.0");
+    expect(o.initial_packet_size).toBe(1200);
+    expect(o.disable_path_mtu_discovery).toBe(true);
+  });
+
+  it("kTLS (1.13 keys) are NOT emitted on 1.12 — trojan outbound", async () => {
+    const o = await buildSrc(KTLS_SRC, "1.12.0");
+    expect(o.tls.enabled).toBe(true); // the TLS block itself still emits
+    expect(o.tls.kernel_tx).toBeUndefined();
+    expect(o.tls.kernel_rx).toBeUndefined();
+  });
+
+  it("kTLS (1.13 keys) ARE emitted on 1.13", async () => {
+    const o = await buildSrc(KTLS_SRC, "1.13.0");
+    expect(o.tls.kernel_tx).toBe(true);
+    expect(o.tls.kernel_rx).toBe(true);
+  });
+});
+
 describe("listen shared block: _unfiller gates `known` the same way", () => {
   useGuest();
 

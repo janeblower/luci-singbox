@@ -35,7 +35,17 @@ function _emit_scalar(out, s, f) {
     // emit_spec). Fail-open: core_at_least() returns true when the version is
     // unknown, so an undetectable core emits everything rather than silently
     // shipping a crippled config.
-    if (f.min_version != null && !helpers.core_at_least(f.min_version)) return;
+    if (f.min_version != null && !helpers.core_at_least(f.min_version)) {
+        // Say so when there is something to lose: a value the user really set
+        // (hand-edited UCI, or left behind by a core downgrade) vanishes from the
+        // generated config. An unset field loses nothing, and warning for it would
+        // print a line per gated key on every single build — so stay quiet there.
+        let held = (f.coerce === "bool") ? s_bool(s, f.name) : length(s_opt(s, f.name)) > 0;
+        if (held)
+            warn(sprintf("_filler: '%s' %s needs sing-box %s+ (core is %s); omitting\n",
+                         s[".name"] ?? "?", f.name, f.min_version, helpers.core_version()));
+        return;
+    }
     if (f.requires != null) {
         // String-form `requires` gates on NON-EMPTINESS of the named sibling, so a
         // UCI bool OFF value "0" (length 1) SATISFIES it. Only safe when the

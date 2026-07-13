@@ -12,7 +12,7 @@ import { runUcodeJSON } from "./ucode.ts";
 // it resolves 1.13 the same fixture grows three keys and parity goes red with zero
 // code change. Parity asserts WHAT A DESCRIPTOR EMITS, with every field present;
 // version gating is a separate concern with its own dedicated tests
-// (tests/backend/test_listen_shared_version_gate.test.ts pins each boundary
+// (tests/backend/test_shared_version_gate.test.ts pins each boundary
 // explicitly). Pin high, and no golden is ever silently reshaped by the guest.
 const PARITY_ENV = { SINGBOX_CORE_VERSION: "99.0" };
 

@@ -140,7 +140,7 @@ describe("_unfiller round-trips the whole parity corpus", () => {
     // would quietly stop round-tripping them. Pinned high, every field is present
     // on both sides. The gated direction — a key _filler won't emit must land in
     // `extra` and be re-emitted verbatim, never be silently dropped from `known` —
-    // is pinned per-case in test_listen_shared_version_gate.test.ts.
+    // is pinned per-case in test_shared_version_gate.test.ts.
     rows = (await buildParity(DRIVER, ["tests/parity"])) as Row[];
     // 76 protocol fixtures + the 8 covering the other four kinds.
     expect(rows.length).toBeGreaterThan(80);

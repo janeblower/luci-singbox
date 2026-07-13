@@ -131,10 +131,22 @@ function validate_shared(shared, ctx) {
         assert(KNOWN_SHARED[k] != null, sprintf("%s: unknown shared key '%s'", ctx, k));
 }
 
+// _no_version_gate(e, ctx, what) — min_version/max_version gate EMISSION, and
+// _filler honours them in ONE place: _emit_scalar. A `const` or a group entry
+// carrying one is silently ignored by the filler (the key is emitted anyway, and
+// an unknown key makes the old core refuse the WHOLE config) while _unfiller,
+// which skips a gated entry whatever its shape, drops it into json_extra. Rather
+// than grow the gate to shapes nobody uses, refuse them where the mistake is made.
+function _no_version_gate(e, ctx, what) {
+    assert(e.min_version == null && e.max_version == null,
+           sprintf("%s: %s '%s' may not carry min_version/max_version (only a scalar entry is gated)",
+                   ctx, what, e.json_key ?? "?"));
+}
+
 function _validate_seq(seq, ctx) {
     for (let e in (seq || [])) {
-        if ("const" in e) { assert(e.json_key != null, sprintf("%s: const entry needs json_key", ctx)); continue; }
-        if (e.fields != null) { _validate_seq(e.fields, ctx); assert(e.json_key != null, sprintf("%s: group needs json_key", ctx)); continue; }
+        if ("const" in e) { assert(e.json_key != null, sprintf("%s: const entry needs json_key", ctx)); _no_version_gate(e, ctx, "const entry"); continue; }
+        if (e.fields != null) { _validate_seq(e.fields, ctx); assert(e.json_key != null, sprintf("%s: group needs json_key", ctx)); _no_version_gate(e, ctx, "group"); continue; }
         assert(e.json_key != null && e.name != null, sprintf("%s: scalar entry needs name+json_key", ctx));
         _validate_emit_meta(e, ctx);
     }
@@ -143,7 +155,25 @@ function validate_groups(groups, ctx) {
     if (groups == null) return;
     for (let g in groups) {
         assert(g.json_key != null, sprintf("%s: group needs json_key", ctx));
+        _no_version_gate(g, ctx, "group");
         _validate_seq(g.fields, ctx);
+    }
+}
+
+// validate_shared_specs(shared, ctx) — run the same seq validation over each
+// declared shared block's emit_spec. That spec is a real emission path (it is what
+// _filler._emit_shared walks), it is where the version gate actually bites
+// (quic/tls/listen), and until now nothing validated it at all.
+function validate_shared_specs(shared, ctx) {
+    if (shared == null) return;
+    for (let blk in shared) {
+        let mod = _shared_module(blk);
+        if (mod == null || mod.emit_spec == null) continue;
+        let spec = mod.emit_spec;
+        let c = sprintf("%s shared:%s", ctx, blk);
+        for (let seq in [ spec.seq, spec.inbound, spec.outbound ]) _validate_seq(seq, c);
+        let variants = (spec.variant != null) ? (spec.variant.variants ?? {}) : {};
+        for (let v in variants) _validate_seq(variants[v], c);
     }
 }
 function validate_users(u, ctx) {
@@ -224,6 +254,7 @@ function register(descriptor) {
         assert(type(descriptor.post) === "function", "descriptor.post must be a function");
     let ctx = sprintf("%s:%s", descriptor.kind, descriptor.type);
     validate_shared(descriptor.shared, ctx);
+    validate_shared_specs(descriptor.shared, ctx);
     validate_groups(descriptor.groups, ctx);
     validate_users(descriptor.users, ctx);
     for (let f in (descriptor.fields || []))

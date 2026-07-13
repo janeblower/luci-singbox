@@ -281,6 +281,99 @@ describe("registry robustness", () => {
     expect(r.stdout.trim()).toBe("ACCEPTED");
   });
 
+  // min_version gates EMISSION, and _filler honours it only in _emit_scalar.
+  // On a `const` or a group entry it is silently ignored — the key still reaches
+  // a core that does not know it, which refuses the whole config. Registration is
+  // where that mistake is made, so registration is where it must fail.
+
+  it("min_version on a GROUP entry is rejected", async () => {
+    const src = `
+      let reg = require("builder.protocols.registry");
+      let threw = false;
+      try {
+        reg.register({ kind:"outbound", type:"vgate_a", sing_box_type:"x",
+          fields:[ { name:"f", type:"string", tab:"basic", json_key:"f" } ],
+          groups:[ { json_key:"ech", min_version:"1.13",
+                     fields:[ { name:"g", json_key:"config" } ] } ] });
+      } catch (e) { threw = true; }
+      print(threw ? "REJECTED" : "ACCEPTED");
+    `;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("REJECTED");
+  });
+
+  it("min_version on a CONST entry (nested in a group) is rejected", async () => {
+    const src = `
+      let reg = require("builder.protocols.registry");
+      let threw = false;
+      try {
+        reg.register({ kind:"outbound", type:"vgate_b", sing_box_type:"x",
+          fields:[ { name:"f", type:"string", tab:"basic", json_key:"f" } ],
+          groups:[ { json_key:"ech", fields:[
+                     { json_key:"enabled", const:true, min_version:"1.13" } ] } ] });
+      } catch (e) { threw = true; }
+      print(threw ? "REJECTED" : "ACCEPTED");
+    `;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("REJECTED");
+  });
+
+  it("min_version on a SCALAR group field is accepted (that one _filler honours)", async () => {
+    const src = `
+      let reg = require("builder.protocols.registry");
+      let threw = "";
+      try {
+        reg.register({ kind:"outbound", type:"vgate_c", sing_box_type:"x",
+          fields:[ { name:"f", type:"string", tab:"basic", json_key:"f" } ],
+          groups:[ { json_key:"ech", fields:[
+                     { name:"g", json_key:"config", min_version:"1.13" } ] } ] });
+      } catch (e) { threw = "" + e; }
+      print(length(threw) ? threw : "ACCEPTED");
+    `;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("ACCEPTED");
+  });
+
+  it("a SHARED block's emit_spec is validated too (min_version on its group)", async () => {
+    // The trap the assertion exists for lives in a shared block (tls.uc's `ech`
+    // group), and nothing validated emit_spec at all before. Shadow multiplex.uc
+    // with a spec that puts min_version on a group entry: register() must throw.
+    const dir = `/tmp/vgate-${process.pid}`;
+    const spec = [
+      "return {",
+      '  applies_to: { kinds: ["outbound"] },',
+      '  fields: [ { name: "mux_enabled", type: "bool", tab: "mux" } ],',
+      "  emit_spec: { seq: [",
+      '    { json_key: "brutal", min_version: "1.13",',
+      '      fields: [ { name: "mux_enabled", json_key: "enabled", coerce: "bool" } ] },',
+      "  ] },",
+      "};",
+    ].join("\n");
+    const drv = [
+      'let reg = require("builder.protocols.registry");',
+      "let threw = false;",
+      "try {",
+      '  reg.register({ kind:"outbound", type:"vgate_d", sing_box_type:"x",',
+      "    shared:{ multiplex:{} },",
+      '    fields:[ { name:"f", type:"string", tab:"basic", json_key:"f" } ] });',
+      "} catch (e) { threw = true; }",
+      'print(threw ? "REJECTED" : "ACCEPTED");',
+    ].join("\n");
+    await exec(`rm -rf ${dir} && mkdir -p ${dir}/builder/_shared`);
+    await putFile(spec, `${dir}/builder/_shared/multiplex.uc`);
+    await putFile(drv, `${dir}/drv.uc`);
+    // First -L wins: the fake multiplex shadows the real one, everything else
+    // resolves against the production lib.
+    const r = await exec(
+      `cd ${WORK} && ucode -L ${dir} -L ${LIB} ${dir}/drv.uc; rc=$?; rm -rf ${dir}; exit $rc`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("REJECTED");
+  });
+
   it("BLD-8: non-scalar default_when_empty is rejected", async () => {
     const src = `
       let reg = require("builder.protocols.registry");

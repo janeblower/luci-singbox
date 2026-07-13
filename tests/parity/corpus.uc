@@ -105,7 +105,7 @@ return [
     // _filler._version_gate_seq. They're set here anyway so the golden proves
     // the "blocked below min_version" half of that gate; the other half (the
     // fields DO emit once the core supports them) is pinned explicitly in
-    // tests/backend/test_listen_shared_version_gate.test.ts.
+    // tests/backend/test_shared_version_gate.test.ts.
     { name: "mixed_in_listen_shared", kind: "inbound", type: "mixed",
       section: { ".name": "mx_ls", protocol: "mixed", listen: "127.0.0.1", listen_port: "1080",
                  tcp_fast_open: "1", tcp_multi_path: "1", udp_fragment: "1",

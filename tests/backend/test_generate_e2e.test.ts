@@ -54,6 +54,36 @@ config inbound 'mixed_in'
 \toption enabled '1'
 \toption protocol 'mixed'
 \toption listen_port '1080'
+\toption tcp_fast_open '1'
+\toption bind_interface 'eth0'
+\toption routing_mark '1234'
+\toption reuse_addr '1'
+\toption netns '/var/run/netns/x'
+\toption tcp_keep_alive '5m'
+\toption tcp_keep_alive_interval '75s'
+\toption disable_tcp_keep_alive '1'
+
+config outbound 'tuic_out'
+\toption enabled '1'
+\toption type 'tuic'
+\toption server 'tuic.example.com'
+\toption server_port '443'
+\toption server_uuid 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
+\toption server_password 'pw'
+\toption tls_server_name 'tuic.example.com'
+\toption quic_initial_packet_size '1200'
+\toption quic_disable_path_mtu_discovery '1'
+
+config outbound 'trojan_out'
+\toption enabled '1'
+\toption type 'trojan'
+\toption server 'trojan.example.com'
+\toption server_port '443'
+\toption server_password 'pw'
+\toption tls_enabled '1'
+\toption tls_server_name 'trojan.example.com'
+\toption tls_kernel_tx '1'
+\toption tls_kernel_rx '1'
 
 config outbound 'my_vless'
 \toption enabled '1'
@@ -143,20 +173,67 @@ config clash_api 'clash_api'
       expect(
         await jpath('type(d.experimental.cache_file)=="object"', tmpF),
       ).toBe("true");
+
+      // The version gate ADAPTED to the core that is really installed here (no
+      // SINGBOX_CORE_VERSION pin on the generate.uc run above) — assert what it
+      // decided, keyed to that core, so "the gate dropped everything" cannot pass
+      // as "the core accepted everything". `sing-box check` below then rules on it.
+      const mx =
+        '(function(){for(let i in d.inbounds)if(i.tag=="mixed_in")return i;return {};})()';
+      const core = (await exec("sing-box version 2>/dev/null | head -1"))
+        .stdout;
+      const v = core.match(/version (\d+)\.(\d+)/);
+      console.log(`[e2e] core under test: ${core.trim() || "not detected"}`);
+      // No core, no gate: helpers.core_at_least() is fail-open, so an undetectable
+      // version emits everything. Mirror that here rather than assume 1.12.
+      const atLeast = (want: number) =>
+        !v || Number(v[1]) > 1 || Number(v[2]) >= want;
+      // 1.12 set: bind_interface / routing_mark / reuse_addr / netns.
+      expect(await jpath(`${mx}.bind_interface`, tmpF)).toBe(
+        atLeast(12) ? "eth0" : "<<UNDEF>>",
+      );
+      expect(await jpath(`${mx}.routing_mark`, tmpF)).toBe(
+        atLeast(12) ? "1234" : "<<UNDEF>>",
+      );
+      // 1.13 set: the keep-alive trio. Stock OpenWrt still ships 1.12 -> gated off.
+      expect(await jpath(`${mx}.tcp_keep_alive`, tmpF)).toBe(
+        atLeast(13) ? "5m" : "<<UNDEF>>",
+      );
+      // 1.14: quic. No released core has it yet -> absent everywhere today.
+      const tu =
+        '(function(){for(let o in d.outbounds)if(o.tag=="tuic_out")return o;return {};})()';
+      expect(await jpath(`${tu}.initial_packet_size`, tmpF)).toBe(
+        atLeast(14) ? "1200" : "<<UNDEF>>",
+      );
     } finally {
       await exec(`rm -f ${tmpF}`);
     }
 
-    // sing-box check
+    // sing-box check — the one lane that hands a GENERATED config to a REAL core.
+    //
+    // The seed above deliberately sets every version-gated key the builder ships:
+    // the listen 1.12 set (bind_interface / routing_mark / reuse_addr / netns), the
+    // listen 1.13 keep-alive trio, quic's 1.14 pair and kTLS's 1.13 pair. The
+    // invariant is core-agnostic: whatever core is installed, what we generate must
+    // be accepted by it. On the guest's stock 1.12 the gate has to strip the 1.13/
+    // 1.14 keys (an unknown key is not ignored — sing-box refuses the WHOLE config
+    // and the daemon never starts), and the 1.12-labelled keys have to be ones a
+    // real 1.12 actually knows. Parity builds JSON and never runs the core, so a
+    // wrong min_version label can only be caught here.
     const sbAvail = await exec(
       "command -v sing-box >/dev/null 2>&1 && echo YES || echo NO",
     );
     if (sbAvail.stdout.trim() === "YES") {
       const cfgF = `/tmp/e2e_sbcheck_${process.pid}.json`;
       await putFile(r.stdout, cfgF);
+      const ver = await exec("sing-box version 2>&1 | head -1");
       const sbR = await exec(`sing-box check -c ${cfgF} 2>&1`);
       await exec(`rm -f ${cfgF}`);
-      expect(sbR.exitCode).toBe(0);
+      if (sbR.exitCode !== 0) {
+        throw new Error(
+          `sing-box check rejected the generated config (${ver.stdout.trim()}):\n${sbR.stdout}`,
+        );
+      }
     }
   });
 });
