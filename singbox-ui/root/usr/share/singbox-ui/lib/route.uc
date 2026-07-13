@@ -169,13 +169,12 @@ function build_route_rules(cur, valid_ob) {
             // out as a trailing matcher-less rule, which in sing-box matches all
             // traffic and therefore lands in the same place a `final` would.
             //
-            // bypass is a no-op at the kernel level unless the connection came from
-            // auto_redirect (a TUN feature this package has no inbound for). In every
-            // other context sing-box treats it as `route` when an outbound is set and
-            // SKIPS the rule when it is not — so an empty outbound here means traffic
-            // falls through to `final`, which a bypass default does not set. That is
-            // the documented behaviour, not a bug, but it is worth a warn: the user
-            // asked for a default route and would silently get none.
+            // With an outbound set, sing-box treats bypass exactly as `route` for
+            // every connection that did not come from auto_redirect — and it lets
+            // the kernel take the short path for the ones that did. That is the
+            // point of shipping it as the default. WITHOUT an outbound, though, the
+            // rule is SKIPPED outside auto-redirect, so the user would be left with
+            // no default route at all: warn rather than let that pass quietly.
             let ob = rd.outbound ?? "";
             if (length(ob) && !ob_ok(ob)) {
                 warn(sprintf("route.uc: route_default outbound '%s' is not a defined outbound; emitting bypass with no outbound\n", ob));
@@ -183,7 +182,21 @@ function build_route_rules(cur, valid_ob) {
             }
             if (!length(ob))
                 warn("route.uc: route_default action=bypass with no outbound; sing-box skips this rule outside auto-redirect, leaving no default route\n");
-            push(rules, { action: "bypass", outbound: ob });
+
+            // bypass landed in sing-box 1.13, and 1.12 does not ignore an unknown
+            // action — it refuses the whole config, so the service never starts. The
+            // seed config ships action=bypass, which would brick a fresh install on
+            // an older core. Degrade to `route`, which is what bypass does here
+            // anyway once auto_redirect is off the table. Fail-open: an unknown core
+            // version gates nothing.
+            if (!helpers.core_at_least("1.13")) {
+                warn(sprintf("route.uc: route_default action=bypass needs sing-box 1.13+ (running %s); emitting action=route instead\n",
+                             helpers.core_version()));
+                if (length(ob)) final = ob;
+                else warn("route.uc: …and there is no outbound to fall back to, so no default route is set\n");
+            } else {
+                push(rules, { action: "bypass", outbound: ob });
+            }
         }
     }
 

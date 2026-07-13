@@ -49,8 +49,14 @@ config route_rule 'defaults_direct'
 	option action 'route'
 	option outbound 'wan'
 
+# bypass (sing-box 1.13+) with an outbound behaves exactly like `route` for every
+# connection that did not come from auto_redirect, and lets the kernel take the
+# short path for the ones that did — sing-box picks whichever is better. On a core
+# older than 1.13 the action is fatal (the config is refused outright, not
+# ignored), so route.uc degrades it to `route` rather than let a fresh install
+# come up with no service.
 config route_default 'route_default'
-	option action 'route'
+	option action 'bypass'
 	option outbound 'wan'
 
 config inbound 'dns_in'

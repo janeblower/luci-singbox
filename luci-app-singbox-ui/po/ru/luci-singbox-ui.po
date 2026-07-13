@@ -104,7 +104,8 @@ msgstr ""
 #: htdocs/luci-static/resources/view/singbox-ui/lib/json_editor.js:141
 #, javascript-format
 msgid "Applied to \"%s\". Press \"Save & Apply\" to commit."
-msgstr "Применено к «%s». Нажмите «Сохранить и применить», чтобы зафиксировать."
+msgstr ""
+"Применено к «%s». Нажмите «Сохранить и применить», чтобы зафиксировать."
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/json_editor.js:182
 msgid "Apply"
@@ -152,13 +153,17 @@ msgstr "Bypass (в обход)"
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:144
 msgid ""
-"Bypass leaves the connection to the kernel — but only for auto-redirect "
-"(TUN) traffic, which this package does not use. With an outbound set it "
-"behaves exactly like Route; without one the rule is skipped."
+"Bypass hands auto-redirect connections back to the kernel and routes "
+"everything else through the outbound below — sing-box picks whichever is "
+"better per connection. Leave the outbound set: without one, non-auto-"
+"redirect traffic is skipped and you are left with no default route. Needs "
+"sing-box 1.13+; on an older core it is emitted as Route."
 msgstr ""
-"Bypass отдаёт соединение ядру — но только для трафика из auto-redirect "
-"(TUN), которого в этом пакете нет. Если outbound задан, ведёт себя ровно как "
-"Route; если не задан — правило пропускается."
+"Bypass отдаёт соединения из auto-redirect обратно ядру, а всё остальное "
+"направляет через выбранный ниже outbound — sing-box сам решает, что лучше для "
+"каждого соединения. Outbound оставьте заданным: без него трафик не из "
+"auto-redirect пропускается, и дефолтного маршрута не остаётся. Требуется "
+"sing-box 1.13+; на более старом ядре эмитится как Route."
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:27
 msgid "Cache file"
@@ -1454,6 +1459,15 @@ msgstr "В vmess-ссылке отсутствует server/port/uuid"
 
 #~ msgid "Browser (Chrome)"
 #~ msgstr "Браузер (Chrome)"
+
+#~ msgid ""
+#~ "Bypass leaves the connection to the kernel — but only for auto-redirect "
+#~ "(TUN) traffic, which this package does not use. With an outbound set it "
+#~ "behaves exactly like Route; without one the rule is skipped."
+#~ msgstr ""
+#~ "Bypass отдаёт соединение ядру — но только для трафика из auto-redirect "
+#~ "(TUN), которого в этом пакете нет. Если outbound задан, ведёт себя ровно "
+#~ "как Route; если не задан — правило пропускается."
 
 #~ msgid "Certificate path"
 #~ msgstr "Путь к сертификату"

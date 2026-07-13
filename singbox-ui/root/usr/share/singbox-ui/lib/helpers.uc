@@ -124,6 +124,53 @@ function is_stale(path, interval_s, force) {
 	return (time() - st.mtime) >= interval_s;
 }
 
+// core_version() — the running sing-box's "X.Y.Z", or "" when it cannot be
+// determined. Probed once per process: the builders run in one pass, and forking
+// `sing-box version` for every rule would be absurd.
+//
+// This is the ONLY place the generator shells out. It exists because some config
+// keys are fatal on an older core rather than merely ignored (route action=bypass
+// is 1.13+, and 1.12 refuses to load the whole config), so the generator has to
+// be able to degrade instead of writing something that bricks the service. The
+// probe is fail-open: an unknown version gates nothing.
+//
+// Env overrides: SINGBOX_CORE_VERSION pins it outright (tests); SINGBOX_BIN
+// mirrors init.d / rpcd so a non-PATH install still reports a real version.
+let _core_version = null;
+function core_version() {
+	if (_core_version != null) return _core_version;
+	_core_version = getenv("SINGBOX_CORE_VERSION") ?? "";
+	if (length(_core_version)) return _core_version;
+
+	let bin = getenv("SINGBOX_BIN") ?? "/usr/bin/sing-box";
+	try {
+		let p = fs.popen(sq(bin) + " version 2>/dev/null", "r");
+		if (p) {
+			let out = p.read("all") ?? "";
+			p.close();
+			let m = match(out, /version ([0-9]+\.[0-9]+\.[0-9]+)/);
+			if (m) _core_version = m[1];
+		}
+	} catch (_) { /* no binary, no version — fail open */ }
+	return _core_version;
+}
+
+// core_at_least(want) — "1.13" style comparison against core_version().
+// TRUE when the version is unknown: never gate on a probe that failed.
+function core_at_least(want) {
+	let have = core_version();
+	if (!length(have) || !length(want)) return true;
+	let a = split(have, "."), b = split(want, ".");
+	for (let i = 0; i < 3; i++) {
+		let x = +(a[i] ?? "0"), y = +(b[i] ?? "0");
+		if (x != x) x = 0;
+		if (y != y) y = 0;
+		if (x > y) return true;
+		if (x < y) return false;
+	}
+	return true;
+}
+
 // builtin_rulesets_on(cur) — the `singbox-ui.main.default_rulesets` master
 // switch. Unset means ON (NO-migration: an install that predates the option must
 // not silently lose its rule-sets); only an explicit "0" turns them off.
@@ -156,6 +203,8 @@ return {
 	b64_decode,
 	unlink_quiet,
 	is_stale,
+	core_version,
+	core_at_least,
 	builtin_rulesets_on,
 	ruleset_active,
 };

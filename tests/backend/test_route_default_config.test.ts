@@ -44,8 +44,14 @@ describe("route default config guard (shipped singbox-ui config)", () => {
       ok = ok && (found != null);
       ok = ok && (found != null && type(found.rule_set) === "array" && length(found.rule_set) === 2);
 
-      // route_default -> final wan.
-      ok = ok && (r.final === "wan");
+      // route_default ships action=bypass -> a TRAILING matcher-less rule carrying
+      // the outbound, NOT a final. (final is only a tag; it cannot carry an
+      // action.) The guest has no sing-box binary, so helpers.core_at_least()
+      // fails open and bypass survives — the degrade-to-route path on an old core
+      // is covered by test_route_default_bypass.
+      let last = r.rules[length(r.rules) - 1];
+      ok = ok && (last != null && last.action === "bypass" && last.outbound === "wan");
+      ok = ok && (r.final == null);
 
       // referenced must include both shipped rulesets; build_rule_sets must emit them.
       let refset = {}; for (let n in r.referenced) refset[n] = true;
@@ -56,7 +62,13 @@ describe("route default config guard (shipped singbox-ui config)", () => {
 
       print(ok ? "OK\\n" : sprintf("FAILED rules=%J final=%J referenced=%J\\n", r.rules, r.final, r.referenced));
     `;
-    const r = await runUcode(src);
+    // Pin the core version: the guest installs sing-box from the stock OpenWrt apk
+    // feed, which is still 1.12, and route.uc would then degrade the shipped
+    // action=bypass to action=route. That degrade is deliberate (1.12 REFUSES a
+    // config with an unknown action, so a fresh install would come up dead) and is
+    // covered by test_route_default_bypass. Here we want the shipped config's own
+    // shape, so we ask for a core that supports it.
+    const r = await runUcode(src, [], [], { SINGBOX_CORE_VERSION: "1.13.0" });
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("OK");
   });

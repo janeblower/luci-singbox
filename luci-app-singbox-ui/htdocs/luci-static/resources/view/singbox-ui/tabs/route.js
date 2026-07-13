@@ -141,7 +141,7 @@ function buildRouteDefaultMap() {
 	o.value('bypass', _('Bypass'));
 	o.value('reject', _('Reject'));
 	o.default = 'route';
-	o.description = _('Bypass leaves the connection to the kernel — but only for auto-redirect (TUN) traffic, which this package does not use. With an outbound set it behaves exactly like Route; without one the rule is skipped.');
+	o.description = _('Bypass hands auto-redirect connections back to the kernel and routes everything else through the outbound below — sing-box picks whichever is better per connection. Leave the outbound set: without one, non-auto-redirect traffic is skipped and you are left with no default route. Needs sing-box 1.13+; on an older core it is emitted as Route.');
 	// bypass landed in sing-box 1.13. applyVersionGate takes any {value: {min_version}}
 	// map, so the route_default selector gets the same "(requires 1.13+)" disable +
 	// validate rejection the descriptor-driven selectors get — an older core would

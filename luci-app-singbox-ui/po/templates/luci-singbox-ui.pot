@@ -150,9 +150,11 @@ msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/route.js:144
 msgid ""
-"Bypass leaves the connection to the kernel — but only for auto-redirect "
-"(TUN) traffic, which this package does not use. With an outbound set it "
-"behaves exactly like Route; without one the rule is skipped."
+"Bypass hands auto-redirect connections back to the kernel and routes "
+"everything else through the outbound below — sing-box picks whichever is "
+"better per connection. Leave the outbound set: without one, non-auto-"
+"redirect traffic is skipped and you are left with no default route. Needs "
+"sing-box 1.13+; on an older core it is emitted as Route."
 msgstr ""
 
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/general.js:27

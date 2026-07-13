@@ -40,14 +40,26 @@ interface Cfg {
   };
 }
 
+// The guest installs sing-box from the stock OpenWrt apk feed, which is still
+// 1.12 — so route.uc would degrade every bypass here unless the version is
+// pinned. `core` pins helpers.core_version() outright; `core: null` points the
+// probe at a binary that does not exist, which is the only way to force the
+// "version unknown" case.
+const DEFAULT_CORE = "1.13.0";
+
 async function generate(
   routeDefault: string,
   extra = "",
+  core: string | null = DEFAULT_CORE,
 ): Promise<{ cfg: Cfg; err: string }> {
   await exec(`mkdir -p ${SANDBOX}`);
   await putFile(`${OUTBOUNDS}\n${extra}\n${routeDefault}`, `${TMP}/singbox-ui`);
+  const coreEnv =
+    core === null
+      ? "SINGBOX_BIN=/nonexistent/sing-box "
+      : `SINGBOX_CORE_VERSION=${core} `;
   const r = await exec(
-    `cd ${WORK} && UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${SANDBOX} ` +
+    `cd ${WORK} && ${coreEnv}UCI_CONFIG_DIR=${TMP} SINGBOX_TMPDIR=${SANDBOX} ` +
       `SINGBOX_CONFIG=${OUT} ucode -L ${LIB} ${GENERATE_UC} 2>${TMP}/err`,
   );
   expect(r.exitCode).toBe(0);
@@ -55,6 +67,11 @@ async function generate(
   const err = await exec(`cat ${TMP}/err`);
   return { cfg: JSON.parse(body.stdout) as Cfg, err: err.stdout };
 }
+
+const BYPASS_WAN = `config route_default 'route_default'
+\toption action 'bypass'
+\toption outbound 'wan'
+`;
 
 function tags(cfg: Cfg): string[] {
   return cfg.outbounds.map((o) => o.tag);
@@ -145,6 +162,35 @@ describe("route_default bypass + builtin wan outbound", () => {
     expect(err).toContain("leaving no default route");
     // Nothing references wan any more, so it is pruned here too.
     expect(tags(cfg)).not.toContain("wan");
+  });
+
+  // The seed config ships action=bypass. sing-box 1.12 does not IGNORE an unknown
+  // action — it refuses the whole config, so the service never starts. A fresh
+  // install on an older core would come up dead. route.uc degrades instead, which
+  // costs nothing: with an outbound set, bypass is what `route` does anyway for
+  // every connection that did not come from auto_redirect.
+  it("degrades bypass to route on a core older than 1.13", async () => {
+    const { cfg, err } = await generate(BYPASS_WAN, "", "1.12.9");
+
+    expect(cfg.route?.rules ?? []).toEqual([]);
+    expect(cfg.route?.final).toBe("wan");
+    expect(err).toContain("needs sing-box 1.13+");
+    expect(err).toContain("running 1.12.9");
+  });
+
+  it("keeps bypass on 1.13 and later", async () => {
+    for (const v of ["1.13.0", "1.14.2"]) {
+      const { cfg } = await generate(BYPASS_WAN, "", v);
+      expect(cfg.route?.rules).toEqual([{ action: "bypass", outbound: "wan" }]);
+      expect(cfg.route?.final).toBeUndefined();
+    }
+  });
+
+  it("fails open when the core version cannot be determined", async () => {
+    // Never gate on a probe that failed: a version we could not read must not
+    // silently downgrade what the user asked for.
+    const { cfg } = await generate(BYPASS_WAN, "", null);
+    expect(cfg.route?.rules).toEqual([{ action: "bypass", outbound: "wan" }]);
   });
 
   it("bypass to a nonexistent outbound degrades to the empty outbound", async () => {
