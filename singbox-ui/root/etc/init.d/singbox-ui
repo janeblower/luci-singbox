@@ -23,7 +23,7 @@ SINGBOX_BIN="${SINGBOX_BIN:-/usr/bin/sing-box}"
 # serialize with an atomic mkdir lock-DIRECTORY — busybox ash has no flock and
 # `>` is not exclusive, so mkdir is the atomic primitive (same approach as
 # nftables.uc's apply-lock). Re-entrant within ONE process via a depth counter
-# so reload_config can hold the lock across its nested stop+start. A stale
+# so reload_service can hold the lock across its nested stop+start. A stale
 # lock (holder crashed mid-cycle) is reclaimed after LC_LOCK_TTL so it can
 # never wedge boot/cron forever.
 LC_LOCK_DIR=/tmp/singbox-ui/.lifecycle.lock
@@ -204,7 +204,17 @@ stop_service() {
 	_lc_release
 }
 
-reload_config() {
+# MUST be named reload_service: that is the ONLY hook rc.common looks up on
+# `<init> reload`. With any other name (it used to be `reload_config`, which
+# procd/rc.common know nothing about) reload silently falls through to plain
+# `start` — and since our procd instance params never change (the command is
+# always `sing-box run -c /tmp/singbox-ui.json`), procd considers the running
+# instance up-to-date and does NOT restart it. Result: generate.uc rewrites the
+# config, but the daemon keeps serving the OLD one, so a freshly imported
+# subscription is in the config yet invisible in the dashboard (which reads the
+# live clash_api) until someone hits Restart by hand. Every reload path is
+# affected: both */15 cron jobs and subscription.uc's post-fetch reload.
+reload_service() {
 	# sing-box does not support signal-based config reload. Hold the
 	# lifecycle lock across the WHOLE stop+start (missed-1) so a concurrent
 	# reload/restart/boot cannot interleave its own stop+start in the gap.

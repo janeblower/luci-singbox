@@ -284,6 +284,25 @@ exit 0
     await installHappySingbox();
   });
 
+  it("reload hook is named reload_service (the only one rc.common calls) and does stop+start", async () => {
+    // Regression: the hook used to be called reload_config — a name neither
+    // rc.common nor procd knows. `<init> reload` then fell through to plain
+    // `start`, and procd, seeing unchanged instance params, left the daemon
+    // running the PREVIOUS config. The subscription landed in the config file
+    // but not in the live daemon (nor the dashboard, which reads clash_api).
+    const r = await exec(`
+      PATH="${TD}/bin:$PATH" sh -c "
+        . '${INIT}'
+        type reload_service >/dev/null 2>&1 || exit 3
+        stop()  { echo STOP;  }
+        start() { echo START; }
+        reload_service
+      "
+    `);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.replace(/\s+/g, " ").trim()).toBe("STOP START");
+  });
+
   it("missed-1(a): lifecycle lock is re-entrant (depth counter)", async () => {
     await exec("rm -rf /tmp/singbox-ui/.lifecycle.lock");
 
