@@ -37,7 +37,9 @@ test('Dial tab shows advanced fields immediately, no toggle (VLESS outbound)', a
     await wait(300);
 
     const fields = await visibleFieldsInActiveTab(page);
-    assert('Dial basic visible — Bind interface', fields.includes('Bind interface'), { fields });
+    // The label says "(netdev)" on purpose: sing-box hands this to SO_BINDTODEVICE,
+    // so it wants eth0 / pppoe-wan, not the OpenWrt logical name (wan/lan).
+    assert('Dial basic visible — Bind interface', fields.includes('Bind interface (netdev)'), { fields });
     assert('Dial advanced shown immediately — Routing mark', fields.includes('Routing mark (fwmark)'), { fields });
     assert('Dial advanced shown immediately — Connect timeout', fields.includes('Connect timeout'), { fields });
     assert('No advanced toggle present', !fields.includes('Show advanced fields'), { fields });
