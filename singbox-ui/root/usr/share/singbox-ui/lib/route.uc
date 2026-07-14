@@ -23,11 +23,16 @@ function build_route_rules(cur, valid_ob) {
     let seen = {};
     function ob_ok(tag) { return !valid_ob || valid_ob[tag]; }
 
-    // hijack-dns from tproxy inbounds (must precede user rules).
+    // hijack-dns from a transparent inbound (must precede user rules). Both
+    // tproxy and tun carry a `hijack_dns` field: the mechanism that gets the
+    // query here differs (our nft rules vs the tunnel itself), but the route
+    // action it asks for is the same one — so it is decided in the one place
+    // both protocols meet, not branched per protocol.
     let hijack = false;
     cur.foreach("singbox-ui", "inbound", function(s) {
         if (s.enabled === "0") return;
-        if (s.protocol === "tproxy" && s.hijack_dns === "1") hijack = true;
+        if (s.protocol !== "tproxy" && s.protocol !== "tun") return;
+        if (s.hijack_dns === "1") hijack = true;
     });
     if (hijack) push(rules, { protocol: "dns", action: "hijack-dns" });
 

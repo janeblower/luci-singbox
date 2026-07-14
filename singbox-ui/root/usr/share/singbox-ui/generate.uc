@@ -127,6 +127,13 @@ let ref_seen = {};
 for (let n in referenced) ref_seen[n] = true;
 for (let n in dns_mod.referenced_rulesets(uci))
 	if (!ref_seen[n]) { push(referenced, n); ref_seen[n] = true; }
+// Third source: a tun inbound's route_address_set / route_exclude_address_set.
+// sing-box resolves those tags itself and refuses the whole config on a dangling
+// one, exactly as it does for a dns-only reference. Fed the BUILT inbounds (not
+// the cursor) so the set defined here cannot drift from the set actually emitted
+// — see inbound.uc referenced_rulesets().
+for (let n in inbound_mod.referenced_rulesets(in_block))
+	if (!ref_seen[n]) { push(referenced, n); ref_seen[n] = true; }
 // An enabled inline rule-set that nothing references is dead config: it is not
 // emitted (build_rule_sets only builds referenced sets), yet route.uc still
 // suppresses its member default rules from top-level emission. Warn so the
