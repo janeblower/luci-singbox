@@ -159,7 +159,9 @@ function loadCommon(): Record<string, any> {
     console,
   };
   vm.createContext(sandbox);
-  vm.runInContext(`(function() {${src}})();`, sandbox, { filename: "common.js" });
+  vm.runInContext(`(function() {${src}})();`, sandbox, {
+    filename: "common.js",
+  });
   return sandbox.__moduleExports as Record<string, any>;
 }
 
