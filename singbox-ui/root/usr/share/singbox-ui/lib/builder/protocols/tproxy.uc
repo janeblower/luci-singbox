@@ -23,10 +23,19 @@ reg.register({
           ui_label: "Interfaces to redirect (nftables)", dynamic: "devices" },
         { name: "nft_rules", type: "bool", tab: "basic",
           ui_label: "Install nftables redirect rules", default: 1,
-          // Exclusive: only one enabled tproxy inbound may own the transparent
-          // table (single mark, single ip rule). descriptor_form forces the
-          // flag off + readonly on any further section and names the owner.
-          exclusive: true },
+          // Exclusive group "transparent" = system routing / the firewall, which
+          // has exactly ONE owner. This flag claims it with our own `inet
+          // singbox_ui` table + an ip rule; tun.auto_route claims the same thing
+          // by other means (sing-box's own policy routing). descriptor_form
+          // disables the loser's checkbox and names the owner; generate.uc
+          // refuses to build (rc 3) if UCI is edited behind the UI's back.
+          //
+          // The group SUPERSEDES the old `exclusive: true`: makeExclusive scans
+          // every enabled inbound and asks that protocol's claim field, so a
+          // second tproxy inbound still claims via nft_rules and is still barred
+          // (one mark, one ip rule) — the same-protocol guarantee is a subset of
+          // the group's. Polarity: default 1 + no json_key ⇒ UNSET MEANS ON.
+          exclusive: "transparent" },
         { name: "fwmark", type: "string", tab: "basic",
           ui_label: "Firewall mark (fwmark)", default: "0x40000000",
           // UI/UCI-only (no json_key) — consumed by nftables.uc. Shown only

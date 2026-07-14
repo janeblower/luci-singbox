@@ -272,23 +272,35 @@ describe("protocol_schema RPC", () => {
     expect(r.stdout.trim()).toBe("OK");
   });
 
-  it("11. tproxy.nft_rules has exclusive:true", async () => {
+  // The frontend's cross-protocol exclusion is driven ENTIRELY by these two
+  // schema entries (descriptor_form reads the group + the polarity-defining
+  // `default` off the schema, not off a hardcoded pair). If FIELD_WHITELIST ever
+  // drops `exclusive` or `default`, or the string value gets coerced, the two
+  // checkboxes silently stop excluding each other — hence: both, over the RPC.
+  it("11. tproxy.nft_rules and tun.auto_route share exclusive group 'transparent', with their defaults intact", async () => {
     if (!rawResponse) rawResponse = await callSchema();
-    // mat.fields is a flat array; look for "nft_rules" in entry.fields directly
+    // mat.fields is a flat array; look for the field in entry.fields directly
     const r = await runUcode(`
       let j;
       try { j = json(${JSON.stringify(rawResponse)}); } catch(_) { print("FAIL_PARSE\\n"); exit(0); }
       let schema = j && j.schema;
-      let tproxy = schema && schema.inbound && schema.inbound.tproxy;
-      if (tproxy == null) { print("FAIL_NO_TPROXY"); exit(0); }
-      let nft_field = null;
-      if (type(tproxy.fields) === "array") {
-        for (let f in tproxy.fields) {
-          if (f.name === "nft_rules") { nft_field = f; break; }
-        }
+      function fld(proto, name) {
+        let p = schema && schema.inbound && schema.inbound[proto];
+        if (p == null || type(p.fields) !== "array") return null;
+        for (let f in p.fields) if (f.name === name) return f;
+        return null;
       }
-      if (nft_field == null) { print("FAIL_NO_NFT_RULES"); exit(0); }
-      print(nft_field.exclusive === true ? "OK" : sprintf("FAIL_exclusive:%J", nft_field.exclusive));
+      let nft  = fld("tproxy", "nft_rules");
+      let auto = fld("tun", "auto_route");
+      if (nft  == null) { print("FAIL_NO_NFT_RULES");  exit(0); }
+      if (auto == null) { print("FAIL_NO_AUTO_ROUTE"); exit(0); }
+      if (nft.exclusive  !== "transparent") { print(sprintf("FAIL_nft_exclusive:%J",  nft.exclusive));  exit(0); }
+      if (auto.exclusive !== "transparent") { print(sprintf("FAIL_auto_exclusive:%J", auto.exclusive)); exit(0); }
+      // Polarity: unset means whatever the default says. Flip either and the UI
+      // resolves ownership backwards.
+      if (nft.default  != 1) { print(sprintf("FAIL_nft_default:%J",  nft.default));  exit(0); }
+      if (auto.default != 0) { print(sprintf("FAIL_auto_default:%J", auto.default)); exit(0); }
+      print("OK");
     `);
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("OK");

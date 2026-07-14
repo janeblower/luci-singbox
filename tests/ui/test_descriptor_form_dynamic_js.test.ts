@@ -74,9 +74,43 @@ const uci: any = {
   },
 };
 
+// The real protocol schema for the two fields that claim the "transparent"
+// group. Their `default`s are the load-bearing part: descriptor_form resolves an
+// UNSET flag against its own descriptor default, so nft_rules (default 1, no
+// json_key) is ON when unset and auto_route (default 0 — commit 61534499, LuCI's
+// parse() deletes an option equal to its default) is OFF when unset.
+const INBOUND_SCHEMA = {
+  tproxy: {
+    fields: [
+      {
+        name: "nft_rules",
+        type: "bool",
+        tab: "basic",
+        default: 1,
+        exclusive: "transparent",
+      },
+    ],
+  },
+  tun: {
+    fields: [
+      {
+        name: "auto_route",
+        type: "bool",
+        tab: "basic",
+        default: 0,
+        exclusive: "transparent",
+      },
+    ],
+  },
+};
+
 const SbViewState: any = {
   _ver: "",
   _compatOnly: false,
+  _schema: {} as Record<string, unknown>,
+  getSchema() {
+    return SbViewState._schema;
+  },
   getCoreVersion() {
     return SbViewState._ver;
   },
@@ -109,6 +143,23 @@ const network = {
   },
 };
 
+// ui.addNotification recorder — warnExclusiveConflicts() is what main.js calls
+// at Apply time, and its return value is what holds the apply back.
+const notifications = {
+  _calls: [] as Array<{ msg: any; level: string }>,
+  addNotification(_title: unknown, msg: unknown, level: string) {
+    notifications._calls.push({ msg, level });
+  },
+};
+
+// LuCI ships String.prototype.format; node does not, and descriptor_form uses it
+// for the conflict message. The vm context is its own realm with its own String
+// intrinsic, so the polyfill has to be evaluated INSIDE it. Minimal %s only.
+const FORMAT_POLYFILL = `String.prototype.format = function () {
+    var args = arguments, i = 0;
+    return this.replace(/%s/g, function () { return String(args[i++]); });
+};`;
+
 function loadDescriptorForm() {
   const src = readFileSync(DESCRIPTOR_FORM_JS, "utf8");
   const body = src
@@ -122,8 +173,11 @@ function loadDescriptorForm() {
     __moduleExports: null,
     _: (s: unknown) => s,
     L: { Class: { extend: (o: unknown) => o } },
+    // LuCI ships String.prototype.format; node does not. Only the substitution
+    // matters here, not LuCI's full format vocabulary.
+    E: (_tag: string, _attrs: unknown, children: unknown) => ({ children }),
     form,
-    ui: {},
+    ui: notifications,
     validators,
     uci,
     network,
@@ -133,6 +187,7 @@ function loadDescriptorForm() {
     Promise,
   };
   vm.createContext(sandbox);
+  vm.runInContext(FORMAT_POLYFILL, sandbox);
   vm.runInContext(`(function() {${body}})();`, sandbox, {
     filename: "descriptor_form.js",
   });
@@ -462,7 +517,16 @@ describe("descriptor_form.js — dynamic selectors", () => {
     applyMaterialized(s, "inbound", "tproxy", {
       tabs: ["basic"],
       fields: [
-        { name: "nft_rules", type: "bool", tab: "basic", exclusive: true },
+        // default: 1 mirrors the real tproxy descriptor — and it is what makes
+        // an UNSET nft_rules count as ON (the polarity comes from the field's
+        // own default, not from a blanket rule).
+        {
+          name: "nft_rules",
+          type: "bool",
+          tab: "basic",
+          default: 1,
+          exclusive: true,
+        },
       ],
     });
     const o = findOpt(opts, "nft_rules");
@@ -511,12 +575,204 @@ describe("descriptor_form.js — dynamic selectors", () => {
       applyMaterialized(s, "inbound", "tproxy", {
         tabs: ["basic"],
         fields: [
-          { name: "nft_rules", type: "bool", tab: "basic", exclusive: true },
+          // default: 1 mirrors the real tproxy descriptor — and it is what makes
+          // an UNSET nft_rules count as ON (the polarity comes from the field's
+          // own default, not from a blanket rule).
+          {
+            name: "nft_rules",
+            type: "bool",
+            tab: "basic",
+            default: 1,
+            exclusive: true,
+          },
         ],
       });
       const oo = findOpt(opts, "nft_rules");
       expect(oo?._exclusiveOwner("tpB")).toBe("tpA");
       uci.sections = origSections;
+    });
+  });
+
+  // ------------------------------------------------------------------------
+  // 10. exclusive: "<group>" — cross-protocol ownership of system routing.
+  //
+  // tproxy.nft_rules and tun.auto_route claim the SAME thing (system routing /
+  // the firewall) under DIFFERENT names, and their polarity is OPPOSITE: unset
+  // nft_rules means ON (default 1), unset auto_route means OFF (default 0).
+  // A blanket `!== "0"` — what makeExclusive used to do for every field — lets a
+  // tun that routes NOTHING claim the group, disable tproxy's checkbox and leave
+  // the router with no interception at all. These cases fail if anyone reverts
+  // to it.
+  // ------------------------------------------------------------------------
+  describe("10. exclusive group: cross-protocol (transparent)", () => {
+    function withInbounds<T>(rows: any[], fn: (opts: any) => T): T {
+      const origSections = uci.sections;
+      SbViewState._schema = { inbound: INBOUND_SCHEMA };
+      uci.sections = (config: string, type: string) =>
+        config === "singbox-ui" && type === "inbound"
+          ? rows
+          : origSections(config, type);
+      try {
+        const { s, opts } = makeSection();
+        applyMaterialized(s, "inbound", "tproxy", {
+          tabs: ["basic"],
+          fields: INBOUND_SCHEMA.tproxy.fields,
+        });
+        applyMaterialized(s, "inbound", "tun", {
+          tabs: ["basic"],
+          fields: INBOUND_SCHEMA.tun.fields,
+        });
+        return fn(opts);
+      } finally {
+        uci.sections = origSections;
+        SbViewState._schema = {};
+      }
+    }
+
+    it("a tun with UNSET auto_route does NOT claim the group (default 0 = OFF)", () => {
+      // tun FIRST in UCI order: under a blanket `!== "0"` polarity it would win
+      // the scan and own system routing while routing nothing.
+      withInbounds(
+        [
+          { ".name": "tun_in", enabled: "1", protocol: "tun" },
+          { ".name": "tproxy_in", enabled: "1", protocol: "tproxy" },
+        ],
+        (opts) => {
+          const auto = findOpt(opts, "auto_route");
+          const nft = findOpt(opts, "nft_rules");
+          expect(auto._exclusiveOwner("tun_in")).toBe("tproxy_in");
+          expect(nft._exclusiveOwner("tproxy_in")).toBe("tproxy_in");
+          // and the tproxy owner keeps its flag
+          uci._setCalls = [];
+          nft.write("tproxy_in", "1");
+          expect(uci._setCalls[0]?.[2]).toBe("1");
+        },
+      );
+    });
+
+    it("an UNSET nft_rules DOES claim the group (default 1 = ON), across protocols", () => {
+      withInbounds(
+        [
+          { ".name": "tproxy_in", enabled: "1", protocol: "tproxy" },
+          { ".name": "tun_in", enabled: "1", protocol: "tun", auto_route: "1" },
+        ],
+        (opts) => {
+          const auto = findOpt(opts, "auto_route");
+          expect(auto._exclusiveOwner("tun_in")).toBe("tproxy_in");
+          uci._setCalls = [];
+          auto.write("tun_in", "1");
+          expect(uci._setCalls[0]?.[2]).toBe("0"); // loser forced off
+        },
+      );
+    });
+
+    it("tun owns it when tproxy's nft_rules is off", () => {
+      withInbounds(
+        [
+          {
+            ".name": "tproxy_in",
+            enabled: "1",
+            protocol: "tproxy",
+            nft_rules: "0",
+          },
+          { ".name": "tun_in", enabled: "1", protocol: "tun", auto_route: "1" },
+        ],
+        (opts) => {
+          const nft = findOpt(opts, "nft_rules");
+          expect(nft._exclusiveOwner("tproxy_in")).toBe("tun_in");
+          uci._setCalls = [];
+          nft.write("tproxy_in", "1");
+          expect(uci._setCalls[0]?.[2]).toBe("0");
+        },
+      );
+    });
+
+    it("a disabled section never claims", () => {
+      withInbounds(
+        [
+          { ".name": "tproxy_in", enabled: "0", protocol: "tproxy" },
+          { ".name": "tun_in", enabled: "1", protocol: "tun", auto_route: "1" },
+        ],
+        (opts) => {
+          const auto = findOpt(opts, "auto_route");
+          expect(auto._exclusiveOwner("tun_in")).toBe("tun_in");
+        },
+      );
+    });
+
+    it("exclusiveConflicts names both claimants and their fields", () => {
+      withInbounds(
+        [
+          {
+            ".name": "tproxy_in",
+            enabled: "1",
+            protocol: "tproxy",
+            nft_rules: "1",
+          },
+          { ".name": "tun_in", enabled: "1", protocol: "tun", auto_route: "1" },
+        ],
+        () => {
+          expect(DF.exclusiveConflicts("inbound")).toEqual([
+            {
+              group: "transparent",
+              claimants: [
+                { section: "tproxy_in", field: "nft_rules" },
+                { section: "tun_in", field: "auto_route" },
+              ],
+            },
+          ]);
+        },
+      );
+    });
+
+    it("warnExclusiveConflicts notifies and holds the apply back", () => {
+      withInbounds(
+        [
+          {
+            ".name": "tproxy_in",
+            enabled: "1",
+            protocol: "tproxy",
+            nft_rules: "1",
+          },
+          { ".name": "tun_in", enabled: "1", protocol: "tun", auto_route: "1" },
+        ],
+        () => {
+          notifications._calls = [];
+          expect(DF.warnExclusiveConflicts("inbound")).toBe(true);
+          expect(notifications._calls.length).toBe(1);
+          expect(notifications._calls[0].level).toBe("error");
+          // names BOTH inbounds and the field each claims with
+          const msg = String(notifications._calls[0].msg.children[0]);
+          expect(msg).toContain('"tproxy_in" (nft_rules)');
+          expect(msg).toContain('"tun_in" (auto_route)');
+        },
+      );
+    });
+
+    it("warnExclusiveConflicts stays quiet — and lets Apply run — with one claimant", () => {
+      withInbounds(
+        [
+          { ".name": "tproxy_in", enabled: "1", protocol: "tproxy" },
+          { ".name": "tun_in", enabled: "1", protocol: "tun" },
+        ],
+        () => {
+          notifications._calls = [];
+          expect(DF.warnExclusiveConflicts("inbound")).toBe(false);
+          expect(notifications._calls.length).toBe(0);
+        },
+      );
+    });
+
+    it("exclusiveConflicts is empty when only one section claims", () => {
+      withInbounds(
+        [
+          { ".name": "tproxy_in", enabled: "1", protocol: "tproxy" },
+          { ".name": "tun_in", enabled: "1", protocol: "tun" },
+        ],
+        () => {
+          expect(DF.exclusiveConflicts("inbound")).toEqual([]);
+        },
+      );
     });
   });
 });

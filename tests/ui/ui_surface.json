@@ -29,6 +29,8 @@
 
   { "id": "grid.builtin.locked",      "tab": "outbounds", "kind": "grid-op", "label": "Built-in row: Edit/Delete locked + tinted" },
 
+  { "id": "inbound.transparent.exclusive", "tab": "inbounds", "kind": "grid-op", "label": "Inbound: only one owner of system routing (tproxy.nft_rules vs tun.auto_route)" },
+
   { "id": "grid.route_rule.add",   "tab": "route", "kind": "grid-op", "label": "Route Rule: Add" },
   { "id": "grid.route_rule.edit",  "tab": "route", "kind": "grid-op", "label": "Route Rule: Edit" },
   { "id": "grid.route_rule.logical", "tab": "route", "kind": "grid-op", "label": "Route Rule: logical sub-rules" },

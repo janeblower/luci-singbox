@@ -330,34 +330,148 @@ function makeVirtual(opt) {
     };
 }
 
-// Exclusive bool flag: only one enabled section of the same protocol may have
-// this flag set. If another section already owns it, this section's flag is
-// forced off + disabled in the UI (with a comment naming the owner) and can
-// never persist "1". Generic — driven by the field's `exclusive` property.
-function makeExclusive(opt, fieldName, discrKey) {
-    function ownerOf(section_id) {
-        var proto = uci.get('singbox-ui', section_id, discrKey);
-        var first = null;
-        uci.sections('singbox-ui', 'inbound').forEach(function (s) {
-            if (first) return;
-            if (s.enabled === '0') return;
-            if (s[discrKey] !== proto) return;
-            // Treat unset (undefined/empty) as owner-qualifying — matches the
-            // backend's `nft_rules !== "0"` polarity in first_nft_tproxy /
-            // any_nft_transparent (descriptor default 1 is not written to UCI
-            // until the modal is saved for the first time).
-            if (s[fieldName] === '0') return;
-            first = s['.name'];
+// --- Exclusive flags: "exactly one section may own this" --------------------
+//
+// Two contracts:
+//   exclusive: true        legacy — only one enabled section OF THE SAME PROTOCOL
+//                          may set this flag (a second tproxy inbound must not
+//                          also own the nft table: one mark, one ip rule).
+//   exclusive: "<group>"   cross-protocol — only one enabled section may set ANY
+//                          field tagged with <group>, whatever its protocol and
+//                          whatever the field is NAMED. Group "transparent" is
+//                          system routing / the firewall: tproxy.nft_rules claims
+//                          it with our own `inet singbox_ui` table + an ip rule,
+//                          tun.auto_route claims it with sing-box's own policy
+//                          routing (and auto_redirect's own nft rules). Exactly
+//                          one may own it. Mirrors helpers.transparent_claims;
+//                          generate.uc refuses to build on a conflict (rc 3) —
+//                          this widget is convenience, not enforcement.
+//
+// THE POLARITY IS PER FIELD, and it is not a style choice. LuCI's
+// CBIAbstractValue.parse() REMOVES an option whose submitted value equals its
+// `default` (rmempty is true unless the field is `required`), so a flag that
+// defaults to ON is ABSENT from UCI while it is on. Hence the one rule that
+// covers both fields: an unset flag means whatever its descriptor `default`
+// says. That is `!== "0"` for tproxy.nft_rules (default 1, no json_key — nothing
+// emits it) and `=== "1"` for tun.auto_route (default 0 on purpose, commit
+// 61534499: only an explicit "1" survives parse() and gets emitted). Reading an
+// unset auto_route as ON would let a tun that routes NOTHING seize the group and
+// kill tproxy's nft rules — no interception at all, silently, and every test
+// green. Do not "simplify" this back to a blanket `!== "0"`.
+function claimOf(field) {
+    return {
+        name: field.name,
+        def:  String(field.default != null ? field.default : 0),
+    };
+}
+
+function flagIsOn(sec, claim) {
+    var v = sec[claim.name];
+    if (v == null || v === '') v = claim.def;   // unset ⇒ the descriptor's default
+    return String(v) !== '0';
+}
+
+function discrOf(kind) { return (kind === 'inbound') ? 'protocol' : 'type'; }
+
+// { <protocol>: claim } for one exclusive group, read straight off the schema
+// the forms are built from (SbViewState). The schema is loaded once, before any
+// section renders, so this map is complete regardless of the order in which the
+// per-protocol applyMaterialized() calls ran — and main.js can ask the same
+// question at Apply time without owning a section object.
+function claimsForGroup(kind, group) {
+    var protos = (SbViewState.getSchema() || {})[kind] || {};
+    var claims = {};
+    Object.keys(protos).forEach(function (proto) {
+        ((protos[proto] || {}).fields || []).forEach(function (f) {
+            if (f.exclusive === group) claims[proto] = claimOf(f);
         });
-        return first;
+    });
+    return claims;
+}
+
+// Enabled sections of `kind` that actually claim, in UCI order. `claims` is
+// keyed by protocol, so a protocol absent from it never claims.
+function claimants(kind, claims) {
+    var discr = discrOf(kind);
+    return uci.sections('singbox-ui', kind).filter(function (sec) {
+        if (sec.enabled === '0') return false;
+        var c = claims[sec[discr]];
+        return !!c && flagIsOn(sec, c);
+    });
+}
+
+// Groups of `kind` claimed by MORE THAN ONE enabled section. The form keeps this
+// unreachable (the loser's checkbox is dead), but UCI can be hand-edited, and
+// re-enabling a section from the grid can resurrect a rival claim without its
+// checkbox ever rendering. main.js blocks Apply on it and names the culprits —
+// otherwise generate.uc's refusal (rc 3) reaches the operator as a bare
+// "service restart failed", which tells them nothing.
+function exclusiveConflicts(kind) {
+    var protos = (SbViewState.getSchema() || {})[kind] || {};
+    var groups = {};
+    Object.keys(protos).forEach(function (p) {
+        ((protos[p] || {}).fields || []).forEach(function (f) {
+            if (typeof f.exclusive === 'string') groups[f.exclusive] = 1;
+        });
+    });
+    var discr = discrOf(kind);
+    return Object.keys(groups).map(function (g) {
+        var claims = claimsForGroup(kind, g);
+        return {
+            group: g,
+            claimants: claimants(kind, claims).map(function (sec) {
+                return { section: sec['.name'], field: claims[sec[discr]].name };
+            }),
+        };
+    }).filter(function (c) { return c.claimants.length > 1; });
+}
+
+// Notify the operator about every conflict, naming BOTH inbounds and the field
+// each one claims with — the fix is "turn one of them off", and neither the
+// init.d refusal nor LuCI's "service restart failed" says which two to look at.
+// Returns true when at least one conflict was found (main.js then holds Apply
+// back: the config would not build anyway, and the changes stay staged).
+function warnExclusiveConflicts(kind) {
+    var conflicts = exclusiveConflicts(kind);
+    conflicts.forEach(function (c) {
+        var who = c.claimants.map(function (x) {
+            return '"' + x.section + '" (' + x.field + ')';
+        }).join(', ');
+        // Array child ⇒ text node (section names are user-controlled).
+        ui.addNotification(null, E('p', {}, [
+            _('Not applied: inbounds %s both claim system routing / the firewall. Exactly one may own it — turn one of them off, then apply again.').format(who)
+        ]), 'error');
+    });
+    return conflicts.length > 0;
+}
+
+// The first claimant owns it; every other section's flag is forced off +
+// disabled in the UI (with a comment naming the owner) and can never persist "1".
+// A section never blocks itself.
+function makeExclusive(opt, field, kind) {
+    var group = (typeof field.exclusive === 'string') ? field.exclusive : null;
+    var discr = discrOf(kind);
+
+    function ownerOf(section_id) {
+        var claims;
+        if (group) {
+            claims = claimsForGroup(kind, group);
+        } else {
+            // Legacy contract: only sections of MY protocol claim, via MY field.
+            claims = {};
+            claims[uci.get('singbox-ui', section_id, discr)] = claimOf(field);
+        }
+        var first = claimants(kind, claims)[0];
+        return first ? first['.name'] : null;
     }
     opt._exclusiveOwner = ownerOf;  // exposed for unit tests
+
     var origWrite = opt.write;
     opt.write = function (section_id, value) {
         var first = ownerOf(section_id);
         if (first != null && first !== section_id) value = '0';
         if (typeof origWrite === 'function') return origWrite.call(this, section_id, value);
-        return uci.set('singbox-ui', section_id, fieldName, value);
+        return uci.set('singbox-ui', section_id, field.name, value);
     };
     var origRender = opt.renderWidget;
     if (typeof origRender === 'function') {
@@ -367,8 +481,14 @@ function makeExclusive(opt, fieldName, discrKey) {
             var node = origRender.call(this, section_id, option_index, owned ? '0' : cfgvalue);
             if (owned && node && node.querySelectorAll) {
                 node.querySelectorAll('input, select').forEach(function (el) { el.disabled = true; });
-                node.appendChild(E('div', { 'class': 'cbi-value-description' },
-                    _('nftables rules already active on inbound "%s"').format(first)));
+                // Array child ⇒ text node. A bare string child goes through
+                // innerHTML in LuCI's dom.append() (verified in the container's
+                // luci.js) and `first` is user-controlled.
+                node.appendChild(E('div', { 'class': 'cbi-value-description' }, [
+                    group
+                        ? _('System routing / the firewall is already owned by inbound "%s". Only one inbound may own it.').format(first)
+                        : _('nftables rules already active on inbound "%s"').format(first)
+                ]));
             }
             return node;
         };
@@ -493,7 +613,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
         }
 
         if (f.virtual) makeVirtual(opt);
-        if (f.exclusive) makeExclusive(opt, f.name, discr);
+        if (f.exclusive) makeExclusive(opt, f, kind);
         if (f.requires_pkg) attachPkgNote(opt, f.requires_pkg);
 
         attachValidator(opt, f.validate);
@@ -563,6 +683,8 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
 return L.Class.extend({
     applyMaterialized:      applyMaterialized,
     applyMaterializedNamed: applyMaterializedNamed,
+    exclusiveConflicts:     exclusiveConflicts,
+    warnExclusiveConflicts: warnExclusiveConflicts,
     tagField:               tagField,
     attachPkgNote:          attachPkgNote,
 });

@@ -19,6 +19,7 @@
 'require view.singbox-ui.widgets.action-bar as SbActionBar';
 'require view.singbox-ui.widgets.status-panel as SbStatusPanel';
 'require view.singbox-ui.lib.view_state as SbViewState';
+'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 'require view.singbox-ui.lib.plugins as SbPlugins';
 'require view.singbox-ui.tabs.plugins as SbTabPlugins';
 
@@ -207,6 +208,9 @@ return view.extend({
 
 	handleSaveApply: function (ev, mode) {
 		return this.handleSave(ev).then(function () {
+			// Two claimants of system routing (tproxy.nft_rules vs tun.auto_route)
+			// reach the operator only as "service restart failed" (generate.uc rc 3).
+			if (descriptor_form.warnExclusiveConflicts('inbound')) return;
 			return ui.changes.apply(mode === 'force-apply');
 		});
 	},
