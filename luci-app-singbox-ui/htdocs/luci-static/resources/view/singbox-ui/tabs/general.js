@@ -1,6 +1,7 @@
 'use strict';
 'require form';
 'require uci';
+'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 'require view.singbox-ui.lib.view_state as SbViewState';
 
@@ -22,6 +23,16 @@ function buildGeneralMap() {
 	o.default = '1';
 	o.rmempty = false;
 	o.description = _('Ship the itdoginfo/allow-domains rule-sets as read-only entries in the Rule-Sets tab. When off they are hidden and never referenced, fetched, or written to the config.');
+
+	// One shared download detour for ALL built-in rule-sets. They all fetch from
+	// the same github release, so this is the knob for "github is blocked, pull
+	// them through a proxy" — one selector instead of 25. Applies only to built-in
+	// remote sets that have no detour of their own (backend: ruleset.uc).
+	o = s.option(form.ListValue, 'default_ruleset_detour',
+		_('Built-in rule-set download detour'));
+	o.depends('default_rulesets', '1');
+	o.description = _('Fetch the built-in rule-sets through this outbound (e.g. when their host is blocked). Leave as (none) to download them directly.');
+	SbCommon.loadOutboundList(o, true);
 
 	// --- Cache file (descriptor-driven) ---
 	s = m.section(form.NamedSection, 'cache', 'cache', _('Cache file'),

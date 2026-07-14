@@ -55,6 +55,18 @@ function build_rule_sets(cur, referenced_names, valid_ob) {
             // `rules` is UI-only refs in UCI (no json_key); expand to headless JSON here.
             entry.rules = sub;
         }
+        // Shared download_detour for the package-owned built-ins. All 25 fetch
+        // from ONE github release, so when that host is blocked the operator wants
+        // to route them ALL through a proxy at once, not hand-edit 25 rows. The
+        // single main.default_ruleset_detour applies to a BUILTIN REMOTE set that
+        // has not been given its own download_detour (a user's own set, or one
+        // where they set a specific detour, is left untouched). The dangling-tag
+        // check just below then validates whatever landed here.
+        if (t === "remote" && rs.builtin === "1" && !length(entry.download_detour ?? "")) {
+            let shared = cur.get("singbox-ui", "main", "default_ruleset_detour");
+            if (length(shared ?? "")) entry.download_detour = shared;
+        }
+
         // download_detour names an outbound used to FETCH a remote rule-set; an
         // unknown tag is a dangling reference sing-box refuses to start on.
         // Unlike every other outbound ref (route_rule/route_default/dns.final),
