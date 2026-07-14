@@ -176,11 +176,17 @@ function cache_extract_srs(c, tag, out_path) {
 	try { fh = fs.open(tmp, "w"); } catch (_) { return false; }
 	if (!fh) return false;
 	let wrote = fh.write(payload);
+	// flush() before close(): write() can report the full length when the payload
+	// still sits in the stdio buffer, and close() returns true even when its flush
+	// failed (ucode's fs.file signals write errors by RETURNING null, never by
+	// throwing). Without this, a small ENOSPC'd .srs passes the length check below.
+	let flushed = false;
+	try { flushed = (fh.flush() != null); } catch (_) { flushed = false; }
 	fh.close();
 	// Short write, not just a zero/null one: ENOSPC on a full router flash writes
 	// a PREFIX of the payload and reports it honestly. Reject a truncated .srs here
 	// rather than shipping it to `rule-set decompile` and hoping that notices.
-	if (wrote !== length(payload)) { helpers.unlink_quiet(tmp); return false; }
+	if (!flushed || wrote !== length(payload)) { helpers.unlink_quiet(tmp); return false; }
 	let st = fs.stat(tmp);
 	if (!st || st.size === 0) { helpers.unlink_quiet(tmp); return false; }
 	let renamed = false;

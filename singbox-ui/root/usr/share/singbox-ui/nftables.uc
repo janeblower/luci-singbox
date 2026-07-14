@@ -765,8 +765,21 @@ function run_nft_ruleset(content) {
 		fs.unlink(tmp);
 		return 1;
 	}
-	fd.write(content);
+	// ucode's fs.file.write() returns null on error instead of throwing, and
+	// close() returns true even when the flush failed — so an unchecked write
+	// under ENOSPC would hand `nft -f` a TRUNCATED ruleset. nft is atomic per
+	// file, but a prefix of our ruleset is still a syntactically valid ruleset
+	// missing its tail (the tproxy redirect without its exceptions): it would
+	// apply. Refuse instead. flush() covers the small-content case where the
+	// error surfaces only at close().
+	let wrote = false;
+	try { wrote = (fd.write(content) != null && fd.flush() != null); } catch (_) { wrote = false; }
 	fd.close();
+	if (!wrote) {
+		log_err(`nftables: write to ${tmp} failed (disk full?)`);
+		fs.unlink(tmp);
+		return 1;
+	}
 	// SINGBOX_NFT_CAPTURE: test-seam. When set to a file path, write the
 	// assembled ruleset to that path and return 0 without invoking `nft -f`.
 	// Lets tests inspect the would-be applied content without needing a live

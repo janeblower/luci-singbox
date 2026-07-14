@@ -56,11 +56,19 @@ let clash_mod    = require("clash");
 // bail BEFORE touching CONFIG_OUT, so the last known-good config survives and the
 // daemon keeps running on it; init.d turns this non-zero exit into a refusal to
 // (re)start rather than starting on the stale file.
+//
+// The REMEDY has to ride in the log_event payload, not only in warn(): warn()
+// writes to stderr, and on both paths that reach this code stderr is gone —
+// procd does not route a start_service child's stderr to syslog, and rpcd's
+// wrappers append `>/dev/null 2>&1`. log_event popens `logger` itself, so it is
+// the only channel the operator actually reads.
 let tconf = helpers.transparent_conflict(uci);
 if (tconf != null) {
-	warn(sprintf("generate.uc: refusing to build — inbound '%s' (tproxy nft rules) and inbound '%s' (tun auto_route) both claim system routing. Exactly one may. Turn off the nftables rules on '%s' or auto_route on '%s'.\n",
-		tconf.tproxy, tconf.tun, tconf.tproxy, tconf.tun));
-	try { log_mod.log_event("error", "config.transparent_conflict", tconf); } catch (_) {}
+	let fix = sprintf("disable nft_rules on inbound '%s' or auto_route on inbound '%s'", tconf.tproxy, tconf.tun);
+	warn(sprintf("generate.uc: refusing to build — inbound '%s' (tproxy nft rules) and inbound '%s' (tun auto_route) both claim system routing. Exactly one may. To fix: %s.\n",
+		tconf.tproxy, tconf.tun, fix));
+	try { log_mod.log_event("error", "config.transparent_conflict",
+		{ tproxy: tconf.tproxy, tun: tconf.tun, fix: fix }); } catch (_) {}
 	exit(EXIT_TRANSPARENT_CONFLICT);
 }
 
@@ -216,6 +224,15 @@ if (length(keys(experimental))) config.experimental = experimental;
 // never a truncated CONFIG_OUT that sing-box would refuse to start with.
 // This is the file analog of preview_tmp() in rpcd/singbox-ui.
 //
+// Write errors: ucode's fs.file.write() does NOT throw — it RETURNS null (and
+// close() returns true regardless, flush error swallowed). A `try { f.write() }
+// catch` is therefore inert: under ENOSPC it used to return true with a
+// truncated tmp, rename the last known-good config aside to .prev, and publish
+// the truncated one — with last_generate_result "ok". Check both write() and
+// flush(): write() catches a mid-write buffer flush failing, flush() catches a
+// body small enough to sit entirely in the buffer (where the error would
+// otherwise surface only at close(), which lies).
+//
 // Entropy: 4 bytes from /dev/urandom mixed with time(). On the off chance
 // /dev/urandom is unavailable, fall back to time() alone — collisions are
 // harmless because fs.rename over the tmp is atomic regardless.
@@ -235,8 +252,8 @@ function publish_atomic(path, body) {
 		warn(sprintf("generate.uc: cannot open tmpfile %s for writing\n", tmp));
 		return false;
 	}
-	let ok = true;
-	try { f.write(body); } catch (_) { ok = false; }
+	let ok = false;
+	try { ok = (f.write(body) != null && f.flush() != null); } catch (_) { ok = false; }
 	f.close();
 	if (!ok) {
 		warn(sprintf("generate.uc: write to %s failed\n", tmp));

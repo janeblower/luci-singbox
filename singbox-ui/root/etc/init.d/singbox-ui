@@ -115,7 +115,11 @@ __do_start() {
 	ucode -L "$UCODE_LIB" "$GENERATE_UC"
 	_gen_rc=$?
 	if [ "$_gen_rc" -eq 3 ]; then
-		logger -t singbox-ui "refusing to start: config generation refused — routing ownership conflict (see the message above)"
+		# Self-contained on purpose: generate.uc's own warn() goes to stderr, which
+		# procd does NOT route to syslog, so "see the message above" pointed at a
+		# line the operator never gets. The section names come from generate.uc's
+		# structured event (event=config.transparent_conflict ... fix=...).
+		logger -t singbox-ui "refusing to start: a tproxy inbound (nft_rules) and a tun inbound (auto_route) both claim system routing; exactly one may. Disable one — see event=config.transparent_conflict in the log for the section names and the fix."
 		mkdir -p /var/lib/singbox-ui
 		echo "{\"last_apply_ts\":$(date +%s),\"last_apply_result\":\"failed\"}" \
 			> /var/lib/singbox-ui/apply_state.json

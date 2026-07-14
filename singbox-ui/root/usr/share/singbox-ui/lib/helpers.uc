@@ -228,16 +228,6 @@ function transparent_claims(cur) {
 	return c;
 }
 
-// transparent_owner(cur) — { kind, name } of the owner, or null when nobody
-// claims it. tproxy wins a tie, but a tie is a conflict and generate.uc refuses
-// to build one at all.
-function transparent_owner(cur) {
-	let c = transparent_claims(cur);
-	if (c.tproxy) return { kind: "tproxy", name: c.tproxy[".name"] };
-	if (c.tun)    return { kind: "tun",    name: c.tun[".name"] };
-	return null;
-}
-
 // transparent_conflict(cur) — a tproxy AND a tun both claim it. The UI makes this
 // unreachable (the loser's checkbox is disabled), so reaching it means UCI was
 // hand-edited. Returns { tproxy: <name>, tun: <name> } or null.
@@ -267,6 +257,5 @@ return {
 	builtin_rulesets_on,
 	ruleset_active,
 	transparent_claims,
-	transparent_owner,
 	transparent_conflict,
 };

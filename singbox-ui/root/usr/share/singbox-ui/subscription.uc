@@ -228,16 +228,24 @@ function _set_fetcher_for_test(fn) { _fetcher = fn; }
 // _read_raw_for_test(path) — thin wrapper so a test can verify the reader seam.
 function _read_raw_for_test(path) { return _reader(path); }
 
-// write_atomic(path, body, mode) — write to a sibling tmp file, flush via close,
+// write_atomic(path, body, mode) — write to a sibling tmp file, flush explicitly,
 // then fs.rename over `path`. Guarantees sing-box never reads a half-written
 // sub_<name>.txt and never leaks the fd on a write exception.
+//
+// ucode's fs.file.write() does NOT throw on error — it RETURNS null, and close()
+// returns true even when the flush failed. So catch+flag alone was inert: under
+// ENOSPC (a full /tmp is exactly when this fires) it reported success and renamed
+// a TRUNCATED node list over the good one — the file is line-based, so the tail
+// of the subscription just vanishes and the config still validates. Check both
+// write() (mid-write flush) and flush() (body small enough to sit in the buffer,
+// where only close() would see the error — and close() lies).
 function write_atomic(path, body, mode) {
 	let m = mode ?? 0o600;
 	let tmp = sprintf("%s.tmp.%d", path, time());
 	let f = fs.open(tmp, "w", m);
 	if (!f) { log_err(`write_atomic: cannot open ${tmp}`); return false; }
-	let ok = true;
-	try { f.write(body); } catch (e) { ok = false; }
+	let ok = false;
+	try { ok = (f.write(body) != null && f.flush() != null); } catch (_) { ok = false; }
 	f.close();
 	try { fs.chmod(tmp, m); } catch (_) {}   // a pre-existing tmp keeps its old mode
 	if (!ok) {

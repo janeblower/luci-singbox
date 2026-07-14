@@ -88,9 +88,11 @@ reg.register({
         // `=== "1"`. (tproxy.nft_rules keeps default:1 and is safe only because it
         // has no json_key — nothing emits it — so its `!== "0"` polarity is right
         // for IT and wrong here. Do not copy it over.)
-        // The seed config ships `option auto_route '1'` explicitly, so out-of-box
-        // behaviour is unchanged; a freshly ADDED tun no longer seizes system
-        // routing before the user asks for it.
+        // Nothing regresses out of the box: the seed config (etc/config/singbox-ui)
+        // ships no tun section at all — only tproxy_in and dns_in — so a tun exists
+        // only once someone adds one, and a freshly added tun no longer seizes
+        // system routing before the user asks for it. Whenever a seeded tun does
+        // land, it MUST carry `option auto_route '1'` explicitly to route anything.
         // Guard: tests/backend/test_bool_default_polarity.test.ts.
         { name: "auto_route", type: "bool", tab: "basic", default: 0,
           ui_label: "Auto route (own system routing)",

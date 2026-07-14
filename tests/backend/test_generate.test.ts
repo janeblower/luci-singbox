@@ -1110,3 +1110,98 @@ config route_default 'route_default'
     await exec(`rm -f ${cfgF}`);
   });
 });
+
+// publish_atomic under DISK PRESSURE — the exact scenario the write_failed_stale
+// branch exists for, and the one it used to sleep through.
+//
+// ucode's fs.file.write() signals an error by RETURNING null; it does NOT throw.
+// close() returns true regardless, even when its flush failed. So the original
+// `let ok = true; try { f.write(body); } catch (_) { ok = false; } f.close();`
+// was inert under EVERY write errno: on a full /tmp (a big rule-set download, a
+// log burst) publish_atomic returned TRUE, renamed the last known-good config
+// aside to .prev, and published a TRUNCATED one — with last_generate_result "ok".
+// init.d's `[ -s ]` guard sees a fat file and passes it to `sing-box check`,
+// which rejects it: proxy down, dashboard says the config generated fine.
+//
+// Seam: a size-limited tmpfs (NOT `ulimit -f` — ucode swallows the EFBIG the same
+// way, which is how this trap was found). Two errnos, because ONE check does not
+// cover both — measured on the guest:
+//   body > free space  ->  write()=null, flush()=true   (only write() sees it)
+//   body fits the buf  ->  write()=<len>, flush()=null  (only flush() sees it)
+describe("generate: publish_atomic on a full disk (ENOSPC)", () => {
+  useGuest();
+
+  // 200 direct outbounds ≈ 14 KB of pretty-printed JSON — larger than the 8 KB
+  // of slack left below, so the write dies mid-buffer.
+  const BIG_UCI = Array.from(
+    { length: 200 },
+    (_, i) =>
+      `config outbound 'pad${String(i).padStart(3, "0")}'\n\toption type 'direct'\n`,
+  ).join("\n");
+
+  const SMALL_UCI = `
+config dns_server 'up'
+\toption enabled '1'
+\toption type 'udp'
+\toption server '1.1.1.1'
+`;
+
+  const GOOD = '{"good":"last known good config"}';
+
+  // Runs the prod path (argv-invoked generate.uc) with CONFIG_OUT on a tmpfs
+  // that has `freeKB` kilobytes left. The UCI dir and SINGBOX_TMPDIR stay OFF
+  // the tmpfs so only the config write hits ENOSPC.
+  async function runFull(uciBody: string, freeKB: number) {
+    const dir = `/tmp/enospc_${process.pid}_${Math.random().toString(36).slice(2)}`;
+    const mnt = `${dir}/out`;
+    const out = `${mnt}/singbox-ui.json`;
+    await exec(`mkdir -p ${mnt} ${dir}/ucidir ${dir}/subs`);
+    await putFile(uciBody, `${dir}/ucidir/singbox-ui`);
+    await exec(`mount -t tmpfs -o size=64k tmpfs ${mnt}`);
+    let r: { stdout: string };
+    try {
+      await putFile(GOOD, out);
+      // Fill the tmpfs: 64 KB total, minus one page for the good config,
+      // minus the slack we want to leave. dd stops at ENOSPC on its own, so
+      // freeKB=0 simply means "completely full".
+      await exec(
+        `dd if=/dev/zero of=${mnt}/ballast bs=1024 count=$((60 - ${freeKB})) 2>/dev/null; sync`,
+      );
+      r = await exec(
+        `cd ${WORK} && UCI_CONFIG_DIR=${dir}/ucidir SINGBOX_TMPDIR=${dir}/subs SINGBOX_CONFIG=${out} ` +
+          `ucode -L ${LIB} ${GENERATE_UC} >/dev/null 2>&1; echo "RC=$?"; ` +
+          `echo "PREV=$(ls ${out}.prev 2>/dev/null | wc -l)"; ` +
+          `echo "TMP=$(ls ${out}.tmp.* 2>/dev/null | wc -l)"; ` +
+          `echo "OUT=$(cat ${out})"`,
+      );
+    } finally {
+      await exec(`umount ${mnt}; rm -rf ${dir}`);
+    }
+    const g = (k: string) =>
+      r.stdout.match(new RegExp(`^${k}=(.*)$`, "m"))?.[1];
+    return {
+      rc: Number(g("RC")),
+      prev: Number(g("PREV")),
+      tmp: Number(g("TMP")),
+      out: g("OUT"),
+    };
+  }
+
+  it("body larger than the free space: refuses instead of publishing a truncated config", async () => {
+    const r = await runFull(BIG_UCI, 8);
+    expect(r.rc).not.toBe(0); // write_failed_stale, not "OK"
+    expect(r.rc).not.toBe(3); // and NOT the ownership-conflict rc
+    expect(r.out).toBe(GOOD); // the good config is still THERE, byte-for-byte
+    expect(r.prev).toBe(0); // ...and was never renamed aside
+    expect(r.tmp).toBe(0); // the truncated tmp is unlinked
+  });
+
+  it("body that fits the stdio buffer on a 100%-full disk: refuses (close() lies, flush() does not)", async () => {
+    const r = await runFull(SMALL_UCI, 0);
+    expect(r.rc).not.toBe(0);
+    expect(r.rc).not.toBe(3);
+    expect(r.out).toBe(GOOD);
+    expect(r.prev).toBe(0);
+    expect(r.tmp).toBe(0);
+  });
+});
