@@ -18,6 +18,19 @@ const CONFIG_OUT = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
 // out-of-date config.
 const IS_PROD_OUT = (getenv("SINGBOX_CONFIG") == null);
 
+// init.d's __do_start inspects this rc to decide whether the OLD
+// /tmp/singbox-ui.json (still on disk — every failure path below bails
+// BEFORE touching CONFIG_OUT) is safe to hand to procd. This is the ONLY
+// generate.uc failure that means "this config has no defined meaning, do not
+// run it" — every OTHER failure (see publish_atomic's caller, near the
+// bottom of this file) means "couldn't write a NEW config, but the old one
+// is still good" and deliberately keeps plain exit(1), because init.d must
+// fall through to its own guards ([ ! -s /tmp/singbox-ui.json ] and
+// `sing-box check`) and start on the stale-but-valid file rather than take
+// the whole proxy down over a transient write failure (disk pressure) on a
+// 15-minute cron reload.
+const EXIT_TRANSPARENT_CONFLICT = 3;
+
 let uci_dir = getenv("UCI_CONFIG_DIR");
 let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
 let fs  = require("fs");
@@ -48,7 +61,7 @@ if (tconf != null) {
 	warn(sprintf("generate.uc: refusing to build — inbound '%s' (tproxy nft rules) and inbound '%s' (tun auto_route) both claim system routing. Exactly one may. Turn off the nftables rules on '%s' or auto_route on '%s'.\n",
 		tconf.tproxy, tconf.tun, tconf.tproxy, tconf.tun));
 	try { log_mod.log_event("error", "config.transparent_conflict", tconf); } catch (_) {}
-	exit(1);
+	exit(EXIT_TRANSPARENT_CONFLICT);
 }
 
 let config = {};

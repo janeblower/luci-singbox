@@ -97,14 +97,25 @@ __do_start() {
 	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$RULESETS_UC" fetch &
 	wait
 
-	# Respect the generator's exit code. generate.uc refuses (and bails BEFORE
-	# writing /tmp/singbox-ui.json) when the config has no defined meaning — e.g.
-	# a tproxy inbound and a tun inbound both claiming system routing. The OLD
-	# config is therefore still sitting there, and without this check procd would
-	# happily start the daemon on it: we would report success while silently
-	# discarding the operator's edit.
-	if ! ucode -L "$UCODE_LIB" "$GENERATE_UC"; then
-		logger -t singbox-ui "refusing to start: config generation failed (see the message above)"
+	# generate.uc exits 3 (EXIT_TRANSPARENT_CONFLICT, see generate.uc) ONLY for
+	# the routing-ownership conflict — e.g. a tproxy inbound and a tun inbound
+	# both claiming system routing — a config with no defined meaning, which it
+	# refuses to build at all (bailing BEFORE writing /tmp/singbox-ui.json).
+	# Refuse to start on THAT rc specifically: starting on the stale file would
+	# report success while silently discarding the operator's edit.
+	#
+	# Any OTHER non-zero rc — e.g. a transient write failure (disk pressure),
+	# where generate.uc deliberately left the previous good config in place and
+	# logged "running stale" — falls through to the guards below
+	# ([ ! -s ... ] and `sing-box check`), which already do the right thing:
+	# start on the old config if it is still usable, refuse if it is not.
+	# sing-box is a must-stay-up proxy (see the respawn policy below); a
+	# 15-minute cron reload must not take the tunnel down over a hiccup that
+	# left a perfectly good config sitting on disk.
+	ucode -L "$UCODE_LIB" "$GENERATE_UC"
+	_gen_rc=$?
+	if [ "$_gen_rc" -eq 3 ]; then
+		logger -t singbox-ui "refusing to start: config generation refused — routing ownership conflict (see the message above)"
 		mkdir -p /var/lib/singbox-ui
 		echo "{\"last_apply_ts\":$(date +%s),\"last_apply_result\":\"failed\"}" \
 			> /var/lib/singbox-ui/apply_state.json
