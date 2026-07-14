@@ -276,6 +276,26 @@ return [
                  iproute2_table_index: "2022", iproute2_rule_index: "9000",
                  exclude_interface: ["br-lan"], udp_timeout: "5m",
                  route_exclude_address: ["192.168.0.0/16"] } },
+    // Everything tun_in_{min,auto} do not reach: the 1.13 auto_redirect knobs, the
+    // uid rules, loopback/include_interface/route_address(_set), and
+    // endpoint_independent_nat (gvisor-only). Without this fixture ~14 of tun's
+    // json_keys were emitted by no golden at all — which is exactly what
+    // test_parity_coverage_guard is for (tun is in its module list now).
+    // include_interface only: the core rejects it paired with exclude_interface
+    // (which tun_in_auto carries). Verified against a live sing-box 1.13.13 check.
+    { name: "tun_in_full", kind: "inbound", type: "tun",
+      section: { ".name": "tun_full", protocol: "tun",
+                 address: ["172.19.0.1/30"], stack: "gvisor",
+                 auto_route: "1", auto_redirect: "1",
+                 auto_redirect_reset_mark: "0x2025", auto_redirect_nfqueue: "100",
+                 auto_redirect_iproute2_fallback_rule_index: "32768",
+                 exclude_mptcp: "1", loopback_address: ["10.7.0.1"],
+                 include_interface: ["br-lan"],
+                 route_address: ["0.0.0.0/1", "128.0.0.0/1"],
+                 route_address_set: ["ru_inside"], route_exclude_address_set: ["ru_outside"],
+                 include_uid: ["0"], exclude_uid: ["1000"],
+                 include_uid_range: ["1000:2000"], exclude_uid_range: ["3000:4000"],
+                 endpoint_independent_nat: "1" } },
     // auto_redirect="1" WITHOUT auto_route: the `requires` gate must suppress it.
     // Without that gate sing-box rejects the whole config.
     { name: "tun_in_orphan_redirect", kind: "inbound", type: "tun",

@@ -62,13 +62,35 @@ reg.register({
         // Exclusive with tproxy.nft_rules: only ONE inbound may own the
         // transparent path. The frontend disables the loser; generate.uc
         // refuses to write a config when both are set behind the UI's back.
-        { name: "auto_route", type: "bool", tab: "basic", default: 1,
+        //
+        // `default: 0` IS DELIBERATE — do not "helpfully" flip it back to 1.
+        // LuCI's CBIAbstractValue.parse() REMOVES an option whose submitted value
+        // equals its `default` (when rmempty/optional, and descriptor_form only
+        // clears rmempty for `required` fields). With default:1, a user who ticks
+        // the box — or just leaves it ticked — writes NOTHING to UCI, and
+        // _filler's bool branch emits only when the UCI value is exactly "1" ⇒ the
+        // tun would route nothing while every unset-means-on predicate believed it
+        // did. So: default 0 ⇒ ticked means an explicit `auto_route '1'` in UCI,
+        // unticked means UNSET, and UNSET MEANS OFF.
+        // Any ownership predicate over these two flags must therefore test
+        // `=== "1"`. (tproxy.nft_rules keeps default:1 and is safe only because it
+        // has no json_key — nothing emits it — so its `!== "0"` polarity is right
+        // for IT and wrong here. Do not copy it over.)
+        // The seed config ships `option auto_route '1'` explicitly, so out-of-box
+        // behaviour is unchanged; a freshly ADDED tun no longer seizes system
+        // routing before the user asks for it.
+        // Guard: tests/backend/test_bool_default_polarity.test.ts.
+        { name: "auto_route", type: "bool", tab: "basic", default: 0,
           ui_label: "Auto route (own system routing)",
           json_key: "auto_route", coerce: "bool",
           exclusive: "transparent",
           ui_help: "Installs policy routing so traffic enters the tunnel. Mutually exclusive with the tproxy inbound's nftables rules." },
 
-        { name: "auto_redirect", type: "bool", tab: "basic", default: 1,
+        // default: 0 for the same reason as auto_route (see above). It is also
+        // what makes `requires: NEEDS_AUTO_ROUTE` work at all: `requires` reads the
+        // RAW UCI value of the sibling, so an effectively-on-but-unset auto_route
+        // would gate this field (and every other NEEDS_AUTO_ROUTE one) OFF.
+        { name: "auto_redirect", type: "bool", tab: "basic", default: 0,
           ui_label: "Auto redirect (nftables)",
           json_key: "auto_redirect", coerce: "bool",
           depends: NEEDS_AUTO_ROUTE, requires: NEEDS_AUTO_ROUTE,

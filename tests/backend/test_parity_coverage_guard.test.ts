@@ -43,7 +43,8 @@ describe("parity coverage guard", () => {
       "builder.protocols.json_raw", "builder.protocols.socks", "builder.protocols.http",
       "builder.protocols.vmess", "builder.protocols.ssh", "builder.protocols.naive",
       "builder.protocols.groups", "builder.protocols.tproxy", "builder.protocols.redirect",
-      "builder.protocols.mixed", "builder.protocols.cloudflared" ])
+      "builder.protocols.mixed", "builder.protocols.cloudflared",
+      "builder.protocols.tun" ])
     require(_m);
 
   // ---- 1. collect every declared json_key across all descriptors ----
