@@ -1,65 +1,13 @@
 #!/bin/sh
-# Seed the built-in rule-sets from itdoginfo/allow-domains.
-#
-# They are ordinary `ruleset` sections carrying `option builtin '1'`, which the
-# UI renders read-only (no Edit/Delete) and the backend gates on the
-# singbox-ui.main.default_rulesets master switch (helpers.ruleset_active).
-#
-# The URLs point at the release channel's `latest` alias, so a new upstream
-# release is picked up without touching the config; sing-box re-fetches each
-# .srs on its own update_interval.
-#
-# They all ship ENABLED, and that costs nothing: an enabled rule-set nobody
-# references is neither emitted into the config (ruleset.uc only builds the
-# referenced tags) nor downloaded (nft-rulesets.uc only fetches nft_rules=1).
-#
-# Shipping them disabled was a footgun, not a saving. Point a route rule at a
-# DISABLED rule-set and route.uc drops the whole rule — a matcher-less rule would
-# match all traffic, so the catch-all guard kills it — leaving only a warn in
-# logread. "I referenced youtube and nothing happens" with no visible cause.
-# Enabled-by-default means referencing a set is all it takes.
-#
-# Idempotent: a section that already exists is left alone (a user who turned
-# `porn` OFF must not have it switched back on by a package upgrade). Honours the
-# master switch: with default_rulesets=0 nothing is created at all.
-#
-# SINGBOX_UCI is a test/dev seam. The uci CLI does NOT honour UCI_CONFIG_DIR
-# (only `-c <dir>`), so without it this script could only ever be exercised
-# against the live /etc/config — which means it could not be tested at all, and
-# scripts/dev-stand.sh could not replay it into a sandbox container.
-# shellcheck disable=SC2086  # SINGBOX_UCI deliberately carries flags (-c <dir>)
-UCI="${SINGBOX_UCI:-uci}"
-uci_() { $UCI "$@"; }
-
-BASE='https://github.com/itdoginfo/allow-domains/releases/latest/download'
-INTERVAL='86400'
-
-SETS='anime block cloudflare cloudfront digitalocean discord geoblock google_ai
-      google_meet google_play hdrezka hetzner hodca meta news ovh porn roblox
-      russia_inside russia_outside telegram tiktok twitter ukraine_inside youtube'
-
-[ "$(uci_ -q get singbox-ui.main.default_rulesets)" = "0" ] && exit 0
-
-uci_ -q get singbox-ui.main >/dev/null || uci_ -q set singbox-ui.main='singbox-ui'
-uci_ -q get singbox-ui.main.default_rulesets >/dev/null \
-	|| uci_ -q set singbox-ui.main.default_rulesets='1'
-
-for name in $SETS; do
-	# Already present — this script ran on a previous install/upgrade, or the
-	# user created a set with that name themselves. Only stamp the builtin
-	# marker; never touch enabled/url, those are theirs to own.
-	if uci_ -q get "singbox-ui.$name" >/dev/null; then
-		uci_ -q set "singbox-ui.$name.builtin"='1'
-		continue
-	fi
-	uci_ -q set "singbox-ui.$name"='ruleset'
-	uci_ -q set "singbox-ui.$name.builtin"='1'
-	uci_ -q set "singbox-ui.$name.enabled"='1'
-	uci_ -q set "singbox-ui.$name.type"='remote'
-	uci_ -q set "singbox-ui.$name.url"="$BASE/$name.srs"
-	uci_ -q set "singbox-ui.$name.nft_rules"='0'
-	uci_ -q set "singbox-ui.$name.update_interval"="$INTERVAL"
-done
-
-uci_ -q commit singbox-ui
+# First-install seed of the built-in rule-sets. The actual logic lives in a
+# PERSISTENT script (uci-defaults are deleted after their first successful run,
+# which is exactly why a config wipe used to leave the box with no rule-sets):
+# init.d start_service calls the same script on every start so they self-heal.
+# Keeping this thin wrapper means a fresh install still has the sets before the
+# service ever starts. Env (incl. the SINGBOX_UCI test seam) is inherited.
+SEED=/usr/share/singbox-ui/seed-rulesets.sh
+# Fall back to the in-tree copy so the test/dev sandbox (which runs this file
+# straight from the checkout, where the absolute path does not exist) still works.
+[ -x "$SEED" ] || SEED="$(dirname "$0")/../../usr/share/singbox-ui/seed-rulesets.sh"
+sh "$SEED"
 exit 0

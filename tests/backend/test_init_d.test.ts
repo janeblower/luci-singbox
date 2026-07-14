@@ -84,6 +84,7 @@ describe("test_init_d", () => {
       "procd_open_instance",
       "procd_set_param",
       "procd_close_instance",
+      "procd_add_reload_trigger",
     ]) {
       await putFile(
         `#!/bin/sh\necho "${fn} $*" >>"${TD}/procd.log"\n`,
@@ -119,6 +120,28 @@ describe("test_init_d", () => {
     expect(ucode).toContain("nft-rulesets");
     expect(ucode).toContain("SINGBOX_BOOT_FETCH=1");
     expect(procd).toContain("procd_open_instance");
+  });
+
+  it("start_service invokes the rule-set self-heal seed", async () => {
+    // A wiped/hand-replaced /etc/config used to come up with no rule-sets forever
+    // (uci-defaults/92 runs once and is then deleted). start_service now calls the
+    // persistent seed on every start. Point the seam at a stub and confirm it ran
+    // — the seed's own behaviour (creates 25, wear-safe) is covered against a real
+    // uci in test_ruleset_defaults_seed.
+    const SEED = `${TD}/bin/seed-stub`;
+    await putFile(`#!/bin/sh\necho "seed $*" >>"${TD}/seed.log"\n`, SEED);
+    await exec(`chmod +x '${SEED}'`);
+    await exec(`: >"${TD}/seed.log"`);
+    await clearLogs();
+    const r = await exec(
+      `PATH="${TD}/bin:$PATH" SINGBOX_BIN="${TD}/bin/sing-box" ` +
+        `SEED_RULESETS_SH='${SEED}' sh -c "
+          . '${INIT}'
+          __do_start
+        "`,
+    );
+    expect(r.exitCode).toBe(0);
+    expect((await exec(`cat '${TD}/seed.log'`)).stdout).toContain("seed");
   });
 
   it("nft apply gated by 'needed' (stub returns empty → skip)", async () => {
@@ -301,6 +324,19 @@ exit 0
     `);
     expect(r.exitCode).toBe(0);
     expect(r.stdout.replace(/\s+/g, " ").trim()).toBe("STOP START");
+  });
+
+  it("service_triggers registers a reload trigger for the singbox-ui config", async () => {
+    // Without this, a UI 'Save & Apply' commits UCI but procd never fires a
+    // reload, so the daemon keeps the OLD /tmp/singbox-ui.json until a manual
+    // Restart / cron tick / reboot. Symptoms: a disabled tproxy inbound's nft
+    // table lingers (start_service's remove-reconcile never runs), and settings
+    // look like they "did nothing" until a reboot re-reads /etc/config.
+    await clearLogs();
+    const r = await exec(runInit("service_triggers"));
+    expect(r.exitCode).toBe(0);
+    const procd = (await exec(`cat '${TD}/procd.log'`)).stdout;
+    expect(procd).toContain("procd_add_reload_trigger singbox-ui");
   });
 
   it("missed-1(a): lifecycle lock is re-entrant (depth counter)", async () => {

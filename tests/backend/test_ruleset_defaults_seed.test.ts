@@ -132,6 +132,22 @@ describe("92-singbox-ui-rulesets seeds the built-in rule-sets", () => {
     expect(ALL_SETS.filter((n) => u[n] === "ruleset").length).toBe(25);
   });
 
+  it("a second run changes nothing and does not rewrite the config (wear-safe)", async () => {
+    // start_service calls the seed on EVERY boot to self-heal a wiped config, so
+    // a no-op run must not churn /etc/config (flash wear on real routers). The
+    // seed only commits when something actually changed — even a same-content
+    // `uci commit` rewrites the file and bumps mtime, so mtime is the real signal.
+    const mtime = async () =>
+      (await exec(`date -r ${DIR}/singbox-ui +%s`)).stdout.trim();
+    const contents = async () =>
+      (await exec(`cat ${DIR}/singbox-ui`)).stdout;
+    const [mBefore, cBefore] = [await mtime(), await contents()];
+    await exec("sleep 1"); // ensure a rewrite would show a DIFFERENT mtime
+    expect(await runScript(DIR)).toBe(0);
+    expect(await mtime()).toBe(mBefore); // the commit never fired
+    expect(await contents()).toBe(cBefore);
+  });
+
   it("creates nothing at all when the master switch is off", async () => {
     const OFF = `${DIR}-off`;
     await seed(

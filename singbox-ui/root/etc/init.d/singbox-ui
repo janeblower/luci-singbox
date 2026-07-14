@@ -9,6 +9,8 @@ SUBSCRIPTION_UC=/usr/share/singbox-ui/subscription.uc
 RULESETS_UC=/usr/share/singbox-ui/nft-rulesets.uc
 NFTABLES_UC=/usr/share/singbox-ui/nftables.uc
 APPLY_PLUGINS_UC=/usr/share/singbox-ui/apply-plugins.uc
+# Overridable so tests can point the self-heal seed at the in-tree copy.
+SEED_RULESETS_SH="${SEED_RULESETS_SH:-/usr/share/singbox-ui/seed-rulesets.sh}"
 UCODE_LIB=/usr/share/singbox-ui/lib
 # Overridable so tests can stub the binary (default is the packaged path used by
 # the procd command below). Used for both `check` (S6.1) and `run`.
@@ -87,8 +89,35 @@ start_service() {
 	return "$_ss_rc"
 }
 
+# The reload hook was wired to every path EXCEPT the one operators actually use:
+# both */15 cron jobs and subscription.uc call `<init> reload`, but a UI
+# "Save & Apply" only does `uci commit` + `ubus uci apply`. procd fires a config
+# reload from that apply ONLY for a service that registered a trigger, and this
+# one never did — so a committed setting sat in /etc/config while the daemon kept
+# running the OLD /tmp/singbox-ui.json until a manual Restart, the next cron tick,
+# or a reboot. Two operator-visible symptoms fall out of that one gap:
+#   - disable a tproxy inbound, Apply -> the `inet singbox_ui` table lingers,
+#     because start_service's "nft not needed -> remove" reconcile never runs;
+#   - change anything, Apply, reboot -> it looks like the change "did nothing"
+#     until the reboot, which is when the daemon finally re-reads /etc/config.
+# procd_add_reload_trigger makes `uci apply singbox-ui` fire `reload` =
+# reload_service (its pre-flight conflict check and lifecycle lock included), so
+# Apply reloads the daemon and reconciles nft the same way cron already does.
+service_triggers() {
+	procd_add_reload_trigger "singbox-ui"
+}
+
 __do_start() {
 	mkdir -p /tmp/singbox-ui
+
+	# Self-heal the package-owned built-in rule-sets. uci-defaults/92 seeds them
+	# on first install, but OpenWrt deletes that file afterwards — so a wiped or
+	# hand-replaced /etc/config/singbox-ui came up with zero rule-sets and no way
+	# to get them back. The seed is idempotent and only writes UCI when something
+	# is actually missing (no flash churn on a normal boot), and honours the
+	# default_rulesets master switch. Runs BEFORE generate.uc so this start sees
+	# them. Never fatal.
+	[ -x "$SEED_RULESETS_SH" ] && sh "$SEED_RULESETS_SH" 2>/dev/null
 
 	# Always try to refresh on (re)start, with short curl timeouts so boot
 	# stays snappy. subscription.uc keeps prior sub_*.txt / rs_*.json files
