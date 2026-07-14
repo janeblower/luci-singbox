@@ -15,11 +15,12 @@
 // makeExclusive used to apply to every field, the seeded tun — auto_route unset,
 // i.e. routing NOTHING — would claim the group, tproxy's checkbox would go dead
 // and forced-off, and the router would end up with no interception at all.
-import { test, assert, openEditModalBySid, dismissModal } from './fixtures';
+import { test, assert, openEditModalBySid, dismissModal, containerExec, wait } from './fixtures';
 
 export const COVERS = ["inbound.transparent.exclusive"];
 
 const TUN = '_e2bt_tun';
+const TP2 = '_e2bt_tproxy2';
 
 // State of a descriptor field's widget in the open modal, addressed by the
 // stable data-sb-field hook (tagField), not by its label text.
@@ -95,5 +96,55 @@ test.describe('the tun owns it once tproxy gives it up', () => {
         assert('tproxy nft_rules forced off', nft?.checked === false, nft);
         assert('caption names the owning inbound', (nft?.text || '').includes(TUN), nft);
         await dismissModal(page);
+    });
+});
+
+// A SECOND TPROXY IS NOT A CONFLICT. helpers.transparent_claims keeps only the
+// FIRST claimant of each protocol (`!c.tproxy` / `!c.tun`), so this config builds
+// (rc 0) and the frontend must not hold Apply back on it. It once did: the check
+// counted every claimant in the group, and this exact sequence — no hand-editing —
+// killed the WHOLE page's Apply:
+//
+//   `enabled` is editable  ⇒ a live checkbox in the GRID row.
+//   `nft_rules` is modalonly ⇒ GridSection.parse() SKIPS it for a row whose modal
+//   was never opened, so it stays UNSET, and unset means ON (default 1).
+//
+// So flipping Enable in the grid (or a JSON import, which only does uci.add +
+// enabled=1) staged a second claimant nobody could turn off — the modal renders
+// its nft_rules already unchecked AND disabled. Hence: the modal must NEVER be
+// opened in this test. Opening it is what would parse the option and write '0'.
+test.describe('a second tproxy enabled from the grid still applies', () => {
+    test.use({
+        uciSeed: `uci set singbox-ui.tproxy_in.enabled=1; uci set singbox-ui.tproxy_in.nft_rules=1; `
+            + `uci set singbox-ui.${TP2}=inbound; uci set singbox-ui.${TP2}.protocol=tproxy; `
+            + `uci set singbox-ui.${TP2}.enabled=0; uci set singbox-ui.${TP2}.listen_port=7894; `
+            + `uci -q delete singbox-ui.${TP2}.nft_rules; uci commit singbox-ui`,
+    });
+
+    test('enabling it from the grid does not block the page Apply', async ({ page }) => {
+        const clicked = await page.evaluate((sid) => {
+            const row = document.querySelector(`#cbi-singbox-ui-inbound tr[data-sid="${sid}"]`);
+            if (!row) return 'no row';
+            const cb = row.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+            if (!cb) return 'no grid checkbox';
+            if (!cb.checked) cb.click();
+            return { checked: cb.checked };
+        }, TP2);
+        assert('grid Enable checkbox present and ticked', (clicked as any)?.checked === true, clicked);
+
+        // The page's real "Save & Apply" — the button bound to handleSaveApply,
+        // which is where warnExclusiveConflicts() decides whether to apply.
+        await page.click('.cbi-page-actions .cbi-button-apply');
+        await wait(6000);
+
+        const notes = await page.evaluate(() => Array.from(document.querySelectorAll('.alert-message'))
+            .map((n) => (n.textContent || '').replace(/\s+/g, ' ').trim()));
+        assert('no conflict notification for two tproxy inbounds',
+            !notes.some((n) => /both claim system routing/i.test(n)), notes);
+
+        // ...and the apply actually landed. LuCI's parse() drops `enabled` when it
+        // equals its default (1), so "ON" is the option being GONE, not '1'.
+        const en = containerExec(`uci -q get singbox-ui.${TP2}.enabled || echo UNSET`).trim();
+        assert('the second tproxy was applied (enabled no longer 0)', en !== '0', en);
     });
 });

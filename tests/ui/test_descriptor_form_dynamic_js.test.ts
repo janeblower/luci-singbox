@@ -225,6 +225,21 @@ function makeSection() {
         o._values.push([k, v]);
         return o;
       };
+      // Minimal DOM stand-in for the widget node. makeExclusive wraps
+      // renderWidget to disable the loser's checkbox and append the caption
+      // naming the owner; case 10 asserts that caption's XSS shape.
+      o.renderWidget = (_sid: string, _idx: unknown, cfgvalue: unknown) => {
+        const inputs = [{ disabled: false }];
+        return {
+          _cfgvalue: cfgvalue,
+          _inputs: inputs,
+          _appended: [] as any[],
+          querySelectorAll: () => inputs,
+          appendChild(this: any, child: unknown) {
+            this._appended.push(child);
+          },
+        };
+      };
       opts.push(o);
       return o;
     },
@@ -741,6 +756,10 @@ describe("descriptor_form.js — dynamic selectors", () => {
           expect(DF.warnExclusiveConflicts("inbound")).toBe(true);
           expect(notifications._calls.length).toBe(1);
           expect(notifications._calls[0].level).toBe("error");
+          // Array child ⇒ text node; a bare string would go through innerHTML.
+          expect(Array.isArray(notifications._calls[0].msg.children)).toBe(
+            true,
+          );
           // names BOTH inbounds and the field each claims with
           const msg = String(notifications._calls[0].msg.children[0]);
           expect(msg).toContain('"tproxy_in" (nft_rules)');
@@ -771,6 +790,61 @@ describe("descriptor_form.js — dynamic selectors", () => {
         ],
         () => {
           expect(DF.exclusiveConflicts("inbound")).toEqual([]);
+        },
+      );
+    });
+
+    // The backend (helpers.transparent_claims) keeps the FIRST claimant of each
+    // protocol and only conflicts when a tproxy AND a tun both claim, so two
+    // enabled tproxy inbounds build a config just fine (rc 0). Counting every
+    // claimant here would hold back the WHOLE page's Apply on a config the
+    // backend accepts — and reachably: `enabled` is a live grid checkbox, while
+    // nft_rules is modalonly, so GridSection.parse() never writes it for a row
+    // whose modal was never opened, leaving it unset ⇒ ON (default 1). The
+    // second tproxy's checkbox is already dead (makeExclusive) — there would be
+    // nothing for the operator to turn off.
+    it("two enabled tproxy inbounds are NOT a conflict (the backend takes the first)", () => {
+      withInbounds(
+        [
+          {
+            ".name": "tproxy_in",
+            enabled: "1",
+            protocol: "tproxy",
+            nft_rules: "1",
+          },
+          // no nft_rules ⇒ unset ⇒ ON: exactly what the grid's Enable toggle
+          // and the JSON importer leave behind.
+          { ".name": "tproxy_2", enabled: "1", protocol: "tproxy" },
+        ],
+        (opts) => {
+          expect(DF.exclusiveConflicts("inbound")).toEqual([]);
+          notifications._calls = [];
+          expect(DF.warnExclusiveConflicts("inbound")).toBe(false);
+          expect(notifications._calls.length).toBe(0);
+          // ...and the second tproxy is still barred from owning it.
+          const nft = findOpt(opts, "nft_rules");
+          expect(nft._exclusiveOwner("tproxy_2")).toBe("tproxy_in");
+        },
+      );
+    });
+
+    // XSS shape, not text: LuCI's dom.append() routes a BARE STRING child through
+    // node.innerHTML and an ARRAY child through createTextNode. Section names are
+    // user-controlled. Asserting textContent would pass for both forms.
+    it("the owner caption is an ARRAY child of E() (text node, not innerHTML)", () => {
+      withInbounds(
+        [
+          { ".name": "tproxy_in", enabled: "1", protocol: "tproxy" },
+          { ".name": "tun_in", enabled: "1", protocol: "tun" },
+        ],
+        (opts) => {
+          const auto = findOpt(opts, "auto_route");
+          const node = auto.renderWidget("tun_in", 0, "1");
+          expect(node._cfgvalue).toBe("0"); // loser rendered forced-off
+          expect(node._inputs[0].disabled).toBe(true);
+          expect(node._appended.length).toBe(1);
+          expect(Array.isArray(node._appended[0].children)).toBe(true);
+          expect(String(node._appended[0].children[0])).toContain("tproxy_in");
         },
       );
     });

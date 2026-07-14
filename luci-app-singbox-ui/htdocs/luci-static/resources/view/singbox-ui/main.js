@@ -208,8 +208,8 @@ return view.extend({
 
 	handleSaveApply: function (ev, mode) {
 		return this.handleSave(ev).then(function () {
-			// Two claimants of system routing (tproxy.nft_rules vs tun.auto_route)
-			// reach the operator only as "service restart failed" (generate.uc rc 3).
+			// A COURTESY, not a gate — see warnExclusiveConflicts(). It hooks only
+			// THIS view's Save & Apply; generate.uc's rc 3 is the enforcement.
 			if (descriptor_form.warnExclusiveConflicts('inbound')) return;
 			return ui.changes.apply(mode === 'force-apply');
 		});

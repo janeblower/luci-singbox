@@ -20,12 +20,15 @@ var SB_INBOUND_PROTOCOLS = [
 	['direct',      'Direct (DNS / port-forward)'],
 	['tproxy',      'TProxy (transparent)'],
 	['redirect',    'Redirect (transparent)'],
-	// TUN was dropped from this list by the descriptor-driven refactor (926ec722)
-	// while protocols/tun.uc stayed a first-class descriptor: the schema RPC still
-	// served it, and generate/route/nftables still handled it, but the dropdown
-	// never offered it — so no TUN inbound could be created from the UI, and an
-	// existing one's fields (auto_route, auto_redirect, stack, …) rendered NOWHERE.
-	// applyMaterialized only runs for protocols in THIS list.
+	// applyMaterialized only runs for protocols in THIS list. A protocol that has
+	// a descriptor but no line here renders NOWHERE: the schema RPC serves it and
+	// generate/route/nftables handle it, but the dropdown never offers it, so it
+	// cannot be created and an existing one's fields are invisible.
+	// Precedent (this line): 926ec722 deleted the hand-coded TUN block AND this
+	// entry, pointing at a `protocols/tun.uc` that did not exist yet — TUN was
+	// simply gone from the UI. cde028ae finally wrote tun.uc, and nobody added the
+	// dropdown line back, so the descriptor rendered nowhere until the browser lane
+	// tripped over it. Descriptor and dropdown ship together.
 	['tun',         'TUN'],
 	['mixed',       'Mixed (HTTP + SOCKS5)'],
 	['socks',       'SOCKS'],

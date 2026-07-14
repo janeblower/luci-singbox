@@ -406,6 +406,14 @@ function claimants(kind, claims) {
 // checkbox ever rendering. main.js blocks Apply on it and names the culprits —
 // otherwise generate.uc's refusal (rc 3) reaches the operator as a bare
 // "service restart failed", which tells them nothing.
+//
+// ONE claimant PER PROTOCOL, mirroring helpers.transparent_claims (`!c.tproxy` /
+// `!c.tun`): the backend keeps only the FIRST claimant of each protocol, so two
+// enabled tproxy inbounds are NOT a conflict to it — it picks the first and the
+// config builds. Counting every claimant here would block the whole page's Apply
+// on a config the backend accepts, and the second tproxy's `nft_rules` is already
+// dead in its modal (makeExclusive), so there is nothing for the operator to turn
+// off. A conflict is only ever ACROSS protocols.
 function exclusiveConflicts(kind) {
     var protos = (SbViewState.getSchema() || {})[kind] || {};
     var groups = {};
@@ -416,10 +424,15 @@ function exclusiveConflicts(kind) {
     });
     var discr = discrOf(kind);
     return Object.keys(groups).map(function (g) {
-        var claims = claimsForGroup(kind, g);
+        var claims = claimsForGroup(kind, g), seen = {};
         return {
             group: g,
-            claimants: claimants(kind, claims).map(function (sec) {
+            claimants: claimants(kind, claims).filter(function (sec) {
+                var p = sec[discr];
+                if (seen[p]) return false;
+                seen[p] = 1;
+                return true;
+            }).map(function (sec) {
                 return { section: sec['.name'], field: claims[sec[discr]].name };
             }),
         };
@@ -431,6 +444,12 @@ function exclusiveConflicts(kind) {
 // init.d refusal nor LuCI's "service restart failed" says which two to look at.
 // Returns true when at least one conflict was found (main.js then holds Apply
 // back: the config would not build anyway, and the changes stay staged).
+//
+// A COURTESY, NOT A GATE. main.js hooks only the VIEW's handleSaveApply; LuCI's
+// global "Unsaved changes" indicator calls ui.changes.apply() directly and never
+// comes through here. generate.uc's rc-3 refusal is the enforcement. This exists
+// so the operator learns WHICH two inbounds to look at instead of reading a bare
+// "service restart failed".
 function warnExclusiveConflicts(kind) {
     var conflicts = exclusiveConflicts(kind);
     conflicts.forEach(function (c) {
