@@ -85,7 +85,7 @@ print(sprintf("%J", f.build(d, { ".name":"t", obfs_type:"salamander" })));
   it("inbound base builds listen/listen_port", async () => {
     const r = await runUcode(`
 let f = require("builder._filler");
-let d = { kind:"inbound", sing_box_type:"mixed", shared:null,
+let d = { kind:"inbound", sing_box_type:"mixed", shared:{listen:true},
     fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" } ] };
 print(sprintf("%J", f.build(d, { ".name":"m", listen_port:"1080" })));
 `);
@@ -98,7 +98,7 @@ print(sprintf("%J", f.build(d, { ".name":"m", listen_port:"1080" })));
   it("inbound returns null when listen_port missing", async () => {
     const r = await runUcode(`
 let f = require("builder._filler");
-let d = { kind:"inbound", sing_box_type:"mixed", shared:null, fields:[] };
+let d = { kind:"inbound", sing_box_type:"mixed", shared:{listen:true}, fields:[] };
 print(f.build(d, { ".name":"m" }) == null ? "NULL" : "NOTNULL");
 `);
     expect(r.exitCode).toBe(0);
@@ -157,7 +157,7 @@ print(threw ? "THREW" : "OK");
   it("filler emits users[] and clears password on multi", async () => {
     const r = await runUcode(`
 let f = require("builder._filler");
-let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:null,
+let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:{listen:true},
     fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" },
              { name:"server_password", type:"string", json_key:"password", omit_when:"never" } ],
     users:{ from:"ss_user",
@@ -174,7 +174,7 @@ print(sprintf("%J", f.build(d, { ".name":"s", listen_port:"8388", server_passwor
   it("filler keeps top-level password when no multi-users", async () => {
     const r = await runUcode(`
 let f = require("builder._filler");
-let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:null,
+let d = { kind:"inbound", sing_box_type:"shadowsocks", shared:{listen:true},
     fields:[ { name:"listen", type:"string" }, { name:"listen_port", type:"number" },
              { name:"server_password", type:"string", json_key:"password", omit_when:"never" } ],
     users:{ from:"ss_user",

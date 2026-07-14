@@ -123,10 +123,18 @@ interface Row {
 
 // Fixtures that legitimately never reach the filler, so there is nothing to
 // invert. Hardcoded so a NEW one can't slip in unnoticed:
-//   cloudflared_in — has no listen_port on purpose (it tests that guard)
-//   json_in_raw    — the raw-JSON escape hatch, not a descriptor build
 //   awg_warp_basic — a plugin descriptor; its lib dir is not on this -L path
-const EXPECTED_SKIPS = ["awg_warp_basic", "cloudflared_in", "json_in_raw"];
+//
+// cloudflared_in and json_in_raw used to land here too, but only because
+// filler.build() unconditionally required listen_port for ANY kind:"inbound"
+// descriptor (this DRIVER calls filler.build() directly, bypassing their
+// emit() escape hatch on purpose, to exercise the declarative path). Now that
+// build() only requires listen_port for descriptors declaring shared:
+// {listen:true} (added for tun, which is not a listener), both build a bare
+// {type,tag} header instead of returning null, and round-trip trivially
+// (neither has anything to invert: json_in_raw's raw_json field has no
+// json_key, and cloudflared's own fields are exercised only via its emit()).
+const EXPECTED_SKIPS = ["awg_warp_basic"];
 
 describe("_unfiller round-trips the whole parity corpus", () => {
   useGuest();

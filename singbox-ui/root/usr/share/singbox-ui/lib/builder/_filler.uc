@@ -259,7 +259,15 @@ function build(d, s) {
     let out;
     const HEADERLESS = { route_rule: 1, dns_rule: 1, cache: 1, clash_api: 1 };
     if (d.kind === "inbound") {
-        out = dial_blk.build_listen_base(s, d.sing_box_type);
+        // build_listen_base owns {type,tag,listen,listen_port} and is fatal
+        // without listen_port — correct for the 16 listener inbounds (shared:
+        // {listen:true}), wrong for a non-listener like tun: sing-box rejects
+        // `listen`/`listen_port` on it outright, so it never declares the
+        // shared listen block and has no listen_port field to satisfy. Those
+        // get the same bare {type,tag} header non-inbound kinds get below.
+        out = (d.shared != null && d.shared.listen)
+            ? dial_blk.build_listen_base(s, d.sing_box_type)
+            : { type: d.sing_box_type, tag: s[".name"] };
         if (out == null) return null;
     } else if (HEADERLESS[d.kind]) {
         out = {};                                  // no type/tag header
