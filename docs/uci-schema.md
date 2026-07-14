@@ -207,7 +207,7 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 | Field | Type | Values | Required | Depends on | Description |
 |---|---|---|---|---|---|
 | `enabled` | bool | `0`/`1` | yes | — | Disabled sections (`enabled=0`) are skipped by `build_inbounds`. |
-| `protocol` | enum | `direct`, `tproxy`, `mixed`, `shadowsocks`, `vless`, `trojan`, `hysteria2` | yes | — | Selects the protocol branch in `build_one`. `tun` and `vmess` are dropped in E2 — existing sections are deleted by migration `drop-removed-protocols-e2`. Defaults to `tproxy` if absent. Legacy field `mode` is silently ignored. |
+| `protocol` | enum | `direct`, `tproxy`, `tun`, `mixed`, `shadowsocks`, `vless`, `trojan`, `hysteria2` | yes | — | Selects the protocol descriptor. `vmess` is dropped in E2 — existing sections are deleted by migration `drop-removed-protocols-e2` (which also dropped the pre-E2 `tun`; `tun` came back as a full descriptor later). Defaults to `tproxy` if absent. Legacy field `mode` is silently ignored. |
 | `listen` | string | IP address or `::` | no | all except `tun` | Bind address. Defaults to `::` if empty. |
 | `listen_port` | integer | valid port | yes (except tun) | all except `tun` | Listen port. Missing/zero causes the section to be skipped with a warning. |
 
@@ -226,7 +226,17 @@ UI write: `tabs/inbounds.js` — `buildInboundsMap()`.
 | `udp_fragment` | bool | `0`/`1` | no | `protocol=tproxy` | Enables UDP fragment reassembly. |
 | `hijack_dns` | bool | `0`/`1` | no | `protocol=tproxy` | UI-only: controls whether an nftables DNS-hijack rule is installed. **Not read by `inbound.uc`**. |
 | `interface` | string (list) | device names | no | `protocol=tproxy` | UI-only: selects network interfaces for nftables rules. **Not read by `inbound.uc`**. |
-| `nft_rules` | bool | `0`/`1` | no | `protocol=tproxy` or `tun` | UI-only: controls nftables rule generation. **Not read by `inbound.uc`**. |
+| `nft_rules` | bool | `0`/`1` | no | `protocol=tproxy` | UI-only: controls generation of our `inet singbox_ui` nftables table. **Not read by `inbound.uc`** — read by `nftables.uc` via `helpers.transparent_claims`. Default `1`: never emitted to sing-box JSON, so **unset means ON**. A `tun` inbound has no `nft_rules` field and never will (see below). |
+
+### `tun` protocol fields
+
+`tun` is the alternative to `tproxy`, not a companion to it. Its full field list lives in the descriptor (`lib/builder/protocols/tun.uc`) and is emitted declaratively; only the field the rest of the backend reads is documented here.
+
+| Field | Type | Values | Required | Depends on | Description |
+|---|---|---|---|---|---|
+| `auto_route` | bool | `0`/`1` | no | `protocol=tun` | sing-box's own policy routing (`auto_redirect` requires it and installs sing-box's own nftables rules, OpenWrt fw4 compatibility rules included — our table plays no part in TUN mode). Emitted to sing-box JSON, and read by `helpers.transparent_claims`. Default `0`: **unset means OFF** — LuCI deletes an option whose value equals its default, so a default of `1` erased a ticked box from UCI and the tun then emitted no `auto_route` at all. |
+
+**Ownership of the transparent path.** `tproxy.nft_rules` and `tun.auto_route` both claim system routing / the firewall, and exactly one may. `helpers.transparent_owner` / `helpers.transparent_conflict` are the single place that decides; `generate.uc` refuses to build a config where both claim it (and bails before writing `/tmp/singbox-ui.json`, so the last known-good config survives), and `init.d` refuses to start on that refusal. The UI disables the loser's checkbox, so the conflict is only reachable by hand-editing UCI.
 
 ### `mixed` protocol fields
 

@@ -189,6 +189,65 @@ function ruleset_active(cur, s) {
 	return true;
 }
 
+// --- Who owns the transparent path? ---------------------------------------
+//
+// Exactly ONE thing may own system routing / the firewall:
+//   tproxy.nft_rules — our `inet singbox_ui` table + the ip rule
+//   tun.auto_route   — sing-box's own policy routing (auto_redirect rides on it
+//                      and installs sing-box's OWN nft rules, fw4 compat
+//                      included, so our table plays no part in TUN mode)
+// A tun with auto_route OFF is just a netdev that intercepts nothing, so it does
+// not compete. nftables.uc and generate.uc both ask HERE, so the nft path and the
+// conflict guard cannot drift apart (and the frontend's exclusivity has one
+// backend truth to mirror).
+//
+// The polarity differs per field, and it is NOT a style choice:
+//
+//   field             default  emitted to sing-box JSON?              test
+//   tproxy.nft_rules     1     no  (no json_key — UI/UCI-only,       !== "0"
+//                                   read by nftables.uc)
+//   tun.auto_route       0     yes (json_key + coerce: "bool")       === "1"
+//
+// tun.auto_route's default was 1 until 61534499. LuCI's CBIAbstractValue.parse()
+// REMOVES an option whose submitted value equals its `default` (rmempty defaults
+// true), so ticking a box that defaults to ON deleted it from UCI — and _filler
+// emits a bool only on "1", so the tun routed nothing. With default 0 an explicit
+// "1" is the only truth: unset means OFF for emission, for `requires` and for
+// ownership alike. Reading unset as ON here would let that dead tun claim
+// ownership and switch tproxy's nft rules OFF — no interception at all, silently.
+//
+// transparent_claims(cur) — the one scan: first enabled CLAIMANT of each kind.
+// Returns { tproxy: <section|null>, tun: <section|null> }.
+function transparent_claims(cur) {
+	let c = { tproxy: null, tun: null };
+	cur.foreach("singbox-ui", "inbound", function(s) {
+		if (s.enabled === "0") return;
+		if (s.protocol === "tproxy" && s.nft_rules  !== "0" && !c.tproxy) c.tproxy = s;
+		if (s.protocol === "tun"    && s.auto_route === "1" && !c.tun)    c.tun    = s;
+	});
+	return c;
+}
+
+// transparent_owner(cur) — { kind, name } of the owner, or null when nobody
+// claims it. tproxy wins a tie, but a tie is a conflict and generate.uc refuses
+// to build one at all.
+function transparent_owner(cur) {
+	let c = transparent_claims(cur);
+	if (c.tproxy) return { kind: "tproxy", name: c.tproxy[".name"] };
+	if (c.tun)    return { kind: "tun",    name: c.tun[".name"] };
+	return null;
+}
+
+// transparent_conflict(cur) — a tproxy AND a tun both claim it. The UI makes this
+// unreachable (the loser's checkbox is disabled), so reaching it means UCI was
+// hand-edited. Returns { tproxy: <name>, tun: <name> } or null.
+function transparent_conflict(cur) {
+	let c = transparent_claims(cur);
+	return (c.tproxy && c.tun)
+		? { tproxy: c.tproxy[".name"], tun: c.tun[".name"] }
+		: null;
+}
+
 return {
 	uci_get_or_empty,
 	s_opt,
@@ -207,4 +266,7 @@ return {
 	core_at_least,
 	builtin_rulesets_on,
 	ruleset_active,
+	transparent_claims,
+	transparent_owner,
+	transparent_conflict,
 };

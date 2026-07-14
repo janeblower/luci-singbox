@@ -97,7 +97,19 @@ __do_start() {
 	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$RULESETS_UC" fetch &
 	wait
 
-	ucode -L "$UCODE_LIB" "$GENERATE_UC"
+	# Respect the generator's exit code. generate.uc refuses (and bails BEFORE
+	# writing /tmp/singbox-ui.json) when the config has no defined meaning — e.g.
+	# a tproxy inbound and a tun inbound both claiming system routing. The OLD
+	# config is therefore still sitting there, and without this check procd would
+	# happily start the daemon on it: we would report success while silently
+	# discarding the operator's edit.
+	if ! ucode -L "$UCODE_LIB" "$GENERATE_UC"; then
+		logger -t singbox-ui "refusing to start: config generation failed (see the message above)"
+		mkdir -p /var/lib/singbox-ui
+		echo "{\"last_apply_ts\":$(date +%s),\"last_apply_result\":\"failed\"}" \
+			> /var/lib/singbox-ui/apply_state.json
+		return 1
+	fi
 
 	# If neither a fresh download nor a cached config produced anything,
 	# refuse to start; cron will re-run subscription.uc in ≤30 min and call

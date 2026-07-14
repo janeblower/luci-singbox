@@ -32,6 +32,25 @@ let ruleset_mod  = require("ruleset");
 let cache_mod    = require("cache");
 let clash_mod    = require("clash");
 
+// Two interceptors on one LAN is not a config with a defined meaning: a tproxy
+// inbound owning our `inet singbox_ui` table AND a tun inbound owning auto_route
+// both claim the same traffic, and which one wins comes down to nft hook order.
+// `sing-box check` cannot catch it — both halves are individually valid — so the
+// invariant is ours to guard. The UI disables the loser's checkbox, so getting
+// here means UCI was edited by hand.
+//
+// Refuse loudly instead of writing a config whose behaviour we cannot predict. We
+// bail BEFORE touching CONFIG_OUT, so the last known-good config survives and the
+// daemon keeps running on it; init.d turns this non-zero exit into a refusal to
+// (re)start rather than starting on the stale file.
+let tconf = helpers.transparent_conflict(uci);
+if (tconf != null) {
+	warn(sprintf("generate.uc: refusing to build — inbound '%s' (tproxy nft rules) and inbound '%s' (tun auto_route) both claim system routing. Exactly one may. Turn off the nftables rules on '%s' or auto_route on '%s'.\n",
+		tconf.tproxy, tconf.tun, tconf.tproxy, tconf.tun));
+	try { log_mod.log_event("error", "config.transparent_conflict", tconf); } catch (_) {}
+	exit(1);
+}
+
 let config = {};
 
 let log_block = log_mod.build_log(uci);

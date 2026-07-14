@@ -532,18 +532,12 @@ function nft_delete_table_quiet() {
 // cmd_remove lives further down, next to cmd_apply: it takes the same apply-lock,
 // and ucode resolves a top-level function only if it is defined ABOVE the caller.
 
-// first_nft_tproxy(cur) — first enabled inbound with protocol=tproxy and
-// nft_rules not explicitly "0". Returns the section object or null.
+// first_nft_tproxy(cur) — the tproxy inbound that owns our nft table (first
+// enabled one with nft_rules not explicitly "0"), or null. Ownership is decided
+// in ONE place — helpers.transparent_claims — so this path and generate.uc's
+// tproxy-vs-tun conflict guard cannot drift apart.
 function first_nft_tproxy(cur) {
-	let found = null;
-	cur.foreach("singbox-ui", "inbound", function(s) {
-		if (found) return;
-		if (s.enabled === "0") return;
-		if (s.protocol !== "tproxy") return;
-		if (s.nft_rules === "0") return;
-		found = s;
-	});
-	return found;
+	return helpers.transparent_claims(cur).tproxy;
 }
 
 // count_nft_tproxy(cur) — number of enabled inbounds qualifying for the
@@ -562,15 +556,16 @@ function count_nft_tproxy(cur) {
 	return n;
 }
 
-// any_nft_transparent(cur) — true if a tproxy or tun inbound requests nft rules.
+// any_nft_transparent(cur) — true if a tproxy inbound requests our nft rules.
+//
+// A tun inbound NEVER appears here. With auto_route + auto_redirect sing-box
+// installs its OWN nftables rules — including compatibility rules for the OpenWrt
+// fw4 table — so our `inet singbox_ui` table plays no part in TUN mode. The old
+// `s.protocol === "tun" && s.nft_rules === "1"` branch was a stub for a design
+// that was never built (tun has no nft_rules field, and never will); it could only
+// ever have installed a redundant, conflicting table.
 function any_nft_transparent(cur) {
-	let yes = false;
-	cur.foreach("singbox-ui", "inbound", function(s) {
-		if (s.enabled === "0") return;
-		if (s.protocol === "tproxy" && s.nft_rules !== "0") yes = true;
-		if (s.protocol === "tun"    && s.nft_rules === "1") yes = true;
-	});
-	return yes;
+	return first_nft_tproxy(cur) != null;
 }
 
 // first_fakeip(cur) — ranges of the first enabled dns_server with type=fakeip.
