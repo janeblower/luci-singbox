@@ -132,19 +132,39 @@ const SbViewState: any = {
     return SbViewState._compatOnly;
   },
 };
-const SbCommon = {
-  compareVersions(a: string, b: string) {
-    const pa = String(a).split(".").map(Number);
-    const pb = String(b).split(".").map(Number);
-    const len = Math.max(pa.length, pb.length);
-    for (let i = 0; i < len; i++) {
-      const na = pa[i] || 0;
-      const nb = pb[i] || 0;
-      if (na !== nb) return na > nb ? 1 : -1;
-    }
-    return 0;
-  },
-};
+// The REAL lib/common.js over the SAME uci stub, not a hand-written SbCommon.
+// rulesetActive() is THE frontend mirror of helpers.ruleset_active(): one copy,
+// shared by the rule-set picker here and by the grid in tabs/route.js. Stubbing it
+// would let this test pass while the two frontends disagreed — which is the exact
+// failure mode it exists to catch (the picker offering a rule-set the backend
+// prunes; for tun.route_address_set that inverts the tunnel).
+function loadCommon(): Record<string, any> {
+  const src = readFileSync(resolve(VIEW_ROOT, "lib/common.js"), "utf8")
+    .replace(/^'use strict';\s*/, "")
+    .replace(/^'require [^']+';\s*/gm, "")
+    .replace(
+      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
+      "__moduleExports = $1;",
+    );
+  const sandbox: Record<string, unknown> = {
+    __moduleExports: null,
+    _: (s: unknown) => s,
+    L: { Class: { extend: (o: unknown) => o } },
+    E: () => ({}),
+    form,
+    ui: {},
+    uci,
+    SbRpc: {},
+    window: { setTimeout: () => {} },
+    console,
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(`(function() {${src}})();`, sandbox, { filename: "common.js" });
+  return sandbox.__moduleExports as Record<string, any>;
+}
+
+// ...which also brings the real compareVersions() the version gate uses.
+const SbCommon = loadCommon();
 const network = {
   getDevices() {
     return Promise.resolve([

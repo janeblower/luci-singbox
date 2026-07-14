@@ -7,6 +7,33 @@ config inbound 'tproxy_in'
 	option hijack_dns '1'
 	option nft_rules '1'
 
+# TUN — the ALTERNATIVE to tproxy, shipped DISABLED. It is not a companion to the
+# inbound above: system routing has exactly one owner. Enabling this means turning
+# the tproxy inbound's nftables rules off (the UI enforces it — the loser's
+# checkbox goes dead and names the winner; generate.uc refuses to build a config
+# where both claim it, and init.d refuses to start on that refusal). With
+# auto_route + auto_redirect sing-box installs its OWN nftables rules — fw4
+# compatibility rules included — so none of our `inet singbox_ui` table is used.
+#
+# Shipped off because turning it on would change how a fresh install behaves, and
+# because it needs kmod-tun (a hard dependency, so /dev/net/tun is there — but the
+# box may still not want a tunnel). Flip `enabled` here and on tproxy_in to switch.
+#
+# auto_route/auto_redirect/hijack_dns are written out EXPLICITLY on purpose: their
+# descriptor default is 0, because LuCI deletes an option whose value equals its
+# default, so a default-1 emitted bool could never be persisted at all. Unset means
+# OFF for these — a seeded tun with no auto_route would route nothing.
+config inbound 'tun_in'
+	option enabled '0'
+	option protocol 'tun'
+	list   address '172.19.0.1/30'
+	list   address 'fdfe:dcba:9876::1/126'
+	option interface_name 'singbox-tun'
+	option stack 'system'
+	option auto_route '1'
+	option auto_redirect '1'
+	option hijack_dns '1'
+
 # NO default routing is shipped: no outbound, no route rules, no route_default.
 #
 # The routing this used to ship was wrong, and wrong in the direction that

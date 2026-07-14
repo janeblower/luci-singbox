@@ -75,6 +75,7 @@ function loadDF(vstate: VersionState) {
     Value: FakeOpt,
     ListValue: FakeOpt,
     DynamicList: FakeOpt,
+    MultiValue: FakeOpt,
   };
 
   const SbViewState = {

@@ -44,6 +44,14 @@ check '"type": "tproxy"'  'tproxy inbound'
 check '"listen_port": 7893'  'tproxy port'
 check '"action": "hijack-dns"'  'hijack-dns'
 
+# -- the seeded tun_in is DISABLED and must not reach the config. It is the
+# ALTERNATIVE to the tproxy inbound above, not a companion: system routing has
+# exactly one owner, and if this one ever emitted, generate.uc would refuse to
+# build at all (rc 3, both claim the "transparent" group) and the box would come
+# up with no config. Shipping it enabled would also change how a fresh install
+# behaves — you flip two toggles to switch, deliberately.
+echo "$OUT" | grep -q '"type": "tun"' && { echo "CHECK_FAIL: the seeded tun_in must ship DISABLED"; exit 1; }
+
 # -- The shipped config carries NO routing opinion: no outbound, no route rule,
 # no route_default, no dns_rule. The routing it used to ship was wrong in the
 # direction that silently does nothing: it sent russia_inside — the itdoginfo list

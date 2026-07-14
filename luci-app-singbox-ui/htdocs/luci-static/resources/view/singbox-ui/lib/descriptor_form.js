@@ -108,22 +108,6 @@ function tagField(opt, name, control) {
     }
 }
 
-// Frontend mirror of helpers.ruleset_active() — the backend's ONE predicate for
-// "is this rule-set live". It honours the built-in master switch
-// (main.default_rulesets, unset = ON) on top of the section's own `enabled`, and
-// route.uc / dns.uc / nft-rulesets.uc all PRUNE anything it rejects.
-//
-// The picker must offer nothing the backend then throws away: a reference to a
-// pruned rule-set is dropped with a warn the user never sees. For
-// tun.route_address_set that silent prune INVERTS the tunnel — the field means
-// "ONLY these CIDRs enter the tun", so losing it makes the tun capture the whole
-// address space.
-function rulesetActive(s) {
-    if (s.enabled === '0') return false;
-    if (s.builtin === '1' && uci.get('singbox-ui', 'main', 'default_rulesets') === '0') return false;
-    return true;
-}
-
 // Dynamic selectors: options are populated from live UCI / network state at
 // .load() time instead of a static `values` array. Generalises the
 // loadOutboundList() pattern from tabs/common.js over a `source` discriminator.
@@ -135,9 +119,11 @@ function dynamicChoices(source) {
     if (source === 'dns_servers')
         return uci.sections('singbox-ui', 'dns_server')
             .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
+    // SbCommon.rulesetActive — THE frontend mirror of helpers.ruleset_active().
+    // The picker must offer nothing the backend prunes; see the comment there.
     if (source === 'rulesets')
         return uci.sections('singbox-ui', 'ruleset')
-            .filter(rulesetActive)
+            .filter(SbCommon.rulesetActive)
             .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
     if (source === 'route_rules')
         return uci.sections('singbox-ui', 'route_rule')
@@ -206,6 +192,33 @@ function attachDynamic(opt, field) {
         dynamicChoices(field.dynamic).forEach(function (kv) { self.value(kv[0], kv[1]); });
         return form.ListValue.prototype.load.apply(this, arguments);
     };
+}
+
+// Everything a form.MultiValue needs beyond its constructor. Called from BOTH
+// places that create one (applyMaterialized and applyNamed) — the two must not
+// drift.
+//
+//  * create: the "-- custom --" row. MANDATORY for netdev lists (eth0.100 /
+//    pppoe-wan are not enumerable, a strict whitelist would make them
+//    unreachable) and correct for the rest: on a LIST, `values` is a set of
+//    suggestions, not a whitelist (only `enum` is strict), and a section
+//    reference may name a tag that comes from a subscription, not from UCI.
+//
+//  * transformChoices: LuCI's CBIMultiValue returns NULL from it when the option
+//    has no choices at all, and its renderWidget hands that straight to
+//    ui.Dropdown, which starts with Object.keys(choices) — TypeError, and the
+//    modal renders half-built with no visible complaint. A DYNAMIC source is
+//    empty exactly when the sections it lists do not exist yet, which is not an
+//    exotic state: `group_outbounds` lists the OTHER outbounds, so a box with a
+//    single outbound offers none — and a fresh install ships ZERO, so the very
+//    first "Add outbound" hits it. Same for a tun's `route_address_set` with the
+//    built-in rule-sets switched off and none of your own. Caught in the dev
+//    stand; invisible before task 7, when a list with choices was a DynamicList
+//    and an empty datalist was simply an empty datalist.
+function armMultiValue(opt) {
+    opt.create = true;
+    var orig = opt.transformChoices;
+    opt.transformChoices = function () { return orig.call(this) || {}; };
 }
 
 function labelFor(field) {
@@ -642,19 +655,19 @@ function applyMaterialized(s, kind, protoName, materialized) {
         var W = widgetFor(f);
         var opt = s.taboption(f.tab, W, f.name, _(labelFor(f)));
         opt.modalonly = true;
-        // Free entry on every checkbox dropdown ("-- custom --" row). MANDATORY
-        // for netdev lists — eth0.100 / pppoe-wan are not enumerable and a strict
-        // whitelist would make them unreachable — and correct for the rest: on a
-        // LIST, `values` is a datalist of suggestions, not a whitelist (only
-        // `enum` is strict), and a section reference may name a tag that comes
-        // from a subscription rather than from a UCI section.
-        if (W === form.MultiValue) opt.create = true;
+        if (W === form.MultiValue) armMultiValue(opt);
 
         depsArmsFor(f, protoName).forEach(function (d) { opt.depends(d); });
 
         if (f.required)        opt.rmempty = false;
         if (f.default != null) opt.default = String(f.default);
-        if (f.placeholder)     opt.placeholder = f.placeholder;
+        // NOT on a MultiValue. On a text input `placeholder` is ghost text in an
+        // EMPTY field; CBIMultiValue.renderWidget maps the same property to
+        // ui.Dropdown's `select_placeholder` — the caption on the CLOSED bar. So
+        // tls_alpn's "h2 / http/1.1" rendered as a collapsed dropdown that read as
+        // if two values were already picked. A list with choices needs no ghost
+        // text: the choices ARE the hint.
+        if (f.placeholder && W !== form.MultiValue) opt.placeholder = f.placeholder;
         // UX-2: surface per-field inline help when the descriptor carries it.
         // `ui_help` is optional and must be whitelisted in schema_dump.uc
         // FIELD_WHITELIST to reach the frontend. No-op when not declared.
@@ -713,10 +726,16 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         if (gate.mode === 'hide') return;
         var W = widgetFor(f);
         var opt = s.option(W, f.name, _(labelFor(f)));
-        if (W === form.MultiValue) opt.create = true;   // free entry — see applyMaterialized
+        if (W === form.MultiValue) armMultiValue(opt);
         if (f.required)        opt.rmempty = false;
         if (f.default != null) opt.default = String(f.default);
-        if (f.placeholder)     opt.placeholder = f.placeholder;
+        // NOT on a MultiValue. On a text input `placeholder` is ghost text in an
+        // EMPTY field; CBIMultiValue.renderWidget maps the same property to
+        // ui.Dropdown's `select_placeholder` — the caption on the CLOSED bar. So
+        // tls_alpn's "h2 / http/1.1" rendered as a collapsed dropdown that read as
+        // if two values were already picked. A list with choices needs no ghost
+        // text: the choices ARE the hint.
+        if (f.placeholder && W !== form.MultiValue) opt.placeholder = f.placeholder;
         var help = f.ui_help;
         if (help) opt.description = _(help);
         // depends arms: advanced toggle + per-value depends + parent_enabled.

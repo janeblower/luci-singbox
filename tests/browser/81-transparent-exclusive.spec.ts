@@ -31,12 +31,23 @@ async function flagState(page: import('@playwright/test').Page, field: string) {
         if (!node) return null;
         const row = node.closest('.cbi-value');
         const cb = node.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        // The caption is the ONLY thing that says WHY the box is dead: CLAUDE.md's
+        // own trap is that the theme gives a disabled control opacity .7 and it
+        // still reads as live. So it is not enough for the text to be in
+        // textContent — it has to be on screen.
+        const cap = node.querySelector('.cbi-value-description') as HTMLElement | null;
         return {
             rowVisible: row instanceof HTMLElement
                 ? getComputedStyle(row).display !== 'none' : false,
             disabled: cb ? cb.disabled : null,
             checked: cb ? cb.checked : null,
             text: (node.textContent || '').trim(),
+            captionVisible: cap
+                ? (cap.offsetParent !== null
+                    && getComputedStyle(cap).display !== 'none'
+                    && getComputedStyle(cap).visibility !== 'hidden'
+                    && (cap.textContent || '').trim().length > 0)
+                : false,
         };
     }, field);
 }
@@ -73,6 +84,8 @@ test.describe('tproxy owns it; the tun routes nothing', () => {
         assert('tun auto_route forced off', auto?.checked === false, auto);
         assert('caption names the owning inbound',
             (auto?.text || '').includes('tproxy_in'), auto);
+        assert('caption is actually VISIBLE, not just in textContent',
+            auto?.captionVisible === true, auto);
         await dismissModal(page);
     });
 });
@@ -95,6 +108,8 @@ test.describe('the tun owns it once tproxy gives it up', () => {
             nft?.disabled === true, nft);
         assert('tproxy nft_rules forced off', nft?.checked === false, nft);
         assert('caption names the owning inbound', (nft?.text || '').includes(TUN), nft);
+        assert('caption is actually VISIBLE, not just in textContent',
+            nft?.captionVisible === true, nft);
         await dismissModal(page);
     });
 });

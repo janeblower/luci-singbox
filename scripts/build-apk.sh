@@ -55,7 +55,7 @@ ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 # (libc is apk's base dep; jq was dropped — not used by any shipped on-device code.)
 SINGBOX_NAME="singbox-ui"
 SINGBOX_DESC="singbox-ui backend (config generator, nftables, subscriptions)"
-SINGBOX_DEPENDS="libc sing-box curl ucode ucode-mod-fs kmod-nft-socket kmod-nft-tproxy"
+SINGBOX_DEPENDS="libc sing-box curl ucode ucode-mod-fs kmod-nft-socket kmod-nft-tproxy kmod-tun"
 SINGBOX_CONFFILE="/etc/config/singbox-ui"
 
 # 3) luci-app-singbox-ui — noarch LuCI frontend. luci-base is implicit via the

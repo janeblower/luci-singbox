@@ -13,8 +13,11 @@ return {
           ui_label: "Skip certificate verification", default: 0,
           parent_enabled: "tls_enabled" },
 
+        // No `placeholder`: a list WITH values renders as a checkbox dropdown, and
+        // its placeholder is the CLOSED bar's caption, not ghost text — "h2 /
+        // http/1.1" there read as "two values already selected".
         { name: "tls_alpn", type: "list", tab: "tls",
-          ui_label: "ALPN", placeholder: "h2 / http/1.1",
+          ui_label: "ALPN",
           values: ["h2", "http/1.1", "h3"], validate: "alpn",
           parent_enabled: "tls_enabled", advanced: true },
         { name: "tls_min_version", type: "enum", tab: "tls",

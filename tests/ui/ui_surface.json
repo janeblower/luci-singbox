@@ -31,6 +31,11 @@
 
   { "id": "inbound.transparent.exclusive", "tab": "inbounds", "kind": "grid-op", "label": "Inbound: only one owner of system routing (tproxy.nft_rules vs tun.auto_route)" },
 
+  { "id": "inbound.tun.fields",         "tab": "inbounds", "kind": "modal", "label": "TUN: the modal renders (stack, MTU, address, auto_route, ...)" },
+  { "id": "inbound.tun.depends_chain",  "tab": "inbounds", "kind": "modal", "label": "TUN: auto_route off hides auto_redirect AND its transitive dependants" },
+  { "id": "inbound.tun.ruleset_picker", "tab": "inbounds", "kind": "modal", "label": "TUN: the rule-set picker offers exactly what generate emits" },
+  { "id": "inbound.tun.device_choices",  "tab": "inbounds", "kind": "modal", "label": "TUN: each netdev choice is offered exactly once" },
+
   { "id": "grid.route_rule.add",   "tab": "route", "kind": "grid-op", "label": "Route Rule: Add" },
   { "id": "grid.route_rule.edit",  "tab": "route", "kind": "grid-op", "label": "Route Rule: Edit" },
   { "id": "grid.route_rule.logical", "tab": "route", "kind": "grid-op", "label": "Route Rule: logical sub-rules" },

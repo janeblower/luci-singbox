@@ -41,6 +41,16 @@ describe("package dependencies (build-apk.sh is the single source of truth)", ()
       expect(deps).toContain(need);
   });
 
+  // The two transparent-proxy paths each need their kernel module, and neither
+  // failure is loud: without kmod-nft-tproxy the nft ruleset does not load;
+  // without kmod-tun there is no /dev/net/tun, sing-box dies at start and the
+  // dashboard just says "service stopped".
+  it("SINGBOX_DEPENDS carries the kernel modules both transparent paths need", () => {
+    const deps = dependsOf("SINGBOX_DEPENDS");
+    for (const need of ["kmod-nft-socket", "kmod-nft-tproxy", "kmod-tun"])
+      expect(deps).toContain(need);
+  });
+
   it("no OpenWrt buildroot Makefile survives (apk-only, per docs/release.md)", () => {
     for (const mk of [
       "singbox-ui/Makefile",

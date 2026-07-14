@@ -144,17 +144,21 @@ function loadCommon(
   return Object.assign(mod, { clock });
 }
 
+// route.js's builtinsOn IS SbCommon.builtinRulesetsOn — one predicate, mirroring
+// the backend's one helpers.builtin_rulesets_on(). So SbCommon here is the REAL
+// common.js over the same UCI state, not a stub: stubbing it would let the two
+// drift apart and still pass, which is the whole failure mode being guarded.
 function loadRoute(state: Record<string, UciSection>): {
   builtinsOn: () => boolean;
 } {
+  const uci = mkUci(state);
+  const SbCommon = evalModule("lib/common.js", {
+    uci,
+    window: { setTimeout: () => {} },
+  });
   return evalModule("tabs/route.js", {
-    uci: mkUci(state),
-    SbCommon: {
-      addRenameField: () => {},
-      applyVersionGate: () => {},
-      lockBuiltinRow: () => {},
-      loadOutboundList: () => {},
-    },
+    uci,
+    SbCommon,
     descriptor_form: { applyMaterialized: () => {} },
     SbViewState: { getSchema: () => ({}), getCoreVersion: () => "" },
   }) as unknown as { builtinsOn: () => boolean };

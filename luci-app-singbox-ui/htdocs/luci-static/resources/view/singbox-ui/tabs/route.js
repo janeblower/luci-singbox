@@ -14,12 +14,10 @@ var RULE_SET_TYPES   = [['remote', _('Remote')], ['local', _('Local')], ['inline
 
 function toArray(v) { return (v == null) ? [] : (Array.isArray(v) ? v : [v]); }
 
-// The built-in rule-sets' master switch. Unset means ON — mirrors
-// helpers.builtin_rulesets_on() in the backend, which must agree or the grid
-// shows rows the generated config does not contain.
-function builtinsOn() {
-	return uci.get('singbox-ui', 'main', 'default_rulesets') !== '0';
-}
+// The built-in rule-sets' master switch. THE mirror of helpers.builtin_rulesets_on()
+// lives in lib/common.js — one copy, because the grid and the rule-set picker must
+// not be able to disagree with each other or with the backend.
+var builtinsOn = SbCommon.builtinRulesetsOn;
 
 // Map default route_rule name -> ["logical:<name>", "inline:<name>", ...].
 function consumedMap() {

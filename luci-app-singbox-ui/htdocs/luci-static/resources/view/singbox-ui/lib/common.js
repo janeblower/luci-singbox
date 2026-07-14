@@ -129,6 +129,29 @@ function addRenameField(s, tab) {
 // point of shipping the rule-sets.
 function isBuiltin(sid) { return uci.get('singbox-ui', sid, 'builtin') === '1'; }
 
+// THE frontend mirror of helpers.ruleset_active() / helpers.builtin_rulesets_on().
+// ONE place, exactly as the backend keeps ONE predicate — it lived in tabs/route.js
+// (the grid) AND in lib/descriptor_form.js (the rule-set picker), and two copies of
+// a rule the backend enforces is a disagreement waiting to happen.
+//
+// The backend PRUNES whatever this rejects (route.uc, dns.uc, nft-rulesets.uc), so
+// the picker must offer nothing the backend then throws away: a reference to a
+// pruned rule-set is dropped with a warn nobody sees. For tun.route_address_set
+// that silent prune INVERTS the tunnel — the field means "ONLY these CIDRs enter
+// the tun", so losing every entry makes the tun capture the whole address space.
+//
+// Unset means ON (NO-migration: an install that predates the option must not
+// silently lose its rule-sets); only an explicit "0" turns them off.
+function builtinRulesetsOn() {
+	return uci.get('singbox-ui', 'main', 'default_rulesets') !== '0';
+}
+
+function rulesetActive(s) {
+	if (s.enabled === '0') return false;
+	if (s.builtin === '1' && !builtinRulesetsOn()) return false;
+	return true;
+}
+
 // tintBuiltinRow(td, trEl) — add .sb-builtin-row to the row owning the action cell.
 //
 // LuCI master hands renderRowActions the <tr> it is building. The LuCI shipped in
@@ -436,6 +459,8 @@ return L.Class.extend({
     addRenameField:    addRenameField,
     renameRefs:        renameRefs,
     isBuiltin:         isBuiltin,
+    builtinRulesetsOn: builtinRulesetsOn,
+    rulesetActive:     rulesetActive,
     lockBuiltinRow:    lockBuiltinRow,
     wireTabs:          wireTabs,
     notify:            notify,

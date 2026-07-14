@@ -129,6 +129,19 @@ test('xcut: MultiValue dropdown has checkboxes and stays open across picks', asy
 
     const isOpen = () => dd.evaluate((el: Element) => el.hasAttribute('open'));
 
+    // A `placeholder` on a MultiValue is NOT ghost text. CBIMultiValue.renderWidget
+    // maps it to ui.Dropdown's `select_placeholder` — the caption on the CLOSED bar
+    // — where tls_alpn's old "h2 / http/1.1" read as "two values already picked".
+    // descriptor_form now refuses to pass placeholder to a MultiValue at all, so the
+    // bar shows LuCI's own "-- Please choose --".
+    //
+    // A substring check, not an equality one: the closed widget's innerText also
+    // carries the (clipped, not display:none) choice labels — "h2http/1.1h3<bar>" —
+    // so `!== 'h2 / http/1.1'` would have passed WITH the bug still in place.
+    const closedText = await dd.innerText();
+    assert('the collapsed bar does not advertise picked values',
+        !closedText.includes('h2 / http/1.1'), closedText);
+
     await dd.click();                                  // open it once
     assert('dropdown opened on click', await isOpen());
 
@@ -153,6 +166,45 @@ test('xcut: MultiValue dropdown has checkboxes and stays open across picks', asy
     await expect(dd.locator('ul.dropdown > li[data-value="-"] input.create-item-input')).toHaveCount(1);
 
     await dismissModal(page);
+});
+
+// A MultiValue with ZERO choices is not an exotic state — it is a FRESH INSTALL.
+// The seed ships no outbounds at all, so the first "Add outbound" leaves exactly
+// one section, and `group_outbounds` (dynamic: outbounds) lists the OTHERS: none.
+// LuCI's CBIMultiValue.transformChoices() returns null on an empty keylist and its
+// renderWidget hands that to ui.Dropdown, which opens with Object.keys(choices) —
+// TypeError, and the modal renders half-built. armMultiValue() substitutes {}.
+//
+// This crash arrived with the MultiValue migration (task 7) and no lane saw it:
+// baseline.uci ships the `wan` outbound, so every existing spec's Add modal had one
+// other outbound to offer and never hit zero. The dev stand did — with one outbound
+// in UCI, the whole outbound modal broke. Deleting `wan` reproduces the fresh box.
+// pageerrors is an auto-fixture: any exception fails this test on its own.
+test.describe('a fresh box has nothing to offer', () => {
+    test.use({ uciSeed: 'uci -q delete singbox-ui.wan; uci commit singbox-ui' });
+
+    test('xcut: a MultiValue with zero choices renders (it does not crash the modal)', async ({ page }) => {
+        await openAddModal(page, 'outbound', '_xc_empty');
+        await setProtocolInModal(page, 'vless', 'Type');
+
+        // group_outbounds is the empty one: the section being added is the only
+        // outbound, and a group may not contain itself.
+        const empty = page.locator('#modal_overlay [data-sb-field="group_outbounds"]');
+        await expect(empty).toHaveAttribute('data-sb-control', 'multi');
+        await expect(empty.locator('ul > li[data-value]:not([data-value="-"])')).toHaveCount(0);
+        // ...and free entry survives, which is the whole affordance left: you can
+        // still type a member name that no UCI section has yet.
+        await expect(empty.locator('ul > li[data-value="-"]')).toHaveCount(1);
+
+        // The modal finished building: a field declared AFTER the empty dropdown is
+        // there. Before the fix the render threw and the rest never appeared.
+        await clickTab(page, 'tls');
+        await fillField(page, 'Enable TLS', '1', { kind: 'flag' });
+        await wait(500);
+        await expect(page.locator('#modal_overlay [data-sb-field="tls_alpn"]')).toHaveCount(1);
+
+        await dismissModal(page);
+    });
 });
 
 test('xcut: version-gate disables a too-new field with a note', async ({ page }) => {
