@@ -43,6 +43,16 @@ var RENAME_REFS = {
 	ruleset: [
 		['route_rule', 'rule_set', true],
 		['dns_rule',   'rule_set', true],
+		// A tun inbound's route_address_set / route_exclude_address_set name rule-set
+		// sections too (Task 5). Before Task 5 a stale tun reference made sing-box
+		// refuse the config outright — loud and obvious. Task 5's prune (inbound.uc)
+		// now silently drops a reference to a rule-set that no longer exists, which
+		// turns a missed rename here into a SILENT full-tunnel: the tun's
+		// route_address_set goes empty, and "only these rule-sets enter the tunnel"
+		// becomes "everything enters the tunnel". Keeping this table in sync with the
+		// rename is what keeps that path loud.
+		['inbound',    'route_address_set',         true],
+		['inbound',    'route_exclude_address_set', true],
 	],
 	route_rule: [
 		['route_rule', 'rules', true],

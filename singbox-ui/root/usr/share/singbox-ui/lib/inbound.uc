@@ -12,6 +12,7 @@
 let helpers = require("helpers");
 let reg     = require("builder.protocols.registry");
 let filler  = require("builder._filler");
+let log_mod = require("log");
 
 // Eagerly load every active inbound descriptor so register() fires. S2.1: each
 // require() is wrapped so one malformed descriptor file logs+skips instead of
@@ -41,6 +42,17 @@ const TUN_RS_KEYS = [ "route_address_set", "route_exclude_address_set" ];
 // honours the builtin master switch `main.default_rulesets`).
 // Deletes the key entirely when nothing survives — an empty array is not the
 // same as an absent one.
+//
+// This is NOT a harmless prune. tun.uc's own help text: "Only traffic matching
+// these rule-sets' IP CIDRs enters the tunnel; everything else bypasses it." A
+// route_address_set with nothing left in it means the tun captures the ENTIRE
+// address space instead of "only these" — the mirror case
+// (route_exclude_address_set) drags bypass traffic INTO the tunnel instead. Both
+// directions are silent otherwise: warn() alone goes to stderr, and every
+// production path (procd's start_service child, rpcd's `>/dev/null 2>&1`
+// wrappers) throws stderr away — log_event popens `logger` itself and is the
+// only channel the operator actually reads (mirrors generate.uc:70's
+// transparent_conflict precedent).
 function prune_dead_ruleset_refs(out, s, cur) {
 	let rs_active = {};
 	cur.foreach("singbox-ui", "ruleset", function(r) {
@@ -53,17 +65,15 @@ function prune_dead_ruleset_refs(out, s, cur) {
 			if (rs_active[n]) { push(kept, n); continue; }
 			warn(sprintf("inbound.uc: tun '%s': rule-set '%s' is not active; dropping from %s\n",
 			             s[".name"], n, key));
+			try { log_mod.log_event("warn", "config.tun_ruleset_pruned",
+			      { inbound: s[".name"], key: key, ruleset: n }); } catch (_) {}
 		}
 		if (length(kept)) out[key] = kept;
 		else delete out[key];
 	}
 }
 
-// `cur` is optional: build_one(s) alone still works for the descriptor-level
-// callers (tests, parity). It is threaded in from build_inbounds so a tun can
-// drop references to rule-sets that are not active — filtering here rather than
-// in the descriptor keeps the descriptor declarative and invertible.
-function build_one(s, cur) {
+function build_one(s) {
 	let proto = s_opt(s, "protocol");
 	if (!proto) return null;
 	let d = reg.get("inbound", proto);
@@ -71,17 +81,17 @@ function build_one(s, cur) {
 		warn(sprintf("inbound.uc: no descriptor for '%s'\n", proto));
 		return null;
 	}
-	let out = (type(d.emit) === "function") ? d.emit(s) : filler.build(d, s);
-	if (out != null && proto === "tun" && cur != null) prune_dead_ruleset_refs(out, s, cur);
-	return out;
+	return (type(d.emit) === "function") ? d.emit(s) : filler.build(d, s);
 }
 
 function build_inbounds(cur) {
 	let out = [];
 	cur.foreach("singbox-ui", "inbound", function(s) {
 		if (s.enabled === "0") return;
-		let one = build_one(s, cur);
-		if (one != null) push(out, one);
+		let one = build_one(s);
+		if (one == null) return;
+		if (s_opt(s, "protocol") === "tun") prune_dead_ruleset_refs(one, s, cur);
+		push(out, one);
 	});
 	return out;
 }
@@ -106,9 +116,17 @@ function referenced_rulesets(inbounds) {
 	let seen = {};
 	for (let one in inbounds ?? []) {
 		if (one.type !== "tun") continue;
-		for (let key in TUN_RS_KEYS)
-			for (let n in one[key] ?? [])
+		for (let key in TUN_RS_KEYS) {
+			// sing-box treats these fields as listable: a bare string ("route_address_set":
+			// "ru_block") resolves as a tag exactly like a one-element array. Reachable
+			// via the `json` protocol escape hatch (raw_json), which bypasses the
+			// descriptor's `coerce: "array"`. `for (let n in <string>)` iterates zero
+			// times in ucode, so without this the tag dangles uncollected.
+			let refs = one[key] ?? [];
+			if (type(refs) === "string") refs = [ refs ];
+			for (let n in refs)
 				if (!seen[n]) { push(out, n); seen[n] = true; }
+		}
 	}
 	return out;
 }

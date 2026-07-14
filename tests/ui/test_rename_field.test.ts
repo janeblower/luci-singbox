@@ -253,6 +253,31 @@ describe("renameRefs", () => {
     expect(state.keep.detour).toBe("someone_else");
   });
 
+  it("rewrites a tun inbound's route_address_set / route_exclude_address_set on a rule-set rename", () => {
+    // Task 5 review F2: before Task 5, a stale tun reference made sing-box
+    // refuse the config outright — loud. Task 5's prune (inbound.uc) turned
+    // that into a SILENT full-tunnel (the reference just vanishes). This
+    // table entry is what keeps a rule-set rename from creating one.
+    const state: Record<string, UciSection> = {
+      ru_block: { ".name": "ru_block", ".type": "ruleset" },
+      ru_bypass: { ".name": "ru_bypass", ".type": "ruleset" },
+      tun_in: {
+        ".name": "tun_in",
+        ".type": "inbound",
+        protocol: "tun",
+        route_address_set: ["ru_block", "other"],
+        route_exclude_address_set: "ru_bypass",
+      },
+    };
+    const { common } = loadCommon(state);
+    common.renameRefs("ruleset", "ru_block", "ru_block2");
+    common.renameRefs("ruleset", "ru_bypass", "ru_bypass2");
+
+    expect(state.tun_in.route_address_set).toEqual(["ru_block2", "other"]);
+    // A single-item UCI list arrives as a scalar; it must still be rewritten.
+    expect(state.tun_in.route_exclude_address_set).toEqual(["ru_bypass2"]);
+  });
+
   it("leaves unrelated kinds alone", () => {
     const state: Record<string, UciSection> = {
       rr: { ".name": "rr", ".type": "route_rule", outbound: "wan" },

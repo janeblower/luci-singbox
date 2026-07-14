@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
+import { runUcode } from "../helpers/ucode.ts";
 
 // A tun inbound's route_address_set / route_exclude_address_set name OUR rule-set
 // sections, and sing-box resolves those tags ITSELF. A tag with no matching
@@ -84,6 +85,41 @@ ${extra}`;
 
 function ruleSetTags(doc: any): string[] {
   return (doc?.route?.rule_set ?? []).map((r: any) => r.tag);
+}
+
+// F1 regression: a pruned tun rule-set reference must reach syslog, not just
+// stderr. warn() alone is invisible on every production path — procd does not
+// route a start_service child's stderr to syslog, and rpcd's wrappers append
+// `>/dev/null 2>&1` (generate.uc:60-64's own precedent). log_event's DEFAULT
+// sink pipes to a forked `logger` process, which this rig cannot observe from
+// outside (no syslog exists in the throwaway guest); log.uc ships a purpose
+// -built seam for exactly this instead — _set_logger_for_test — already used
+// by tests/backend/test_log_uc.test.ts. Swap it in and call the real
+// inbound.build_inbounds(cur), the same entry point generate.uc uses.
+async function prunedRulesetLog(uciBody: string): Promise<string> {
+  const dir = `/tmp/tunrs_evt_${process.pid}_${Math.random().toString(36).slice(2)}`;
+  await exec(`mkdir -p ${dir}`);
+  await putFile(uciBody, `${dir}/singbox-ui`);
+  const r = await runUcode(
+    `
+let uci_dir = getenv("UCI_CONFIG_DIR");
+let uci = uci_dir ? require("uci").cursor(uci_dir) : require("uci").cursor();
+let log = require("log");
+let inb = require("inbound");
+let captured = [];
+log._set_logger_for_test(function(level, line) { push(captured, level + "|" + line); });
+inb.build_inbounds(uci);
+for (let l in captured) print(l + "\\n");
+`,
+    [],
+    [],
+    { UCI_CONFIG_DIR: dir },
+  );
+  await exec(`rm -rf ${dir}`);
+  if (r.exitCode !== 0) {
+    throw new Error(`ucode exit ${r.exitCode}\nstderr: ${r.stderr}`);
+  }
+  return r.stdout;
 }
 
 describe("tun rule-set references (route_address_set / route_exclude_address_set)", () => {
@@ -217,5 +253,46 @@ config inbound 'tun_in'
       for (const tag of emitted) expect(defined).toContain(tag);
       expect(g.checkRc).toBe(0); // the core is the final arbiter
     }
+  });
+
+  // F1 (review): the prune inverts what the tunnel captures ("only these
+  // rule-sets enter the tunnel" -> everything enters it) and used to tell
+  // nobody but stderr. Assert the drop reaches the structured event log.
+  it("a pruned tun rule-set reference emits a structured log_event, not just stderr", async () => {
+    const log = await prunedRulesetLog(
+      RULESET("ru_block").replace("option enabled '1'", "option enabled '0'") +
+        TUN("1", "route_address_set", "ru_block"),
+    );
+    // RED before the fix: log is empty — the drop only ever reached warn()
+    // (stderr), which every production path (procd/rpcd) throws away.
+    expect(log).toContain("event=config.tun_ruleset_pruned");
+    expect(log).toContain("ruleset=ru_block");
+    expect(log).toContain("inbound=tun_in");
+    expect(log).toMatch(/^warn\|/m);
+  });
+
+  // F4 (review): sing-box treats route_address_set as listable, so a bare
+  // string ("route_address_set": "ru_block") resolves as a tag exactly like a
+  // one-element array. The declarative tun descriptor always coerces to an
+  // array (coerce: "array"), so this is reachable only through the `json`
+  // protocol escape hatch (raw_json), which bypasses the descriptor entirely.
+  it("a scalar route_address_set (json escape hatch) is still DEFINED, not left dangling", async () => {
+    const raw = JSON.stringify({
+      type: "tun",
+      address: ["172.19.0.1/30"],
+      auto_route: true,
+      route_address_set: "ru_block", // bare string, not an array
+    });
+    const uci =
+      RULESET("ru_block") +
+      `\nconfig inbound 'raw_tun'\n\toption enabled '1'\n\toption protocol 'json'\n\toption raw_json '${raw}'\n`;
+    const g = await generate(uci);
+    expect(g.rc).toBe(0);
+    expect(g.doc.inbounds[0].route_address_set).toBe("ru_block"); // preserved verbatim
+    // RED before the fix: [] — `for (let n in "ru_block")` iterates zero
+    // times in ucode, so referenced_rulesets() never collected the tag.
+    expect(ruleSetTags(g.doc)).toEqual(["ru_block"]);
+    expect(g.check).not.toContain("rule-set not found");
+    expect(g.checkRc).toBe(0);
   });
 });
