@@ -3,8 +3,11 @@
 // TUN is the alternative to tproxy, not a companion to it: with auto_route +
 // auto_redirect sing-box installs its OWN nftables rules (and, per the docs,
 // compatibility rules into the OpenWrt fw4 table), so our `inet singbox_ui`
-// table is NOT used at all. `auto_route` therefore carries the cross-protocol
-// exclusive group "transparent" together with tproxy.nft_rules.
+// table is NOT used at all. Only one of {tun.auto_route, tproxy.nft_rules}
+// should really be on at once, but there is NO enforced cross-protocol
+// exclusivity today — see the comment on `auto_route` below for why
+// `exclusive: "transparent"` was tried and reverted. A later task builds a
+// group-aware, polarity-aware mechanism and wires the two together.
 //
 // NO shared: { listen: true }. tun is not a listener. The doc page renders a
 // "Listen Fields" section but that is a doc-generator artifact: sing-box 1.13.13
@@ -59,9 +62,18 @@ reg.register({
           ui_help: "Empty = let sing-box choose (mixed when built with gVisor, otherwise system)." },
 
         // --- Ownership of system routing / firewall -------------------------
-        // Exclusive with tproxy.nft_rules: only ONE inbound may own the
-        // transparent path. The frontend disables the loser; generate.uc
-        // refuses to write a config when both are set behind the UI's back.
+        // NOT wired to tproxy.nft_rules (yet). `exclusive: "transparent"` was
+        // tried here and reverted: descriptor_form.js's makeExclusive() filters
+        // sibling sections by `protocol`, so a shared group LABEL buys no
+        // cross-protocol semantics — it only ever compared tun sections against
+        // other tun sections. Worse, its ownerOf() treats an UNSET flag as
+        // owner-qualifying, which is correct for tproxy.nft_rules (default:1, no
+        // json_key, so unset really does mean "on, not yet saved") and backwards
+        // for auto_route (default:0 — see below, unset means OFF): a tun_a with
+        // auto_route left OFF would still have "owned" the group and force every
+        // other tun section's auto_route to a disabled, forced-off checkbox. A
+        // later task builds a group-aware, polarity-aware exclusive mechanism and
+        // re-attaches it here together with tproxy.
         //
         // `default: 0` IS DELIBERATE — do not "helpfully" flip it back to 1.
         // LuCI's CBIAbstractValue.parse() REMOVES an option whose submitted value
@@ -83,7 +95,6 @@ reg.register({
         { name: "auto_route", type: "bool", tab: "basic", default: 0,
           ui_label: "Auto route (own system routing)",
           json_key: "auto_route", coerce: "bool",
-          exclusive: "transparent",
           ui_help: "Installs policy routing so traffic enters the tunnel. Mutually exclusive with the tproxy inbound's nftables rules." },
 
         // default: 0 for the same reason as auto_route (see above). It is also

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { buildParity } from "../helpers/parity.ts";
+import { runUcodeJSON } from "../helpers/ucode.ts";
 
 // COVERAGE GUARD for the JSON editor's reverse mapping.
 //
@@ -221,5 +222,41 @@ describe("_unfiller round-trips the whole parity corpus", () => {
     expect(js?.same).toBe(true);
     expect(js?.j1).toContain('"format": "source"');
     expect(js?.j1).not.toContain("update_interval");
+  });
+
+  it("tun: a pasted listen_port does not become a UCI field (F3 regression)", async () => {
+    // tun is kind:"inbound" but declares no shared:{listen:true} — sing-box
+    // rejects listen_port on it outright. _unfiller.parse() used to hardcode
+    // `if (d.kind === "inbound")` to claim listen/listen_port, same bug
+    // _filler.build() had before cde028ae's shared.listen gate. A tun JSON
+    // carrying a copy-pasted listen_port (from another inbound, or the doc
+    // page's bogus "Listen Fields" section) must NOT turn into a dead
+    // `option listen_port` — it has to surface as an unmapped/extra key instead,
+    // so the JSON editor asks the user about it rather than silently writing it.
+    const src = `
+      let unfiller = require("builder._unfiller");
+      require("inbound");
+      let reg = require("builder.protocols.registry");
+      let d = reg.get("inbound", "tun");
+      let r = unfiller.parse(d, {
+        type: "tun", tag: "t1", address: [ "172.19.0.1/30" ],
+        listen_port: 1080, auto_route: true,
+      });
+      print(sprintf("%J\\n", r));
+    `;
+    const r = await runUcodeJSON<{
+      fields: Record<string, unknown>;
+      extra: Record<string, unknown>;
+      known: Record<string, unknown>;
+    }>(src);
+
+    expect(r.fields).toEqual({
+      address: ["172.19.0.1/30"],
+      auto_route: "1",
+    });
+    expect(r.fields.listen_port).toBeUndefined();
+    expect(r.extra.listen_port).toBe(1080);
+    expect(r.known.listen_port).toBeUndefined();
+    expect(r.known.listen).toBeUndefined();
   });
 });

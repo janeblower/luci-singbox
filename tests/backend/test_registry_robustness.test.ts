@@ -390,4 +390,43 @@ describe("registry robustness", () => {
     expect(r.exitCode).toBe(0);
     expect(r.stdout.trim()).toBe("REJECTED");
   });
+
+  // F4: _filler.build() (mirrored in _unfiller.field_names/parse) branches on
+  // `d.shared != null && d.shared.listen` to decide whether an inbound gets
+  // build_listen_base's {listen, listen_port} header. Before cde028ae every
+  // kind:"inbound" descriptor got that header unconditionally (the flag was
+  // effectively "am I an inbound"); now it is load-bearing, and it fails OPEN —
+  // a listener descriptor that forgets to declare shared.listen silently builds
+  // a bare {type,tag}, with no way for the user to set listen/listen_port, and
+  // nothing catches it until init.d's `sing-box check` refuses to start.
+  //
+  // This guard is vacuous today: every real listener already declares its own
+  // local `listen_port` UI field (build_listen_base reads it straight off raw
+  // UCI — it has no json_key of its own) paired with shared.listen. It exists
+  // to catch the NEXT descriptor that breaks that pairing in either direction:
+  // a re-introduced local listen_port field without the shared block, or an
+  // existing listener whose shared.listen gets dropped while its listen_port
+  // field is left behind (the field is what this check keys on, so either
+  // mistake trips it).
+  it("F4: every inbound descriptor with a listen_port field also declares shared.listen", async () => {
+    const src = `
+      require("outbound");
+      require("inbound");
+      let reg = require("builder.protocols.registry");
+      let bad = [];
+      for (let ctx in reg._registry) {
+          let d = reg._registry[ctx];
+          if (d.kind !== "inbound") continue;
+          let has_listen_port = false;
+          for (let f in (d.fields || [])) if (f.name === "listen_port") has_listen_port = true;
+          let has_shared_listen = d.shared != null && d.shared.listen;
+          if (has_listen_port && !has_shared_listen) push(bad, ctx);
+      }
+      for (let b in sort(bad)) print(sprintf("BAD %s\\n", b));
+      print(length(bad) ? "FAIL\\n" : "OK\\n");
+    `;
+    const r = await runUcode(src);
+    expect(r.exitCode).toBe(0);
+    expect(r.stdout.trim()).toBe("OK");
+  });
 });

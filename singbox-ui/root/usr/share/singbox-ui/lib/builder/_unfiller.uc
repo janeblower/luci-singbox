@@ -257,7 +257,13 @@ function _parse_shared(fields, json, kind, d, seen, extra) {
 // is UCI-only and never touched.
 function field_names(d) {
     let known = {};
-    if (d.kind === "inbound") { known.listen = true; known.listen_port = true; }
+    // Mirrors _filler.build()'s discriminator exactly: build_listen_base (and
+    // thus listen/listen_port) only exists for a descriptor that DECLARES
+    // shared:{listen:true} — tun is kind:"inbound" but not a listener, and has no
+    // listen_port field to own.
+    if (d.kind === "inbound" && d.shared != null && d.shared.listen) {
+        known.listen = true; known.listen_port = true;
+    }
     for (let f in (d.fields ?? [])) if (f.json_key != null && !_gated(f)) known[f.name] = true;
     _seq_names(known, d.groups ?? []);
     if (d.users != null) {
@@ -317,8 +323,12 @@ function parse(d, json) {
     // all). They must be consumed, or the editor would report them as unknown and
     // stash them in json_extra — where the next build would then emit them twice.
     for (let k in (d.derived_keys ?? [])) seen[k] = true;
-    if (kind === "inbound") {
+    if (kind === "inbound" && d.shared != null && d.shared.listen) {
         // build_listen_base owns these two — they have no json_key of their own.
+        // Same discriminator as _filler.build() / field_names() above: a
+        // non-listener inbound (tun) declares no shared.listen, so a pasted
+        // listen_port has nothing to consume it and falls through to `extra`
+        // instead of resurrecting a dead UCI option.
         seen.listen = true;
         seen.listen_port = true;
         if (json.listen != null)      fields.listen      = "" + json.listen;
