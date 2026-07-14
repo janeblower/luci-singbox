@@ -1,12 +1,12 @@
-// 79-cross-cutting.mjs — validation, modal Cancel, DynamicList, version-gate,
-// RPC-error surfaces (each via the appropriate stub/seam).
-import { test, assert, wait, openAddModal, setProtocolInModal,
+// 79-cross-cutting.mjs — validation, modal Cancel, DynamicList, MultiValue,
+// version-gate, RPC-error surfaces (each via the appropriate stub/seam).
+import { test, assert, expect, wait, openAddModal, setProtocolInModal,
          fillField, clickTab, dismissModal, containerExec } from './fixtures';
 
 export const COVERS = ["xcut.validation_port", "xcut.validation_uuid",
     "xcut.validation_required", "xcut.modal_cancel", "xcut.dynamiclist",
-    "xcut.version_gate", "xcut.rpc_timeout", "xcut.rpc_generate_fail",
-    "xcut.rpc_acl_denied"];
+    "xcut.multivalue", "xcut.version_gate", "xcut.rpc_timeout",
+    "xcut.rpc_generate_fail", "xcut.rpc_acl_denied"];
 
 // Set a labeled field's value and fire the events LuCI's widget validation
 // listens on (keyup + blur), so the descriptor's `validate` callback runs and
@@ -88,26 +88,70 @@ test('xcut: modal Cancel discards (no UCI section written)', async ({ page }) =>
     assert('Cancel wrote no section', got === 'NONE', got);
 });
 
-test('xcut: DynamicList add/remove (ALPN)', async ({ page }) => {
-    await openAddModal(page, 'outbound', '_xc_dl');
+// A list with NO choices has nothing to drop down and stays a DynamicList.
+// tun's "Interface address (CIDR)" is the case: free-form CIDRs, required, on
+// the basic tab with no depends — so it renders as soon as the protocol is set.
+test('xcut: DynamicList add/remove (a list with no choices)', async ({ page }) => {
+    await openAddModal(page, 'inbound', '_xc_dl');
+    await setProtocolInModal(page, 'tun');
+    const added = await page.evaluate(() => {
+        const ov = document.getElementById('modal_overlay');
+        const dl = ov.querySelector('[data-sb-field="address"]');
+        if (!dl) return { ok: false, reason: 'no address widget' };
+        if (dl.getAttribute('data-sb-control') !== 'dynamic')
+            return { ok: false, reason: `control=${dl.getAttribute('data-sb-control')}` };
+        const inp = dl.querySelector('input');
+        if (!inp) return { ok: false, reason: 'no dynlist input' };
+        inp.value = '172.19.0.1/30';
+        inp.dispatchEvent(new Event('keydown', { bubbles: true, key: 'Enter' }));
+        return { ok: true, reason: '' };
+    });
+    assert('DynamicList address input present', added.ok, added);
+    await dismissModal(page);
+});
+
+// THE REQUIREMENT (task 7): a list WITH choices is a checkbox dropdown that
+// STAYS OPEN — like the firewall's "Covered networks". The old DynamicList made
+// you reopen the list after every single pick. Ticking a second item without
+// reopening is the whole point, and only the browser can prove it: a unit test
+// would validate our idea of LuCI, not LuCI.
+test('xcut: MultiValue dropdown has checkboxes and stays open across picks', async ({ page }) => {
+    await openAddModal(page, 'outbound', '_xc_mv');
     await setProtocolInModal(page, 'vless', 'Type');
-    // ALPN is a list+values DynamicList on the TLS tab, gated by tls_enabled
-    // (parent_enabled). Enable TLS first so the ALPN row renders, then click
-    // into the TLS tab and operate the .cbi-dynlist add control.
+    // ALPN is list+values → MultiValue, gated by tls_enabled (parent_enabled).
     await clickTab(page, 'tls');
     await fillField(page, 'Enable TLS', '1', { kind: 'flag' });
     await wait(500);
-    const added = await page.evaluate(() => {
-        const ov = document.getElementById('modal_overlay');
-        const row = Array.from(ov.querySelectorAll('.cbi-value'))
-            .find(r => (r.querySelector('.cbi-value-title')||{}).textContent.trim() === 'ALPN');
-        if (!row) return false;
-        const inp = row.querySelector('.cbi-dynlist input');
-        if (!inp) return false;
-        inp.value = 'h2'; inp.dispatchEvent(new Event('keydown', { bubbles:true, key:'Enter' }));
-        return true;
-    });
-    assert('DynamicList ALPN input present', added);
+
+    const dd = page.locator('#modal_overlay [data-sb-field="tls_alpn"]');
+    await expect(dd).toHaveAttribute('data-sb-control', 'multi');
+    await expect(dd).toHaveAttribute('multiple', '');
+
+    const isOpen = () => dd.evaluate((el: Element) => el.hasAttribute('open'));
+
+    await dd.click();                                  // open it once
+    assert('dropdown opened on click', await isOpen());
+
+    // ui.Dropdown only grows the per-item <input type=checkbox> when it opens
+    // (transformItem). This is what makes it a CHECKBOX list, not a menu.
+    await expect(dd.locator('ul.dropdown > li input[type="checkbox"]').first()).toBeVisible();
+
+    await dd.locator('ul.dropdown > li[data-value="h2"]').click();
+    assert('STILL OPEN after the first pick', await isOpen());
+
+    // ...and the second item is reachable WITHOUT reopening the dropdown.
+    await dd.locator('ul.dropdown > li[data-value="h3"]').click();
+    assert('STILL OPEN after the second pick', await isOpen());
+
+    // Scope to ul.dropdown: LuCI clones every selected <li> into the ul.preview
+    // (the collapsed summary), so an unscoped selector matches each one twice.
+    await expect(dd.locator('ul.dropdown > li[data-value="h2"][selected]')).toHaveCount(1);
+    await expect(dd.locator('ul.dropdown > li[data-value="h3"][selected]')).toHaveCount(1);
+
+    // Free entry survives: the "-- custom --" row is what makes non-enumerable
+    // values (eth0.100, a subscription's tag) reachable at all.
+    await expect(dd.locator('ul.dropdown > li[data-value="-"] input.create-item-input')).toHaveCount(1);
+
     await dismissModal(page);
 });
 

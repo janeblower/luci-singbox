@@ -38,10 +38,14 @@ function loadDescriptorForm(sandboxExtras: Record<string, unknown> = {}) {
   return (sandbox as any).__moduleExports;
 }
 
+// MultiValue is a DISTINCT stub value: in real LuCI it extends DynamicList, and
+// controlKindFor() tells them apart by identity — collapsing the two here would
+// hide a fall-through bug in the ordering of that check.
 const form = {
   Flag: "Flag",
   ListValue: "ListValue",
   DynamicList: "DynamicList",
+  MultiValue: "MultiValue",
   TextValue: "TextValue",
   Value: "Value",
 };
@@ -168,6 +172,7 @@ const wireMat = {
       values: ["", "xtls-rprx-vision"],
     },
     { name: "multi", type: "list", tab: "tls" },
+    { name: "alpn", type: "list", tab: "tls", values: ["h2", "h3"] },
     { name: "enabled_flag", type: "bool", tab: "tls" },
     { name: "raw_json", type: "string", tab: "tls", multiline: true },
   ],
@@ -183,7 +188,11 @@ describe("descriptor_form.js — tagField wiring", () => {
     expect(opts.every((o) => o._sbField === o._name)).toBe(true);
     expect(byName.server._sbControl).toBe("text");
     expect(byName.vless_flow._sbControl).toBe("list");
+    // A list with no choices has nothing to drop down — still a DynamicList.
     expect(byName.multi._sbControl).toBe("dynamic");
+    // A list WITH choices is the checkbox dropdown (MultiValue). The kind must
+    // NOT fall through to "dynamic": MultiValue extends DynamicList.
+    expect(byName.alpn._sbControl).toBe("multi");
     expect(byName.enabled_flag._sbControl).toBe("checkbox");
     expect(byName.raw_json._sbControl).toBe("textarea");
   });

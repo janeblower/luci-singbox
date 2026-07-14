@@ -47,6 +47,11 @@ const uci: any = {
       return [
         { ".name": "rs_geoip", type: "remote" },
         { ".name": "rs_ads", type: "local" },
+        // Pruned by helpers.ruleset_active on the backend: `enabled '0'`, and a
+        // builtin under a master switch that is off. The picker must not offer
+        // either (case 6b).
+        { ".name": "rs_off", type: "remote", enabled: "0" },
+        { ".name": "rs_builtin", type: "remote", builtin: "1" },
       ];
     }
     if (config === "singbox-ui" && type === "route_rule") {
@@ -63,7 +68,13 @@ const uci: any = {
     }
     return [];
   },
+  // The built-in rule-sets' master switch (main.default_rulesets). Unset means
+  // ON — NO-migration, mirrors helpers.builtin_rulesets_on().
+  _defaultRulesets: undefined as string | undefined,
   get(_config: string, sid: string, opt: string) {
+    if (sid === "main") {
+      return opt === "default_rulesets" ? uci._defaultRulesets : undefined;
+    }
     const rows: any[] = uci.sections("singbox-ui", "inbound");
     const row = rows.filter((r: any) => r[".name"] === sid)[0];
     return row ? row[opt] : undefined;
@@ -212,7 +223,6 @@ function makeSection() {
         _widget: widget,
         _name: name,
         _depends: [],
-        _values: [],
         rmempty: true,
         keylist: [],
         vallist: [],
@@ -221,8 +231,13 @@ function makeSection() {
         o._depends.push(d);
         return o;
       };
+      // Faithful to LuCI: CBIAbstractValue.value() APPENDS to keylist/vallist,
+      // and transformChoices() reads them back. A stub that recorded calls in a
+      // private array instead would never notice a load() that forgets to reset
+      // them — which is exactly the duplicate-choices bug case 3 now guards.
       o.value = (k: unknown, v: unknown) => {
-        o._values.push([k, v]);
+        o.keylist.push(k);
+        o.vallist.push(v);
         return o;
       };
       // Minimal DOM stand-in for the widget node. makeExclusive wraps
@@ -251,7 +266,7 @@ function findOpt(opts: any[], name: string) {
   return opts.find((o) => o._name === name);
 }
 function keysOf(opt: any): string[] {
-  return opt._values.map((v: any[]) => v[0]);
+  return opt.keylist.slice();
 }
 
 describe("descriptor_form.js — dynamic selectors", () => {
@@ -280,7 +295,7 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
   });
 
-  describe("1b. dynamic:outbounds + type:list → DynamicList, excludes own section_id", () => {
+  describe("1b. dynamic:outbounds + type:list → MultiValue, excludes own section_id", () => {
     const { s, opts } = makeSection();
     applyMaterialized(s, "outbound", "selector", {
       tabs: ["basic"],
@@ -290,8 +305,15 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
     const o = findOpt(opts, "outbounds");
 
-    it("widget is DynamicList", () => {
-      expect(o?._widget).toBe(form.DynamicList);
+    // A list WITH choices is the firewall's "Covered networks" widget: a
+    // checkbox dropdown that stays open across clicks. MultiValue extends
+    // DynamicList in the container's form.js, so load/parse/write are unchanged.
+    it("widget is MultiValue", () => {
+      expect(o?._widget).toBe(form.MultiValue);
+    });
+
+    it("create = true (free entry survives: a tag may come from a subscription)", () => {
+      expect(o?.create).toBe(true);
     });
 
     it("load() suggests tags, excludes own section_id", () => {
@@ -360,7 +382,7 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
   });
 
-  describe("3. dynamic:devices + type:list → DynamicList, async netdev", () => {
+  describe("3. dynamic:devices + type:list → MultiValue, async netdev", () => {
     const { s, opts } = makeSection();
     applyMaterialized(s, "inbound", "tproxy", {
       tabs: ["basic"],
@@ -370,8 +392,15 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
     const o = findOpt(opts, "interface");
 
-    it("widget is DynamicList", () => {
-      expect(o?._widget).toBe(form.DynamicList);
+    // type:list wins over the `devices` source — the LIST branch, not the scalar
+    // one. And create MUST be on: eth0.100 / pppoe-wan aren't enumerable, so a
+    // strict whitelist would make them unreachable.
+    it("widget is MultiValue", () => {
+      expect(o?._widget).toBe(form.MultiValue);
+    });
+
+    it("create = true (netdev names are not enumerable)", () => {
+      expect(o?.create).toBe(true);
     });
 
     it("load() resolves netdev suggestions (async)", async () => {
@@ -381,6 +410,17 @@ describe("descriptor_form.js — dynamic selectors", () => {
       const k = keysOf(o);
       expect(k.indexOf("br-lan")).toBeGreaterThanOrEqual(0);
       expect(k.indexOf("eth0")).toBeGreaterThanOrEqual(0);
+    });
+
+    // LuCI calls load() once per render and opt.value() APPENDS to keylist —
+    // so without a reset the choices accumulate. A datalist of suggestions hid
+    // this; a checkbox dropdown draws every duplicate as its own row (seen on
+    // the dev stand: eth0 four times).
+    it("a second load() does not duplicate the choices", async () => {
+      await o.load.call(o, "sid");
+      await o.load.call(o, "sid");
+      const k = keysOf(o);
+      expect(k.filter((x: string) => x === "eth0").length).toBe(1);
     });
   });
 
@@ -411,7 +451,7 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
   });
 
-  describe("5. list + static values → DynamicList (ALPN)", () => {
+  describe("5. list + static values → MultiValue (ALPN)", () => {
     const { s, opts } = makeSection();
     applyMaterialized(s, "outbound", "vless", {
       tabs: ["tls"],
@@ -426,8 +466,14 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
     const o = findOpt(opts, "tls_alpn");
 
-    it("widget is DynamicList", () => {
-      expect(o?._widget).toBe(form.DynamicList);
+    it("widget is MultiValue", () => {
+      expect(o?._widget).toBe(form.MultiValue);
+    });
+
+    // On a LIST, `values` is a datalist of suggestions, not a whitelist (only
+    // `enum` is strict) — so the "-- custom --" row must stay reachable.
+    it("create = true (values on a list are suggestions, not a whitelist)", () => {
+      expect(o?.create).toBe(true);
     });
 
     it("suggestions populated", () => {
@@ -438,7 +484,31 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
   });
 
-  describe("6. dynamic:rulesets + type:list → DynamicList", () => {
+  // A list with NO choices has nothing to drop down — it stays a DynamicList.
+  // tun.address is the load-bearing case: free-form CIDRs, and `required`.
+  describe("5b. list with NO choices → DynamicList (free-form CIDRs, user lists)", () => {
+    const { s, opts } = makeSection();
+    applyMaterialized(s, "inbound", "tun", {
+      tabs: ["basic"],
+      fields: [
+        { name: "address", type: "list", tab: "basic", required: true },
+        { name: "route_address", type: "list", tab: "basic" },
+        { name: "mixed_user", type: "list", tab: "basic", secret: true },
+      ],
+    });
+
+    it("address / route_address / user list stay DynamicList", () => {
+      for (const n of ["address", "route_address", "mixed_user"]) {
+        expect(findOpt(opts, n)?._widget, n).toBe(form.DynamicList);
+      }
+    });
+
+    it("no `create` flag on a plain DynamicList", () => {
+      expect(findOpt(opts, "address")?.create).toBeUndefined();
+    });
+  });
+
+  describe("6. dynamic:rulesets + type:list → MultiValue", () => {
     const { s, opts } = makeSection();
     applyMaterialized(s, "route_rule", "default", {
       tabs: ["match"],
@@ -448,8 +518,8 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
     const o = findOpt(opts, "rule_set");
 
-    it("widget is DynamicList", () => {
-      expect(o?._widget).toBe(form.DynamicList);
+    it("widget is MultiValue", () => {
+      expect(o?._widget).toBe(form.MultiValue);
     });
 
     it("load() populates ruleset suggestions", () => {
@@ -458,6 +528,47 @@ describe("descriptor_form.js — dynamic selectors", () => {
       const k = keysOf(o);
       expect(k.indexOf("rs_geoip")).toBeGreaterThanOrEqual(0);
       expect(k.indexOf("rs_ads")).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  // The picker must offer ONLY what helpers.ruleset_active would keep. A
+  // reference to a rule-set the backend prunes is dropped with a warn nobody
+  // sees — and for tun.route_address_set that inverts the tunnel (the field is a
+  // whitelist: no entries left ⇒ the tun captures the whole address space).
+  describe("6b. rule-set picker offers only ACTIVE rule-sets", () => {
+    function rulesetKeys() {
+      const { s, opts } = makeSection();
+      applyMaterialized(s, "inbound", "tun", {
+        tabs: ["basic"],
+        fields: [
+          {
+            name: "route_address_set",
+            type: "list",
+            tab: "basic",
+            dynamic: "rulesets",
+          },
+        ],
+      });
+      const o = findOpt(opts, "route_address_set");
+      o.load.call(o, "sid");
+      return keysOf(o);
+    }
+
+    it("a disabled rule-set is never offered", () => {
+      expect(rulesetKeys().indexOf("rs_off")).toBe(-1);
+    });
+
+    it("built-ins are offered while the master switch is unset (= ON)", () => {
+      uci._defaultRulesets = undefined;
+      expect(rulesetKeys().indexOf("rs_builtin")).toBeGreaterThanOrEqual(0);
+    });
+
+    it("built-ins vanish when main.default_rulesets = 0 — the backend prunes them", () => {
+      uci._defaultRulesets = "0";
+      const k = rulesetKeys();
+      expect(k.indexOf("rs_builtin")).toBe(-1);
+      expect(k.indexOf("rs_geoip")).toBeGreaterThanOrEqual(0); // non-builtin unaffected
+      uci._defaultRulesets = undefined;
     });
   });
 

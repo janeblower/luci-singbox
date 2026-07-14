@@ -33,6 +33,22 @@ var TAB_TITLES = {
 function widgetFor(field) {
     var t = field.type;
     if (t === 'bool') return form.Flag;
+    // A LIST WITH CHOICES is a checkbox dropdown (MultiValue) — the very widget
+    // the LuCI firewall uses for "Covered networks". It stays OPEN across clicks;
+    // a DynamicList made you reopen the dropdown for every single item.
+    //
+    // In the container's form.js (verified there, not against master — the two
+    // differ) CBIMultiValue *extends* CBIDynamicList and only overrides
+    // renderWidget with `new ui.Dropdown(..., {multiple:true, create:this.create})`.
+    // load/parse/write and the UCI list format are therefore identical: the swap
+    // is drop-in at the model level, only the widget changes.
+    //
+    // A list with NO choices (free-form CIDRs — tun.address, route_address,
+    // loopback_address; user lists) stays a DynamicList: there is nothing to
+    // drop down.
+    if (t === 'list')
+        return (field.dynamic || Array.isArray(field.values)) ? form.MultiValue
+                                                              : form.DynamicList;
     // Dynamic selectors populate their choices at load() time (see
     // attachDynamic). The source decides WHERE the choices come from; the
     // field's own `type` decides the widget.
@@ -44,27 +60,28 @@ function widgetFor(field) {
     // LuCI turns a Value with choices into a Combobox: suggestions, not a
     // whitelist. Section references stay strict single-selects.
     if (field.dynamic) {
-        if (field.type === 'list') return form.DynamicList;
         if (field.dynamic === 'devices') return form.Value;
         return form.ListValue;
     }
     if (t === 'enum') return form.ListValue;
-    if (t === 'list') return form.DynamicList;
     // Multiline string fields render as a textarea widget (TextValue) instead of
     // a single-line input. Used for PEM keys, raw JSON, and share-link URLs.
     if (t === 'string' && field.multiline) return form.TextValue;
-    // A string/list field carrying a static `values` array still renders as a
-    // free-entry widget (Value / DynamicList); the values become datalist
-    // suggestions, not a strict whitelist. Only `enum` is a strict dropdown.
+    // A string field carrying a static `values` array still renders as a
+    // free-entry Value; the values become datalist suggestions, not a strict
+    // whitelist. Only `enum` is a strict dropdown.
     return form.Value;
 }
 
 // Map a LuCI CBI widget constructor to a stable, lowercase control kind for the
 // data-sb-control hook. Identity comparison works both against real LuCI classes
 // and the unit-test string stub. form.Value (single-line input) is the default.
+// MultiValue is probed BEFORE DynamicList: it extends it, and an identity check
+// must not be allowed to fall through to the wrong kind.
 function controlKindFor(widget) {
     if (widget === form.Flag)        return 'checkbox';
     if (widget === form.ListValue)   return 'list';
+    if (widget === form.MultiValue)  return 'multi';
     if (widget === form.DynamicList) return 'dynamic';
     if (widget === form.TextValue)   return 'textarea';
     return 'text';
@@ -91,6 +108,22 @@ function tagField(opt, name, control) {
     }
 }
 
+// Frontend mirror of helpers.ruleset_active() — the backend's ONE predicate for
+// "is this rule-set live". It honours the built-in master switch
+// (main.default_rulesets, unset = ON) on top of the section's own `enabled`, and
+// route.uc / dns.uc / nft-rulesets.uc all PRUNE anything it rejects.
+//
+// The picker must offer nothing the backend then throws away: a reference to a
+// pruned rule-set is dropped with a warn the user never sees. For
+// tun.route_address_set that silent prune INVERTS the tunnel — the field means
+// "ONLY these CIDRs enter the tun", so losing it makes the tun capture the whole
+// address space.
+function rulesetActive(s) {
+    if (s.enabled === '0') return false;
+    if (s.builtin === '1' && uci.get('singbox-ui', 'main', 'default_rulesets') === '0') return false;
+    return true;
+}
+
 // Dynamic selectors: options are populated from live UCI / network state at
 // .load() time instead of a static `values` array. Generalises the
 // loadOutboundList() pattern from tabs/common.js over a `source` discriminator.
@@ -104,6 +137,7 @@ function dynamicChoices(source) {
             .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
     if (source === 'rulesets')
         return uci.sections('singbox-ui', 'ruleset')
+            .filter(rulesetActive)
             .map(function (s) { return [s['.name'], s['.name'] + ' (' + (s.type || '?') + ')']; });
     if (source === 'route_rules')
         return uci.sections('singbox-ui', 'route_rule')
@@ -117,15 +151,25 @@ function dynamicChoices(source) {
 }
 
 function attachDynamic(opt, field) {
+    // The widget is whatever the field's TYPE asked for (MultiValue for a list
+    // with choices, Combobox for a scalar netdev, ListValue for a scalar section
+    // reference) — hence the prototype is taken from widgetFor(), not hardcoded.
+    var Widget = widgetFor(field);
+
     // Device suggestions need the async network runtime and must NOT restrict
-    // input: netdev names like eth0.100 / pppoe-wan aren't all enumerable, so
-    // they render as free-entry hints on whichever widget the field's type asked
-    // for (DynamicList for a list, Combobox for a scalar) — hence the prototype
-    // is taken from widgetFor(), not hardcoded.
+    // input: netdev names like eth0.100 / pppoe-wan aren't all enumerable. This
+    // branch serves BOTH the scalar case (dial.bind_interface, dns/dhcp
+    // interface) and the list case (tproxy.interface, tun.include_interface).
     if (field.dynamic === 'devices') {
-        var Widget = widgetFor(field);
         opt.load = function (section_id) {
             var self = this, args = arguments;
+            // Reset first — LuCI calls load() once per render, and opt.value()
+            // APPENDS to keylist/vallist. Without this the choices accumulate:
+            // eth0 four times over four renders. Harmless-looking in a datalist
+            // of suggestions, but a checkbox dropdown shows every duplicate as
+            // its own row. Both other branches below already do this.
+            this.keylist = [];
+            this.vallist = [];
             return network.getDevices().then(function (devs) {
                 (devs || []).forEach(function (d) {
                     var n = d.getName ? d.getName() : String(d);
@@ -136,9 +180,10 @@ function attachDynamic(opt, field) {
         };
         return;
     }
-    // Generic free-entry multi-select for any list-typed dynamic source
-    // (outbounds, rulesets, route_rules). Suggestions come from existing
-    // sections; free text always allowed. Excludes the current section.
+    // Generic multi-select for any list-typed dynamic source (outbounds,
+    // rulesets, route_rules). Suggestions come from existing sections; free text
+    // stays available through the dropdown's "-- custom --" row (opt.create, set
+    // by the caller). Excludes the current section.
     if (field.type === 'list') {
         opt.load = function (section_id) {
             this.keylist = [];
@@ -147,7 +192,7 @@ function attachDynamic(opt, field) {
             dynamicChoices(field.dynamic).forEach(function (kv) {
                 if (kv[0] !== section_id) self.value(kv[0], kv[1]);
             });
-            return form.DynamicList.prototype.load.apply(this, arguments);
+            return Widget.prototype.load.apply(this, arguments);
         };
         return;
     }
@@ -594,8 +639,16 @@ function applyMaterialized(s, kind, protoName, materialized) {
                 });
             return;
         }
-        var opt = s.taboption(f.tab, widgetFor(f), f.name, _(labelFor(f)));
+        var W = widgetFor(f);
+        var opt = s.taboption(f.tab, W, f.name, _(labelFor(f)));
         opt.modalonly = true;
+        // Free entry on every checkbox dropdown ("-- custom --" row). MANDATORY
+        // for netdev lists — eth0.100 / pppoe-wan are not enumerable and a strict
+        // whitelist would make them unreachable — and correct for the rest: on a
+        // LIST, `values` is a datalist of suggestions, not a whitelist (only
+        // `enum` is strict), and a section reference may name a tag that comes
+        // from a subscription rather than from a UCI section.
+        if (W === form.MultiValue) opt.create = true;
 
         depsArmsFor(f, protoName).forEach(function (d) { opt.depends(d); });
 
@@ -637,7 +690,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
 
         attachValidator(opt, f.validate);
         if (gate.mode === 'disable') disableWithNote(opt, gate.note);
-        tagField(opt, f.name, controlKindFor(widgetFor(f)));
+        tagField(opt, f.name, controlKindFor(W));
         s._sbMatRegistry[key] = {
             opt: opt, values: values,
             // Track whether THIS first registration already carried an explicit
@@ -658,7 +711,9 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
     materialized.fields.forEach(function (f) {
         var gate = versionGate(f);
         if (gate.mode === 'hide') return;
-        var opt = s.option(widgetFor(f), f.name, _(labelFor(f)));
+        var W = widgetFor(f);
+        var opt = s.option(W, f.name, _(labelFor(f)));
+        if (W === form.MultiValue) opt.create = true;   // free entry — see applyMaterialized
         if (f.required)        opt.rmempty = false;
         if (f.default != null) opt.default = String(f.default);
         if (f.placeholder)     opt.placeholder = f.placeholder;
@@ -695,7 +750,7 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         if (f.requires_pkg) attachPkgNote(opt, f.requires_pkg);
         attachValidator(opt, f.validate);
         if (gate.mode === 'disable') disableWithNote(opt, gate.note);
-        tagField(opt, f.name, controlKindFor(widgetFor(f)));
+        tagField(opt, f.name, controlKindFor(W));
     });
 }
 

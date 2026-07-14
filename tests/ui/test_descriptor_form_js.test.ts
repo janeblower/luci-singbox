@@ -41,6 +41,7 @@ const form = {
   Flag: "Flag",
   ListValue: "ListValue",
   DynamicList: "DynamicList",
+  MultiValue: "MultiValue",
   Value: "Value",
 };
 const validators = {

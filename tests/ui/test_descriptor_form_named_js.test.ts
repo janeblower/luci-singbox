@@ -27,6 +27,7 @@ const form = {
   Value: FakeOpt,
   ListValue: FakeOpt,
   DynamicList: FakeOpt,
+  MultiValue: FakeOpt,
 };
 const uci = { sections: () => [] };
 const network = {};
