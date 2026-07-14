@@ -67,9 +67,12 @@ config ruleset '${name}'
 ${extra}`;
 
 // A tun that references a rule-set and NOTHING else does — no route rule, no dns
-// rule. auto_route is what gates the *_address_set keys (auto_redirect does NOT:
-// since 1.11 the sets go to the routes instead of the firewall without it, and a
-// live check accepts that), so it is spelled out per case.
+// rule. The *_address_set keys need BOTH auto_route AND auto_redirect (without
+// auto_redirect sing-box turns each CIDR into a route and dies on the first
+// duplicate — `check` passes, the daemon does not; see tun.uc). `autoRoute`
+// drives auto_route; auto_redirect rides along whenever auto_route is on, unless
+// a case overrides it via `extra` (the orphan-redirect cases pass their own
+// auto_redirect '1' with auto_route off).
 const TUN = (
   autoRoute: string | null,
   key: string,
@@ -82,6 +85,12 @@ config inbound 'tun_in'
 \tlist address '172.19.0.1/30'
 ${autoRoute === null ? "" : `\toption auto_route '${autoRoute}'\n`}\tlist ${key} '${ref}'
 ${extra}`;
+
+// The address-set keys need BOTH auto_route and auto_redirect on, so a case that
+// wants the set actually emitted passes AR ("\toption auto_redirect '1'\n") as
+// the tun's extra. Spelled out rather than auto-added so the negative cases can
+// say "auto_route on, redirect unset/off/orphaned" without the helper fighting them.
+const AR = "\toption auto_redirect '1'\n";
 
 function ruleSetTags(doc: any): string[] {
   return (doc?.route?.rule_set ?? []).map((r: any) => r.tag);
@@ -127,7 +136,7 @@ describe("tun rule-set references (route_address_set / route_exclude_address_set
 
   it("a rule-set referenced ONLY by tun.route_address_set is DEFINED in route.rule_set", async () => {
     const g = await generate(
-      RULESET("ru_block") + TUN("1", "route_address_set", "ru_block"),
+      RULESET("ru_block") + TUN("1", "route_address_set", "ru_block", AR),
     );
     expect(g.rc).toBe(0);
     expect(g.doc.inbounds[0].route_address_set).toEqual(["ru_block"]);
@@ -142,7 +151,7 @@ describe("tun rule-set references (route_address_set / route_exclude_address_set
 
   it("route_exclude_address_set is defined too", async () => {
     const g = await generate(
-      RULESET("ru_bypass") + TUN("1", "route_exclude_address_set", "ru_bypass"),
+      RULESET("ru_bypass") + TUN("1", "route_exclude_address_set", "ru_bypass", AR),
     );
     expect(g.doc.inbounds[0].route_exclude_address_set).toEqual(["ru_bypass"]);
     expect(ruleSetTags(g.doc)).toEqual(["ru_bypass"]);
@@ -168,10 +177,31 @@ describe("tun rule-set references (route_address_set / route_exclude_address_set
     });
   }
 
+  // The SECOND half of the gate: route_address_set needs auto_redirect too, and
+  // this is the case that actually crashed a live box (auto_route on, redirect
+  // off → sing-box makes routes, dupes collide, FATAL "add route 8: file
+  // exists"). auto_route '1' with auto_redirect absent OR an orphaned
+  // auto_redirect '1' left after auto_route was turned off must BOTH emit nothing.
+  for (const [label, extra, ar] of [
+    ["auto_redirect unset", "", "1"],
+    ["auto_redirect '0'", "\toption auto_redirect '0'\n", "1"],
+    ["orphaned auto_redirect '1' (auto_route off)", "\toption auto_redirect '1'\n", "0"],
+  ] as const) {
+    it(`auto_route '${ar}' + ${label}: contributes NO rule-set`, async () => {
+      const g = await generate(
+        RULESET("ru_block") + TUN(ar, "route_address_set", "ru_block", extra),
+      );
+      expect(g.rc).toBe(0);
+      expect(g.doc.inbounds[0].route_address_set).toBeUndefined();
+      expect(ruleSetTags(g.doc)).toEqual([]);
+      expect(g.checkRc).toBe(0);
+    });
+  }
+
   it("an INACTIVE rule-set is pruned from the built object — no dangling tag, no empty array", async () => {
     const g = await generate(
       RULESET("ru_block").replace("option enabled '1'", "option enabled '0'") +
-        TUN("1", "route_address_set", "ru_block"),
+        TUN("1", "route_address_set", "ru_block", AR),
     );
     expect(g.rc).toBe(0);
     // The descriptor emits whatever UCI holds; the prune is what stops a user
@@ -189,7 +219,7 @@ describe("tun rule-set references (route_address_set / route_exclude_address_set
     const uci =
       "\nconfig main 'main'\n\toption default_rulesets '0'\n" +
       RULESET("ru_builtin", "\toption builtin '1'\n") +
-      TUN("1", "route_address_set", "ru_builtin");
+      TUN("1", "route_address_set", "ru_builtin", AR);
     const g = await generate(uci);
     expect("route_address_set" in g.doc.inbounds[0]).toBe(false);
     expect(ruleSetTags(g.doc)).toEqual([]);
@@ -221,24 +251,26 @@ config inbound 'tun_in'
   // future edit moves the gate — and fails the moment the two stop agreeing.
   it("every emitted tun rule-set tag has a route.rule_set definition (matrix)", async () => {
     const cases = [
-      RULESET("a") + TUN("1", "route_address_set", "a"),
+      // Straddle the gate: emitting cases (auto_route + auto_redirect both on),
+      // and non-emitting ones (a flag off/unset, or an orphaned redirect). The
+      // invariant "emitted ⊆ defined" must hold across all of them.
+      RULESET("a") + TUN("1", "route_address_set", "a", AR),
+      RULESET("a") + TUN("1", "route_address_set", "a"), // redirect unset → emits nothing
       RULESET("a") + TUN("0", "route_address_set", "a"),
       RULESET("a") + TUN(null, "route_address_set", "a"),
       RULESET("a") +
-        TUN("1", "route_address_set", "a", "\toption auto_redirect '1'\n"),
-      RULESET("a") +
-        TUN("0", "route_address_set", "a", "\toption auto_redirect '1'\n"),
+        TUN("0", "route_address_set", "a", AR), // orphaned redirect → emits nothing
       RULESET("a") +
         RULESET("b") +
         TUN(
           "1",
           "route_address_set",
           "a",
-          "\tlist route_exclude_address_set 'b'\n",
+          AR + "\tlist route_exclude_address_set 'b'\n",
         ),
       // Referenced by a route rule as well: the union must dedupe, not double up.
       RULESET("a") +
-        TUN("1", "route_address_set", "a") +
+        TUN("1", "route_address_set", "a", AR) +
         "\nconfig route_rule 'r'\n\toption enabled '1'\n\tlist rule_set 'a'\n\toption action 'reject'\n",
     ];
     for (const uci of cases) {
@@ -261,7 +293,7 @@ config inbound 'tun_in'
   it("a pruned tun rule-set reference emits a structured log_event, not just stderr", async () => {
     const log = await prunedRulesetLog(
       RULESET("ru_block").replace("option enabled '1'", "option enabled '0'") +
-        TUN("1", "route_address_set", "ru_block"),
+        TUN("1", "route_address_set", "ru_block", AR),
     );
     // RED before the fix: log is empty — the drop only ever reached warn()
     // (stderr), which every production path (procd/rpcd) throws away.

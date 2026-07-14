@@ -263,10 +263,13 @@ function disableWithNote(opt, note) {
 }
 
 // `requires_pkg`: the field only works if an optional system package is present
-// (kTLS needs kmod-tls). Probe once per page — rpcd forks apk per call — and,
-// when it is missing, append an inline note carrying a one-click install button.
-// Fail-open: an unanswered probe leaves the note without a button rather than
-// nagging the user to install something that may already be there.
+// (kTLS needs kmod-tls; the tun inbound's auto_redirect needs kmod-nft-queue).
+// Probe once per page — rpcd forks apk per call — and show an inline note with a
+// one-click install button ONLY while the package is missing; once it is there
+// the note carries no information and is removed entirely.
+// Fail-open: an unanswered probe counts as installed, so a broken probe stays
+// silent rather than nagging the user to install something they already have.
+// The note therefore starts hidden and is revealed only on a definite "absent".
 var pkgProbe = {};
 function pkgInstalled(pkg) {
     if (!pkgProbe[pkg])
@@ -282,11 +285,12 @@ function attachPkgNote(opt, pkg) {
     opt.renderWidget = function (section_id, option_index, cfgvalue) {
         var node = orig.call(this, section_id, option_index, cfgvalue);
         if (!node || typeof node.appendChild !== 'function') return node;
-        var note = E('div', { 'class': 'cbi-value-description' },
+        var note = E('div', { 'class': 'cbi-value-description', 'style': 'display:none' },
                      _('Requires the %s package.').format(pkg) + ' ');
         node.appendChild(note);
         pkgInstalled(pkg).then(function (installed) {
             if (installed) return;
+            note.style.display = '';
             var btn = E('button', {
                 'type': 'button',
                 'class': 'cbi-button cbi-button-action',
@@ -602,15 +606,25 @@ function applyMaterialized(s, kind, protoName, materialized) {
     // The same field can be declared by multiple protocols — each call must
     // produce its own arm so the OR semantics of opt.depends() correctly
     // gate by the right protocol AND the right advanced/parent state.
+    // `depends` mirrors the backend's `requires`: one clause {field,value}, an
+    // array of clauses (AND — one LuCI depends object, whose keys ARE an AND),
+    // or a clause whose `value` is an array (OR — one arm per value, since
+    // LuCI ORs successive depends() calls). AND-of-ORs is not expressible and
+    // nothing needs it; a clause inside an AND array carries a single value.
     function depsArmsFor(f, protoName) {
-        var values = (f.depends && Array.isArray(f.depends.value))
-            ? f.depends.value
-            : (f.depends ? [f.depends.value] : [null]);
+        var clauses = f.depends
+            ? (Array.isArray(f.depends) ? f.depends : [f.depends])
+            : [];
+        var orValues = (clauses.length === 1 && Array.isArray(clauses[0].value))
+            ? clauses[0].value
+            : [null];
         var noAdvGate = (kind === 'inbound' || kind === 'outbound');
-        return values.map(function (v) {
+        return orValues.map(function (v) {
             var d = {};
             d[discr] = protoName;
-            if (f.depends) d[f.depends.field] = v;
+            clauses.forEach(function (c) {
+                d[c.field] = (v !== null) ? v : c.value;
+            });
             if (f.parent_enabled) d[f.parent_enabled] = '1';
             if (f.advanced && !noAdvGate) d['_show_advanced_' + f.tab] = '1';
             return d;

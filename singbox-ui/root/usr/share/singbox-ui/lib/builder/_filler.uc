@@ -25,6 +25,31 @@ const SHARED_DISPATCH = {
     listen:    { merge: true },
 };
 
+// _one_gate(s, g) — does ONE `requires` clause hold against section s?
+// (defined above its caller: ucode resolves top-level functions in order)
+function _one_gate(s, g) {
+    // String form gates on NON-EMPTINESS of the named sibling, so a UCI bool OFF
+    // value "0" (length 1) SATISFIES it. Only safe when the sibling is a string
+    // field; use the object form {field, value:"1"} to gate on a bool sibling.
+    if (type(g) === "string") return length(s_opt(s, g)) > 0;
+    let want = g.value;
+    let have = s_opt(s, g.field);
+    if (type(want) === "array") {
+        for (let v in want) if (v === have) return true;
+        return false;
+    }
+    return have === want;
+}
+
+// _requires_ok(s, req) — the whole gate: an array means every clause must hold.
+function _requires_ok(s, req) {
+    if (type(req) === "array") {
+        for (let g in req) if (!_one_gate(s, g)) return false;
+        return true;
+    }
+    return _one_gate(s, req);
+}
+
 // _emit_scalar(out, s, f) — write one scalar field per its metadata:
 // json_key / coerce / omit_when / skip_value / requires / default_when_empty.
 // Fields without json_key never reach here (filtered in build()).
@@ -46,25 +71,17 @@ function _emit_scalar(out, s, f) {
                          s[".name"] ?? "?", f.name, f.min_version, helpers.core_version()));
         return;
     }
-    if (f.requires != null) {
-        // String-form `requires` gates on NON-EMPTINESS of the named sibling, so a
-        // UCI bool OFF value "0" (length 1) SATISFIES it. Only safe when the
-        // sibling is a string field; use object-form {field, value:"1"} to gate
-        // on a bool sibling.
-        if (type(f.requires) === "string") {
-            if (!length(s_opt(s, f.requires))) return;
-        } else {
-            let want = f.requires.value;
-            let have = s_opt(s, f.requires.field);
-            if (type(want) === "array") {
-                let hit = false;
-                for (let v in want) if (v === have) hit = true;
-                if (!hit) return;
-            } else if (have !== want) {
-                return;
-            }
-        }
-    }
+    // `requires` is a gate on SIBLING UCI values. Three forms, and the third is
+    // load-bearing precisely BECAUSE `requires` is not transitive (_emit_scalar
+    // reads the sibling's RAW UCI value, never "would that sibling itself be
+    // emitted?"):
+    //   "name"                 -> the sibling is non-empty
+    //   {field, value}         -> the sibling equals value (or one of, if array)
+    //   [{field,value}, ...]   -> ALL of them hold (AND)
+    // Chaining A->B->C does NOT give A the C gate: an orphaned B ('1' left in
+    // UCI after C was turned off) drags A back into the config. So a field that
+    // truly needs two flags names BOTH — that is what the array form is for.
+    if (f.requires != null && !_requires_ok(s, f.requires)) return;
     let coerce = f.coerce || "str";
     let omit   = f.omit_when || "empty";
 

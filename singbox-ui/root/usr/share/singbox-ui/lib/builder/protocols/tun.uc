@@ -35,7 +35,18 @@
 let reg = require("builder.protocols.registry");
 
 const NEEDS_AUTO_ROUTE    = { field: "auto_route",    value: "1" };
-const NEEDS_AUTO_REDIRECT = { field: "auto_redirect", value: "1" };
+
+// AND, not just {auto_redirect:"1"} — and the difference is the whole point.
+// `requires` reads the RAW UCI value of the sibling it names, never "would that
+// sibling itself be emitted". auto_redirect is meaningless without auto_route
+// (the core says so, and `requires: NEEDS_AUTO_ROUTE` on it enforces it), but
+// switching auto_route off does NOT clear `auto_redirect '1'` from UCI — it
+// just orphans it. A one-clause gate on auto_redirect therefore hands the
+// orphan every field below: marks and address-sets emitted for a tunnel that
+// routes nothing. Naming BOTH flags is what makes the gate mean what it reads
+// like. (Fixture: tun_in_orphan_redirect.)
+const NEEDS_AUTO_REDIRECT = [ { field: "auto_route",    value: "1" },
+                              { field: "auto_redirect", value: "1" } ];
 
 reg.register({
     kind: "inbound", type: "tun", sing_box_type: "tun",
@@ -109,10 +120,23 @@ reg.register({
         // what makes `requires: NEEDS_AUTO_ROUTE` work at all: `requires` reads the
         // RAW UCI value of the sibling, so an effectively-on-but-unset auto_route
         // would gate this field (and every other NEEDS_AUTO_ROUTE one) OFF.
+        // requires_pkg: the ruleset sing-box installs here ends in an nfqueue
+        // expression ("... queue flags bypass to 100" — verified on a live box
+        // with `nft list table inet sing-box`), and the `queue` expression lives
+        // in kmod-nft-queue. Nothing in a stock OpenWrt pulls that kmod in, and
+        // the kernel does not ignore an expression it does not know: the WHOLE
+        // batch is rejected with ENOENT, so sing-box dies at post-start with
+        // "auto-redirect: setup nftables: flush nftables: ... no such file or
+        // directory" and procd respawns it forever. `sing-box check` passes —
+        // this is a runtime failure — so only the pkg note stands between the
+        // operator and a service that silently never comes up. auto_route needs
+        // no extra kmod (kmod-tun is already a hard dep); auto_redirect alone
+        // does.
         { name: "auto_redirect", type: "bool", tab: "basic", default: 0,
           ui_label: "Auto redirect (nftables)",
           json_key: "auto_redirect", coerce: "bool",
           depends: NEEDS_AUTO_ROUTE, requires: NEEDS_AUTO_ROUTE,
+          requires_pkg: "kmod-nft-queue",
           ui_help: "sing-box installs its own nftables rules, including compatibility rules for the OpenWrt fw4 table. Recommended: better routing and higher performance than tproxy." },
 
         { name: "strict_route", type: "bool", tab: "basic", default: 0,
@@ -184,29 +208,43 @@ reg.register({
           json_key: "route_exclude_address", coerce: "array", advanced: true,
           depends: NEEDS_AUTO_ROUTE, requires: NEEDS_AUTO_ROUTE },
 
-        // Rule-set driven routes. The docs claim these require BOTH auto_route
-        // and auto_redirect, but a live `sing-box check` (1.13.13) accepts
-        // route_address_set with only auto_route set (auto_redirect entirely
-        // absent) — trust the core, not the doc page, per this file's own rule.
-        // Gate on auto_route alone, and NOT auto_redirect: `requires` checks the
-        // raw UCI value of the named sibling, not whether that sibling would
-        // itself be emitted, so gating on auto_redirect here does not
-        // transitively pick up auto_route — an orphaned `auto_redirect '1'` left
-        // behind after the user flips auto_route off would leak this field back
-        // into the config (see tun_in_orphan_redirect).
+        // Rule-set driven routes. These need BOTH auto_route AND auto_redirect,
+        // and `sing-box check` will NOT tell you that: it accepts the config and
+        // the daemon then dies at post-start. This file used to gate on
+        // auto_route alone, citing exactly that green `check` — a static check
+        // cannot see a runtime failure, so it was the wrong witness.
+        //
+        // What the core actually does (docs, tun/#route_address_set — two tabs):
+        //   with auto_redirect    -> the CIDRs become an nftables set
+        //   without auto_redirect -> the CIDRs become ROUTES, one per CIDR
+        // and the route path blows up on the first duplicate CIDR. Our built-in
+        // rule-sets overlap (they share Cloudflare/Meta ranges), so this is the
+        // normal case, not a corner: bisected live on 1.13.12 —
+        //   telegram                        -> starts
+        //   telegram + meta                 -> starts
+        //   telegram+meta+discord+twitter   -> FATAL "set routes: add route 8: file exists"
+        // …and the tunnel never comes up, with nothing but that line to show.
+        //
+        // BOTH flags are named because `requires` is not transitive: it reads the
+        // raw UCI value of the named sibling, never "would that sibling itself be
+        // emitted". Gating on auto_redirect alone would let an orphaned
+        // `auto_redirect '1'` (left behind when auto_route was switched off) leak
+        // this field back into the config — that is the tun_in_orphan_redirect
+        // fixture. Gating on auto_route alone is what shipped the FATAL above.
+        //
         // A tag named here MUST end up in route.rule_set — see inbound.uc
         // referenced_rulesets(). Without it the core fails with
         // "parse route_address_set: rule-set not found: <tag>".
         { name: "route_address_set", type: "list", tab: "basic",
           ui_label: "Route via rule-sets", dynamic: "rulesets",
           json_key: "route_address_set", coerce: "array",
-          depends: NEEDS_AUTO_ROUTE, requires: NEEDS_AUTO_ROUTE,
-          ui_help: "Only traffic matching these rule-sets' IP CIDRs enters the tunnel; everything else bypasses it. The TUN counterpart of the tproxy nftables rules." },
+          depends: NEEDS_AUTO_REDIRECT, requires: NEEDS_AUTO_REDIRECT,
+          ui_help: "Only traffic matching these rule-sets' IP CIDRs enters the tunnel; everything else bypasses it. The TUN counterpart of the tproxy nftables rules. Needs Auto redirect: without it sing-box turns each CIDR into a route and dies on the first duplicate." },
         { name: "route_exclude_address_set", type: "list", tab: "basic",
           ui_label: "Bypass via rule-sets", dynamic: "rulesets",
           json_key: "route_exclude_address_set", coerce: "array",
-          depends: NEEDS_AUTO_ROUTE, requires: NEEDS_AUTO_ROUTE,
-          ui_help: "Traffic matching these rule-sets' IP CIDRs bypasses the tunnel." },
+          depends: NEEDS_AUTO_REDIRECT, requires: NEEDS_AUTO_REDIRECT,
+          ui_help: "Traffic matching these rule-sets' IP CIDRs bypasses the tunnel. Needs Auto redirect, same as the field above." },
 
         // --- uid rules ----------------------------------------------------------
         { name: "include_uid", type: "list", tab: "basic",

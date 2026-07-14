@@ -874,7 +874,9 @@ function call_plugin_install() {
 // `tls` module autoloads on setsockopt(TCP_ULP) once the package is on disk).
 // The allowlist IS the validation: apk runs as root, so no caller-supplied name
 // ever reaches it — same lesson as call_plugin_install, drawn tighter.
-const INSTALLABLE_PKGS = [ "kmod-tls" ];
+// kmod-nft-queue: the tun inbound's auto_redirect ruleset uses the `queue`
+// nftables expression, which no stock OpenWrt install pulls in (see tun.uc).
+const INSTALLABLE_PKGS = [ "kmod-tls", "kmod-nft-queue" ];
 
 function pkg_arg() {
 	let pkg = parse_args().package;

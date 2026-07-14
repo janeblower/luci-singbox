@@ -3,10 +3,12 @@ import { resolve } from "node:path";
 import vm from "node:vm";
 import { describe, expect, it } from "vitest";
 
-// requires_pkg: a field (kTLS -> kmod-tls) renders an inline note; when the
-// package is missing the note also carries a one-click Install button that runs
-// pkg_install and then disappears. A failed probe must NOT show the button
-// (fail-open), otherwise every rpcd hiccup nags the user to install.
+// requires_pkg: a field (kTLS -> kmod-tls, tun auto_redirect -> kmod-nft-queue)
+// renders an inline note with a one-click Install button — but ONLY while the
+// package is actually missing. Once it is installed the note says nothing the
+// operator needs, so it stays hidden entirely. A failed probe counts as
+// installed (fail-open): otherwise every rpcd hiccup nags the user to install
+// something they already have.
 
 const DESCRIPTOR_FORM_JS = resolve(
   import.meta.dirname,
@@ -22,6 +24,13 @@ function el(tag: string, attrs: any, children: any) {
     children: [] as any[],
     textContent: "",
     disabled: false,
+    // Enough of CSSStyleDeclaration for the show/hide the note does. The inline
+    // `style` attribute is the only way E() can set it at construction.
+    style: {
+      display: /display\s*:\s*none/.test(String((attrs || {}).style || ""))
+        ? "none"
+        : "",
+    },
     appendChild(c: any) {
       c.parentNode = node;
       node.children.push(c);
@@ -102,6 +111,7 @@ describe("descriptor_form.js — requires_pkg note", () => {
 
     const note = widget.children[0];
     expect(note.attrs.class).toBe("cbi-value-description");
+    expect(note.style.display).toBe(""); // revealed: the package is absent
     expect(note.textContent).toContain("kmod-tls");
     const btn = note.children.find((c: any) => c.tag === "button");
     expect(btn).toBeTruthy();
@@ -112,23 +122,25 @@ describe("descriptor_form.js — requires_pkg note", () => {
     expect(note.children.some((c: any) => c.tag === "button")).toBe(false);
   });
 
-  it("installed package: note only, no button", async () => {
+  it("installed package: note stays hidden, no button", async () => {
     const DF = loadDF({
       callPkgStatus: () => Promise.resolve({ installed: true }),
       callPkgInstall: () => Promise.reject(new Error("must not be called")),
     });
     const { widget } = render(DF);
     await flush();
+    expect(widget.children[0].style.display).toBe("none");
     expect(widget.children[0].children.length).toBe(0);
   });
 
-  it("probe failure is fail-open: note only, no button", async () => {
+  it("probe failure is fail-open: note stays hidden, no button", async () => {
     const DF = loadDF({
       callPkgStatus: () => Promise.reject(new Error("rpcd down")),
       callPkgInstall: () => Promise.reject(new Error("must not be called")),
     });
     const { widget } = render(DF);
     await flush();
+    expect(widget.children[0].style.display).toBe("none");
     expect(widget.children[0].children.length).toBe(0);
   });
 

@@ -53,6 +53,23 @@ const KNOWN_OMIT    = { empty: 1, never: 1 };
 // _emit_seq/_emit_group mutual recursion.
 let _shared_module, _shared_fields;
 
+// requires: "name" | {field,value} | [ …clauses… ] (AND). The array form exists
+// because `requires` is NOT transitive: a field that really needs two flags must
+// name both, or an orphaned intermediate flag drags it back into the config.
+// (Defined ABOVE its caller: ucode resolves top-level functions in source order,
+// and a forward reference dies with "left-hand side is not a function" — which
+// require_dir() catches and reports as "failed to load <descriptor>".)
+function _validate_requires(req, ctx, nm) {
+    if (type(req) === "array") {
+        assert(length(req) > 0, sprintf("%s.%s: requires[] must not be empty", ctx, nm));
+        for (let g in req) _validate_requires(g, ctx, nm);   // one level; a clause is never itself an array
+        return;
+    }
+    assert(type(req) === "string" ||
+           (type(req) === "object" && req.field != null && req.value != null),
+           sprintf("%s.%s: requires must be a string, {field,value}, or an array of those", ctx, nm));
+}
+
 // _validate_emit_meta(f, ctx) — the subset of field validation that applies to
 // ANY emit target: top-level descriptor.fields AND group / shared-seq scalar
 // fields (which all flow through _filler._emit_scalar). Without this, a typo'd
@@ -77,9 +94,7 @@ function _validate_emit_meta(f, ctx) {
         assert(type(f.only_values) === "array",
                sprintf("%s.%s: only_values must be an array", ctx, nm));
     if (f.requires != null)
-        assert(type(f.requires) === "string" ||
-               (type(f.requires) === "object" && f.requires.field != null && f.requires.value != null),
-               sprintf("%s.%s: requires must be a string or {field,value}", ctx, nm));
+        _validate_requires(f.requires, ctx, nm);
 }
 
 function validate_field(f, ctx) {
@@ -87,9 +102,13 @@ function validate_field(f, ctx) {
     assert(KNOWN_TYPES[f.type] != null,           sprintf("%s: field.type unknown: %s", ctx, f.type));
     // All descriptors use `tab` (E2 DSL). Legacy `group` fallback removed.
     assert(f.tab != null,                         sprintf("%s.%s: field.tab required", ctx, f.name));
+    // depends mirrors `requires` in the frontend (visibility vs emission), so it
+    // takes the same shapes — including the array = AND form.
     if (f.depends != null) {
-        assert(f.depends.field != null,           sprintf("%s.%s: depends.field required", ctx, f.name));
-        assert(f.depends.value != null,           sprintf("%s.%s: depends.value required (string or array)", ctx, f.name));
+        for (let d in (type(f.depends) === "array") ? f.depends : [ f.depends ]) {
+            assert(d.field != null,               sprintf("%s.%s: depends.field required", ctx, f.name));
+            assert(d.value != null,               sprintf("%s.%s: depends.value required (string or array)", ctx, f.name));
+        }
     }
     // enum <-> values <-> default consistency (S4-5). A `values` list is the
     // hallmark of an enum: it must be an enum and only an enum. A non-empty
