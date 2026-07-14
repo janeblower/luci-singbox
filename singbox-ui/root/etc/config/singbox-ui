@@ -19,10 +19,22 @@ config inbound 'tproxy_in'
 # because it needs kmod-tun (a hard dependency, so /dev/net/tun is there — but the
 # box may still not want a tunnel). Flip `enabled` here and on tproxy_in to switch.
 #
-# auto_route/auto_redirect/hijack_dns are written out EXPLICITLY on purpose: their
-# descriptor default is 0, because LuCI deletes an option whose value equals its
-# default, so a default-1 emitted bool could never be persisted at all. Unset means
-# OFF for these — a seeded tun with no auto_route would route nothing.
+# auto_route/auto_redirect are DELIBERATELY ABSENT — do not "helpfully" pre-arm
+# them. `enabled` is a live checkbox in the inbounds GRID; `auto_route` is
+# `modalonly` and is only ever touched by opening the modal. If the seed pre-wrote
+# auto_route '1' here, ticking `enabled` alone would be enough to make this
+# section claim system routing too — colliding with the seeded, enabled
+# tproxy_in and tripping generate.uc's ownership guard (rc 3), which init.d
+# refuses to start on. Net effect of one grid click: no sing-box, no nftables
+# table, LAN traffic leaves unproxied. An enabled-but-unrouted tun is inert and
+# safe; a route on the seed's behalf is not something we get to hand out for
+# free while tproxy is already holding it. To actually route, open the modal:
+# there `makeExclusive` disables `auto_route` and names tproxy_in as the current
+# owner until its `nft_rules` is turned off — that's the flow this feature is
+# built around. Ticking it there writes an explicit `auto_route '1'` (default is
+# 0, so LuCI persists a value that differs from it — see tun.uc). hijack_dns has
+# no such hazard (no ownership group) and is written out explicitly so the
+# seeded tun has a sensible starting value the moment auto_route is turned on.
 config inbound 'tun_in'
 	option enabled '0'
 	option protocol 'tun'
@@ -30,8 +42,6 @@ config inbound 'tun_in'
 	list   address 'fdfe:dcba:9876::1/126'
 	option interface_name 'singbox-tun'
 	option stack 'system'
-	option auto_route '1'
-	option auto_redirect '1'
 	option hijack_dns '1'
 
 # NO default routing is shipped: no outbound, no route rules, no route_default.

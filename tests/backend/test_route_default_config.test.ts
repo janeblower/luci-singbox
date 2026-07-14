@@ -51,11 +51,23 @@ describe("route default config guard (shipped singbox-ui config)", () => {
       let actions = [];
       for (let rule in (r.rules ?? [])) push(actions, rule.action);
 
+      // F1 regression: a tun inbound's auto_route is a routing opinion too — it
+      // just lives one subsystem over from route_rule/route_default (it is
+      // helpers.transparent_conflict / generate.uc's ownership guard, not
+      // route.uc). The seed used to pre-arm it on the disabled tun_in, which
+      // this guard's own foreach loop above could not see (it only counts
+      // outbound/route_rule/route_default/dns_rule/ruleset). Check it directly.
+      let tun_auto_route = [];
+      cur.foreach("singbox-ui", "inbound", function(s) {
+        if (s.protocol === "tun" && s.auto_route === "1") push(tun_auto_route, s[".name"]);
+      });
+
       print(sprintf("%J\\n", {
         counts: counts,
         actions: actions,
         final: r.final,
         referenced: r.referenced,
+        tun_auto_route: tun_auto_route,
       }));
     `;
     const r = await runUcode(src);
@@ -66,6 +78,7 @@ describe("route default config guard (shipped singbox-ui config)", () => {
       actions: string[];
       final: string | null;
       referenced: string[];
+      tun_auto_route: string[];
     };
 
     // No routing opinion whatsoever.
@@ -81,5 +94,10 @@ describe("route default config guard (shipped singbox-ui config)", () => {
     expect(got.actions).toEqual(["hijack-dns", "hijack-dns"]);
     expect(got.final).toBeNull();
     expect(got.referenced).toEqual([]);
+
+    // No inbound pre-arms auto_route either (F1): that is a routing opinion
+    // one subsystem over, and the seed has no more business shipping it on a
+    // tun than it does a route_default.
+    expect(got.tun_auto_route).toEqual([]);
   });
 });

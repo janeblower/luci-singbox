@@ -106,6 +106,66 @@ echo "OK"
     expect(r.stdout).toContain("OK");
   });
 
+  it("enabling the seeded tun_in, with nothing else changed, does not trip the ownership conflict", async () => {
+    // REGRESSION GUARD (F1): the seed used to pre-arm `auto_route '1'` +
+    // `auto_redirect '1'` on the DISABLED tun_in. Those are `modalonly`
+    // fields, but `enabled` is a live checkbox in the inbounds GRID — so a
+    // user could flip tun_in on WITHOUT ever opening the modal, leaving the
+    // pre-armed auto_route in UCI untouched. That reproduces exactly: seed +
+    // `enabled '1'` on tun_in and nothing else. tun_in (auto_route='1') and
+    // the seeded, enabled tproxy_in (nft_rules default-on) then both claimed
+    // system routing -> generate.uc's ownership guard refused (rc 3) ->
+    // init.d would not (re)start on that refusal -> the LAN egresses
+    // unproxied. The one-line fix: the seed no longer writes auto_route /
+    // auto_redirect, so an enabled-from-the-grid tun_in is inert (no
+    // routing), not conflicting.
+    const cmd = `
+set -e
+TMPDIR=$(mktemp -d)
+trap 'rm -rf "$TMPDIR"' EXIT
+SANDBOX_DIR="$TMPDIR/sandbox"
+mkdir -p "$SANDBOX_DIR/subs"
+SANDBOX_CONFIG="$SANDBOX_DIR/singbox-ui.json"
+
+cp '${DEFAULT_CFG}' "$TMPDIR/singbox-ui"
+
+# The one click: flip tun_in.enabled via UCI, exactly what the grid checkbox
+# does. Nothing else in the seed changes — in particular the modalonly
+# auto_route field is never touched.
+uci -c "$TMPDIR" set singbox-ui.tun_in.enabled=1
+uci -c "$TMPDIR" commit singbox-ui
+
+cd '${WORK}'
+set +e
+UCI_CONFIG_DIR="$TMPDIR" SINGBOX_TMPDIR="$SANDBOX_DIR/subs" SINGBOX_CONFIG="$SANDBOX_CONFIG" \\
+    ucode -L '${LIB}' '${GENERATE_UC}' >"$TMPDIR/gen.stdout" 2>"$TMPDIR/gen.stderr"
+RC=$?
+set -e
+
+echo "GENERATE_RC=$RC"
+cat "$TMPDIR/gen.stderr"
+
+if [ "$RC" -eq 3 ]; then
+    echo "CHECK_FAIL: ownership conflict (rc 3) — tun_in.auto_route and tproxy_in.nft_rules both claim system routing"
+    exit 1
+fi
+if [ "$RC" -ne 0 ]; then
+    echo "CHECK_FAIL: generate.uc must succeed (rc 0) with tun_in enabled and nothing else changed"
+    exit 1
+fi
+
+echo "OK"
+`;
+    const r = await exec(cmd);
+    if (r.exitCode !== 0) {
+      throw new Error(
+        `enabling tun_in must not trip the ownership conflict (exit ${r.exitCode})\nstdout: ${r.stdout}\nstderr: ${r.stderr}`,
+      );
+    }
+    expect(r.stdout).toContain("GENERATE_RC=0");
+    expect(r.stdout).toContain("OK");
+  });
+
   it("sing-box check accepts generated default config", async () => {
     // Skipped if sing-box is not installed in the VM
     const checkCmd = await exec(

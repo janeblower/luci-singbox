@@ -89,11 +89,16 @@ reg.register({
         // has no json_key — nothing emits it — so its `!== "0"` polarity is right
         // for IT and wrong here. Do not copy it over.)
         // Nothing regresses out of the box: the seed config (etc/config/singbox-ui)
-        // ships no tun section at all — only tproxy_in and dns_in — so a tun exists
-        // only once someone adds one, and a freshly added tun no longer seizes
-        // system routing before the user asks for it. Whenever a seeded tun does
-        // land, it MUST carry `option auto_route '1'` explicitly to route anything.
-        // Guard: tests/backend/test_bool_default_polarity.test.ts.
+        // DOES ship a tun_in section (disabled), but it carries no auto_route or
+        // auto_redirect — see the comment on tun_in there for why those two are
+        // deliberately absent. `enabled` is a live grid checkbox, auto_route is
+        // `modalonly`; if the seed pre-armed auto_route, ticking `enabled` alone
+        // (never opening the modal) would make the disabled-by-default tun claim
+        // system routing out from under the seeded, enabled tproxy_in and trip the
+        // ownership conflict. A tun only starts routing once someone opens the
+        // modal and ticks `auto_route` there themselves.
+        // Guard: tests/backend/test_bool_default_polarity.test.ts,
+        // tests/backend/test_defaults.test.ts ("enabling the seeded tun_in ...").
         { name: "auto_route", type: "bool", tab: "basic", default: 0,
           ui_label: "Auto route (own system routing)",
           json_key: "auto_route", coerce: "bool",
