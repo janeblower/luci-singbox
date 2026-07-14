@@ -36,7 +36,7 @@ interface Cfg {
   outbounds: { tag: string; type: string }[];
   route?: {
     final?: string;
-    rules?: { action?: string; outbound?: string }[];
+    rules?: { action?: string; outbound?: string; domain_suffix?: string[] }[];
   };
 }
 
@@ -202,6 +202,47 @@ describe("route_default bypass + builtin wan outbound", () => {
     );
     expect(cfg.route?.rules).toEqual([{ action: "bypass", outbound: "" }]);
     expect(err).toContain("is not a defined outbound");
+  });
+
+  // A PER-RULE bypass (not the default) — "exclude this match from the tunnel".
+  // It carries no outbound (the descriptor gates outbound to action=route), so
+  // there is nothing to degrade into on an old core: route.uc drops it instead of
+  // shipping an action 1.12 fatally rejects.
+  const RULE_BYPASS = `config route_default 'route_default'
+\toption action 'route'
+\toption outbound 'wan'
+
+config route_rule 'excl'
+\toption enabled '1'
+\tlist domain_suffix 'example.com'
+\toption action 'bypass'
+`;
+
+  it("emits a per-rule bypass verbatim on 1.13+", async () => {
+    const { cfg } = await generate(RULE_BYPASS, "", "1.13.0");
+    expect(cfg.route?.rules).toContainEqual({
+      domain_suffix: ["example.com"],
+      action: "bypass",
+    });
+  });
+
+  it("drops a per-rule bypass on a core older than 1.13 (no outbound to fall back to)", async () => {
+    const { cfg, err } = await generate(RULE_BYPASS, "", "1.12.9");
+    // The bypass rule is gone; the matched traffic just follows the default
+    // route instead of taking the whole config down.
+    expect((cfg.route?.rules ?? []).some((r) => r.action === "bypass")).toBe(
+      false,
+    );
+    expect(cfg.route?.final).toBe("wan");
+    expect(err).toContain("action=bypass needs sing-box 1.13+");
+  });
+
+  it("keeps a per-rule bypass when the core version is unknown (fail-open)", async () => {
+    const { cfg } = await generate(RULE_BYPASS, "", null);
+    expect(cfg.route?.rules).toContainEqual({
+      domain_suffix: ["example.com"],
+      action: "bypass",
+    });
   });
 
   it("cleanup", async () => {

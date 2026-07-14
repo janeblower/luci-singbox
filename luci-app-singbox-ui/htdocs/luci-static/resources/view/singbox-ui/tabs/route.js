@@ -91,6 +91,15 @@ function buildRouteRulesMap() {
 	if (rulesEntry && rulesEntry.opt)
 		rulesEntry.opt.validate = SbCommon.logicalSubRuleValidate(uci, _);
 
+	// action=bypass landed in sing-box 1.13; on an older core route.uc drops the
+	// rule. Gate the choice out of the picker (and validate-reject it) so the
+	// operator does not pick a value that silently vanishes — same treatment
+	// route_default's bypass gets, reaching into the descriptor-built selector.
+	var actionEntry = reg['action\taction'];
+	if (actionEntry && actionEntry.opt)
+		SbCommon.applyVersionGate(actionEntry.opt, { bypass: { min_version: '1.13' } },
+			SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
+
 	return m;
 }
 
@@ -130,6 +139,16 @@ function buildRuleSetsMap() {
 function buildRouteDefaultMap() {
 	var m = new form.Map('singbox-ui', _('Default'),
 		_('Final route applied to traffic that does not match any rule.'));
+
+	// The seed config ships NO route_default (it carries no routing opinion —
+	// guarded by test_route_default_config). A LuCI NamedSection whose section is
+	// absent renders just a title and NO fields, so the Default-route controls
+	// silently vanished once the seed stopped shipping the section. Create an
+	// empty one on demand so the fields render; empty == no opinion (route.uc
+	// emits no final for it), and the user can then set the default outbound. It
+	// is only written to UCI if the user saves.
+	if (!uci.get('singbox-ui', 'route_default'))
+		uci.add('singbox-ui', 'route_default', 'route_default');
 
 	var s = m.section(form.NamedSection, 'route_default', 'route_default', _('Default'));
 	s.anonymous = true;

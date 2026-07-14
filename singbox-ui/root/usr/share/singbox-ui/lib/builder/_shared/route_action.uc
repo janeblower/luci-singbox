@@ -17,7 +17,14 @@ function fields() {
           // sing-box rejects. Backfill the sing-box default "route" so
           // action_ok()'s outbound validation stays meaningful (BLD-1).
           default_when_empty: "route",
-          values: [ "route", "route-options", "reject", "hijack-dns", "sniff", "resolve" ],
+          // "bypass" hands a matched flow back to the kernel (auto-redirect) /
+          // direct instead of the proxy — "exclude this from the tunnel". It
+          // carries NO outbound here (unlike route_default's global bypass): the
+          // outbound field below stays gated to action=route. Needs sing-box
+          // 1.13+; route.uc drops a per-rule bypass on an older core (1.12
+          // FATALLY rejects the unknown action), and the frontend hides the
+          // choice there too.
+          values: [ "route", "route-options", "reject", "hijack-dns", "sniff", "resolve", "bypass" ],
           ui_label: "Action" },
 
         // route

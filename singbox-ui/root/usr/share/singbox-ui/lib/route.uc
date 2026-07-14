@@ -132,6 +132,18 @@ function build_route_rules(cur, valid_ob) {
             rule.rules = sub;
         }
 
+        // Per-rule bypass needs sing-box 1.13+ (route_default degrades the same
+        // way). Unlike route_default's bypass it carries no outbound, so there is
+        // nothing to degrade INTO on an older core — 1.12 fatally rejects the
+        // unknown action, so drop the rule and warn. Fail-safe: the matched
+        // traffic just follows the remaining rules / the final route instead of
+        // taking the whole config down. Fail-open on an unknown core version.
+        if (rule.action === "bypass" && !helpers.core_at_least("1.13")) {
+            warn(sprintf("route.uc: route_rule '%s' action=bypass needs sing-box 1.13+ (running %s); dropping the rule\n",
+                         name, helpers.core_version()));
+            return;
+        }
+
         // action_ok first: resolve_rulesets() marks the sets it sees as `referenced`,
         // and a referenced set is emitted as a top-level (remote) rule_set that
         // sing-box then fetches in the background. Running it on a rule that
