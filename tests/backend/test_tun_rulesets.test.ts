@@ -151,7 +151,8 @@ describe("tun rule-set references (route_address_set / route_exclude_address_set
 
   it("route_exclude_address_set is defined too", async () => {
     const g = await generate(
-      RULESET("ru_bypass") + TUN("1", "route_exclude_address_set", "ru_bypass", AR),
+      RULESET("ru_bypass") +
+        TUN("1", "route_exclude_address_set", "ru_bypass", AR),
     );
     expect(g.doc.inbounds[0].route_exclude_address_set).toEqual(["ru_bypass"]);
     expect(ruleSetTags(g.doc)).toEqual(["ru_bypass"]);
@@ -185,7 +186,11 @@ describe("tun rule-set references (route_address_set / route_exclude_address_set
   for (const [label, extra, ar] of [
     ["auto_redirect unset", "", "1"],
     ["auto_redirect '0'", "\toption auto_redirect '0'\n", "1"],
-    ["orphaned auto_redirect '1' (auto_route off)", "\toption auto_redirect '1'\n", "0"],
+    [
+      "orphaned auto_redirect '1' (auto_route off)",
+      "\toption auto_redirect '1'\n",
+      "0",
+    ],
   ] as const) {
     it(`auto_route '${ar}' + ${label}: contributes NO rule-set`, async () => {
       const g = await generate(
@@ -258,15 +263,14 @@ config inbound 'tun_in'
       RULESET("a") + TUN("1", "route_address_set", "a"), // redirect unset → emits nothing
       RULESET("a") + TUN("0", "route_address_set", "a"),
       RULESET("a") + TUN(null, "route_address_set", "a"),
-      RULESET("a") +
-        TUN("0", "route_address_set", "a", AR), // orphaned redirect → emits nothing
+      RULESET("a") + TUN("0", "route_address_set", "a", AR), // orphaned redirect → emits nothing
       RULESET("a") +
         RULESET("b") +
         TUN(
           "1",
           "route_address_set",
           "a",
-          AR + "\tlist route_exclude_address_set 'b'\n",
+          `${AR}\tlist route_exclude_address_set 'b'\n`,
         ),
       // Referenced by a route rule as well: the union must dedupe, not double up.
       RULESET("a") +

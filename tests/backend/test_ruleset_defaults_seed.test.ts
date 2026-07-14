@@ -139,8 +139,7 @@ describe("92-singbox-ui-rulesets seeds the built-in rule-sets", () => {
     // `uci commit` rewrites the file and bumps mtime, so mtime is the real signal.
     const mtime = async () =>
       (await exec(`date -r ${DIR}/singbox-ui +%s`)).stdout.trim();
-    const contents = async () =>
-      (await exec(`cat ${DIR}/singbox-ui`)).stdout;
+    const contents = async () => (await exec(`cat ${DIR}/singbox-ui`)).stdout;
     const [mBefore, cBefore] = [await mtime(), await contents()];
     await exec("sleep 1"); // ensure a rewrite would show a DIFFERENT mtime
     expect(await runScript(DIR)).toBe(0);

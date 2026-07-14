@@ -27,7 +27,7 @@ function el(tag: string, attrs: any, children: any) {
     // Enough of CSSStyleDeclaration for the show/hide the note does. The inline
     // `style` attribute is the only way E() can set it at construction.
     style: {
-      display: /display\s*:\s*none/.test(String((attrs || {}).style || ""))
+      display: /display\s*:\s*none/.test(String(attrs?.style || ""))
         ? "none"
         : "",
     },

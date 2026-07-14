@@ -16,14 +16,16 @@
  * post-start, а `sing-box check` при этом зелёный. Подсказка с кнопкой — всё,
  * что стоит между оператором и сервисом, который молча не поднимается.
  */
-import { readFileSync } from "node:fs";
+import { globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { globSync } from "node:fs";
 
 const ROOT = resolve(import.meta.dirname, "../..");
 const RPCD = resolve(ROOT, "singbox-ui/root/usr/libexec/rpcd/singbox-ui");
-const BUILDER = resolve(ROOT, "singbox-ui/root/usr/share/singbox-ui/lib/builder");
+const BUILDER = resolve(
+  ROOT,
+  "singbox-ui/root/usr/share/singbox-ui/lib/builder",
+);
 
 function allowlist(): string[] {
   const src = readFileSync(RPCD, "utf8");
@@ -55,22 +57,14 @@ describe("requires_pkg <-> INSTALLABLE_PKGS", () => {
   it("tun.auto_redirect требует kmod-nft-queue", () => {
     // Не косметика: без kmod'а ядро отвергает весь nft-батч auto_redirect'а и
     // sing-box уходит в respawn-петлю, а `sing-box check` остаётся зелёным.
-    const src = readFileSync(
-      resolve(BUILDER, "protocols/tun.uc"),
-      "utf8",
-    );
-    const field = src.match(
-      /\{\s*name:\s*"auto_redirect"[\s\S]*?\},\n/,
-    )?.[0];
+    const src = readFileSync(resolve(BUILDER, "protocols/tun.uc"), "utf8");
+    const field = src.match(/\{\s*name:\s*"auto_redirect"[\s\S]*?\},\n/)?.[0];
     expect(field).toBeTruthy();
     expect(field).toContain('requires_pkg: "kmod-nft-queue"');
   });
 
   it("auto_route НЕ требует пакета (хватает kmod-tun, он жёсткая зависимость)", () => {
-    const src = readFileSync(
-      resolve(BUILDER, "protocols/tun.uc"),
-      "utf8",
-    );
+    const src = readFileSync(resolve(BUILDER, "protocols/tun.uc"), "utf8");
     const field = src.match(/\{\s*name:\s*"auto_route"[\s\S]*?\},\n/)?.[0];
     expect(field).toBeTruthy();
     expect(field).not.toContain("requires_pkg");
