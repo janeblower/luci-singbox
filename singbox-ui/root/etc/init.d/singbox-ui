@@ -247,7 +247,48 @@ reload_service() {
 	# reload/restart/boot cannot interleave its own stop+start in the gap.
 	# The lock is re-entrant, so the nested stop/start below do not deadlock.
 	_lc_acquire
+
+	# Ask about the routing-ownership conflict BEFORE `stop`, not after.
+	# This used to be a plain `stop; start`: `stop` removes our `inet singbox_ui`
+	# table, and `start` then ran generate.uc, got rc 3 and refused — so a
+	# conflicting UCI (reached via BOTH */15 cron jobs and the UI's Apply) tore
+	# the firewall down and only then discovered we would not be starting. No
+	# sing-box, no nft table: the LAN egressed UNPROXIED while we logged a
+	# refusal. Refuse the RELOAD instead — the daemon keeps serving the last
+	# known-good config with its rules up, and the operator's bad edit simply is
+	# not applied. (Boot is different: __do_start has nothing to preserve, so it
+	# still refuses to start at all.)
+	#
+	# ONLY rc 3 (EXIT_TRANSPARENT_CONFLICT) aborts. Any other non-zero — ucode
+	# missing, an unrelated blow-up in the checker — falls through to the normal
+	# stop+start and its existing guards: a broken checker must not become a
+	# broken reload.
+	ucode -L "$UCODE_LIB" "$GENERATE_UC" check-conflict
+	_chk_rc=$?
+	if [ "$_chk_rc" -eq 3 ]; then
+		logger -t singbox-ui "refusing to reload: a tproxy inbound (nft_rules) and a tun inbound (auto_route) both claim system routing; exactly one may. Keeping the running config and its nft rules — disable one and re-apply (see event=config.transparent_conflict in the log for the section names and the fix)."
+		_lc_release
+		return 1
+	fi
+
 	stop
 	start
 	_lc_release
+}
+
+# `restart` had the SAME teardown hole, and it is not academic: the rpcd `restart`
+# method — the UI's "Restart service" button — goes through it. rc.common offers
+# no `restart_service` hook; its `restart` is a hardcoded `stop; start`, defined
+# BEFORE the init script is sourced and NOT re-defined by the USE_PROCD block, so
+# this override wins. A restart IS a stop+start, so route it through
+# reload_service and inherit the pre-flight conflict check and the lifecycle lock
+# — otherwise one button press on a conflicting UCI still strips the nft table
+# and leaves the daemon down. (`trap '' TERM` is rc.common's: don't get killed
+# half-way through the stop.)
+restart() {
+	trap '' TERM
+	reload_service
+	_rs_rc=$?
+	trap - TERM
+	return "$_rs_rc"
 }

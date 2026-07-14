@@ -6,7 +6,12 @@ let reg = require("builder.protocols.registry");
 
 reg.register({
     kind: "outbound", type: "hysteria2", sing_box_type: "hysteria2",
-    shared: { tls: { force_enabled: true }, dial: true },
+    // quic: Hysteria2{Inbound,Outbound}Options both embed QUICOptions upstream
+    // (sing-box `testing` = 1.14), exactly like hysteria and tuic. The block was
+    // simply never declared here — _shared/quic.uc's header always claimed
+    // hysteria2 as a user. The two keys are min_version-gated to 1.14, so nothing
+    // changes on a 1.12/1.13 core.
+    shared: { tls: { force_enabled: true }, quic: {}, dial: true },
 
     fields: [
         { name: "server", type: "string", tab: "basic", required: true,
@@ -49,7 +54,7 @@ reg.register({
 
 reg.register({
     kind: "inbound", type: "hysteria2", sing_box_type: "hysteria2",
-    shared: { tls: { force_enabled: true }, listen: true },
+    shared: { tls: { force_enabled: true }, quic: {}, listen: true },
 
     fields: [
         { name: "listen", type: "string", tab: "basic", default: "::",

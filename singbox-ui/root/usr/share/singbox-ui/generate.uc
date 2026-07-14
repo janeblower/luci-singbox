@@ -72,6 +72,23 @@ if (tconf != null) {
 	exit(EXIT_TRANSPARENT_CONFLICT);
 }
 
+// `generate.uc check-conflict` — run ONLY the guard above, then stop. Nothing is
+// built, nothing is written; the rc is the same EXIT_TRANSPARENT_CONFLICT.
+//
+// init.d's reload_service asks this BEFORE it stops the daemon. It used to be
+// plain `stop; start`: `stop` removes our `inet singbox_ui` table, and `start`
+// then ran the full generate.uc, got rc 3 and refused — so a conflicting UCI (a
+// */15 cron reload, or the UI's Apply) left the box with NO sing-box and NO
+// interception, and the LAN egressed unproxied. We refused, we logged, and the
+// traffic leaked anyway. Asking first means a bad edit is refused as an APPLY:
+// the daemon keeps serving the last known-good config, table intact.
+//
+// It is a MODE of this entrypoint rather than a predicate init.d could evaluate
+// itself, because the rule already lives in exactly one place
+// (helpers.transparent_conflict, consumed here) and a second copy in shell would
+// drift. ARGV dispatch mirrors `nftables.uc needed` / `subscription.uc fetch-subs`.
+if (ARGV[0] === "check-conflict") exit(0);
+
 let config = {};
 
 let log_block = log_mod.build_log(uci);

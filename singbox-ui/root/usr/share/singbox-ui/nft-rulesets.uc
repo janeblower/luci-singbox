@@ -285,7 +285,15 @@ function cmd_fetch_rulesets(cur) {
 	// never exists) and to needlessly reload sing-box every 30 minutes.
 	let names = helpers.sections_of_kind(cur, "ruleset", "nft_rules", "1");
 	if (!length(names)) {
-		log_err("fetch_rulesets: no rule-sets configured (nft_rules=1)");
+		// Only an error if OUR nft path is actually in use. On a TUN box
+		// (auto_route: sing-box installs its own rules; our `inet singbox_ui`
+		// table plays no part) — or on a box with no transparent inbound at all
+		// — these sets feed nothing, so having none of them is normal. It used
+		// to log `error:` on every boot of a perfectly healthy TUN box, and an
+		// operator who learns to ignore a red line stops reading the log. Same
+		// predicate as the ownership guard, one source of truth.
+		if (helpers.transparent_claims(cur).tproxy != null)
+			log_err("fetch_rulesets: no rule-sets configured (nft_rules=1)");
 		return 0;
 	}
 

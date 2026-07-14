@@ -318,3 +318,177 @@ exit 0
     });
   });
 });
+
+// `generate.uc check-conflict` — the conflict guard, and NOTHING else. It exists
+// so init.d's reload_service can ask the question BEFORE it stops the daemon
+// (see the describe below) without a second copy of the predicate: same file,
+// same helpers.transparent_conflict, same rc.
+describe("generate.uc check-conflict: the guard alone, same rc", () => {
+  useGuest();
+
+  async function checkConflict(uciBody: string): Promise<Gen> {
+    const dir = `/tmp/tcc_${process.pid}_${Math.random().toString(36).slice(2)}`;
+    const out = `${dir}/singbox-ui.json`;
+    await exec(`mkdir -p ${dir}/subs`);
+    await putFile(uciBody, `${dir}/singbox-ui`);
+    await putFile(SENTINEL, out);
+
+    const r = await exec(
+      `cd ${WORK} && UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/subs SINGBOX_CONFIG=${out} ` +
+        `ucode -L ${LIB} ${GENERATE_UC} check-conflict; echo "RC=$?"; cat ${out}; rm -rf ${dir}`,
+    );
+    const m = r.stdout.match(/RC=(\d+)/);
+    return {
+      rc: m ? Number(m[1]) : -1,
+      stderr: r.stderr,
+      config: r.stdout.replace(/[\s\S]*?RC=\d+\n/, ""),
+    };
+  }
+
+  it("conflict: rc 3 (EXIT_TRANSPARENT_CONFLICT), names both sections", async () => {
+    const g = await checkConflict(TPROXY + tun("1"));
+    expect(g.rc).toBe(3);
+    expect(g.stderr).toContain("tp_in");
+    expect(g.stderr).toContain("tun_in");
+  });
+
+  it("no conflict: rc 0 and it builds NOTHING (check-only)", async () => {
+    const g = await checkConflict(TPROXY);
+    expect(g.rc).toBe(0);
+    // The sentinel is untouched: the mode exits before any building/publishing.
+    // (Plain `generate.uc` on the same UCI would have overwritten it.)
+    expect(g.config).toBe(SENTINEL);
+  });
+});
+
+// THE BUG (this whole describe is the regression guard): reload_service used to
+// be `stop; start`. `stop` removes our `inet singbox_ui` table; `start` then ran
+// generate.uc, got rc 3 and refused. Net result on a conflicting UCI: no daemon,
+// no nft table — the LAN egresses UNPROXIED. And every reload path lands here:
+// both */15 cron jobs and the UI's Apply. Verified live on the dev stand before
+// the fix: `nft list tables` went empty and sing-box was gone.
+//
+// The fix asks the question BEFORE stop and aborts the reload, leaving the
+// daemon (and its table) serving the last known-good config. Boot is different —
+// there is nothing to preserve there, so start_service still refuses (above).
+describe("init.d reload_service: a conflict must not tear down the firewall", () => {
+  useGuest();
+  let TD = "";
+
+  // ucodeStub: `$1` is the rc for `generate.uc check-conflict`, `$2` for every
+  // other generate.uc call. Every invocation is logged, so the test can prove
+  // `nftables.uc remove` (what `stop` does to our table) never ran.
+  function ucodeStub(checkRc: number, genRc: number): string {
+    return `#!/bin/sh
+echo "ucode $*" >>"${TD}/ucode.log"
+for _arg in "$@"; do
+  case "$_arg" in
+    check-conflict) exit ${checkRc} ;;
+  esac
+done
+for _arg in "$@"; do
+  case "$_arg" in
+    */generate.uc) exit ${genRc} ;;
+  esac
+done
+exit 0
+`;
+  }
+
+  // Source the real init.d, then stub rc.common's `stop`/`start` (they are NOT
+  // defined when the file is merely sourced) so we can see whether the entry
+  // point called them at all. `entry` is reload_service or restart — rc.common's
+  // `restart` is a bare `stop; start` with no hook, so init.d overrides it and
+  // routes it through reload_service; the rpcd `restart` method (the UI's
+  // "Restart service" button) had the identical teardown hole.
+  async function reload(
+    checkRc: number,
+    genRc: number,
+    entry = "reload_service",
+  ) {
+    await putFile(ucodeStub(checkRc, genRc), `${TD}/bin/ucode`);
+    await exec(`chmod +x '${TD}/bin/ucode'`);
+    await exec(`: > '${TD}/logger.log'; : > '${TD}/ucode.log'`);
+    const r = await exec(
+      `PATH="${TD}/bin:$PATH" sh -c "
+        . '${INIT}'
+        stop()  { echo stop  >>'${TD}/lifecycle.log'; }
+        start() { echo start >>'${TD}/lifecycle.log'; }
+        : > '${TD}/lifecycle.log'
+        ${entry}
+      "`,
+    );
+    return {
+      rc: r.exitCode,
+      lifecycle: (await exec(`cat '${TD}/lifecycle.log'`)).stdout,
+      logger: (await exec(`cat '${TD}/logger.log'`)).stdout,
+      ucode: (await exec(`cat '${TD}/ucode.log'`)).stdout,
+      locked:
+        (await exec("test -d /tmp/singbox-ui/.lifecycle.lock")).exitCode === 0,
+    };
+  }
+
+  beforeAll(async () => {
+    TD = (await exec("mktemp -d")).stdout.trim();
+    await exec(`mkdir -p '${TD}/bin'`);
+    await putFile(
+      `#!/bin/sh\necho "logger $*" >>"${TD}/logger.log"\n`,
+      `${TD}/bin/logger`,
+    );
+    await exec(`chmod +x '${TD}/bin/logger'`);
+    await exec(
+      `touch '${TD}/logger.log' '${TD}/ucode.log' '${TD}/lifecycle.log'`,
+    );
+  });
+
+  afterAll(async () => {
+    await exec(`rm -rf '${TD}' /tmp/singbox-ui/.lifecycle.lock`);
+  });
+
+  it("conflict: does NOT stop the daemon, fails the reload, says what to turn off", async () => {
+    const r = await reload(3, 3);
+    expect(r.lifecycle).toBe(""); // neither stop NOR start ran
+    expect(r.ucode).not.toContain("remove"); // our nft table was never removed
+    expect(r.rc).not.toBe(0);
+    expect(r.logger).toContain("refusing to reload");
+    expect(r.logger).toContain("nft_rules");
+    expect(r.logger).toContain("auto_route");
+    expect(r.locked).toBe(false); // the lifecycle lock is released on this path too
+  });
+
+  it("no conflict: normal stop + start", async () => {
+    const r = await reload(0, 0);
+    expect(r.lifecycle).toBe("stop\nstart\n");
+    expect(r.rc).toBe(0);
+    expect(r.locked).toBe(false);
+  });
+
+  // Fail OPEN on the check itself: a checker that dies for an unrelated reason
+  // (ucode gone, a require() blowing up) must not become a broken reload. ONLY
+  // rc 3 means "this config must not be used" — the same distinction 1b8c0914
+  // drew for __do_start.
+  it("a check that fails for another reason (rc 1) does NOT block the reload", async () => {
+    const r = await reload(1, 0);
+    expect(r.lifecycle).toBe("stop\nstart\n");
+    expect(r.rc).toBe(0);
+  });
+
+  // `restart` is the SAME hole through a different door — the rpcd `restart`
+  // method behind the UI's "Restart service" button. rc.common's `restart` is a
+  // hardcoded `stop; start` (no `restart_service` hook, and the USE_PROCD block
+  // does not re-define it), so init.d overrides it onto reload_service. Verified
+  // on the dev stand pre-fix: one press on a conflicting UCI killed the daemon
+  // and removed our nft table, and still returned rc 0.
+  it("restart: same conflict, same refusal — does not tear anything down", async () => {
+    const r = await reload(3, 3, "restart");
+    expect(r.lifecycle).toBe("");
+    expect(r.rc).not.toBe(0);
+    expect(r.logger).toContain("refusing to reload");
+  });
+
+  it("restart: no conflict — still a real stop + start", async () => {
+    const r = await reload(0, 0, "restart");
+    expect(r.lifecycle).toBe("stop\nstart\n");
+    expect(r.rc).toBe(0);
+  });
+});

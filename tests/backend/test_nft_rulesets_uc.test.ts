@@ -164,4 +164,19 @@ describe("nft_rulesets_uc", () => {
     expect(r.stdout).not.toMatch(/unknown type.*tproxy/i);
     expect(r.stdout).toMatch(/no rule-sets configured/i);
   });
+
+  // A healthy TUN-only box (sing-box does its own auto_route/auto_redirect nft
+  // rules; our `inet singbox_ui` table plays no part) has nothing to put in
+  // these sets — that is normal, not an error. It used to log
+  // "error: fetch_rulesets: no rule-sets configured" on every boot, and an
+  // operator who learns to ignore a red line stops reading the log.
+  // Same predicate as the ownership guard: helpers.transparent_claims.
+  it("TUN-only box: no rule-sets is NOT an error (nobody claims our nft path)", async () => {
+    await writeUci(
+      `config inbound 'tun_in'\n\toption enabled '1'\n\toption protocol 'tun'\n\toption auto_route '1'\n`,
+    );
+    const r = await runUc("fetch");
+    expect(r.stdout).not.toMatch(/no rule-sets configured/i);
+    expect(r.stdout).not.toMatch(/^error:/im);
+  });
 });

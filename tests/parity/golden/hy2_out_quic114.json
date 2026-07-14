@@ -1,1 +1,1 @@
-{ "password": "pw", "server": "ex.com", "server_port": 443, "tag": "hq", "tls": { "enabled": true }, "type": "hysteria2" }
+{ "disable_path_mtu_discovery": true, "initial_packet_size": 1280, "password": "pw", "server": "ex.com", "server_port": 443, "tag": "hq", "tls": { "enabled": true }, "type": "hysteria2" }
