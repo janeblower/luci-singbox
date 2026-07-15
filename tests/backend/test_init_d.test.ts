@@ -144,20 +144,24 @@ describe("test_init_d", () => {
     expect((await exec(`cat '${TD}/seed.log'`)).stdout).toContain("seed");
   });
 
-  it("nft apply gated by 'needed' (stub returns empty → skip)", async () => {
+  it("#3: nft apply called unconditionally (no 'needed' gate)", async () => {
     await clearLogs();
     const r = await exec(runInit("start_service"));
     expect(r.exitCode).toBe(0);
     const ucode = (await exec(`cat '${TD}/ucode.log'`)).stdout;
-    expect(ucode).not.toContain("nftables.uc apply");
+    // __do_start no longer branches on `needed`; cmd_apply itself drops the core
+    // table when unneeded AND applies plugin fragments (the old needed=0 -> remove
+    // branch skipped fragments — a plugin's table was then missing after boot).
+    expect(ucode).toContain("nftables.uc apply");
   });
 
-  it("C2.1.12: defensive nftables.uc remove called before apply decision", async () => {
+  it("#3: __do_start never calls `remove` nor probes `needed`", async () => {
     await clearLogs();
     const r = await exec(runInit("start_service"));
     expect(r.exitCode).toBe(0);
     const ucode = (await exec(`cat '${TD}/ucode.log'`)).stdout;
-    expect(ucode).toContain("nftables.uc remove");
+    expect(ucode).not.toContain("nftables.uc remove");
+    expect(ucode).not.toContain("nftables.uc needed");
   });
 
   it("G4: nft apply failure is logged via logger", async () => {

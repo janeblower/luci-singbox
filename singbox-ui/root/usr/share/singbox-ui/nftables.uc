@@ -986,12 +986,23 @@ function cmd_apply(cur) {
 // AFTER this delete — leaving an orphan table tproxy'ing to a dead port until the
 // next start. The locks were disjoint, so nothing serialised the two.
 function cmd_remove() {
-	if (!acquire_apply_lock()) {
-		log_err("nftables: another apply is in progress (lock held); skipping remove");
-		return 1;
+	// #2: do NOT just SKIP on contention. `stop` (init.d) ignores our rc, so a
+	// skipped remove leaves the table UP with the daemon gone — LAN tproxy'd to a
+	// dead port, the exact leak this lock exists to prevent. Bounded-wait for the
+	// lock instead; an `nft -f` apply is fast, so a concurrent one frees it well
+	// within the window. If it never frees (a wedged apply), remove the table
+	// ANYWAY — nft_delete_table_quiet is idempotent and "table gone" is the safe
+	// direction when the daemon is going down.
+	// ponytail: 5×1s bounded wait; raise the bound if an apply legitimately runs >5s.
+	let got = false;
+	for (let i = 0; i < 5; i++) {
+		if (acquire_apply_lock()) { got = true; break; }
+		system(["/bin/sh", "-c", "sleep 1"]);
 	}
+	if (!got)
+		log_err("nftables: apply lock still held after wait; removing table anyway (stop must not leave a live table)");
 	nft_delete_table_quiet();
-	release_apply_lock();
+	if (got) release_apply_lock();
 	return 0;
 }
 

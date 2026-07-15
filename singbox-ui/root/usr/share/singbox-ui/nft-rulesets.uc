@@ -532,7 +532,10 @@ function cmd_refresh(cur, force) {
 	let db = cache_mod.cache_db_path(cur);
 	let tags = remote_nft_tags(cur);
 	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
-	if (db != null && length(tags) && !boot && !no_reload) {
+	// #2: the cold-cache reload is `<init> reload` = stop+start; gate it on the
+	// operator's enable intent so a background tick never resurrects a service
+	// they disabled (crontab does not consult rc.d symlinks).
+	if (db != null && length(tags) && !boot && !no_reload && helpers.service_enabled(SINGBOX_INITD)) {
 		let eligible = retry_eligible_cold_tags(cur, db, tags, force);
 		if (length(eligible)) {
 			log("refresh: cold rule-set in cache.db; reloading sing-box to populate it");
@@ -560,7 +563,11 @@ function cmd_refresh(cur, force) {
 		}
 	}
 	cmd_fetch_rulesets(cur);
-	if (!no_reload) system(["/bin/sh", "-c", NFT_APPLY_CMD]);
+	// #2: the trailing nft apply refreshes the table's CIDR sets on a LIVE
+	// daemon without a reload. If the operator stopped the service, re-installing
+	// the table would tproxy the LAN to a dead port — a silent blackhole. Skip
+	// it when nothing is running; a later reload's `start` re-applies nft anyway.
+	if (!no_reload && helpers.singbox_running()) system(["/bin/sh", "-c", NFT_APPLY_CMD]);
 	return 0;
 }
 

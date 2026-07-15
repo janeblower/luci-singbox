@@ -238,6 +238,25 @@ function transparent_conflict(cur) {
 		: null;
 }
 
+// singbox_running() — is the daemon actually up right now? `pgrep -x sing-box`
+// matches the process basename only, mirroring the rpcd handler's
+// is_singbox_running() fallback. The cron nft-apply gates on this: our nft table
+// only serves a LIVE daemon, so re-installing it while the operator has the
+// service stopped would tproxy the LAN to a dead port (a silent blackhole). If a
+// reload later brings the daemon back, `start` re-applies nft itself.
+function singbox_running() {
+	return system(["/bin/sh", "-c", "pgrep -x sing-box >/dev/null 2>&1"]) == 0;
+}
+
+// service_enabled(initd) — does the operator want the service at all? `<init>
+// enabled` is rc.common's native rc.d-symlink check. Cron reloads gate on it so
+// a DISABLED service is never resurrected by a background tick; a bare `stop`
+// (transient) still is, per OpenWrt start-on-boot semantics — crontab does not
+// look at rc.d symlinks, so without this a disabled service came back to life.
+function service_enabled(initd) {
+	return system([ initd, "enabled" ]) == 0;
+}
+
 return {
 	uci_get_or_empty,
 	s_opt,
@@ -258,4 +277,6 @@ return {
 	ruleset_active,
 	transparent_claims,
 	transparent_conflict,
+	singbox_running,
+	service_enabled,
 };

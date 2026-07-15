@@ -72,8 +72,12 @@ while [ $# -gt 0 ]; do case "$1" in -o) out="$2"; shift 2 ;; *) shift ;; esac; d
 exit 0
 `;
 
-// Fake init.d: records every reload call.
+// Fake init.d: records every reload call. The #2 service_enabled() gate calls
+// `<init> enabled` before the cold-cache reload — answer it WITHOUT logging (so
+// it is not miscounted as a reload), and let a marker file flip it to "disabled"
+// so a test can prove a disabled service is not resurrected by the cron tick.
 const FAKE_INITD = `#!/bin/sh
+case "$1" in enabled) [ -f ${TMP}/disabled ] && exit 1; exit 0 ;; esac
 echo "reload-called $*" >> ${RELOAD_LOG}
 `;
 
@@ -357,6 +361,33 @@ describe("audit_4_1_cold_backoff (S4-1/S4-5/S4-6/BUG1/BUG2/SEC-10)", () => {
     const r = await runUc("refresh", "BBOLT_KNOWN=");
     expect(r.stdout).toContain("not in cache.db yet"); // reached the cold path
     expect(await countReloads()).toBe(0);
+  });
+
+  // ---- #2: a DISABLED service is not resurrected by the cold-cache cron reload --
+  // The cold-cache reload is `<init> reload` = stop+start. A background cron tick
+  // must never start a service the operator disabled — crontab does not consult
+  // rc.d symlinks, so without the service_enabled() gate a `disable` was silently
+  // undone every cycle a rule-set went cold.
+  it("#2: disabled service → cold cron reload suppressed (0 reloads), re-enabled → 1", async () => {
+    // Fresh cold tag: absent the gate this reloads exactly once.
+    await putFile(uciDead(), `${TMP}/singbox-ui`);
+    await exec(
+      `rm -f ${RUNTIME}/.rs_cold_deadrs.attempt ${RUNTIME}/rs_deadrs.json`,
+    );
+    await exec(`touch ${TMP}/disabled`);
+    await clearReloadLog();
+    await runUc("refresh");
+    expect(await countReloads()).toBe(0);
+
+    // Re-enable: the same cold tag now reloads, proving the gate — not some other
+    // backoff — was what suppressed it above.
+    await exec(`rm -f ${TMP}/disabled`);
+    await exec(
+      `rm -f ${RUNTIME}/.rs_cold_deadrs.attempt ${RUNTIME}/rs_deadrs.json`,
+    );
+    await clearReloadLog();
+    await runUc("refresh");
+    expect(await countReloads()).toBe(1);
   });
 
   it("teardown", async () => {

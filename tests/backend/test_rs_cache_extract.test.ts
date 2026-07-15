@@ -132,7 +132,7 @@ describe("rs_cache_extract", () => {
   it("cold tag triggers ONE init.d reload in refresh; warm tag does not reload", async () => {
     // Fake init.d script: appends "reload-called <args>" to $RELOAD_LOG
     await putFile(
-      `#!/bin/sh\necho "reload-called $*" >>"$RELOAD_LOG"\n`,
+      `#!/bin/sh\n[ "$1" = enabled ] && exit 0\necho "reload-called $*" >>"$RELOAD_LOG"\n`,
       INITD,
     );
     await exec(`chmod +x ${INITD}`);

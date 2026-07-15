@@ -926,7 +926,11 @@ function cmd_refresh(cur, force, name) {
 		let changed = cmd_fetch_subs(cur, name);
 		// C3: reload only when the node set really moved. C4: `changed < 0` means
 		// another refresh holds the lock — it will do the reload itself.
-		if (changed > 0 && !no_reload) system([SINGBOX_INITD, "reload"]);
+		// #2: never resurrect a DISABLED service from a background cron tick —
+		// crontab does not consult rc.d symlinks, so an operator's `disable` was
+		// silently undone. `reload` = stop+start would start what they turned off.
+		if (changed > 0 && !no_reload && helpers.service_enabled(SINGBOX_INITD))
+			system([SINGBOX_INITD, "reload"]);
 	}
 	return 0;
 }

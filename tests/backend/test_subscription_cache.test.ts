@@ -40,8 +40,13 @@ fi
 exit 0
 `;
 
-// init.d stub: appends a line per reload so a test can count them.
+// init.d stub: appends a line per reload so a test can count them. The #2
+// service_enabled() gate calls `<init> enabled` before reloading; answer it
+// WITHOUT logging (so it is never miscounted as a reload). SB_DISABLED=1 in the
+// env flips the answer to "disabled" (exit 1) so a test can prove a disabled
+// service is not resurrected by a cron refresh.
 const INITD_STUB = `#!/bin/sh
+[ "$1" = enabled ] && { [ -n "$SB_DISABLED" ] && exit 1; exit 0; }
 echo "$1" >>"\${RELOAD_LOG:-/dev/null}"
 exit 0
 `;
@@ -270,6 +275,21 @@ describe("test_subscription_cache", () => {
     await putFile("trojan://pw@t.example.com:443#T\n", `${dir}/body`);
     await run("refresh force");
     expect(await reloads(dir)).toBe(3); // a node disappeared -> reload
+    await exec(`rm -rf ${dir}`);
+  });
+
+  it("#2: a DISABLED service is not resurrected when the node set changes", async () => {
+    const { dir, run } = await setup();
+    // First fetch: nodes appear = changed set, which C3 shows reloads once. With
+    // the service disabled the fetch still happens, but the reload must not.
+    await run("refresh force", { SB_DISABLED: "1" });
+    expect(await reloads(dir)).toBe(0);
+    // Re-enabled AND the node set moves again (drop a node, à la C3) so `changed`
+    // is truthy — the reload now fires, proving the gate (not an unchanged set)
+    // was what suppressed it above.
+    await putFile("trojan://pw@t.example.com:443#T\n", `${dir}/body`);
+    await run("refresh force");
+    expect(await reloads(dir)).toBe(1);
     await exec(`rm -rf ${dir}`);
   });
 

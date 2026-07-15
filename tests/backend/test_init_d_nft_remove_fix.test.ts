@@ -2,10 +2,14 @@ import { afterAll, beforeAll, describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
 import { exec, putFile } from "../helpers/ssh.ts";
 
-// Regression test for svc-1: init.d blackhole fix.
-// Verifies that nftables.uc remove is only called when nft is NOT needed,
-// and that apply's atomic add+delete+table self-replaces without a prior
-// unconditional remove.
+// Regression test for svc-1: init.d blackhole fix + #2/#3.
+// __do_start no longer branches on `nftables.uc needed`. It calls
+// `nftables.uc apply` UNCONDITIONALLY: cmd_apply already drops the core table
+// when no tproxy/tun inbound needs it AND still applies plugin nft fragments —
+// which the old `needed=0 -> remove` branch skipped (a plugin's table was then
+// absent after boot until the first cron apply). So init.d calls `apply` and
+// never `remove` (nor `needed`); apply's atomic add+delete+table self-replaces,
+// keeping the no-pre-remove blackhole guarantee.
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const INIT = `${WORK}/singbox-ui/root/etc/init.d/singbox-ui`;
@@ -106,8 +110,9 @@ echo "${fn} $*" >>"${TD}/procd.log"
     }
   });
 
-  it("svc-1: nftables.uc remove NOT called when nft is needed (no unconditional remove)", async () => {
-    // uci stub that says nft is needed
+  // The ucode stub answers `apply` (exit 0) and, if ever probed, `needed` — so
+  // the test can assert __do_start no longer probes `needed` nor calls `remove`.
+  async function installNftUcode(): Promise<void> {
     await putFile(
       `#!/bin/sh
 echo "ucode $*" >>"${TD}/ucode.log"
@@ -120,6 +125,7 @@ for _arg in "$@"; do
     case "$_arg" in
         needed)  echo 1; exit 0 ;;
         apply)   exit 0 ;;
+        remove)  exit 0 ;;
     esac
 done
 exit 0
@@ -127,56 +133,31 @@ exit 0
       `${TD}/bin/ucode`,
     );
     await exec(`chmod +x '${TD}/bin/ucode'`);
+  }
+
+  it("svc-1/#3: __do_start calls `nftables.uc apply` unconditionally", async () => {
+    await installNftUcode();
     await clearLogs();
 
     const r = await exec(runInit("start_service"));
     expect(r.exitCode).toBe(0);
 
     const ucode = (await exec(`cat '${TD}/ucode.log'`)).stdout;
-    // Remove should NOT appear before apply
-    const removeLines = ucode.split("\n").filter((l) => l.includes("remove"));
-    const applyLines = ucode.split("\n").filter((l) => l.includes("apply"));
-
-    // If both exist, apply must come BEFORE remove (no unconditional pre-remove)
-    if (removeLines.length > 0 && applyLines.length > 0) {
-      const firstRemove = ucode.indexOf("remove");
-      const firstApply = ucode.indexOf("apply");
-      expect(firstApply).toBeLessThan(firstRemove);
-    } else if (removeLines.length > 0) {
-      // Only remove, no apply that's wrong for the "needed" case
-      expect(applyLines.length).toBeGreaterThan(0);
-    }
+    expect(ucode).toContain("nftables.uc apply");
   });
 
-  it("svc-1: nftables.uc remove IS called in else branch when nft not needed", async () => {
-    // uci stub that says nft is NOT needed
-    await putFile(
-      `#!/bin/sh
-echo "ucode $*" >>"${TD}/ucode.log"
-for _arg in "$@"; do
-    case "$_arg" in
-        */generate.uc)   echo '{"ok":true}' > /tmp/singbox-ui.json; exit 0 ;;
-    esac
-done
-for _arg in "$@"; do
-    case "$_arg" in
-        needed)  echo 0; exit 0 ;;
-    esac
-done
-exit 0
-`,
-      `${TD}/bin/ucode`,
-    );
-    await exec(`chmod +x '${TD}/bin/ucode'`);
+  it("svc-1/#3: __do_start never calls `remove` nor probes `needed`", async () => {
+    await installNftUcode();
     await clearLogs();
 
     const r = await exec(runInit("start_service"));
     expect(r.exitCode).toBe(0);
 
     const ucode = (await exec(`cat '${TD}/ucode.log'`)).stdout;
-    // Remove SHOULD be called when nft is not needed
-    expect(ucode).toContain("nftables.uc remove");
-    // But apply should NOT be called
-    expect(ucode).not.toContain("nftables.uc apply");
+    // The `needed`/`remove` branch is gone: cmd_apply drops the table itself when
+    // not needed and applies plugin fragments either way. No unconditional
+    // pre-remove ⇒ no blackhole window if apply fails.
+    expect(ucode).not.toContain("nftables.uc remove");
+    expect(ucode).not.toContain("nftables.uc needed");
   });
 });
