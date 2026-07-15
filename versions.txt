@@ -1,4 +1,4 @@
-singbox-ui 0.1.0-r85
-luci-app-singbox-ui 0.1.0-r433
-luci-i18n-singbox-ui-ru 0.1.0-r79
+singbox-ui 0.1.0-r89
+luci-app-singbox-ui 0.1.0-r436
+luci-i18n-singbox-ui-ru 0.1.0-r80
 singbox-ui-plugin-awg_warp 0.1.0-r36
