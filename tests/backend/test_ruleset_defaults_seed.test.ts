@@ -165,6 +165,33 @@ describe("92-singbox-ui-rulesets seeds the built-in rule-sets", () => {
     await exec(`rm -rf ${OFF}`);
   });
 
+  // #9: the self-heal runs on every start (incl. cron). `uci commit` flushes the
+  // WHOLE singbox-ui config, so committing here while the user has a LuCI edit
+  // staged (Save without Apply) would persist their work prematurely and
+  // irreversibly. It must DEFER — commit nothing — while changes are pending.
+  it("#9: defers (commits nothing) while the user has uncommitted changes pending", async () => {
+    await seed(DIR);
+    // Isolate the shared /tmp/.uci savedir, then stage a user edit WITHOUT commit.
+    await exec(`uci -c ${DIR} revert singbox-ui 2>/dev/null || true`);
+    await exec(`uci -c ${DIR} set singbox-ui.user_pending=ruleset`);
+
+    expect(await runScript(DIR)).toBe(0);
+
+    // None of the 23 seedable builtins were created (russia_inside/discord ship
+    // in the base config, so exclude them, as the master-switch-off case does).
+    const u = await rulesets(DIR);
+    const created = ALL_SETS.filter(
+      (n) => u[n] === "ruleset" && n !== "russia_inside" && n !== "discord",
+    );
+    expect(created).toEqual([]);
+
+    // The user's staged edit is STILL pending — the seed did not commit it away.
+    const ch = await exec(`uci -c ${DIR} changes singbox-ui`);
+    expect(ch.stdout).toContain("user_pending");
+
+    await exec(`uci -c ${DIR} revert singbox-ui`); // clear the shared savedir
+  });
+
   it("cleanup", async () => {
     await exec(`rm -rf ${DIR}`);
   });

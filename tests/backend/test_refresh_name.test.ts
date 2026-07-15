@@ -95,4 +95,39 @@ describe("test_refresh_name", () => {
     const argv = (await exec(`cat ${ARGV_OUT} 2>/dev/null || true`)).stdout;
     expect(argv.split("\n")).toContain("mysub");
   }, 20000);
+
+  // #8: the RULESETS branch used to run SYNCHRONOUSLY even under async:true. A
+  // cold-rule-set refresh (init.d reload + up to RS_CACHE_WAIT of wait_for_tags)
+  // then blocked the ubus call past its timeout — which the browser reported as
+  // "refresh failed" over work that was still running. It must fork like the
+  // subscriptions branch. Mirror of the test above, with a SLOW rulesets stub.
+  it("async:true forks the RULESETS refresh too (does not block on a slow one)", async () => {
+    const tmp = `${STUB_DIR}/tmp_rs`;
+    await exec(`rm -rf ${tmp} && mkdir -p ${tmp} && rm -f ${ARGV_OUT}`);
+
+    const slow = `${STUB_DIR}/slow_rs.uc`;
+    await putFile(
+      `system(["/bin/sh","-c","sleep 2"]);\n` +
+        `let fs=require("fs");\n` +
+        `let f=fs.open(getenv("ARGV_OUT"),"w");\n` +
+        `if (f) { f.write(join("\\n", ARGV)); f.close(); }\n`,
+      slow,
+    );
+
+    const t0 = Date.now();
+    const r = await exec(
+      `printf '%s' '{"what":"rulesets","async":true}' | ` +
+        `env SUBSCRIPTION_UC=/bin/true RULESETS_UC=${slow} ARGV_OUT=${ARGV_OUT} ` +
+        `SINGBOX_TMPDIR=${tmp} ucode -L ${LIB} ${HANDLER} call refresh`,
+    );
+    const elapsed = Date.now() - t0;
+
+    expect(r.stdout).toContain('"ok"');
+    expect(elapsed).toBeLessThan(2000); // did not wait for the child's sleep
+
+    // the ruleset refresh really was forked (argv written after we returned)
+    await exec("sleep 4");
+    const argv = (await exec(`cat ${ARGV_OUT} 2>/dev/null || true`)).stdout;
+    expect(argv.split("\n")).toContain("refresh");
+  }, 20000);
 });

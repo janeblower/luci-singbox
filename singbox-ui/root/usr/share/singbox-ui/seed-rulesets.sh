@@ -47,6 +47,18 @@ SETS='anime block cloudflare cloudfront digitalocean discord geoblock google_ai
 
 [ "$(uci_ -q get singbox-ui.main.default_rulesets)" = "0" ] && exit 0
 
+# #9: never fold a user's uncommitted LuCI edits into OUR commit. The uci CLI
+# commits the WHOLE singbox-ui config, so if the user has staged changes (a LuCI
+# "Save" without "Apply") and a cron/start self-heal fires here, `uci commit`
+# would flush their work prematurely and irreversibly. If singbox-ui already has
+# pending changes, defer the whole reconcile: it runs on every start, so the
+# builtins reappear on a start with a clean staging (once the user Applies or
+# discards). uci-defaults (first install) always starts clean, so first-run
+# seeding is unaffected.
+if [ -n "$(uci_ -q changes singbox-ui 2>/dev/null)" ]; then
+	exit 0
+fi
+
 # Track whether anything actually changed, so a no-op reconcile never rewrites
 # /etc/config (flash-wear on real routers, and it would also churn the config
 # the user is looking at). set_if() only writes when the value differs.

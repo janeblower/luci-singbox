@@ -947,7 +947,20 @@ if (length(ARGV)) {
 	let argv = ARGV;
 	let sub = argv[0] || "";
 	switch (sub) {
-	case "fetch-subs":  cmd_fetch_subs(cur, argv[1]); break;
+	case "fetch-subs":
+		// #6: the init.d start fetch sets SINGBOX_FETCH_IF_STALE=1 so a fresh
+		// cache is REUSED rather than re-downloaded on every (re)start. __do_start
+		// runs fetch-subs on each start, including an Apply-triggered reload — so
+		// without this, every Save&Apply re-fetched every subscription though the
+		// cron refresh had just done so (two provider hits per tick). is_stale
+		// treats a MISSING cache as stale, so first boot still fetches. rpcd's
+		// manual refresh goes through `refresh force`, never this env, so a user
+		// Refresh always fetches. Gated at the dispatch, not inside cmd_fetch_subs,
+		// because ucode resolves any_subs_stale (defined below) only here.
+		if (getenv("SINGBOX_FETCH_IF_STALE") === "1" && !any_subs_stale(cur, false, argv[1]))
+			break;
+		cmd_fetch_subs(cur, argv[1]);
+		break;
 	case "refresh":     cmd_refresh(cur, argv[1] === "force", argv[2]); break;
 	case "sub-status":  printf("%J\n", cmd_sub_status(cur)); break;
 	default:

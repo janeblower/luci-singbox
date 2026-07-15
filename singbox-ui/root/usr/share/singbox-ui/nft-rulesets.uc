@@ -579,7 +579,15 @@ if (length(ARGV)) {
 	let argv = ARGV;
 	let sub = argv[0] || "";
 	switch (sub) {
-	case "fetch":   cmd_fetch_rulesets(cur); break;
+	case "fetch":
+		// #6: mirror subscription.uc — the init.d start fetch sets
+		// SINGBOX_FETCH_IF_STALE=1 so a fresh rs_*.json cache is reused instead of
+		// re-downloaded on every (re)start. is_stale treats a missing cache as
+		// stale (first boot fetches); the cron `refresh` path never sets this env.
+		if (getenv("SINGBOX_FETCH_IF_STALE") === "1" && !any_rulesets_stale(cur, false))
+			break;
+		cmd_fetch_rulesets(cur);
+		break;
 	case "refresh": cmd_refresh(cur, argv[1] === "force"); break;
 	default:
 		log_err("usage: nft-rulesets.uc {fetch|refresh [force]}");

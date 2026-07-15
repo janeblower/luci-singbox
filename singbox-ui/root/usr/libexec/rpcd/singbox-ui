@@ -269,7 +269,14 @@ function call_refresh() {
 		else if (!run(argv)) ok = false;
 	}
 	if (what === "rulesets" || what === "all") {
-		if (!run(uc_argv(RULESETS_UC, "refresh", "force"))) ok = false;
+		let rargv = uc_argv(RULESETS_UC, "refresh", "force");
+		// #8: honour `async` here too. A ruleset refresh can issue an init.d
+		// reload + up to RS_CACHE_WAIT (10s) of wait_for_tags on a cold rule-set —
+		// exactly the blocking wait async exists to avoid. Left synchronous, an
+		// async refresh STILL hung the ubus call whenever a rule-set was cold (and
+		// the browser read that timeout as "refresh failed"). Fork it fire-and-forget.
+		if (async) run_bg(rargv);
+		else if (!run(rargv)) ok = false;
 	}
 	if (ok) emit_ok();
 	else emit_err(`refresh ${what} failed`);

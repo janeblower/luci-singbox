@@ -293,6 +293,30 @@ describe("test_subscription_cache", () => {
     await exec(`rm -rf ${dir}`);
   });
 
+  it("#6: SINGBOX_FETCH_IF_STALE reuses a fresh cache; missing/stale/no-env still fetch", async () => {
+    const { dir, run } = await setup();
+    const curls = async () =>
+      Number(
+        (
+          await exec(`wc -l <${dir}/curl.log 2>/dev/null || echo 0`)
+        ).stdout.trim(),
+      );
+    // missing cache: stale by definition, so the gate still fetches (first boot).
+    await exec(`: >${dir}/curl.log`);
+    await run("fetch-subs", { SINGBOX_FETCH_IF_STALE: "1" });
+    expect(await curls()).toBeGreaterThan(0);
+    // fresh cache + gate: the redundant re-fetch a UI Apply used to trigger is
+    // now skipped — no curl at all.
+    await exec(`: >${dir}/curl.log`);
+    await run("fetch-subs", { SINGBOX_FETCH_IF_STALE: "1" });
+    expect(await curls()).toBe(0);
+    // without the env (e.g. rpcd `refresh force` path semantics): always fetch.
+    await exec(`: >${dir}/curl.log`);
+    await run("fetch-subs");
+    expect(await curls()).toBeGreaterThan(0);
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("C4: a held lock makes a concurrent refresh skip (no second fetch, no second reload)", async () => {
     const { dir, run } = await setup();
     await run("refresh force");

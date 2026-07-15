@@ -119,11 +119,16 @@ __do_start() {
 	# them. Never fatal.
 	[ -x "$SEED_RULESETS_SH" ] && sh "$SEED_RULESETS_SH" 2>/dev/null
 
-	# Always try to refresh on (re)start, with short curl timeouts so boot
-	# stays snappy. subscription.uc keeps prior sub_*.txt / rs_*.json files
-	# untouched on failure, so generate.uc falls back to the cache.
-	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$SUBSCRIPTION_UC" fetch-subs &
-	SINGBOX_BOOT_FETCH=1 ucode -L "$UCODE_LIB" "$RULESETS_UC" fetch &
+	# Refresh on (re)start, with short curl timeouts so boot stays snappy.
+	# subscription.uc keeps prior sub_*.txt / rs_*.json files untouched on
+	# failure, so generate.uc falls back to the cache.
+	# #6: SINGBOX_FETCH_IF_STALE=1 makes these REUSE a still-fresh cache instead
+	# of re-downloading. __do_start runs on every (re)start — a UI Apply reloads →
+	# starts → would otherwise re-fetch every subscription/rule-set though the cron
+	# refresh just did, hammering providers twice per tick. A missing cache reads
+	# as stale, so first boot still fetches.
+	SINGBOX_BOOT_FETCH=1 SINGBOX_FETCH_IF_STALE=1 ucode -L "$UCODE_LIB" "$SUBSCRIPTION_UC" fetch-subs &
+	SINGBOX_BOOT_FETCH=1 SINGBOX_FETCH_IF_STALE=1 ucode -L "$UCODE_LIB" "$RULESETS_UC" fetch &
 	wait
 
 	# generate.uc exits 3 (EXIT_TRANSPARENT_CONFLICT, see generate.uc) ONLY for
