@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // tests/test_descriptor_form_dynamic_js.sh — port of dynamic-source selector
 // tests for lib/descriptor_form.js::applyMaterialized().
@@ -139,30 +138,15 @@ const SbViewState: any = {
 // failure mode it exists to catch (the picker offering a rule-set the backend
 // prunes; for tun.route_address_set that inverts the tunnel).
 function loadCommon(): Record<string, any> {
-  const src = readFileSync(resolve(VIEW_ROOT, "lib/common.js"), "utf8")
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  return loadLuciModule(resolve(VIEW_ROOT, "lib/common.js"), {
     _: (s: unknown) => s,
-    L: { Class: { extend: (o: unknown) => o } },
     E: () => ({}),
     form,
     ui: {},
     uci,
     SbRpc: {},
     window: { setTimeout: () => {} },
-    console,
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(`(function() {${src}})();`, sandbox, {
-    filename: "common.js",
-  });
-  return sandbox.__moduleExports as Record<string, any>;
+  }).exports as Record<string, any>;
 }
 
 // ...which also brings the real compareVersions() the version gate uses.
@@ -185,29 +169,9 @@ const notifications = {
   },
 };
 
-// LuCI ships String.prototype.format; node does not, and descriptor_form uses it
-// for the conflict message. The vm context is its own realm with its own String
-// intrinsic, so the polyfill has to be evaluated INSIDE it. Minimal %s only.
-const FORMAT_POLYFILL = `String.prototype.format = function () {
-    var args = arguments, i = 0;
-    return this.replace(/%s/g, function () { return String(args[i++]); });
-};`;
-
 function loadDescriptorForm() {
-  const src = readFileSync(DESCRIPTOR_FORM_JS, "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  return loadLuciModule(DESCRIPTOR_FORM_JS, {
     _: (s: unknown) => s,
-    L: { Class: { extend: (o: unknown) => o } },
-    // LuCI ships String.prototype.format; node does not. Only the substitution
-    // matters here, not LuCI's full format vocabulary.
     E: (_tag: string, _attrs: unknown, children: unknown) => ({ children }),
     form,
     ui: notifications,
@@ -216,15 +180,8 @@ function loadDescriptorForm() {
     network,
     SbViewState,
     SbCommon,
-    console,
     Promise,
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(FORMAT_POLYFILL, sandbox);
-  vm.runInContext(`(function() {${body}})();`, sandbox, {
-    filename: "descriptor_form.js",
-  });
-  return (sandbox as any).__moduleExports;
+  }).exports;
 }
 
 const DF = loadDescriptorForm();

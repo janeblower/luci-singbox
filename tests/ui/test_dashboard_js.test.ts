@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // tests/test_dashboard_js.sh — vm sandbox for tabs/dashboard.js.
 // Mirrors test_monitoring_js.sh approach: load fragment into vm context with
@@ -100,15 +100,6 @@ function findAll(n: any, pred: (n: any) => boolean, out: any[] = []): any[] {
 // ---- load dashboard --------------------------------------------------------
 
 function loadDashboard() {
-  const src = readFileSync(DASHBOARD_JS, "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-
   let intervalId = 0;
   let timeoutId = 0;
   const intervals: Record<string, { fn: () => void; ms: number }> = {};
@@ -129,11 +120,9 @@ function loadDashboard() {
   // reads this back instead of touching a real #modal_overlay.
   let lastModal: { title: unknown; body: unknown } | null = null;
 
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  const extras = {
     _: (s: unknown) => s,
     E,
-    L: { Class: { extend: (o: unknown) => o } },
     ui: {
       createHandlerFn: (_ctx: unknown, fn: unknown) => fn,
       addNotification: () => {},
@@ -239,16 +228,8 @@ function loadDashboard() {
     },
   };
 
-  vm.createContext(sandbox);
-  // Patch String.prototype.format inside the vm context
-  vm.runInContext(
-    `if(!String.prototype.format){String.prototype.format=function(){var a=arguments,i=0;return this.replace(/%[sd]/g,function(){return ""+a[i++];});};}`,
-    sandbox,
-  );
-  vm.runInContext(`(function(){${body}})();`, sandbox, {
-    filename: "dashboard.js",
-  });
-  return sandbox as any;
+  const { exports } = loadLuciModule(DASHBOARD_JS, extras);
+  return { __moduleExports: exports, __test: extras.__test } as any;
 }
 
 // ---- tests -----------------------------------------------------------------

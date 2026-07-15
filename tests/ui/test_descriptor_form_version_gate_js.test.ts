@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // tests/test_descriptor_form_version_gate_js.sh — version gate behavior.
 // Fields with min_version/max_version are disabled/hidden based on
@@ -48,17 +47,6 @@ interface VersionState {
 }
 
 function loadDF(vstate: VersionState) {
-  const src = readFileSync(DESCRIPTOR_FORM_JS, "utf8");
-  // Shell test strips 'use strict' + require lines, replaces 'return L.Class.extend('
-  // with 'return (' so the body IS a function body returning the exports object.
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__exports = $1;",
-    );
-
   function FakeOpt(this: any, name: string) {
     this.option = name;
     this.deps = [];
@@ -97,11 +85,9 @@ function loadDF(vstate: VersionState) {
     },
   };
 
-  const sandbox: Record<string, unknown> = {
-    __exports: null,
+  return loadLuciModule(DESCRIPTOR_FORM_JS, {
     _: (s: unknown) => s,
     E: () => ({}),
-    L: { Class: { extend: (o: unknown) => o } },
     form,
     ui: {},
     uci: { sections: () => [] },
@@ -109,14 +95,7 @@ function loadDF(vstate: VersionState) {
     validators: {},
     SbViewState,
     SbCommon,
-    console: { log: () => {}, error: () => {}, warn: () => {} },
-  };
-
-  vm.createContext(sandbox);
-  vm.runInContext(`(function(){${body}})();`, sandbox, {
-    filename: "descriptor_form.js",
-  });
-  return (sandbox as any).__exports;
+  }).exports;
 }
 
 // ---- tests -----------------------------------------------------------------

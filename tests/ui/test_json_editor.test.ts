@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // The JSON editor applies a DIFF, not an overwrite.
 //
@@ -43,27 +42,13 @@ interface JsonEditorMod {
 }
 
 function evalModule(file: string, extra: Record<string, unknown>) {
-  const src = readFileSync(resolve(VIEW_ROOT, file), "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  return loadLuciModule(resolve(VIEW_ROOT, file), {
     _: (s: string) => Object.assign(String(s), { format: () => String(s) }),
-    L: { Class: { extend: (o: unknown) => o } },
     form: { Button: "Button" },
     ui: { showModal: () => {}, hideModal: () => {}, addNotification: () => {} },
     E: () => ({}),
-    console,
     ...extra,
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(`(function() {${body}})();`, sandbox, { filename: file });
-  return sandbox.__moduleExports as Record<string, unknown>;
+  }).exports as Record<string, unknown>;
 }
 
 function load(state: Record<string, UciSection>) {

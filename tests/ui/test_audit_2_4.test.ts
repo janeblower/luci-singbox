@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { formStub, validatorsStub } from "../helpers/form-stub";
+import { loadLuciModule } from "../helpers/luci";
 
 // tests/test_audit_2_4.sh — regression for audit 2.4.
 // Shared (tab,name) fields collapse to ONE LuCI widget; explicit ui_label
@@ -16,50 +16,17 @@ const DESCRIPTOR_FORM_JS = resolve(VIEW_ROOT, "lib/descriptor_form.js");
 // ---- load descriptor_form --------------------------------------------------
 
 function loadDF() {
-  const src = readFileSync(DESCRIPTOR_FORM_JS, "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-
-  const form = {
-    Flag: "Flag",
-    ListValue: "ListValue",
-    DynamicList: "DynamicList",
-    MultiValue: "MultiValue",
-    Value: "Value",
-  };
-  const validators = {
-    host: () => true,
-    port: () => true,
-    uuid: () => true,
-    alpn: () => true,
-  };
-  const SbViewState = {
-    getCoreVersion: () => "",
-    getCompatOnly: () => false,
-  };
-  const SbCommon = { compareVersions: () => 0 };
-
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  return loadLuciModule(DESCRIPTOR_FORM_JS, {
     _: (s: unknown) => s,
-    L: { Class: { extend: (o: unknown) => o } },
-    form,
+    form: formStub,
     ui: {},
-    validators,
-    SbViewState,
-    SbCommon,
-    console: { log: () => {}, error: () => {}, warn: () => {} },
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(`(function(){${body}})();`, sandbox, {
-    filename: "descriptor_form.js",
-  });
-  return (sandbox as any).__moduleExports;
+    validators: validatorsStub,
+    SbViewState: {
+      getCoreVersion: () => "",
+      getCompatOnly: () => false,
+    },
+    SbCommon: { compareVersions: () => 0 },
+  }).exports;
 }
 
 // ---- section mock ----------------------------------------------------------

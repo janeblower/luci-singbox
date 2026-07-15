@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // Regression for the "Name is only settable at creation" bug.
 //
@@ -33,15 +32,6 @@ interface UciSection {
 }
 
 function loadCommon(state: Record<string, UciSection>) {
-  const src = readFileSync(resolve(VIEW_ROOT, "lib/common.js"), "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-
   const uci = {
     get: (_cfg: string, sid: string, opt?: string) =>
       opt === undefined ? (state[sid] ?? null) : (state[sid]?.[opt] ?? null),
@@ -59,10 +49,8 @@ function loadCommon(state: Record<string, UciSection>) {
       Object.values(state).filter((s) => !stype || s[".type"] === stype),
   };
 
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  const common = loadLuciModule(resolve(VIEW_ROOT, "lib/common.js"), {
     _: (s: unknown) => s,
-    L: { Class: { extend: (o: unknown) => o } },
     form: { Value: "Value", ListValue: "ListValue" },
     uci,
     ui: {},
@@ -70,19 +58,11 @@ function loadCommon(state: Record<string, UciSection>) {
     E: () => ({}),
     window: {},
     document: {},
-    console,
+  }).exports as {
+    addRenameField: (s: Section, tab?: string) => void;
+    renameRefs: (kind: string, from: string, to: string) => void;
   };
-  vm.createContext(sandbox);
-  vm.runInContext(`(function() {${body}})();`, sandbox, {
-    filename: "common.js",
-  });
-  return {
-    common: sandbox.__moduleExports as {
-      addRenameField: (s: Section, tab?: string) => void;
-      renameRefs: (kind: string, from: string, to: string) => void;
-    },
-    uci,
-  };
+  return { common, uci };
 }
 
 // Minimal CBI section stub that records how each option was registered.

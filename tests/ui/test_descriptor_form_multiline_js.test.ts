@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { formStub, validatorsStub } from "../helpers/form-stub";
+import { loadLuciModule } from "../helpers/luci";
 
 // tests/ui/test_descriptor_form_multiline_js.test.ts — regression test for
 // uic-3: multiline string fields must render as TextValue with rows/monospace
@@ -14,42 +14,16 @@ const VIEW_ROOT = resolve(
 const DESCRIPTOR_FORM_JS = resolve(VIEW_ROOT, "lib/descriptor_form.js");
 
 function loadDescriptorForm(sandboxExtras: Record<string, unknown> = {}) {
-  const src = readFileSync(DESCRIPTOR_FORM_JS, "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  return loadLuciModule(DESCRIPTOR_FORM_JS, {
     _: (s: unknown) => s,
-    L: { Class: { extend: (o: unknown) => o } },
     ui: {},
     network: {},
-    console,
     ...sandboxExtras,
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(`(function() {${body}})();`, sandbox, {
-    filename: "descriptor_form.js",
-  });
-  return (sandbox as any).__moduleExports;
+  }).exports;
 }
 
-const form = {
-  Flag: "Flag",
-  ListValue: "ListValue",
-  DynamicList: "DynamicList",
-  MultiValue: "MultiValue",
-  Value: "Value",
-  TextValue: "TextValue",
-};
-const validators = {
-  host: () => true,
-  port: () => true,
-};
+const form = formStub;
+const validators = validatorsStub;
 const SbViewState = {
   getCoreVersion: () => "",
   getCompatOnly: () => false,

@@ -1,7 +1,7 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { formStub, validatorsStub } from "../helpers/form-stub";
+import { loadLuciModule } from "../helpers/luci";
 
 // Mirrors the loader in test_descriptor_form_js.test.ts: descriptor_form.js is a
 // LuCI fragment, not an ES module — strip the fragment header and rewrite the
@@ -14,41 +14,18 @@ const VIEW_ROOT = resolve(
 const DESCRIPTOR_FORM_JS = resolve(VIEW_ROOT, "lib/descriptor_form.js");
 
 function loadDescriptorForm(sandboxExtras: Record<string, unknown> = {}) {
-  const src = readFileSync(DESCRIPTOR_FORM_JS, "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  return loadLuciModule(DESCRIPTOR_FORM_JS, {
     _: (s: unknown) => s,
-    L: { Class: { extend: (o: unknown) => o } },
     ui: {},
     network: {},
-    console,
     ...sandboxExtras,
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(`(function() {${body}})();`, sandbox, {
-    filename: "descriptor_form.js",
-  });
-  return (sandbox as any).__moduleExports;
+  }).exports;
 }
 
 // MultiValue is a DISTINCT stub value: in real LuCI it extends DynamicList, and
 // controlKindFor() tells them apart by identity — collapsing the two here would
 // hide a fall-through bug in the ordering of that check.
-const form = {
-  Flag: "Flag",
-  ListValue: "ListValue",
-  DynamicList: "DynamicList",
-  MultiValue: "MultiValue",
-  TextValue: "TextValue",
-  Value: "Value",
-};
+const form = formStub;
 const DF = loadDescriptorForm({ form });
 const tagField: (opt: any, name: string, control?: string) => void =
   DF.tagField;
@@ -110,7 +87,7 @@ describe("descriptor_form.js — tagField", () => {
 });
 
 // --- integration: every materialized field carries the hook -----------------
-const validators = { host: () => true, port: () => true, uuid: () => true };
+const validators = validatorsStub;
 const SbViewState = {
   getCoreVersion: () => "",
   getCompatOnly: () => false,

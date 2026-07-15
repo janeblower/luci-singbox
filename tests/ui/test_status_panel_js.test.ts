@@ -1,13 +1,9 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // tests/test_status_panel_js.sh — asserts renderStatusPanel handles RPC failure
 // (S2-1): a rejected callStatus() must not reject the returned promise.
-
-// status-panel.js uses a custom E() with more DOM features than loadLuciModule's
-// default sandbox, so we build the sandbox manually (mirroring the original .sh).
 
 const STATUS_PANEL_JS = resolve(
   import.meta.dirname,
@@ -63,44 +59,23 @@ function E(tag: string, a?: any, c?: any) {
 }
 
 function loadStatusPanel() {
-  const src = readFileSync(STATUS_PANEL_JS, "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-
   let statusImpl: () => Promise<any> = () =>
     Promise.resolve({ status: "ok", running: true, now: 0 });
 
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
-    _: (s: unknown) => s,
-    E,
-    L: { Class: { extend: (o: unknown) => o } },
-    Math,
-    Object,
-    Array,
-    Promise,
-    Number,
-    String,
-    console: { log() {}, error() {}, warn() {} },
-    SbRpc: { callStatus: (..._a: unknown[]) => statusImpl() },
-    __test: {
-      setStatus: (fn: () => Promise<any>) => {
-        statusImpl = fn;
-      },
+  const __test = {
+    setStatus: (fn: () => Promise<any>) => {
+      statusImpl = fn;
     },
   };
 
-  vm.createContext(sandbox);
-  vm.runInContext(`(function(){${body}})();`, sandbox, {
-    filename: "status-panel.js",
+  const { exports } = loadLuciModule(STATUS_PANEL_JS, {
+    _: (s: unknown) => s,
+    E,
+    SbRpc: { callStatus: (..._a: unknown[]) => statusImpl() },
+    __test,
   });
 
-  return sandbox as any;
+  return { __moduleExports: exports, __test };
 }
 
 describe("status-panel.js renderStatusPanel (S2-1)", () => {

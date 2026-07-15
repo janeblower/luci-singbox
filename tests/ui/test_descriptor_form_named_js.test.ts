@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // tests/test_descriptor_form_named_js.sh — port of applyMaterializedNamed tests.
 
@@ -36,16 +35,7 @@ const SbViewState = { getCoreVersion: () => "", getCompatOnly: () => false };
 const SbCommon = { compareVersions: () => 0 };
 
 function loadDescriptorFormNamed() {
-  const src = readFileSync(DESCRIPTOR_FORM_JS, "utf8");
-  // Shell test uses: .replace(/return L\.Class\.extend\(/, 'return (')
-  // then: new Function('form','ui','uci','network','validators','SbViewState','SbCommon', body)
-  // We replicate with vm + same replacement
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/'require [^']*';\s*/g, "")
-    .replace(/return L\.Class\.extend\(/, "return (");
-
-  const sandbox: Record<string, unknown> = {
+  return loadLuciModule(DESCRIPTOR_FORM_JS, {
     _: (s: unknown) => s,
     E: () => ({}),
     form,
@@ -55,16 +45,7 @@ function loadDescriptorFormNamed() {
     validators,
     SbViewState,
     SbCommon,
-    L: { Class: { extend: (o: unknown) => o } },
-    console,
-  };
-  vm.createContext(sandbox);
-  // Wrap in a function that takes the params and returns the module object
-  const wrappedBody = `(function(form,ui,uci,network,validators,SbViewState,SbCommon){ ${body} })(form,ui,uci,network,validators,SbViewState,SbCommon)`;
-  const result = vm.runInContext(wrappedBody, sandbox, {
-    filename: "descriptor_form.js",
-  });
-  return result;
+  }).exports;
 }
 
 const mod = loadDescriptorFormNamed();

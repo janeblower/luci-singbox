@@ -1,7 +1,6 @@
-import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import vm from "node:vm";
 import { describe, expect, it } from "vitest";
+import { loadLuciModule } from "../helpers/luci";
 
 // Two-step outbound type picker: `_kind` (Manual / Groups / Subscription) filters
 // the `type` dropdown down to that mode's members.
@@ -98,15 +97,6 @@ const STATE: Record<string, UciSection> = {
 // outbounds.js wraps renderWidget at BUILD time, so the stub widget has to be in
 // place before buildOutboundsMap() runs — hence the factory map.
 function loadOutbounds(widgets: Record<string, () => unknown> = {}) {
-  const src = readFileSync(resolve(VIEW_ROOT, "tabs/outbounds.js"), "utf8");
-  const body = src
-    .replace(/^'use strict';\s*/, "")
-    .replace(/^'require [^']+';\s*/gm, "")
-    .replace(
-      /return L\.Class\.extend\((\{[\s\S]*\})\);?\s*$/,
-      "__moduleExports = $1;",
-    );
-
   const registered: Registered[] = [];
 
   function mkOpt(tab: string, name: string): Opt {
@@ -146,10 +136,8 @@ function loadOutbounds(widgets: Record<string, () => unknown> = {}) {
       Object.values(STATE).filter((s) => !stype || s[".type"] === stype),
   };
 
-  const sandbox: Record<string, unknown> = {
-    __moduleExports: null,
+  const mod = loadLuciModule(resolve(VIEW_ROOT, "tabs/outbounds.js"), {
     _: (s: unknown) => s,
-    L: { Class: { extend: (o: unknown) => o } },
     form: {
       Map: class {
         section() {
@@ -194,14 +182,7 @@ function loadOutbounds(widgets: Record<string, () => unknown> = {}) {
     window: { setTimeout: (fn: () => void) => fn() },
     Uint8Array,
     Math,
-    console,
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(`(function() {${body}})();`, sandbox, {
-    filename: "outbounds.js",
-  });
-
-  const mod = sandbox.__moduleExports as {
+  }).exports as {
     kindOfType: (t: string) => string;
     buildOutboundsMap: () => unknown;
   };
