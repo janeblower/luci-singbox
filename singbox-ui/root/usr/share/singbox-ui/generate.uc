@@ -72,22 +72,13 @@ if (tconf != null) {
 	exit(EXIT_TRANSPARENT_CONFLICT);
 }
 
-// `generate.uc check-conflict` — run ONLY the guard above, then stop. Nothing is
-// built, nothing is written; the rc is the same EXIT_TRANSPARENT_CONFLICT.
-//
-// init.d's reload_service asks this BEFORE it stops the daemon. It used to be
-// plain `stop; start`: `stop` removes our `inet singbox_ui` table, and `start`
-// then ran the full generate.uc, got rc 3 and refused — so a conflicting UCI (a
-// */15 cron reload, or the UI's Apply) left the box with NO sing-box and NO
-// interception, and the LAN egressed unproxied. We refused, we logged, and the
-// traffic leaked anyway. Asking first means a bad edit is refused as an APPLY:
-// the daemon keeps serving the last known-good config, table intact.
-//
-// It is a MODE of this entrypoint rather than a predicate init.d could evaluate
-// itself, because the rule already lives in exactly one place
-// (helpers.transparent_conflict, consumed here) and a second copy in shell would
-// drift. ARGV dispatch mirrors `nftables.uc needed` / `subscription.uc fetch-subs`.
-if (ARGV[0] === "check-conflict") exit(0);
+// NB: the rc-3 guard above runs on EVERY invocation, before anything is built.
+// init.d's reload_service leans on that: it pre-flights a FULL generate to a
+// temp path BEFORE `stop`, so a transparent conflict (rc 3) — or a config the
+// core later rejects — aborts the reload with the running config still up,
+// instead of tearing down the daemon and nft table first and only then
+// discovering the config is unusable (LAN leaking unproxied). No separate
+// check-conflict mode is needed: the full pre-flight subsumes it.
 
 let config = {};
 
@@ -271,7 +262,12 @@ function publish_atomic(path, body) {
 	}
 	let tmp = sprintf("%s.tmp.%d.%d", path, time(), n);
 
-	let f = fs.open(tmp, "w");
+	// 0600: this file carries node passwords and the clash_api secret, exactly
+	// like the sub-cache (0600) and outbound-meta.json (0600). fs.open without a
+	// perm arg yields 0644 under the default umask — world-readable creds. The
+	// atomic rename below preserves the tmp's mode, so config, .prev AND the rpcd
+	// preview file (which renames one of these tmps over itself) all end up 0600.
+	let f = fs.open(tmp, "w", 0o600);
 	if (!f) {
 		warn(sprintf("generate.uc: cannot open tmpfile %s for writing\n", tmp));
 		return false;
@@ -285,11 +281,23 @@ function publish_atomic(path, body) {
 		return false;
 	}
 
-	// Best-effort backup of the previous file. Ignore failures (file may
-	// not exist on first run, or the rename may not be permitted).
+	// Best-effort backup of the previous file by COPYING it aside, then a single
+	// atomic rename(tmp -> path) below. rename(2) atomically REPLACES the target,
+	// so the live config never vanishes — not even for an instant. The old code
+	// did rename(path, prev) FIRST: that opened a window with no file at `path`
+	// (a concurrent reader saw "no cached config"), and if the final rename then
+	// failed the system was left with NO config at all though a valid one sat in
+	// .prev — a spurious "no cached config" refusal to start.
 	let prev = path + ".prev";
-	try { fs.unlink(prev); } catch (_) {}
-	try { fs.rename(path, prev); } catch (_) {}
+	try {
+		let src = fs.open(path, "r");
+		if (src) {
+			let old = src.read("all") ?? "";
+			src.close();
+			let pf = fs.open(prev, "w", 0o600);
+			if (pf) { pf.write(old); pf.flush(); pf.close(); }
+		}
+	} catch (_) {}
 
 	let renamed = false;
 	try { renamed = fs.rename(tmp, path); } catch (_) { renamed = false; }

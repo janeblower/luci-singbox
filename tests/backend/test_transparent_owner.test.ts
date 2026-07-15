@@ -319,78 +319,43 @@ exit 0
   });
 });
 
-// `generate.uc check-conflict` — the conflict guard, and NOTHING else. It exists
-// so init.d's reload_service can ask the question BEFORE it stops the daemon
-// (see the describe below) without a second copy of the predicate: same file,
-// same helpers.transparent_conflict, same rc.
-describe("generate.uc check-conflict: the guard alone, same rc", () => {
-  useGuest();
-
-  async function checkConflict(uciBody: string): Promise<Gen> {
-    const dir = `/tmp/tcc_${process.pid}_${Math.random().toString(36).slice(2)}`;
-    const out = `${dir}/singbox-ui.json`;
-    await exec(`mkdir -p ${dir}/subs`);
-    await putFile(uciBody, `${dir}/singbox-ui`);
-    await putFile(SENTINEL, out);
-
-    const r = await exec(
-      `cd ${WORK} && UCI_CONFIG_DIR=${dir} SINGBOX_TMPDIR=${dir}/subs SINGBOX_CONFIG=${out} ` +
-        `ucode -L ${LIB} ${GENERATE_UC} check-conflict; echo "RC=$?"; cat ${out}; rm -rf ${dir}`,
-    );
-    const m = r.stdout.match(/RC=(\d+)/);
-    return {
-      rc: m ? Number(m[1]) : -1,
-      stderr: r.stderr,
-      config: r.stdout.replace(/[\s\S]*?RC=\d+\n/, ""),
-    };
-  }
-
-  it("conflict: rc 3 (EXIT_TRANSPARENT_CONFLICT), names both sections", async () => {
-    const g = await checkConflict(TPROXY + tun("1"));
-    expect(g.rc).toBe(3);
-    expect(g.stderr).toContain("tp_in");
-    expect(g.stderr).toContain("tun_in");
-  });
-
-  it("no conflict: rc 0 and it builds NOTHING (check-only)", async () => {
-    const g = await checkConflict(TPROXY);
-    expect(g.rc).toBe(0);
-    // The sentinel is untouched: the mode exits before any building/publishing.
-    // (Plain `generate.uc` on the same UCI would have overwritten it.)
-    expect(g.config).toBe(SENTINEL);
-  });
-});
-
 // THE BUG (this whole describe is the regression guard): reload_service used to
-// be `stop; start`. `stop` removes our `inet singbox_ui` table; `start` then ran
-// generate.uc, got rc 3 and refused. Net result on a conflicting UCI: no daemon,
-// no nft table — the LAN egresses UNPROXIED. And every reload path lands here:
-// both */15 cron jobs and the UI's Apply. Verified live on the dev stand before
-// the fix: `nft list tables` went empty and sing-box was gone.
+// tear down the firewall BEFORE it knew the new config was usable. It did a
+// cheap `check-conflict` pre-stop (rc 3 only), then `stop; start`; the FULL
+// generate + `sing-box check` ran only INSIDE `start`, i.e. AFTER `stop` removed
+// our `inet singbox_ui` table and the daemon. So a config that generates cleanly
+// but the core REJECTS (unknown field on an old core, dangling ref, fail-open
+// version gate, the user's json_extra) left the box with no daemon and no table
+// — the LAN egressing UNPROXIED — and self-reproduced on every */15 cron reload.
 //
-// The fix asks the question BEFORE stop and aborts the reload, leaving the
-// daemon (and its table) serving the last known-good config. Boot is different —
-// there is nothing to preserve there, so start_service still refuses (above).
-describe("init.d reload_service: a conflict must not tear down the firewall", () => {
+// The fix pre-flights the FULL config to a temp path and runs `sing-box check`
+// on it BEFORE `stop`. rc 3 (conflict) OR a core rejection aborts the reload,
+// leaving the daemon and its table serving the last known-good config. Boot is
+// different — nothing to preserve there, so start_service still refuses (above).
+describe("init.d reload_service: a bad config must not tear down the firewall", () => {
   useGuest();
   let TD = "";
 
-  // ucodeStub: `$1` is the rc for `generate.uc check-conflict`, `$2` for every
-  // other generate.uc call. Every invocation is logged, so the test can prove
-  // `nftables.uc remove` (what `stop` does to our table) never ran.
-  function ucodeStub(checkRc: number, genRc: number): string {
+  // Two stubs drive the pre-flight: `ucode` exits `genRc` for the temp generate
+  // (3 = transparent conflict, 0 = built ok, other = fail-open), and `sing-box`
+  // exits `checkRc` for `check` (consulted only when genRc is 0). Every ucode
+  // invocation is logged so the test can prove `nftables.uc remove` (what `stop`
+  // does to our table) never ran on a refusal.
+  function ucodeStub(genRc: number): string {
     return `#!/bin/sh
 echo "ucode $*" >>"${TD}/ucode.log"
-for _arg in "$@"; do
-  case "$_arg" in
-    check-conflict) exit ${checkRc} ;;
-  esac
-done
 for _arg in "$@"; do
   case "$_arg" in
     */generate.uc) exit ${genRc} ;;
   esac
 done
+exit 0
+`;
+  }
+
+  function singboxStub(checkRc: number): string {
+    return `#!/bin/sh
+[ "$1" = check ] && exit ${checkRc}
 exit 0
 `;
   }
@@ -402,15 +367,16 @@ exit 0
   // routes it through reload_service; the rpcd `restart` method (the UI's
   // "Restart service" button) had the identical teardown hole.
   async function reload(
-    checkRc: number,
     genRc: number,
+    checkRc: number,
     entry = "reload_service",
   ) {
-    await putFile(ucodeStub(checkRc, genRc), `${TD}/bin/ucode`);
-    await exec(`chmod +x '${TD}/bin/ucode'`);
+    await putFile(ucodeStub(genRc), `${TD}/bin/ucode`);
+    await putFile(singboxStub(checkRc), `${TD}/bin/sing-box`);
+    await exec(`chmod +x '${TD}/bin/ucode' '${TD}/bin/sing-box'`);
     await exec(`: > '${TD}/logger.log'; : > '${TD}/ucode.log'`);
     const r = await exec(
-      `PATH="${TD}/bin:$PATH" sh -c "
+      `PATH="${TD}/bin:$PATH" SINGBOX_BIN='${TD}/bin/sing-box' sh -c "
         . '${INIT}'
         stop()  { echo stop  >>'${TD}/lifecycle.log'; }
         start() { echo start >>'${TD}/lifecycle.log'; }
@@ -445,8 +411,8 @@ exit 0
     await exec(`rm -rf '${TD}' /tmp/singbox-ui/.lifecycle.lock`);
   });
 
-  it("conflict: does NOT stop the daemon, fails the reload, says what to turn off", async () => {
-    const r = await reload(3, 3);
+  it("conflict (generate rc 3): does NOT stop the daemon, fails the reload, says what to turn off", async () => {
+    const r = await reload(3, 0);
     expect(r.lifecycle).toBe(""); // neither stop NOR start ran
     expect(r.ucode).not.toContain("remove"); // our nft table was never removed
     expect(r.rc).not.toBe(0);
@@ -456,18 +422,33 @@ exit 0
     expect(r.locked).toBe(false); // the lifecycle lock is released on this path too
   });
 
-  it("no conflict: normal stop + start", async () => {
+  // The #1 fix: config generates cleanly (rc 0) but the CORE rejects it. Pre-fix
+  // this was only discovered inside `start`, AFTER `stop` removed the table and
+  // daemon. Now the pre-flight `sing-box check` catches it first and refuses the
+  // reload with nothing torn down.
+  it("core rejects config (generate 0, check 1): does NOT stop, keeps running config", async () => {
+    const r = await reload(0, 1);
+    expect(r.lifecycle).toBe(""); // stop never ran — daemon + table survive
+    expect(r.ucode).not.toContain("remove");
+    expect(r.rc).not.toBe(0);
+    expect(r.logger).toContain("refusing to reload");
+    expect(r.logger).toContain("sing-box rejected");
+    expect(r.locked).toBe(false);
+  });
+
+  it("no conflict, core accepts (0/0): normal stop + start", async () => {
     const r = await reload(0, 0);
     expect(r.lifecycle).toBe("stop\nstart\n");
     expect(r.rc).toBe(0);
     expect(r.locked).toBe(false);
   });
 
-  // Fail OPEN on the check itself: a checker that dies for an unrelated reason
-  // (ucode gone, a require() blowing up) must not become a broken reload. ONLY
-  // rc 3 means "this config must not be used" — the same distinction 1b8c0914
-  // drew for __do_start.
-  it("a check that fails for another reason (rc 1) does NOT block the reload", async () => {
+  // Fail OPEN on generate itself: a generate that dies for an unrelated reason
+  // (a temp-write hiccup, a require() blowing up) must not become a broken
+  // reload. ONLY rc 3 means "this config must not be used"; any other non-zero
+  // falls through to stop+start (the core check is skipped when generate != 0),
+  // the same distinction 1b8c0914 drew for __do_start.
+  it("a generate that fails for another reason (rc 1) does NOT block the reload", async () => {
     const r = await reload(1, 0);
     expect(r.lifecycle).toBe("stop\nstart\n");
     expect(r.rc).toBe(0);
@@ -480,7 +461,7 @@ exit 0
   // on the dev stand pre-fix: one press on a conflicting UCI killed the daemon
   // and removed our nft table, and still returned rc 0.
   it("restart: same conflict, same refusal — does not tear anything down", async () => {
-    const r = await reload(3, 3, "restart");
+    const r = await reload(3, 0, "restart");
     expect(r.lifecycle).toBe("");
     expect(r.rc).not.toBe(0);
     expect(r.logger).toContain("refusing to reload");

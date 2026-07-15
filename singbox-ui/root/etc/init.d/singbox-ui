@@ -177,27 +177,18 @@ __do_start() {
 		return 1
 	fi
 
-	# Defensive: if a previous start_service installed nft rules and the
-	# user has since flipped every tproxy inbound to a non-tproxy protocol
-	# (or disabled the section), `needed` will now return "0" — but the
-	# old table would linger until the next `stop`. Only remove when nft
-	# is not needed so the post-apply state always reflects the latest `needed`
-	# decision. The remove is idempotent and a no-op when no table exists.
-	# apply's atomic `add+delete+table` prelude self-replaces the table,
-	# so we don't remove unconditionally before apply (which would leave a
-	# blackhole if apply then fails).
-
-	if [ "$(ucode -L "$UCODE_LIB" "$NFTABLES_UC" needed)" = "1" ]; then
-		# G4: surface apply failures via syslog. apply's atomic
-		# `add+delete+table` prelude self-replaces the table on failure,
-		# so a stale table from a prior start won't linger.
-		ucode -L "$UCODE_LIB" "$NFTABLES_UC" apply
-		_nft_rc=$?
-		[ "$_nft_rc" = 0 ] || logger -t singbox-ui "nft apply failed (rc=$_nft_rc)"
-	else
-		# nft not needed; clean up any stale table from a previous start.
-		ucode -L "$UCODE_LIB" "$NFTABLES_UC" remove 2>/dev/null || true
-	fi
+	# Apply nft unconditionally. cmd_apply already does the right thing in every
+	# case: when no tproxy/tun inbound needs the core table it DROPS any stale one
+	# (the old `needed=0 -> remove` branch) AND — crucially — still applies any
+	# plugin-contributed nft fragments. The old `needed` branch called `remove`,
+	# which skips fragments entirely, so in TUN-only mode (no tproxy) a plugin's
+	# table (e.g. awg_warp's) was absent after boot until the first */15 cron
+	# apply — up to 15 min of missing rules. One call, both behaviours, gap closed.
+	# apply's atomic `add+delete+table` prelude self-replaces the table on failure,
+	# so a stale table from a prior start won't linger.
+	ucode -L "$UCODE_LIB" "$NFTABLES_UC" apply
+	_nft_rc=$?
+	[ "$_nft_rc" = 0 ] || logger -t singbox-ui "nft apply failed (rc=$_nft_rc)"
 
 	# Phase E: reconcile plugin-managed resources (e.g. AWG-WARP interfaces) before
 	# the daemon starts. Idempotent; never fatal.
@@ -277,28 +268,44 @@ reload_service() {
 	# The lock is re-entrant, so the nested stop/start below do not deadlock.
 	_lc_acquire
 
-	# Ask about the routing-ownership conflict BEFORE `stop`, not after.
-	# This used to be a plain `stop; start`: `stop` removes our `inet singbox_ui`
-	# table, and `start` then ran generate.uc, got rc 3 and refused — so a
-	# conflicting UCI (reached via BOTH */15 cron jobs and the UI's Apply) tore
-	# the firewall down and only then discovered we would not be starting. No
-	# sing-box, no nft table: the LAN egressed UNPROXIED while we logged a
-	# refusal. Refuse the RELOAD instead — the daemon keeps serving the last
-	# known-good config with its rules up, and the operator's bad edit simply is
-	# not applied. (Boot is different: __do_start has nothing to preserve, so it
-	# still refuses to start at all.)
+	# Pre-flight the FULL config BEFORE `stop`, not after. `stop` removes our
+	# `inet singbox_ui` table and the daemon; if a bad config were only caught
+	# INSIDE `start` (which regenerates and runs `sing-box check` post-stop), the
+	# box would already have no daemon and no table — the LAN egressing UNPROXIED
+	# — before we discovered the config is unusable. And it self-reproduces: the
+	# same UCI drives the same bad config on every */15 cron reload. Two failure
+	# modes reach this:
+	#   - transparent-ownership conflict: generate.uc exits 3 (bails before writing);
+	#   - well-formed but core-rejected: unknown field on an old core, dangling
+	#     ref, a fail-open version gate, the user's json_extra — generate.uc emits
+	#     it happily but `sing-box check` refuses it.
+	# Build to a TEMP path and validate it here; refuse the reload on either,
+	# leaving the daemon serving the last known-good config with its table intact.
+	# This full generate subsumes the old `check-conflict` mode (generate.uc still
+	# exits 3 on conflict before building). The double generate (temp here, prod
+	# in `start`) is the accepted price. (Boot is different: __do_start has nothing
+	# to preserve, so it refuses to start at all.)
 	#
-	# ONLY rc 3 (EXIT_TRANSPARENT_CONFLICT) aborts. Any other non-zero — ucode
-	# missing, an unrelated blow-up in the checker — falls through to the normal
-	# stop+start and its existing guards: a broken checker must not become a
-	# broken reload.
-	ucode -L "$UCODE_LIB" "$GENERATE_UC" check-conflict
+	# Fail-open on everything else: a generate rc other than 0/3 (a temp-write
+	# hiccup) or a missing core binary falls through to the normal stop+start and
+	# its own guards — a broken pre-flight must not become a broken reload.
+	_pf=/tmp/singbox-ui/.preflight.json
+	SINGBOX_CONFIG="$_pf" ucode -L "$UCODE_LIB" "$GENERATE_UC"
 	_chk_rc=$?
 	if [ "$_chk_rc" -eq 3 ]; then
 		logger -t singbox-ui "refusing to reload: a tproxy inbound (nft_rules) and a tun inbound (auto_route) both claim system routing; exactly one may. Keeping the running config and its nft rules — disable one and re-apply (see event=config.transparent_conflict in the log for the section names and the fix)."
+		rm -f "$_pf"
 		_lc_release
 		return 1
 	fi
+	if [ "$_chk_rc" -eq 0 ] && [ -x "$SINGBOX_BIN" ] && \
+		! "$SINGBOX_BIN" check -c "$_pf" 2>/tmp/singbox-ui.reload.check.err; then
+		logger -t singbox-ui "refusing to reload: sing-box rejected the new config; keeping the running config. $(head -c 200 /tmp/singbox-ui.reload.check.err 2>/dev/null)"
+		rm -f "$_pf"
+		_lc_release
+		return 1
+	fi
+	rm -f "$_pf"
 
 	stop
 	start

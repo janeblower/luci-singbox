@@ -837,7 +837,12 @@ function ip_rule_smoke_check(mark, mask) {
 function gather_apply_params(cur) {
 	let tp = first_nft_tproxy(cur);
 
-	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : "7893";
+	// No default port: a tproxy inbound with no listen_port is DROPPED by
+	// build_listen_base (nothing listens), so masking it with "7893" would make
+	// nft mark LAN traffic to a dead port — a silent blackhole. Leave it null and
+	// let _cmd_apply_locked's validate_port() guard refuse the apply, same as an
+	// out-of-range port.
+	let port = (tp && tp.listen_port != null && tp.listen_port !== "") ? tp.listen_port : null;
 	let ifaces = tp ? helpers.as_array(tp.interface) : [];
 	if (!length(ifaces)) ifaces = [ "br-lan" ];
 
