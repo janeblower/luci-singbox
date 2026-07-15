@@ -2,6 +2,7 @@
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.icons as SbIcons';
+'require view.singbox-ui.lib.common as SbCommon';
 
 var callClashGet     = SbRpc.callClashGet;
 var callClashMutate  = SbRpc.callClashMutate;
@@ -43,16 +44,7 @@ function buildMonitoring() {
 		}, 200);
 	}
 
-	// Same prettyBytes the dashboard uses: decimal divisor, 3 significant digits.
-	// The table used to mix 1024-based "1.5MB" with the dashboard's 1000-based
-	// "1.5 MB" — two byte scales in one app, one of them always wrong.
-	function fmtBytes(n) {
-		n = +n || 0;
-		if (n < 1000) return n + ' B';
-		var u = ['B','KB','MB','GB','TB','PB'];
-		var e = Math.min(Math.floor(Math.log(n) / Math.log(1000)), u.length - 1);
-		return Number((n / Math.pow(1000, e)).toPrecision(3)) + ' ' + u[e];
-	}
+	var fmtBytes = SbCommon.prettyBytes;
 	function pad2(n) { return (n < 10 ? '0' : '') + n; }
 	function fmtDuration(ms) {
 		var s = Math.max(0, Math.floor(ms / 1000));

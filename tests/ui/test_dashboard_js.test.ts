@@ -188,6 +188,19 @@ function loadDashboard() {
           if (onTick) onTick(r);
           return r;
         }),
+      prettyBytes: (n: number) => {
+        n = +n || 0;
+        if (n < 1000) return `${n} B`;
+        const u = ["B", "KB", "MB", "GB", "TB", "PB"];
+        const e = Math.min(
+          Math.floor(Math.log(n) / Math.log(1000)),
+          u.length - 1,
+        );
+        return `${Number((n / 1000 ** e).toPrecision(3))} ${u[e]}`;
+      },
+      copyToClipboard: (_t: string, cb?: (m: string, e: boolean) => void) => {
+        if (cb) cb("", false);
+      },
     },
     // lib/icons.js builds real SVG nodes via createElementNS; in the vm sandbox
     // they are just opaque elements — the dashboard only appends them.

@@ -2,9 +2,7 @@
 'require form';
 'require uci';
 'require ui';
-'require tools.widgets as widgets';
 'require view.singbox-ui.lib.common as SbCommon';
-'require view.singbox-ui.lib.validators as SbValidators';
 'require view.singbox-ui.importers.inbound as SbImpInbound';
 'require view.singbox-ui.importers.outbound as SbImpOutbound';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';

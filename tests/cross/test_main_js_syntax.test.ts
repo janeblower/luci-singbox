@@ -63,9 +63,6 @@ describe("test_main_js_syntax", () => {
     it("requires ui", () => {
       expect(src).toContain("'require ui'");
     });
-    it("requires tools.widgets as widgets", () => {
-      expect(src).toContain("'require tools.widgets as widgets'");
-    });
   });
 
   describe("references input UCI sections (in tab modules)", () => {

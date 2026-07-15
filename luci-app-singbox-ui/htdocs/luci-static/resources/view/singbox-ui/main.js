@@ -6,9 +6,6 @@
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.common as SbCommon';
-'require view.singbox-ui.importers.inbound as SbImpInbound';
-'require view.singbox-ui.importers.outbound as SbImpOutbound';
-'require tools.widgets as widgets';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
 'require view.singbox-ui.tabs.outbounds as SbTabOutbounds';
 'require view.singbox-ui.tabs.route as SbTabRoute';

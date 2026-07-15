@@ -41,14 +41,7 @@ function buildDashboard() {
 	};
 	var root = E('div', { 'class': 'sb-dashboard' });
 
-	// forkop's prettyBytes: decimal (1000) divisor, 3 significant digits.
-	function prettyBytes(n) {
-		n = +n || 0;
-		if (n < 1000) return n + ' B';
-		var u = ['B','KB','MB','GB','TB','PB'];
-		var e = Math.min(Math.floor(Math.log(n) / Math.log(1000)), u.length - 1);
-		return Number((n / Math.pow(1000, e)).toPrecision(3)) + ' ' + u[e];
-	}
+	var prettyBytes = SbCommon.prettyBytes;
 
 	function fetchProxies() {
 		return callClashGet('/proxies').then(function (res) {
@@ -264,17 +257,9 @@ function buildDashboard() {
 	var COPYABLE_RE =
 		/^(vless|vmess|trojan|ss|ssr|hysteria2?|hy2|tuic|anytls|socks5?):\/\//i;
 	function copyLink(link) {
-		var p = (typeof navigator !== 'undefined' && navigator.clipboard &&
-		         navigator.clipboard.writeText)
-			? navigator.clipboard.writeText(link) : Promise.reject();
-		return p.catch(function () {
-			// LuCI is usually served over plain http, where the async clipboard API
-			// is unavailable (secure-context only) — fall back to the old seam.
-			var ta = E('textarea', { 'style': 'position:fixed;opacity:0' }, link);
-			document.body.appendChild(ta);
-			ta.select();
-			try { document.execCommand('copy'); } finally { document.body.removeChild(ta); }
-		}).then(function () {
+		// SbCommon.copyToClipboard owns the navigator.clipboard + execCommand
+		// fallback (one copy); its onResult fires once on either path.
+		SbCommon.copyToClipboard(link, function () {
 			ui.addNotification(null, E('p', {}, _('Proxy link copied')), 'info');
 		});
 	}

@@ -1,8 +1,6 @@
 'use strict';
 'require uci';
 'require ui';
-'require view.singbox-ui.lib.rpc as SbRpc';
-'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.importers.transport as SbTransport';
 
 // Constrained to the protocols inbound.uc actually builds — importing
@@ -143,28 +141,6 @@ function jsonImportInbound(o) {
 	return out;
 }
 
-// openJsonExportModal(kind, name) — shared between inbound/outbound export.
-// Fetches the section's sing-box JSON via the export_section RPC and shows it in
-// SbCommon.showJsonModal, which already renders the pre/status/Copy/Close markup
-// and accepts a promise of a string or an { error } — this used to hand-rebuild
-// all of it, drifting from the very modal it was meant to match.
-function openJsonExportModal(kind, name) {
-	var body = SbRpc.callExportSection(kind, name).then(function (res) {
-		if (!res || res.status !== 'ok')
-			return { error: _('Error: ') + ((res && res.message) || _('unknown error')) };
-		return JSON.stringify(res.section, null, 2);
-	}, function (err) {
-		return { error: _('RPC failed: ') + (err && err.message ? err.message : String(err)) };
-	});
-
-	SbCommon.showJsonModal(_('Export JSON — %s %s').format(kind, name), body);
-}
-
-function jsonExportInbound(name)  { openJsonExportModal('inbound',  name); }
-function jsonExportOutbound(name) { openJsonExportModal('outbound', name); }
-
 return L.Class.extend({
     jsonImportInbound:   jsonImportInbound,
-    jsonExportInbound:   jsonExportInbound,
-    jsonExportOutbound:  jsonExportOutbound,
 });

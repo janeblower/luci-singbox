@@ -3,7 +3,6 @@
 'require rpc';
 'require uci';
 'require ui';
-'require tools.widgets as widgets';
 'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.lib.validators as SbValidators';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';

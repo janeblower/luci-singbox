@@ -18,6 +18,17 @@ function loadOutboundList(o, includeNone) {
 	};
 }
 
+// prettyBytes(n) — forkop's byte formatter: decimal (1000) divisor, 3 significant
+// digits. One copy so the dashboard and monitoring tab never drift into mixing
+// 1000- and 1024-based scales (one of which is always wrong).
+function prettyBytes(n) {
+	n = +n || 0;
+	if (n < 1000) return n + ' B';
+	var u = ['B','KB','MB','GB','TB','PB'];
+	var e = Math.min(Math.floor(Math.log(n) / Math.log(1000)), u.length - 1);
+	return Number((n / Math.pow(1000, e)).toPrecision(3)) + ' ' + u[e];
+}
+
 // Every UCI option that holds a reference to a section BY NAME, grouped by the
 // kind of section being pointed at. A rename that doesn't rewrite these leaves a
 // dangling reference, which the backend then silently drops with a warn() —
@@ -455,6 +466,7 @@ function waitSubRefresh(onTick) {
 
 return L.Class.extend({
     loadOutboundList:  loadOutboundList,
+    prettyBytes:       prettyBytes,
     waitSubRefresh:    waitSubRefresh,
     addRenameField:    addRenameField,
     renameRefs:        renameRefs,

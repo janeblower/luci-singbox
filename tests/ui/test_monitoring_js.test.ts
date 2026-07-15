@@ -157,6 +157,18 @@ function loadMonitoring() {
       play: () => makeEl("svg"),
       search: () => makeEl("svg"),
     },
+    SbCommon: {
+      prettyBytes: (n: number) => {
+        n = +n || 0;
+        if (n < 1000) return `${n} B`;
+        const u = ["B", "KB", "MB", "GB", "TB", "PB"];
+        const e = Math.min(
+          Math.floor(Math.log(n) / Math.log(1000)),
+          u.length - 1,
+        );
+        return `${Number((n / 1000 ** e).toPrecision(3))} ${u[e]}`;
+      },
+    },
     __test: {
       setOutboundMeta: (fn: () => Promise<any>) => {
         outboundMetaImpl = fn;

@@ -1,7 +1,6 @@
 'use strict';
 'require uci';
 'require ui';
-'require view.singbox-ui.importers.inbound as SbImpInbound';
 'require view.singbox-ui.importers.transport as SbTransport';
 
 // Constrained to the proxy protocols outbound.uc build_constructor_for()
@@ -88,14 +87,6 @@ function jsonImportOutbound(o) {
 	SbTransport.parseTransport(o, f);
 	out.ok = true;
 	return out;
-}
-
-// Symmetric wrapper: importers/outbound.js exposes the same export entrypoint
-// as inbound.js so callers can stay protocol-scoped. The modal itself is
-// shared (defined in importers/inbound.js) to keep one copy of the Copy /
-// clipboard-fallback logic.
-function jsonExportOutbound(name) {
-	return SbImpInbound.jsonExportOutbound(name);
 }
 
 // E2: share-link import wrapper.
@@ -386,6 +377,5 @@ function _shareLinkImport(url) {
 return L.Class.extend({
     SB_OUTBOUND_KNOWN:  SB_OUTBOUND_KNOWN,
     jsonImportOutbound: jsonImportOutbound,
-    jsonExportOutbound: jsonExportOutbound,
     shareLinkImport:    shareLinkImport,
 });
