@@ -284,10 +284,13 @@ describe("test_subscription_cache", () => {
     // the service disabled the fetch still happens, but the reload must not.
     await run("refresh force", { SB_DISABLED: "1" });
     expect(await reloads(dir)).toBe(0);
-    // Re-enabled AND the node set moves again (drop a node, à la C3) so `changed`
-    // is truthy — the reload now fires, proving the gate (not an unchanged set)
-    // was what suppressed it above.
-    await putFile("trojan://pw@t.example.com:443#T\n", `${dir}/body`);
+    // Re-enabled AND the node set genuinely MOVES (the default body is one node;
+    // add a second) so `changed` is truthy — the reload now fires, proving the
+    // gate (not an unchanged set) was what suppressed it above.
+    await putFile(
+      "trojan://pw@t.example.com:443#T\nvless://uuid@v.example.com:443?security=tls#V\n",
+      `${dir}/body`,
+    );
     await run("refresh force");
     expect(await reloads(dir)).toBe(1);
     await exec(`rm -rf ${dir}`);

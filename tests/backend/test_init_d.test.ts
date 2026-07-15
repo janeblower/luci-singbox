@@ -317,8 +317,12 @@ exit 0
     // `start`, and procd, seeing unchanged instance params, left the daemon
     // running the PREVIOUS config. The subscription landed in the config file
     // but not in the live daemon (nor the dashboard, which reads clash_api).
+    // SINGBOX_BIN must point at the happy stub: reload_service now pre-flights a
+    // full generate + `sing-box check` BEFORE stop+start (the #1 fix), and uses
+    // the absolute $SINGBOX_BIN, not PATH. Without this it would run the REAL
+    // /usr/bin/sing-box against a preflight file the stub never wrote and refuse.
     const r = await exec(`
-      PATH="${TD}/bin:$PATH" sh -c "
+      PATH="${TD}/bin:$PATH" SINGBOX_BIN="${TD}/bin/sing-box" sh -c "
         . '${INIT}'
         type reload_service >/dev/null 2>&1 || exit 3
         stop()  { echo STOP;  }
