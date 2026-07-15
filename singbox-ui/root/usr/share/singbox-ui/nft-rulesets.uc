@@ -594,14 +594,3 @@ if (length(ARGV)) {
 		exit(2);
 	}
 }
-
-// NOTE: this file is invoked only by CLI path (init.d/cron/rpcd) and is NOT
-// require()-able — ucode rejects the hyphen in the module name. These exports are
-// therefore inert today; tests drive this module behaviorally via the CLI. Kept
-// for parity with subscription.uc and in case the file is ever made importable.
-return {
-	path_under_whitelist,
-	is_stale,
-	_cmd_fetch_rulesets_for_test: function(cur) { return cmd_fetch_rulesets(cur); },
-	_any_rulesets_stale_for_test: function(cur, force) { return any_rulesets_stale(cur, force); },
-};

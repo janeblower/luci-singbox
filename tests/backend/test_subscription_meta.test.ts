@@ -159,7 +159,7 @@ let fs = require("fs");
 let sub = require("subscription");
 let uci = require("uci").cursor(getenv("UCI_CONFIG_DIR"));
 // Pass 1: body + profile-title header → meta sidecar should be written.
-sub._set_fetcher_for_test(function(jobs){
+sub._set_io_for_test(function(jobs){
   for (let j in jobs) {
     let b = fs.open(j.body_path, "w"); b.write("vless://x@h:1#n\\n"); b.close();
     let h = fs.open(j.hdr_path, "w");
@@ -171,7 +171,7 @@ sub._cmd_fetch_subs_for_test(uci);
 let m1 = fs.stat("${metaPath}");
 print("after_pass1_meta_exists=", (m1 != null) ? "yes" : "no"); print("\\n");
 // Pass 2: body but a header dump with NO userinfo/title → stale meta must go.
-sub._set_fetcher_for_test(function(jobs){
+sub._set_io_for_test(function(jobs){
   for (let j in jobs) {
     let b = fs.open(j.body_path, "w"); b.write("vless://x@h:1#n\\n"); b.close();
     let h = fs.open(j.hdr_path, "w");
@@ -214,7 +214,7 @@ let fs = require("fs");
 let sub = require("subscription");
 let uci = require("uci").cursor(getenv("UCI_CONFIG_DIR"));
 // Pass 1: a good body + title header writes the meta sidecar.
-sub._set_fetcher_for_test(function(jobs){
+sub._set_io_for_test(function(jobs){
   for (let j in jobs) {
     let b = fs.open(j.body_path, "w"); b.write("vless://x@h:1#n\\n"); b.close();
     let h = fs.open(j.hdr_path, "w");
@@ -227,7 +227,7 @@ let m1 = fs.stat("${metaPath}");
 print("after_pass1_meta_exists=", (m1 != null) ? "yes" : "no"); print("\\n");
 // Pass 2: a garbage body (no valid proxy URL) is a hard failure; the now-stale
 // meta sidecar from pass 1 must be removed, not left to mislead the dashboard.
-sub._set_fetcher_for_test(function(jobs){
+sub._set_io_for_test(function(jobs){
   for (let j in jobs) {
     let b = fs.open(j.body_path, "w"); b.write("upstream error page\\n"); b.close();
     let h = fs.open(j.hdr_path, "w"); h.write("HTTP/2 200\\r\\n\\r\\n"); h.close();

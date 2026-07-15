@@ -16,4 +16,3 @@ SB_RPCD="$SB_BACKEND_ROOT/usr/libexec/rpcd/singbox-ui"
 SB_ACL="$SB_UI_ROOT/usr/share/rpcd/acl.d/luci-singbox-ui.json"
 SB_MENU="$SB_UI_ROOT/usr/share/luci/menu.d/luci-singbox-ui.json"
 SB_VIEW="$SB_UI_HTDOCS/luci-static/resources/view/singbox-ui"
-sb_ucode() { "${UCODE_BIN:-ucode}" -L "$SB_LIB" "$@"; }

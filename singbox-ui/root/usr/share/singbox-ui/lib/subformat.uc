@@ -913,14 +913,9 @@ function parse_group(line) {
 }
 
 return {
-	detect,
 	parse_body,
 	parse_node,
 	encode_node,
 	parse_group,
 	encode_group,
-	// test seams
-	_yaml_proxies: yaml_proxies,
-	_clash_to_outbound: clash_to_outbound,
-	_xray_to_outbound: xray_to_outbound,
 };

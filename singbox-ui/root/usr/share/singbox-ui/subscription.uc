@@ -222,9 +222,6 @@ function _set_io_for_test(fetcher, reader) {
 	if (reader != null)  _reader  = reader;
 }
 
-// _set_fetcher_for_test(fn) — dedicated seam to inject a mock fetcher.
-function _set_fetcher_for_test(fn) { _fetcher = fn; }
-
 // _read_raw_for_test(path) — thin wrapper so a test can verify the reader seam.
 function _read_raw_for_test(path) { return _reader(path); }
 
@@ -320,15 +317,7 @@ function epoch_of(v) {
 	if (!m) return null;
 	let y = +m[1], mo = +m[2], d = +m[3];
 	if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
-	// days-from-civil (Howard Hinnant's algorithm), UTC.
-	let yy = (mo <= 2) ? y - 1 : y;
-	let era = ((yy >= 0) ? yy : yy - 399) / 400;
-	era = era - (era % 1);
-	let yoe = yy - era * 400;
-	let doy = ((153 * ((mo > 2) ? mo - 3 : mo + 9) + 2) / 5);
-	doy = doy - (doy % 1) + d - 1;
-	let doe = yoe * 365 + (yoe / 4 - (yoe / 4) % 1) - (yoe / 100 - (yoe / 100) % 1) + doy;
-	return (era * 146097 + doe - 719468) * 86400;
+	return timegm({ year: y, mon: mo, mday: d });  // UTC midnight
 }
 
 // meta_kv(out, key, value) — ONE mapping table for both sources of metadata:
@@ -970,7 +959,6 @@ if (length(ARGV)) {
 }
 
 return {
-	is_stale,
 	_parse_headers_for_test: parse_headers,
 	_preamble_meta_for_test: preamble_meta,
 	_normalize_meta_for_test: normalize_meta,
@@ -979,7 +967,6 @@ return {
 	_ua_candidates_for_test: ua_candidates,
 	_proxy_of_for_test: proxy_of,
 	_set_io_for_test,
-	_set_fetcher_for_test,
 	_fetcher_real_for_test: function(jobs) { return _fetcher(jobs); },
 	_read_raw_for_test,
 	_cmd_fetch_subs_for_test: function(cur, only) { return cmd_fetch_subs(cur, only); },

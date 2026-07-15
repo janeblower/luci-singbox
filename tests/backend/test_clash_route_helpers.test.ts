@@ -11,7 +11,7 @@ import { runUcode } from "../helpers/ucode.ts";
 describe("test_clash_route_helpers", () => {
   useGuest();
 
-  it("helpers.uc: detect_rs_format / csv_list / fnv1a32", async () => {
+  it("helpers.uc: detect_rs_format / fnv1a32", async () => {
     const src = `
 let h = require("helpers");
 function assert(c, m) { if (!c) { warn("ASSERT: " + m + "\\n"); exit(1); } }
@@ -19,9 +19,6 @@ assert(h.detect_rs_format("https://x/a.srs")  === "binary", "srs->binary");
 assert(h.detect_rs_format("https://x/a.json") === "source", "json->source");
 assert(h.detect_rs_format("https://x/a.srs?v=1") === "binary", "query stripped");
 assert(h.detect_rs_format("https://x/a.txt") === "binary", "unknown ext -> binary default");
-assert(length(h.csv_list("a, b ,c")) === 3, "csv 3 items");
-assert(h.csv_list("a, b ,c")[1] === "b", "csv trims");
-assert(length(h.csv_list("")) === 0, "empty csv -> []");
 assert(length(h.fnv1a32("")) === 8, "fnv1a32 is 8 hex");
 assert(h.fnv1a32("abc") === h.fnv1a32("abc"), "fnv1a32 deterministic");
 print("ok\\n");

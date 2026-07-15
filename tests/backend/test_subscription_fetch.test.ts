@@ -41,7 +41,7 @@ describe("test_subscription_fetch", () => {
     const probe = `
 let sub = require("subscription");
 let captured = [];
-sub._set_fetcher_for_test(function(jobs){
+sub._set_io_for_test(function(jobs){
   for (let j in jobs)
     push(captured, { name:j.name, url:j.url, ua:j.ua,
                      has_cfg:(exists(j, "cfg_json")) });
@@ -182,7 +182,7 @@ sub._fetcher_real_for_test([
     const probe = `
 let sub = require("subscription");
 let captured = {};
-sub._set_fetcher_for_test(function(jobs){
+sub._set_io_for_test(function(jobs){
   for (let j in jobs) captured[j.name] = j.proxy ?? null;
   let fs = require("fs");
   for (let j in jobs) { let f = fs.open(j.body_path,"w"); f.write("trojan://x@h:1#n\\n"); f.close(); }

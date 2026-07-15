@@ -19,14 +19,6 @@ function s_opt(s, k)  { let v = s[k]; return (v == null) ? "" : v; }
 function s_bool(s, k) { return s[k] === "1"; }
 function s_num(v)     { let n = +v; return n || 0; }
 
-// csv_list("a, b ,c") -> ["a","b","c"]; "" / null -> [].
-function csv_list(v) {
-	if (v == null || v === "") return [];
-	let out = [];
-	for (let p in split(v, ",")) { let t = trim(p); if (length(t)) push(out, t); }
-	return out;
-}
-
 // sections_of_kind(cur, kind, opt, value) — list section names of a given
 // UCI `.type` whose `opt` equals `value`. Filtering by kind is important
 // because option names (e.g. `type`, `nft_rules`) recur across unrelated
@@ -262,7 +254,6 @@ return {
 	s_opt,
 	s_bool,
 	s_num,
-	csv_list,
 	sections_of_kind,
 	as_array,
 	sq,

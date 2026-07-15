@@ -823,7 +823,6 @@ function parse_proxy_link(url) {
 return {
 	parse_proxy_url,
 	parse_proxy_link,
-	display_name_of,
 	content_tag,
 	name_slug,
 	country_from_flag_emoji,

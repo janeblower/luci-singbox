@@ -1024,9 +1024,6 @@ case "apply":  exit(cmd_apply(cur));
 // Its "best-effort delete" contract is always-success, so falling through
 // to the normal exit 0 below is correct.
 case "remove": cmd_remove();   break;
-case "needed":
-	print(any_nft_transparent(cur) ? "1\n" : "0\n");
-	break;
 // `params` — read-only debug/test seam: print gathered apply parameters as
 // JSON (mark/mask in hex) without running `nft -f`. Used by host tests to
 // drive UCI fixtures through gather_apply_params(). Not wired to rpcd/ACL.
@@ -1065,6 +1062,6 @@ case "print": {
 	exit(0);
 }
 default:
-	log_err("Usage: nftables.uc {apply|remove|needed|params|print|emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]}");
+	log_err("Usage: nftables.uc {apply|remove|params|print|emit PORT V4 V6 IFACE [FWMARK FWMASK ROUTER_OUT]}");
 	exit(2);
 }

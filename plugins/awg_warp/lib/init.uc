@@ -45,15 +45,12 @@ function m_awg_install() {
 reg.register({
 	name:        "awg_warp",
 	version:     "1",
-	descriptors: true,
 
 	rpcd: {
 		methods: {
 			awg_status:  m_awg_status,
 			awg_install: m_awg_install,
 		},
-		acl_read:  ["awg_status"],
-		acl_write: ["awg_install"],
 	},
 
 	lifecycle: {
