@@ -1,6 +1,4 @@
 'use strict';
-'require uci';
-'require ui';
 'require view.singbox-ui.importers.transport as SbTransport';
 
 // Constrained to the proxy protocols outbound.uc build_constructor_for()
@@ -50,7 +48,7 @@ function jsonImportOutbound(o) {
 		if (o.alter_id != null) {
 			var aid = SbTransport.parseIntField(o.alter_id, 0, null);
 			if (!aid.ok) return bad(_('Invalid alter_id: ') + o.alter_id);
-			f.vmess_alter_id = String(aid.value);
+			f.alter_id = String(aid.value);   // vmess.uc calls it alter_id
 		}
 		if (o.security)         f.vmess_security = o.security;
 	}
@@ -74,12 +72,21 @@ function jsonImportOutbound(o) {
 		}
 	}
 	if (o.tls) {
-		f.security = (o.tls.reality && o.tls.reality.enabled) ? 'reality' : 'tls';
+		// `tls_enabled`/`reality_enabled`/`utls_enabled`, NOT the pre-E2
+		// `security` key. No descriptor reads `security`, so the imported node
+		// generated a config with NO tls{} block at all: sing-box dialled
+		// plaintext TCP at a TLS endpoint, the node was dead, and the modal
+		// showed TLS unticked — everything looked "normal".
+		f.tls_enabled = '1';
 		if (o.tls.server_name) f.tls_server_name = o.tls.server_name;
 		if (o.tls.insecure)    f.tls_insecure    = '1';
 		if (Array.isArray(o.tls.alpn)) f.tls_alpn = o.tls.alpn;
-		if (o.tls.utls && o.tls.utls.fingerprint) f.utls_fingerprint = o.tls.utls.fingerprint;
+		if (o.tls.utls && o.tls.utls.fingerprint) {
+			f.utls_enabled     = '1';   // the fingerprint alone emits nothing
+			f.utls_fingerprint = o.tls.utls.fingerprint;
+		}
 		if (o.tls.reality) {
+			if (o.tls.reality.enabled)    f.reality_enabled   = '1';
 			if (o.tls.reality.public_key) f.reality_public_key = o.tls.reality.public_key;
 			if (o.tls.reality.short_id)   f.reality_short_id   = o.tls.reality.short_id;
 		}
@@ -128,11 +135,32 @@ function _shareLinkImport(url) {
 	}
 	// The set of values sing-box's utls.fingerprint accepts; anything else is a
 	// fatal config error, so normalise to chrome (mirrors sharelink_map.normalize_fp).
-	var UTLS = ['chrome', 'firefox', 'edge', 'safari', '360', 'ios', 'android',
-	            'randomized', 'randomizedalpn', 'randomizednoalpn'];
+	// Mirror of sharelink_map.UTLS_FINGERPRINTS — the values sing-box actually
+	// accepts. randomizedalpn/randomizednoalpn are Xray-only and fatal here.
+	var UTLS = ['chrome', 'firefox', 'edge', 'safari', '360', 'qq',
+	            'ios', 'android', 'random', 'randomized'];
 	function normFp(v) {
 		if (!v) return '';
 		return (UTLS.indexOf(String(v).toLowerCase()) >= 0) ? String(v).toLowerCase() : 'chrome';
+	}
+	// A fingerprint on its own emits NOTHING — _shared/tls.uc gates the utls
+	// block on utls_enabled. Same for the transport block: the key is
+	// `transport_type` (pre-E2 it was `transport`), and httpupgrade keeps its
+	// host in a field of its own.
+	function setUtls(f, fp) {
+		f.utls_enabled     = '1';
+		f.utls_fingerprint = fp;
+	}
+	function setTransport(f, type, path, host, serviceName) {
+		if (!type) return;
+		f.transport_type = type;
+		if (path)        f.transport_path         = path;
+		if (serviceName) f.transport_service_name = serviceName;
+		if (host) {
+			if (type === 'httpupgrade') f.transport_host_httpupgrade = host;
+			else if (type === 'http')   f.transport_hosts = [ host ];
+			else                        f.transport_host  = host;
+		}
 	}
 
 	var schemes = ['vless', 'vmess', 'shadowsocks', 'trojan', 'hysteria2',
@@ -204,30 +232,28 @@ function _shareLinkImport(url) {
 		if (!vfp && (params.security === 'reality' || params.pbk)) vfp = 'chrome';
 		if (vsni)               f.tls_server_name = vsni;
 		if (params.flow)        f.vless_flow       = params.flow;
-		if (vfp)                f.utls_fingerprint = vfp;
+		if (vfp)                setUtls(f, vfp);
 		if (params.alpn)        f.tls_alpn = params.alpn.split(',').filter(Boolean);
 		// Mirror backend h_tls_security: a reality block (public_key + short_id)
 		// is emitted ONLY when pbk is present. reality without a public key is
 		// fatal in sing-box, so security=reality without pbk degrades to plain
 		// TLS instead of poisoning the draft with a dangling short_id.
 		if (params.security === 'reality' && params.pbk) {
-			f.security           = 'reality';
+			f.tls_enabled        = '1';
+			f.reality_enabled    = '1';
 			f.reality_public_key = params.pbk;
 			if (params.sid)      f.reality_short_id = params.sid;
 		} else if (params.security === 'tls' || params.security === 'reality' ||
 		           params.security === 'xtls') {
-			f.security = 'tls';
+			f.tls_enabled = '1';
 		} else if (!params.security && (vsni || params.alpn || vfp || params.pbk)) {
 			// Auto-TLS: a link with TLS-only params but no security= is a TLS link.
 			// Treating it as plaintext produced a draft that could never connect.
-			f.security = 'tls';
+			f.tls_enabled = '1';
 		}
-		if (f.security && isTrue(params.allowInsecure || params.insecure))
+		if (f.tls_enabled && isTrue(params.allowInsecure || params.insecure))
 			f.tls_insecure = '1';
-		if (params.type)        f.transport        = params.type;
-		if (params.path)        f.transport_path   = params.path;
-		if (params.host)        f.transport_host   = params.host;
-		if (params.serviceName) f.transport_service_name = params.serviceName;
+		setTransport(f, params.type, params.path, params.host, params.serviceName);
 		return { ok: true, fields: f };
 	}
 	if (scheme === 'trojan') {
@@ -242,13 +268,14 @@ function _shareLinkImport(url) {
 			server: match[2], server_port: +match[3],
 			server_password: safeDecode(match[1]),
 		};
+		// trojan is TLS-only in sing-box, and the branch never set `security` at
+		// all — so even the pre-E2 name was missing and the draft came out as a
+		// plaintext trojan, which cannot connect to anything.
+		tf.tls_enabled = '1';
 		if (tparams.sni || tparams.peer)
 			tf.tls_server_name = tparams.sni || tparams.peer;
-		if (tparams.type)        tf.transport              = tparams.type;
-		if (tparams.path)        tf.transport_path         = tparams.path;
-		if (tparams.host)        tf.transport_host         = tparams.host;
-		if (tparams.serviceName) tf.transport_service_name = tparams.serviceName;
-		if (normFp(tparams.fp))  tf.utls_fingerprint       = normFp(tparams.fp);
+		setTransport(tf, tparams.type, tparams.path, tparams.host, tparams.serviceName);
+		if (normFp(tparams.fp))  setUtls(tf, normFp(tparams.fp));
 		if (isTrue(tparams.allowInsecure) || isTrue(tparams.allowinsecure) ||
 		    isTrue(tparams.insecure))
 			tf.tls_insecure = '1';
@@ -263,6 +290,8 @@ function _shareLinkImport(url) {
 			server: match[2], server_port: +match[3],
 			server_password: safeDecode(match[1]),
 		};
+		// hysteria2 rides on QUIC/TLS — always.
+		hf.tls_enabled = '1';
 		if (hparams.sni) hf.tls_server_name = hparams.sni;
 		if (isTrue(hparams.insecure) || isTrue(hparams.allowInsecure))
 			hf.tls_insecure = '1';
@@ -293,7 +322,7 @@ function _shareLinkImport(url) {
 		var qp = query(qs);
 		var xf = { type: scheme, server: host, server_port: port };
 		// TLS is mandatory for all three (QUIC/TLS transports).
-		xf.security = 'tls';
+		xf.tls_enabled = '1';
 		xf.tls_server_name = qp.sni || qp.peer || host;
 		if (isTrue(qp.insecure) || isTrue(qp.allow_insecure) || isTrue(qp.allowInsecure))
 			xf.tls_insecure = '1';

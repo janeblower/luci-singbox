@@ -202,9 +202,14 @@ function buildMonitoring() {
 	function td(label, content) {
 		return E('td', { 'data-label': label }, content);
 	}
+	// [t], not t. LuCI's dom.append() creates a text node only for an ARRAY of
+	// children — a bare string goes through `node.innerHTML = '' + children`.
+	// Everything rendered here is attacker-supplied: c.metadata.host is the SNI
+	// or Host header of a connection ANY LAN client can open, and src.name is a
+	// DHCP hostname (the classic OpenWrt injection vector).
 	function val(text, cls) {
 		var t = text || '-';
-		return E('span', { 'class': 'sb-mon-val ' + (cls || ''), 'title': t }, t);
+		return E('span', { 'class': 'sb-mon-val ' + (cls || ''), 'title': t }, [t]);
 	}
 
 	function renderRow(c) {
@@ -225,9 +230,9 @@ function buildMonitoring() {
 			td(_('Uploaded'),   val(fmtBytes(c.upload))),
 			td(_('Source'), E('span', { 'class': 'sb-mon-val sb-mon-src',
 				'title': src.name + ' ' + src.ip }, [
-				E('span', { 'class': 'sb-mon-src-name' }, src.name || '-'),
+				E('span', { 'class': 'sb-mon-src-name' }, [src.name || '-']),
 				(src.ip && src.name !== src.ip)
-					? E('span', { 'class': 'sb-mon-src-ip' }, src.ip) : ''
+					? E('span', { 'class': 'sb-mon-src-ip' }, [src.ip]) : ''
 			])),
 			// Closed connections are already terminated, so they get no Close
 			// button — clicking it would DELETE a non-existent id (audit 9.1).

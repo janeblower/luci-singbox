@@ -24,18 +24,25 @@ function makeEl(tag: string): any {
       if (c) this.children.push(c);
       return c;
     },
+    // _html records what went through innerHTML. LuCI's dom.append() assigns
+    // innerHTML for a BARE STRING child (only an array becomes text nodes), so
+    // this is the XSS path and the stub must keep the two apart.
+    _html: "",
     set innerHTML(v: string) {
-      if (v === "") this.children = [];
+      this._html = String(v);
+      this.children = [];
+      this._text = "";
     },
     get innerHTML() {
-      return "";
+      return this._html;
     },
     set textContent(v: string) {
       this._text = String(v);
+      this._html = "";
       this.children = [];
     },
     get textContent(): string {
-      let t = this._text || "";
+      let t = this._text || this._html || "";
       for (const c of this.children) t += c?.textContent || "";
       return t;
     },
@@ -61,19 +68,18 @@ function E(tag: string, a?: any, c?: any): any {
   } else {
     kids = a;
   }
-  function add(x: any) {
-    if (x == null) return;
-    if (Array.isArray(x)) {
-      x.forEach(add);
-      return;
+  // Mirrors LuCI dom.append(): an ARRAY makes a text node per string child; a
+  // bare string is assigned to innerHTML.
+  if (Array.isArray(kids)) {
+    for (const k of kids) {
+      if (k == null) continue;
+      if (typeof k === "object") el.children.push(k);
+      else el._text += String(k);
     }
-    if (typeof x === "string") {
-      el._text += x;
-      return;
-    }
-    el.children.push(x);
+  } else if (kids != null) {
+    if (typeof kids === "object") el.children.push(kids);
+    else el.innerHTML = String(kids);
   }
-  add(kids);
   return el;
 }
 
@@ -1024,6 +1030,50 @@ describe("monitoring.js", () => {
         metadata: { ...CONN.metadata, destinationPort: 443 },
       });
       expect((row.textContent || "").indexOf("ex.com:")).toBe(-1);
+    });
+
+    // Every string in this table is attacker-supplied: metadata.host is the SNI
+    // / Host header of a connection ANY LAN client can open, and sourceIP's name
+    // is a DHCP hostname — the classic OpenWrt injection vector. A bare string
+    // child goes through innerHTML in LuCI's dom.append(), so the guard is the
+    // SHAPE (nothing reached _html), not the rendered text.
+    it("XSS: a hostile host and DHCP hostname are text, not markup", async () => {
+      const EVIL = '<img src=x onerror="alert(1)">';
+      const ctx = loadMonitoring();
+      ctx.__test.setClashGet(() =>
+        Promise.resolve({
+          status: "ok",
+          body: JSON.stringify({
+            connections: [
+              {
+                ...CONN,
+                metadata: {
+                  ...CONN.metadata,
+                  host: EVIL,
+                  sourceIP: "10.0.0.9",
+                },
+              },
+            ],
+          }),
+        }),
+      );
+      const m = ctx.__moduleExports.buildMonitoring();
+      await m.poll();
+
+      const spans: any[] = [];
+      (function walk(n: any) {
+        if (!n) return;
+        // Only the connection-row cells; the tab buttons carry literal labels,
+        // and a literal through innerHTML is not a vector.
+        if (n.tag === "span" && /sb-mon-(val|src)/.test(n.attrs?.class || ""))
+          spans.push(n);
+        for (const k of n.children || []) walk(k);
+      })(m.node);
+
+      expect(spans.length).toBeGreaterThan(0);
+      for (const sp of spans) expect(sp._html).toBe("");
+      const host = spans.find((sp) => (sp.textContent || "").includes(EVIL));
+      expect(host).toBeTruthy();
     });
 
     it("route is the LAST chain entry (the group), not the leaf node", async () => {

@@ -62,23 +62,26 @@ function load(state: Record<string, UciSection>) {
     unset: (_cfg: string, sid: string, opt: string) => {
       if (state[sid]) delete state[sid][opt];
     },
-    rename: (_cfg: string, sid: string, to: string) => {
-      const sec = state[sid];
-      delete state[sid];
-      sec[".name"] = to;
-      state[to] = sec;
-    },
     sections: (_cfg: string, stype?: string) =>
       Object.values(state).filter((s) => !stype || s[".type"] === stype),
   };
 
-  const renamed: [string, string, string][] = [];
+  // NOTE: no `rename` on the uci stub — the real LuCI uci API has none, which is
+  // exactly what this used to hide. SbCommon.renameSection is the seam now.
+  const renamed: [string, string][] = [];
   const mod = evalModule("lib/json_editor.js", {
     uci,
     SbRpc: {},
     SbCommon: {
-      renameRefs: (kind: string, from: string, to: string) =>
-        renamed.push([kind, from, to]),
+      renameSection: (sid: string, to: string) => {
+        const sec = state[sid];
+        if (!sec) return false;
+        delete state[sid];
+        sec[".name"] = to;
+        state[to] = sec;
+        renamed.push([sid, to]);
+        return true;
+      },
       showJsonModal: () => {},
     },
   }) as unknown as JsonEditorMod;
@@ -242,9 +245,9 @@ describe("applyImport", () => {
     expect(state.v1).toBeUndefined();
     expect(state.tokyo).toBeDefined();
     expect(state.tokyo.server).toBe("old.example");
-    // …and everything pointing at the old name is dragged along, or the backend
-    // would silently drop the dangling refs.
-    expect(renamed).toEqual([["outbound", "v1", "tokyo"]]);
+    // …and it goes through renameSection(), which is what drags every by-name
+    // reference along (the backend silently drops dangling ones).
+    expect(renamed).toEqual([["v1", "tokyo"]]);
   });
 
   it("writes a list field as a list", () => {

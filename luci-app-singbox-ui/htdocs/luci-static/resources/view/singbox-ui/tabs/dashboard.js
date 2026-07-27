@@ -15,13 +15,19 @@ var callOutboundMeta = SbRpc.callOutboundMeta;
 function buildDashboard() {
 	var state = {
 		timer: null, ui: null, loaded: false,
-		lastDown: null, lastUp: null, dRate: 0, uRate: 0,
+		lastDown: null, lastUp: null, lastAt: null, dRate: 0, uRate: 0,
 		totDown: 0, totUp: 0, conns: 0, memory: 0, version: '', running: false,
 		proxies: {}, proxiesEvery: 0, sortByLatency: false,
 		// tag -> { name, type, link } side-car (rpcd outbound_meta). The sing-box
 		// tag is ASCII-safe and often a content hash; the human-readable node name
 		// ("🇳🇱 Умная локация") only exists here. UNTRUSTED (it comes from the
 		// subscription provider) — render through E()/textContent only.
+		//
+		// E() ALONE IS NOT ENOUGH. LuCI's dom.append() makes a text node only for
+		// an ARRAY of children; a bare string child goes through
+		// `node.innerHTML = '' + children`. So every untrusted value below is
+		// passed as [value], never as value — a provider's node name, title or
+		// announce is otherwise raw HTML in our page.
 		meta: {},
 		subs: {}, subsNow: 0,
 		// DASH-1/DASH-4: per-group "latency test in progress" flag. Set while a
@@ -282,8 +288,8 @@ function buildDashboard() {
 		var m = nodeMeta(tag);
 		var ms = memberDelay(p);
 		var kids = [
-			E('span', { 'class': 'sb-urltest-node-name' }, displayName(tag)),
-			E('span', { 'class': 'sb-dashboard-node-type' }, p.type || m.type || ''),
+			E('span', { 'class': 'sb-urltest-node-name' }, [displayName(tag)]),
+			E('span', { 'class': 'sb-dashboard-node-type' }, [p.type || m.type || '']),
 			E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
 		];
 		if (m.link && COPYABLE_RE.test(m.link))
@@ -306,14 +312,14 @@ function buildDashboard() {
 			var ms = memberDelay(p);
 			rows.push(urltestRow(_('Selected'), E('span', {}, [
 				displayName(grp.now) + ' ',
-				E('span', { 'class': 'sb-dashboard-node-type' }, p.type || m.type || ''),
+				E('span', { 'class': 'sb-dashboard-node-type' }, [p.type || m.type || '']),
 				' ',
 				E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
 			])));
 		}
 		if (/^https?:\/\//i.test(gmeta.url || ''))
 			rows.push(urltestRow(_('Testing URL'),
-				E('a', { 'href': gmeta.url, 'target': '_blank', 'rel': 'noopener noreferrer' }, gmeta.url)));
+				E('a', { 'href': gmeta.url, 'target': '_blank', 'rel': 'noopener noreferrer' }, [gmeta.url])));
 		if (gmeta.interval != null && gmeta.interval !== '')
 			rows.push(urltestRow(_('Interval'), '' + gmeta.interval));
 		if (gmeta.tolerance != null && gmeta.tolerance !== '')
@@ -471,7 +477,7 @@ function buildDashboard() {
 
 		var kids = [
 			E('div', { 'class': 'sb-dashboard-meta-heading' }, _('Subscription info:')),
-			E('div', { 'class': 'sb-dashboard-meta-title' }, f.title),
+			E('div', { 'class': 'sb-dashboard-meta-title' }, [f.title]),
 			E('div', { 'class': 'sb-dashboard-facts' }, facts)
 		];
 		if (actions.length)
@@ -479,7 +485,7 @@ function buildDashboard() {
 
 		var box = [ E('div', { 'class': 'sb-dashboard-meta-main' }, kids) ];
 		if (f.announce)
-			box.push(E('blockquote', { 'class': 'sb-dashboard-meta-announce' }, f.announce));
+			box.push(E('blockquote', { 'class': 'sb-dashboard-meta-announce' }, [f.announce]));
 		return E('div', { 'class': 'sb-dashboard-sub-meta', 'data-sub': name }, box);
 	}
 
@@ -491,8 +497,20 @@ function buildDashboard() {
 		state.memory = (data && +data.memory) || 0;
 		var down = (data && data.downloadTotal) || 0;
 		var up   = (data && data.uploadTotal)   || 0;
-		state.dRate = (state.lastDown == null) ? 0 : Math.max(0, down - state.lastDown);
-		state.uRate = (state.lastUp   == null) ? 0 : Math.max(0, up   - state.lastUp);
+		// Per SECOND, so divide by the real elapsed time. This was the raw delta
+		// between two polls labelled "/s" — the tick is 2s, so every rate on the
+		// dashboard read DOUBLE. And the poll only runs while the tab is visible,
+		// so coming back to a backgrounded tab dumped minutes of accumulated
+		// traffic into one "second".
+		var now = Date.now();
+		var dt  = (state.lastAt == null) ? 0 : (now - state.lastAt) / 1000;
+		if (dt <= 0 || state.lastDown == null) {
+			state.dRate = 0; state.uRate = 0;
+		} else {
+			state.dRate = Math.max(0, down - state.lastDown) / dt;
+			state.uRate = Math.max(0, up   - state.lastUp)   / dt;
+		}
+		state.lastAt = now;
 		state.lastDown = down; state.lastUp = up;
 		state.totDown = down; state.totUp = up;
 	}
@@ -523,7 +541,7 @@ function buildDashboard() {
 		// No country badge: the provider already puts the flag emoji in the node
 		// name, so an ISO chip beside it is the same fact twice — and the 24px it
 		// costs is what wrapped "WolfPN | Нидерланды 1" onto a second line.
-		var head = [ E('b', { 'class': 'sb-dashboard-node-name' }, displayName(member)) ];
+		var head = [ E('b', { 'class': 'sb-dashboard-node-name' }, [displayName(member)]) ];
 		if (m.link && COPYABLE_RE.test(m.link))
 			head.push(E('button', { 'class': 'btn cbi-button sb-dashboard-node-copy',
 				'title': _('Copy proxy link'), 'aria-label': _('Copy proxy link'),
@@ -552,7 +570,7 @@ function buildDashboard() {
 			E('div', { 'class': 'sb-dashboard-node-foot' }, [
 				// Clash's spelling first ("VLESS", "Direct") — our own meta carries the
 				// lowercase share-link scheme, which reads as a typo next to it.
-				E('span', { 'class': 'sb-dashboard-node-type' }, p.type || m.type || ''),
+				E('span', { 'class': 'sb-dashboard-node-type' }, [p.type || m.type || '']),
 				E('span', { 'class': 'sb-dashboard-lat ' + latClass(ms) }, latText(ms))
 			])
 		];

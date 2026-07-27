@@ -1,6 +1,5 @@
 'use strict';
 'require form';
-'require rpc';
 'require uci';
 'require ui';
 'require view.singbox-ui.lib.common as SbCommon';

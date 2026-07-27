@@ -26,16 +26,11 @@ var DNS_SERVER_TYPES = [
 	['legacy',     _('Legacy (address string)')],
 ];
 
-function loadDnsServerList(o, includeNone) {
-	o.load = function (section_id) {
-		this.keylist = [];
-		this.vallist = [];
-		if (includeNone) this.value('', _('(none)'));
-		uci.sections('singbox-ui', 'dns_server').forEach(function (sec) {
-			this.value(sec['.name'], sec['.name'] + ' (' + (sec.type || '?') + ')');
-		}.bind(this));
-		return form.ListValue.prototype.load.apply(this, arguments);
-	};
+// One implementation of "fill a selector from existing sections" for the whole
+// UI: descriptor_form.attachDynamic. `required:false` is what adds the (none)
+// row, exactly as it does for a descriptor field.
+function loadDnsServerList(o) {
+	descriptor_form.attachDynamic(o, { type: 'string', dynamic: 'dns_servers' });
 }
 
 function buildDnsMap() {
@@ -115,21 +110,21 @@ function buildDnsMap() {
 
 	// Validate logical sub-rules (mirror route_rule): only existing default
 	// rules, not self/logical. Shared validator so route and dns can't drift.
-	var dnsRulesEntry = (s._sbMatRegistry || {})['match\trules'];
+	var dnsRulesEntry = (s._sbMatRegistry || {})['rules'];
 	if (dnsRulesEntry && dnsRulesEntry.opt)
 		dnsRulesEntry.opt.validate = SbCommon.logicalSubRuleValidate(uci, _);
 
 	// -- Settings --
 	s = m.section(form.NamedSection, 'dns', 'dns', _('DNS Settings'));
 	s.anonymous = true;
-	o = s.option(form.ListValue, 'final', _('Final server')); loadDnsServerList(o, true);
+	o = s.option(form.ListValue, 'final', _('Final server')); loadDnsServerList(o);
 	// Picked up by generate.uc as route.default_domain_resolver. If left
 	// empty, the first non-fakeip dns_server is auto-selected. Without it,
 	// sing-box 1.12 emits a deprecation warning and 1.14 will refuse the
 	// config.
 	o = s.option(form.ListValue, 'default_resolver',
 		_('Default domain resolver (bootstrap)'));
-	loadDnsServerList(o, true);
+	loadDnsServerList(o);
 	o = s.option(form.ListValue, 'strategy', _('Strategy'));
 	[['','default'],['prefer_ipv4','prefer_ipv4'],['prefer_ipv6','prefer_ipv6'],
 	 ['ipv4_only','ipv4_only'],['ipv6_only','ipv6_only']].forEach(function (p) {

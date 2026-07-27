@@ -7,7 +7,6 @@
 'require view.singbox-ui.lib.json_editor as SbJsonEditor';
 
 var addRenameField   = SbCommon.addRenameField;
-var loadOutboundList = SbCommon.loadOutboundList;
 
 var ROUTE_RULE_TYPES = [['default', _('Default')], ['logical', _('Logical')]];
 var RULE_SET_TYPES   = [['remote', _('Remote')], ['local', _('Local')], ['inline', _('Inline')]];
@@ -87,7 +86,7 @@ function buildRouteRulesMap() {
 
 	// Validate logical sub-rules: only existing default rules, not self/logical.
 	var reg = s._sbMatRegistry || {};
-	var rulesEntry = reg['match\trules'];
+	var rulesEntry = reg['rules'];
 	if (rulesEntry && rulesEntry.opt)
 		rulesEntry.opt.validate = SbCommon.logicalSubRuleValidate(uci, _);
 
@@ -95,7 +94,7 @@ function buildRouteRulesMap() {
 	// rule. Gate the choice out of the picker (and validate-reject it) so the
 	// operator does not pick a value that silently vanishes — same treatment
 	// route_default's bypass gets, reaching into the descriptor-built selector.
-	var actionEntry = reg['action\taction'];
+	var actionEntry = reg['action'];
 	if (actionEntry && actionEntry.opt)
 		SbCommon.applyVersionGate(actionEntry.opt, { bypass: { min_version: '1.13' } },
 			SbViewState.getCoreVersion(), SbViewState.getCompatOnly());
@@ -171,7 +170,7 @@ function buildRouteDefaultMap() {
 	o.depends('action', 'bypass');
 	// (none) is a real choice for bypass — sing-box reads it as `"outbound": ""`.
 	// For action=route it is not: route.uc drops a final with no outbound.
-	loadOutboundList(o, true);
+	descriptor_form.attachDynamic(o, { type: 'string', dynamic: 'outbounds' });
 	o.default = 'wan';
 
 	return m;

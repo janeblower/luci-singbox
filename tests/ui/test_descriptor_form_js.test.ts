@@ -194,6 +194,34 @@ describe("descriptor_form.js — applyMaterialized", () => {
     });
   });
 
+  // LuCI keys an option by the UCI option it writes (cbid.<cfg>.<sid>.<opt>),
+  // not by the tab it sits on. Registering by tab+name therefore produced TWO
+  // options sharing ONE DOM node and one hidden-state (findElement returns
+  // res[0]): whichever registered last won setActive, the other parsed as
+  // inactive, and AbstractValue.parse() went to remove() -> unset. Live
+  // carriers: `detour` (dns/legacy tab basic vs _shared/dial tab dial) and
+  // `udp_timeout` (tun tab basic vs _shared/listen tab listen) — a DNS server's
+  // Detour could not be saved AND an existing one was wiped on first save.
+  it("a field name declared on two tabs registers ONE option", () => {
+    const { s: sd, opts: od } = makeSection();
+    applyMaterialized(sd, "dns", "legacy", {
+      sing_box_type: "",
+      tabs: ["basic"],
+      fields: [{ name: "detour", type: "string", tab: "basic" }],
+    });
+    applyMaterialized(sd, "dns", "udp", {
+      sing_box_type: "udp",
+      tabs: ["dial"],
+      fields: [{ name: "detour", type: "string", tab: "dial", advanced: true }],
+    });
+
+    const detours = od.filter((o) => o._name === "detour");
+    expect(detours.length).toBe(1);
+    // Both protocols gate it, so it is visible for each of them.
+    const armTypes = detours[0]._depends.map((d: any) => d.type);
+    expect(armTypes).toEqual(["legacy", "udp"]);
+  });
+
   it("inbound discriminator uses 'protocol' not 'type'", () => {
     const { s: s2, opts: opts2 } = makeSection();
     applyMaterialized(s2, "inbound", "trojan", {

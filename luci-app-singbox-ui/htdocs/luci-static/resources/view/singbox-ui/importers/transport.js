@@ -23,17 +23,27 @@ function parseIntField(raw, min, max) {
 // o.transport and writes the transport_* fields into f in place.
 function parseTransport(o, f) {
 	if (!o || !o.transport || !o.transport.type) return f;
-	f.transport = o.transport.type;
+	// `transport_type`, NOT `transport`. The E2 rename moved this key and every
+	// descriptor reads the new name — writing the old one meant the whole
+	// transport{} block silently vanished from the generated config, and the
+	// modal showed an empty Transport tab, so a ws/grpc node dialled plaintext
+	// TCP and just never connected. (99-luci-singbox-ui migrates the old name;
+	// this importer was still minting it.)
+	f.transport_type = o.transport.type;
 	if (o.transport.path)         f.transport_path         = o.transport.path;
 	if (o.transport.service_name) f.transport_service_name = o.transport.service_name;
 	if (o.transport.headers && o.transport.headers.Host)
 		f.transport_host = o.transport.headers.Host;
 	if (o.transport.host != null) {
-		// `http` transport carries an array of vhosts; ws/httpupgrade stays a
-		// single scalar. Route each into its own UCI field.
+		// `http` carries an array of vhosts, ws keeps a scalar Host header, and
+		// httpupgrade has its OWN key (transport_host_httpupgrade) — the same
+		// three-way split the descriptor's emit_spec makes.
 		if (o.transport.type === 'http')
 			f.transport_hosts = Array.isArray(o.transport.host)
 				? o.transport.host : [ o.transport.host ];
+		else if (o.transport.type === 'httpupgrade')
+			f.transport_host_httpupgrade = Array.isArray(o.transport.host)
+				? o.transport.host[0] : o.transport.host;
 		else
 			f.transport_host = Array.isArray(o.transport.host)
 				? o.transport.host[0] : o.transport.host;

@@ -1,6 +1,4 @@
 'use strict';
-'require uci';
-'require ui';
 'require view.singbox-ui.importers.transport as SbTransport';
 
 // Constrained to the protocols inbound.uc actually builds — importing
@@ -86,24 +84,27 @@ function jsonImportInbound(o) {
 				}
 				iu.push(entry);
 			}
-			if (iu.length) f.inbound_user = iu;
+			// vmess names its user list `vmess_user`; vless and hysteria2 use
+			// `inbound_user`. Writing `inbound_user` on a vmess inbound meant
+			// the descriptor never saw the users at all.
+			if (iu.length) f[o.type === 'vmess' ? 'vmess_user' : 'inbound_user'] = iu;
 		} else {
 			var u = (o.users && o.users[0]) || {};
 			if (u.uuid)     f.server_uuid     = u.uuid;
 			if (u.password) f.server_password = u.password;
 			if (u.flow)     f.vless_flow      = u.flow;
-			// sing-box 1.12 docs spec the camelCase `alterId`; accept the
-			// legacy snake_case for paste-compat.
-			var aidRaw = (u.alterId != null) ? u.alterId : u.alter_id;
-			if (aidRaw != null) {
-				var aid = SbTransport.parseIntField(aidRaw, 0, null);
-				if (!aid.ok) return bad(_('Invalid alter_id: ') + aidRaw);
-				f.vmess_alter_id = String(aid.value);
-			}
+			// A vmess INBOUND has no alter_id field of its own: alterId rides
+			// inside the `vmess_user` row (name:uuid:alterId). Writing a
+			// section-level key here produced UCI nothing reads, so the value was
+			// silently lost either way. The multi-user branch above encodes it.
 		}
 	}
 	if (o.tls) {
-		f.security = (o.tls.reality && o.tls.reality.enabled) ? 'reality' : 'tls';
+		// tls_enabled / reality_enabled, not the pre-E2 `security` key — no
+		// descriptor reads `security`, so an imported TLS inbound came out with
+		// no tls{} block and listened in plaintext.
+		f.tls_enabled = '1';
+		if (o.tls.reality && o.tls.reality.enabled) f.reality_enabled = '1';
 		if (o.tls.server_name)      f.tls_server_name      = o.tls.server_name;
 		if (o.tls.certificate_path) f.tls_certificate_path = o.tls.certificate_path;
 		if (o.tls.key_path)         f.tls_key_path         = o.tls.key_path;

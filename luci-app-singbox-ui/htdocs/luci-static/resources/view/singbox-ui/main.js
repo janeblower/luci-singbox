@@ -1,10 +1,8 @@
 'use strict';
 'require view';
-'require form';
 'require rpc';
 'require uci';
 'require ui';
-'require view.singbox-ui.lib.rpc as SbRpc';
 'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.tabs.inbounds as SbTabInbounds';
 'require view.singbox-ui.tabs.outbounds as SbTabOutbounds';

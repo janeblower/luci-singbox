@@ -1,4 +1,3 @@
-import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -11,7 +10,6 @@ const SB_VIEW = join(
   REPO,
   "luci-app-singbox-ui/htdocs/luci-static/resources/view/singbox-ui",
 );
-const SB_LIB_VIEW = join(SB_VIEW, "lib");
 const DF = join(SB_VIEW, "lib/descriptor_form.js");
 
 describe("test_eye_toggle", () => {
@@ -27,24 +25,8 @@ describe("test_eye_toggle", () => {
     });
   });
 
-  describe("reveal-token machinery must be gone from view tree", () => {
-    it("no revealGrant / revealRevoke / withRevealToken / singboxUiRevealToken / reveal_token references", () => {
-      const result = execSync(
-        `grep -rn -E 'revealGrant|revealRevoke|withRevealToken|singboxUiRevealToken|reveal_token' "${SB_VIEW}" || true`,
-        { encoding: "utf8" },
-      );
-      expect(result.trim()).toBe("");
-    });
-  });
-
-  describe("reveal.uc / scrub.uc must not be required anywhere in lib tree", () => {
-    it("no require reveal.uc or scrub.uc in view lib tree", () => {
-      // The lib tree here is the JS view lib — check for any remnant JS require of those UC modules
-      const result = execSync(
-        `grep -rn -E "require.*reveal|require.*scrub" "${SB_LIB_VIEW}" || true`,
-        { encoding: "utf8" },
-      );
-      expect(result.trim()).toBe("");
-    });
-  });
+  // The two "reveal-token machinery must be gone" greps that used to live here
+  // are deleted: revealGrant / withRevealToken / reveal.uc / scrub.uc have ZERO
+  // occurrences in the repo and the files do not exist. A grep for a string that
+  // was never going to come back is not a guard, it is a permanent green tick.
 });

@@ -198,7 +198,7 @@ describe("shareLinkImport (importers/outbound.js)", () => {
     );
     expect(r.ok).toBe(true);
     expect(r.fields.tls_server_name).toBe("cdn.example");
-    expect(r.fields.transport).toBe("ws");
+    expect(r.fields.transport_type).toBe("ws");
     expect(r.fields.transport_path).toBe("/ws");
     expect(r.fields.tls_insecure).toBe("1");
   });
@@ -249,14 +249,14 @@ describe("shareLinkImport (importers/outbound.js)", () => {
     );
     expect(r.ok).toBe(true);
     expect(r.fields.server).toBe("h.example");
-    expect(r.fields.security).toBe("tls");
+    expect(r.fields.tls_enabled).toBe("1");
   });
   it("vless: sni without security= still enables TLS (S1)", () => {
     const r = mod.shareLinkImport(
       "vless://11111111-2222-3333-4444-555555555555@h.example:443?sni=cdn.example",
     );
     expect(r.ok).toBe(true);
-    expect(r.fields.security).toBe("tls");
+    expect(r.fields.tls_enabled).toBe("1");
     expect(r.fields.tls_server_name).toBe("cdn.example");
   });
   it("vless: an unknown fingerprint normalises to chrome (S3)", () => {
@@ -264,6 +264,8 @@ describe("shareLinkImport (importers/outbound.js)", () => {
       "vless://11111111-2222-3333-4444-555555555555@h.example:443?security=tls&fp=bogus",
     );
     expect(r.fields.utls_fingerprint).toBe("chrome");
+    // A fingerprint with no utls_enabled emits nothing at all.
+    expect(r.fields.utls_enabled).toBe("1");
   });
   it("vless: an unknown flow is rejected (S11)", () => {
     const r = mod.shareLinkImport(

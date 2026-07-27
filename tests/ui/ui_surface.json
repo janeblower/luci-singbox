@@ -28,6 +28,7 @@
   { "id": "grid.outbound.enable",     "tab": "outbounds", "kind": "grid-op", "label": "Outbound: Enable/Disable toggle" },
 
   { "id": "grid.builtin.locked",      "tab": "outbounds", "kind": "grid-op", "label": "Built-in row: Edit/Delete locked + tinted" },
+  { "id": "grid.section.rename",      "tab": "outbounds", "kind": "grid-op", "label": "Section: rename via the modal's Name field (LuCI has no uci.rename)" },
 
   { "id": "inbound.transparent.exclusive", "tab": "inbounds", "kind": "grid-op", "label": "Inbound: only one owner of system routing (tproxy.nft_rules vs tun.auto_route)" },
 

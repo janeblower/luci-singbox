@@ -26,18 +26,26 @@ function makeEl(tag: string): any {
       if (c) this.children.push(c);
       return c;
     },
+    // _html records what went through innerHTML. LuCI's dom.append() assigns
+    // innerHTML for a BARE STRING child (only an array becomes text nodes), so
+    // this is the XSS path — the stub has to keep the two apart or a guard that
+    // "renders as text" passes on markup.
+    _html: "",
     set innerHTML(v: string) {
-      if (v === "") this.children = [];
+      this._html = String(v);
+      this.children = [];
+      this._text = "";
     },
     get innerHTML() {
-      return "";
+      return this._html;
     },
     set textContent(v: string) {
       this._text = String(v);
+      this._html = "";
       this.children = [];
     },
     get textContent(): string {
-      let t = this._text || "";
+      let t = this._text || this._html || "";
       for (const c of this.children) t += c?.textContent || "";
       return t;
     },
@@ -62,19 +70,18 @@ function E(tag: string, a?: any, c?: any): any {
   } else {
     kids = a;
   }
-  function add(x: any) {
-    if (x == null) return;
-    if (Array.isArray(x)) {
-      x.forEach(add);
-      return;
+  // Mirrors LuCI dom.append(): an ARRAY makes a text node per string child; a
+  // bare string is assigned to innerHTML.
+  if (Array.isArray(kids)) {
+    for (const k of kids) {
+      if (k == null) continue;
+      if (typeof k === "object") el.children.push(k);
+      else el._text += String(k);
     }
-    if (typeof x === "string") {
-      el._text += x;
-      return;
-    }
-    el.children.push(x);
+  } else if (kids != null) {
+    if (typeof kids === "object") el.children.push(kids);
+    else el.innerHTML = String(kids);
   }
-  add(kids);
   return el;
 }
 
@@ -1016,9 +1023,17 @@ describe("dashboard.js", () => {
       dx.node,
       (n: any) => n.attrs && /sb-dashboard-node-name/.test(n.attrs.class || ""),
     );
-    // Text child (E()), no element children spawned from the payload.
+    // The SHAPE is the guard, not the rendered text: a bare string child goes
+    // through innerHTML in LuCI's dom.append(), and a stub that turns both into
+    // the same text made this test green while the page was injectable.
+    expect(nameEl._html).toBe("");
     expect(nameEl.textContent).toBe(EVIL);
     expect(nameEl.children.length).toBe(0);
+    // The literal source: the untrusted value must be wrapped in an array.
+    const dsrc = readFileSync(DASHBOARD_JS, "utf8");
+    expect(dsrc).toContain(
+      "E('b', { 'class': 'sb-dashboard-node-name' }, [displayName(member)])",
+    );
     // And the source only ever uses innerHTML to clear a container.
     const src = readFileSync(DASHBOARD_JS, "utf8");
     const writes = src.match(/innerHTML\s*=\s*\S+/g) || [];

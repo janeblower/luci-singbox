@@ -34,6 +34,11 @@ describe("common.compareVersions (uic-7)", () => {
   it("orders numerically, not lexically", () => {
     expect(C.compareVersions("1.12.5", "1.12.10")).toBe(-1);
     expect(C.compareVersions("1.2", "1.10")).toBe(-1);
+    // From the deleted test_version_gate_js, which was a strict subset of this
+    // file: the plain three-component ordering the version gates rest on.
+    expect(C.compareVersions("1.12.0", "1.13.0")).toBe(-1);
+    expect(C.compareVersions("1.14.0", "1.13.0")).toBe(1);
+    expect(C.compareVersions("1.13.0", "1.13.0")).toBe(0);
   });
 
   it("fails open (0) when either version is empty/unknown", () => {

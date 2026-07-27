@@ -1,7 +1,5 @@
 'use strict';
 'require form';
-'require uci';
-'require view.singbox-ui.lib.common as SbCommon';
 'require view.singbox-ui.lib.descriptor_form as descriptor_form';
 'require view.singbox-ui.lib.view_state as SbViewState';
 
@@ -32,7 +30,7 @@ function buildGeneralMap() {
 		_('Built-in rule-set download detour'));
 	o.depends('default_rulesets', '1');
 	o.description = _('Fetch the built-in rule-sets through this outbound (e.g. when their host is blocked). Leave as (none) to download them directly.');
-	SbCommon.loadOutboundList(o, true);
+	descriptor_form.attachDynamic(o, { type: 'string', dynamic: 'outbounds' });
 
 	// --- Cache file (descriptor-driven) ---
 	s = m.section(form.NamedSection, 'cache', 'cache', _('Cache file'),

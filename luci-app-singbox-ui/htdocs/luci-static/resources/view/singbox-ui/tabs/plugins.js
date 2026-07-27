@@ -5,7 +5,6 @@
 'require view.singbox-ui.lib.plugins as SbPlugins';
 
 var callInstall = rpc.declare({ object: 'singbox-ui', method: 'plugin_install', params: ['package'] });
-var callEnable = rpc.declare({ object: 'singbox-ui', method: 'plugin_enable', params: ['name', 'enabled'] });
 
 // Available plugins live in OUR feed by naming convention. v1 surfaces them via
 // a small static list; installed ones come from the `plugins` rpcd method.
@@ -33,7 +32,6 @@ function buildPluginsMap() {
 			var rows = KNOWN.map(function (k) {
 				var st = status[k.name] || { installed: false, enabled: false };
 				var isInstalled = !!st.installed;
-				var isEnabled = !!st.enabled;
 				var installBtn = E('button', {
 					'class': 'cbi-button cbi-button-action',
 					'disabled': isInstalled ? 'disabled' : null,
@@ -43,28 +41,40 @@ function buildPluginsMap() {
 						});
 					}),
 				}, isInstalled ? _('Installed') : _('Install'));
-				// Enable is reachable once installed; it toggles the UCI flag so
-				// the plugin can also be disabled without removing the package.
-				var enableBtn = E('button', {
-					'class': 'cbi-button cbi-button-action',
-					'disabled': isInstalled ? null : 'disabled',
-					'click': ui.createHandlerFn(this, function () {
-						return callEnable(k.name, !isEnabled).then(function () {
-							ui.addNotification(null, E('p',
-								isEnabled ? _('Disabled. Reload the page.')
-								          : _('Enabled. Reload the page.')), 'info');
-						});
-					}),
-				}, isEnabled ? _('Disable') : _('Enable'));
 				return E('tr', { 'class': 'tr' }, [
-					E('td', { 'class': 'td' }, [ E('strong', {}, k.label), E('br'), k.description ]),
-					E('td', { 'class': 'td' }, [ installBtn, ' ', enableBtn ]),
+					E('td', { 'class': 'td' }, [ E('strong', {}, [k.label]), E('br'), k.description ]),
+					E('td', { 'class': 'td' }, [ installBtn ]),
 				]);
 			});
 			return E('div', { 'class': 'cbi-section' }, [
 				E('table', { 'class': 'table' }, rows),
 			]);
 		};
+
+		// Enable/disable is a PLAIN UCI FLAG on the `plugins` section, not an RPC
+		// button. The button called plugin_enable, whose handler did a bare
+		// cursor.commit("singbox-ui") — that flushes the WHOLE package, including
+		// a delta someone else staged. Edit an inbound, Save (not Apply), switch
+		// to this tab, hit Enable: the staged edit was committed to /etc/config
+		// without an Apply and Revert no longer worked. It was also a raw commit
+		// rather than `ubus uci apply`, so the procd trigger never fired and the
+		// plugin did not reach the daemon until cron or a reboot — hence the
+		// toast could only say "reload the page".
+		//
+		// As a Flag on the map, Save & Apply, the procd reload and Revert all
+		// work by themselves, and nothing commits anyone else's staging.
+		var ps = m.section(form.NamedSection, 'plugins', 'singbox-ui',
+			_('Enabled plugins'));
+		KNOWN.forEach(function (k) {
+			var st = status[k.name] || { installed: false };
+			var o = ps.option(form.Flag, k.name + '_enabled', k.label, k.description);
+			o.rmempty = false;
+			o.default = '0';
+			if (!st.installed) {
+				o.readonly = true;
+				o.description = _('Not installed.');
+			}
+		});
 		return m;
 	});
 }

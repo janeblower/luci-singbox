@@ -65,7 +65,7 @@ describe("transport helper (S2-QUAL)", () => {
       };
       const fields: Record<string, unknown> = {};
       T.parseTransport(o, fields);
-      expect(fields.transport).toBe("http");
+      expect(fields.transport_type).toBe("http");
       expect(fields.transport_path).toBe("/api");
     });
 
@@ -76,7 +76,7 @@ describe("transport helper (S2-QUAL)", () => {
         f2,
       );
       expect(f2.transport_host).toBe("cdn.x");
-      expect(f2.transport).toBe("ws");
+      expect(f2.transport_type).toBe("ws");
     });
 
     it("xhttp mode is routed", () => {

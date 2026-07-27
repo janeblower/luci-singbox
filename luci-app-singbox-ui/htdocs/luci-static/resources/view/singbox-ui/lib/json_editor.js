@@ -19,9 +19,10 @@
 // family. Those have no JSON representation, and a full overwrite would wipe them.
 //
 // A changed `tag` renames THIS section. It must never create a second one and
-// leave the original behind — so it goes through SbCommon.addRenameField's
-// machinery: uci.rename plus renameRefs(), which rewrites every by-name reference
-// to it (route rules, group members, detours, dns.final …).
+// leave the original behind — so it goes through SbCommon.renameSection(), which
+// re-creates the section under the new name (LuCI's uci API has no rename) and
+// rewrites every by-name reference to it (route rules, group members, detours,
+// dns.final, domain_resolver …).
 //
 // Nothing is written to the router here. Everything lands in LuCI's uci
 // changeset, so Save & Apply commits it and Revert throws it away, exactly as
@@ -78,12 +79,8 @@ function applyImport(kind, sid, r) {
 	else                           uci.unset('singbox-ui', sid, 'json_extra');
 
 	// A changed tag renames THIS section — never spawns a new one — and drags every
-	// reference to it along.
-	if (r.tag && r.tag !== sid) {
-		SbCommon.renameRefs(kind, sid, r.tag);
-		uci.rename('singbox-ui', sid, r.tag);
-		return r.tag;
-	}
+	// reference to it along. renameSection() does both (LuCI has no uci.rename).
+	if (r.tag && r.tag !== sid && SbCommon.renameSection(sid, r.tag)) return r.tag;
 	return sid;
 }
 
@@ -121,9 +118,9 @@ function confirmUnknown(keys, onDone) {
 	]);
 }
 
-// openJsonEditor(kind, sid, onApplied) — the editor modal. onApplied(newSid) is
-// called after the changeset is updated, so the caller can redraw.
-function openJsonEditor(kind, sid, onApplied) {
+// openJsonEditor(kind, sid) — the editor modal. Its only entry point is the
+// "JSON editor" button addJsonButtons() puts in the edit modal.
+function openJsonEditor(kind, sid) {
 	var ta = E('textarea', {
 		'rows': 20,
 		'class': 'cbi-input-textarea',
@@ -140,7 +137,6 @@ function openJsonEditor(kind, sid, onApplied) {
 		ui.addNotification(null,
 			E('p', {}, _('Applied to "%s". Press "Save & Apply" to commit.').format(newSid)),
 			'info');
-		if (onApplied) onApplied(newSid);
 	}
 
 	function onApply() {
@@ -155,7 +151,7 @@ function openJsonEditor(kind, sid, onApplied) {
 
 		// Check the rename BEFORE the RPC: a colliding tag would otherwise be
 		// reported only after the round-trip, and a bad one must never reach
-		// uci.rename.
+		// renameSection().
 		var te = tagError(sid, parsed.tag);
 		if (te) { setError(te); return; }
 
@@ -241,7 +237,6 @@ function addJsonButtons(s, kind, form) {
 		// edits to an existing one would be invisible. map.save() flushes the
 		// changeset into the delta (it does NOT commit — Revert still works), which
 		// is exactly what the editor needs to see.
-		var self = this;
 		return this.map.save().then(function () {
 			ui.hideModal();
 			openJsonEditor(kind, section_id);
@@ -255,11 +250,12 @@ function addJsonButtons(s, kind, form) {
 	return o;
 }
 
+// JSON_KINDS and openJsonEditor are NOT exported: nothing outside this file
+// calls them (addJsonButtons is the entry point, hasJson/tagError/applyImport
+// are what the unit tests drive).
 return L.Class.extend({
-	JSON_KINDS:     JSON_KINDS,
 	hasJson:        hasJson,
 	tagError:       tagError,
 	applyImport:    applyImport,
-	openJsonEditor: openJsonEditor,
 	addJsonButtons: addJsonButtons,
 });

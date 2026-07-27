@@ -4,20 +4,6 @@
 'require ui';
 'require view.singbox-ui.lib.rpc as SbRpc';
 
-function loadOutboundList(o, includeNone) {
-	o.load = function (section_id) {
-		this.keylist = [];
-		this.vallist = [];
-		if (includeNone) this.value('', _('(none)'));
-		var self = this;
-		uci.sections('singbox-ui', 'outbound')
-			.map(function (sec) { return sec['.name']; })
-			.sort()
-			.forEach(function (n) { self.value(n, n); });
-		return form.ListValue.prototype.load.apply(this, arguments);
-	};
-}
-
 // prettyBytes(n) — forkop's byte formatter: decimal (1000) divisor, 3 significant
 // digits. One copy so the dashboard and monitoring tab never drift into mixing
 // 1000- and 1024-based scales (one of which is always wrong).
@@ -43,6 +29,12 @@ var RENAME_REFS = {
 		['outbound',      'detour',           false],
 		['dns_server',    'detour',           false],
 		['ruleset',       'download_detour',  false],
+		['clash_api',     'external_ui_download_detour', false],
+		// The ONE shared detour every built-in rule-set inherits
+		// (ruleset.uc stamps it as download_detour on each builtin that has
+		// none). Missing it degraded quietly: ruleset.uc drops the dangling tag
+		// with a warn and all 25 built-ins silently stop downloading via proxy.
+		['singbox-ui',    'default_ruleset_detour',      false],
 	],
 	// An inbound's `detour` (shared listen block) names ANOTHER INBOUND. sing-box
 	// does not catch a dangling one: `sing-box check` passes, the daemon starts,
@@ -76,13 +68,24 @@ var RENAME_REFS = {
 		['dns',      'final',            false],
 		['dns',      'default_resolver', false],
 		['dns_rule', 'server',           false],
+		// Nothing validates these three, so a missed rename ships a dangling tag
+		// straight into the config and sing-box REJECTS THE WHOLE FILE
+		// ("domain_resolver: server not found"). The pre-flight `sing-box check`
+		// then cancels the reload, so Apply looks like it simply did nothing.
+		// dns.uc only guards dns_rule.server and dns.final; route.uc guards
+		// nothing at all.
+		['dns_server', 'domain_resolver',  false],
+		['dns_server', 'address_resolver', false],
+		['route_rule', 'server',           false],
 	],
 };
 
 // renameRefs(kind, oldName, newName) — rewrite every reference to oldName in the
-// uci changeset. Call BEFORE uci.rename() so the sections are still addressable
-// by their current ids. UCI section names are unique across the whole package
-// (not per-type), so no cross-kind name can be hit by accident.
+// uci changeset. Called by renameSection() AFTER the section itself has been
+// re-created under the new name, so a self-reference (a group listing itself, a
+// logical rule naming a sibling) is rewritten in the copy that survives. UCI
+// section names are unique across the whole package (not per-type), so no
+// cross-kind name can be hit by accident.
 function renameRefs(kind, oldName, newName) {
 	(RENAME_REFS[kind] || []).forEach(function (ref) {
 		var stype = ref[0], opt = ref[1], isList = ref[2];
@@ -102,12 +105,66 @@ function renameRefs(kind, oldName, newName) {
 	});
 }
 
+// renameSection(oldSid, newName) — rename a section in the uci changeset.
+//
+// LuCI's uci API has NO rename. Verified against the shipped uci.js: the methods
+// are createSID/resolveSID/add/clone/remove/get/set/unset/sections/move — the
+// word "rename" appears only in doc comments. `uci.rename('singbox-ui', …)` was
+// a plain TypeError on every call, and because renameRefs() ran FIRST every
+// by-name reference had already been repointed at a name that then never came
+// into existence. The next Save & Apply flushed that: for a rule-set that means
+// tun.route_address_set — a WHITELIST — goes empty, i.e. the tunnel silently
+// swallows the entire address space.
+//
+// uci.clone() is not the answer either: it builds the new section from
+// state.values alone (staged edits dropped) and returns a createSID(), not a
+// name. So: read merged values, add under the new name, copy, remove, put back.
+//
+// The move() matters. uci.add() appends, and for route_rule/dns_rule the order
+// of sections in the file IS the evaluation order — renaming a rule must not
+// quietly demote it to the bottom of the chain.
+function renameSection(oldSid, newName) {
+	var old = uci.get('singbox-ui', oldSid);
+	if (!old || !newName || newName === oldSid) return false;
+
+	var vals = {}, k;
+	for (k in old) if (Object.prototype.hasOwnProperty.call(old, k) && k.charAt(0) !== '.') vals[k] = old[k];
+
+	// The section that FOLLOWS this one in file order, to move the new one back
+	// into place. If there is none, it was last and add() already put it last.
+	var all = uci.sections('singbox-ui'), next = null;
+	for (var i = 0; i < all.length; i++) {
+		if (all[i]['.name'] !== oldSid) continue;
+		next = all[i + 1] ? all[i + 1]['.name'] : null;
+		break;
+	}
+
+	var stype = old['.type'];
+	uci.add('singbox-ui', stype, newName);
+	Object.keys(vals).forEach(function (opt) { uci.set('singbox-ui', newName, opt, vals[opt]); });
+	uci.remove('singbox-ui', oldSid);
+	if (next) uci.move('singbox-ui', newName, next, false);
+
+	// AFTER the copy exists, so a self-reference (a group listing itself, a
+	// logical rule naming a sibling) is rewritten in the section that survives.
+	renameRefs(stype, oldSid, newName);
+	return true;
+}
+
 // addRenameField(s, tab) — the section-name editor. `tab` is REQUIRED for a
 // tabbed section: LuCI only renders options that carry a tab, so the untabbed
 // s.option() form never showed up in the modal at all (same trap tabs/dns.js
 // documents for enabled/type). Declare it right after s.tab() and before any
 // other taboption so "Name" lands first in the pane.
 function addRenameField(s, tab) {
+	// Filled by write(), applied once the section has finished parsing. The
+	// rename CANNOT happen inside write(): LuCI parses options in declaration
+	// order and "Name" is declared FIRST, so renaming there would leave every
+	// following option writing into a section id that no longer exists —
+	// uci.set() on a removed section returns silently, so the rest of the
+	// modal's edits would just evaporate.
+	var pending = null;
+
 	var o = tab
 		? s.taboption(tab, form.Value, '__rename', _('Name'))
 		: s.option(form.Value, '__rename', _('Name'));
@@ -125,12 +182,35 @@ function addRenameField(s, tab) {
 			return _('Name already in use');
 		return true;
 	};
-	o.write     = function (section_id, value) {
+	o.write = function (section_id, value) {
 		if (!value || value === section_id) return;
-		renameRefs(s.sectiontype, section_id, value);
-		uci.rename('singbox-ui', section_id, value);
+		pending = { sid: section_id, name: value };
 	};
 	o.remove = function () {};
+
+	function armSection(sec) {
+		var base = sec.parse;
+		sec.parse = function () {
+			return Promise.resolve(base.apply(this, arguments)).then(function (r) {
+				if (pending) {
+					renameSection(pending.sid, pending.name);
+					pending = null;
+				}
+				return r;
+			});
+		};
+	}
+	armSection(s);
+
+	// A GridSection renders `modalonly` options in a modal built on a FRESH
+	// section instance (cloneOptions copies the options, not the section), so
+	// the wrapper above never sees that parse. addModalOptions is the one hook
+	// LuCI runs on the modal section before it is rendered.
+	var origAddModal = s.addModalOptions;
+	s.addModalOptions = function (ms) {
+		armSection(ms);
+		return origAddModal ? origAddModal.apply(this, arguments) : undefined;
+	};
 }
 
 // Package-owned sections carry `builtin '1'`: the built-in rule-sets
@@ -298,17 +378,18 @@ function withBusy(btn, busyLabel, fn) {
 //   * a Promise resolving to the string,
 //   * an object { error: msg }  (renders an error line),
 //   * an object { json: str }   (renders the string),
+//     (a `{ content: str }` branch used to live here too — no caller ever
+//      produced that shape),
 //   * a Promise resolving to one of those object shapes.
 // Used by importers/inbound.js (export_section) and widgets/action-bar.js
 // (read_config / preview_config) — keep the markup/behaviour consistent.
 function showJsonModal(title, contentOrPromise) {
-	var pre = E('pre', {
-		'class': 'cbi-input-textarea sb-json-modal-pre',
-		'style': 'max-height:50vh;overflow:auto;white-space:pre-wrap;' +
-		         'font-family:monospace;font-size:90%;'
-	}, _('Loading…'));
-	var status = E('div', { 'class': 'sb-json-modal-status',
-		'style': 'margin-top:8px;color:#555;font-size:90%;' });
+	// The classes carry the styling (style.css .sb-json-modal-*). The inline
+	// copies that used to sit here shadowed them AND disagreed — the class says
+	// max-height 60vh, the inline said 50vh, and inline wins — so editing the
+	// stylesheet did nothing.
+	var pre = E('pre', { 'class': 'cbi-input-textarea sb-json-modal-pre' }, [_('Loading…')]);
+	var status = E('div', { 'class': 'sb-json-modal-status' });
 
 	function showCopyResult(msg, isErr) {
 		status.textContent = msg;
@@ -339,10 +420,6 @@ function showJsonModal(title, contentOrPromise) {
 			}
 			if (res.json != null) {
 				pre.textContent = String(res.json);
-				return;
-			}
-			if (res.content != null) {
-				pre.textContent = String(res.content);
 				return;
 			}
 		}
@@ -465,11 +542,11 @@ function waitSubRefresh(onTick) {
 }
 
 return L.Class.extend({
-    loadOutboundList:  loadOutboundList,
     prettyBytes:       prettyBytes,
     waitSubRefresh:    waitSubRefresh,
     addRenameField:    addRenameField,
     renameRefs:        renameRefs,
+    renameSection:     renameSection,
     isBuiltin:         isBuiltin,
     builtinRulesetsOn: builtinRulesetsOn,
     rulesetActive:     rulesetActive,

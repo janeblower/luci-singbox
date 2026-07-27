@@ -109,8 +109,7 @@ function tagField(opt, name, control) {
 }
 
 // Dynamic selectors: options are populated from live UCI / network state at
-// .load() time instead of a static `values` array. Generalises the
-// loadOutboundList() pattern from tabs/common.js over a `source` discriminator.
+// .load() time instead of a static `values` array, discriminated by `source`.
 function dynamicChoices(source) {
     if (source === 'outbounds')
         return uci.sections('singbox-ui', 'outbound')
@@ -183,13 +182,18 @@ function attachDynamic(opt, field) {
         return;
     }
     // Single-select reference to an existing section. Optional fields get a
-    // leading (none); required ones don't.
+    // leading (none); required ones don't. Excludes the current section, exactly
+    // like the list branch above: an outbound "v1" was offering "v1" in its own
+    // Detour, and a self-detour survives scrub_dangling_detours (the tag IS
+    // defined) all the way into sing-box.
     opt.load = function (section_id) {
         this.keylist = [];
         this.vallist = [];
         if (!field.required) this.value('', _('(none)'));
         var self = this;
-        dynamicChoices(field.dynamic).forEach(function (kv) { self.value(kv[0], kv[1]); });
+        dynamicChoices(field.dynamic).forEach(function (kv) {
+            if (kv[0] !== section_id) self.value(kv[0], kv[1]);
+        });
         return form.ListValue.prototype.load.apply(this, arguments);
     };
 }
@@ -394,11 +398,8 @@ function makeVirtual(opt) {
 
 // --- Exclusive flags: "exactly one section may own this" --------------------
 //
-// Two contracts:
-//   exclusive: true        legacy — only one enabled section OF THE SAME PROTOCOL
-//                          may set this flag (a second tproxy inbound must not
-//                          also own the nft table: one mark, one ip rule).
-//   exclusive: "<group>"   cross-protocol — only one enabled section may set ANY
+// ONE contract:
+//   exclusive: "<group>"   only one enabled section may set ANY
 //                          field tagged with <group>, whatever its protocol and
 //                          whatever the field is NAMED. Group "transparent" is
 //                          system routing / the firewall: tproxy.nft_rules claims
@@ -408,6 +409,10 @@ function makeVirtual(opt) {
 //                          one may own it. Mirrors helpers.transparent_claims;
 //                          generate.uc refuses to build on a conflict (rc 3) —
 //                          this widget is convenience, not enforcement.
+//
+// (There used to be a second, `exclusive: true`, "same protocol only" contract.
+// No descriptor has carried it since tproxy.nft_rules moved to the group form;
+// its branch was kept alive by unit tests alone.)
 //
 // THE POLARITY IS PER FIELD, and it is not a style choice. LuCI's
 // CBIAbstractValue.parse() REMOVES an option whose submitted value equals its
@@ -530,19 +535,10 @@ function warnExclusiveConflicts(kind) {
 // disabled in the UI (with a comment naming the owner) and can never persist "1".
 // A section never blocks itself.
 function makeExclusive(opt, field, kind) {
-    var group = (typeof field.exclusive === 'string') ? field.exclusive : null;
-    var discr = discrOf(kind);
+    var group = field.exclusive;
 
-    function ownerOf(section_id) {
-        var claims;
-        if (group) {
-            claims = claimsForGroup(kind, group);
-        } else {
-            // Legacy contract: only sections of MY protocol claim, via MY field.
-            claims = {};
-            claims[uci.get('singbox-ui', section_id, discr)] = claimOf(field);
-        }
-        var first = claimants(kind, claims)[0];
+    function ownerOf(_section_id) {
+        var first = claimants(kind, claimsForGroup(kind, group))[0];
         return first ? first['.name'] : null;
     }
     opt._exclusiveOwner = ownerOf;  // exposed for unit tests
@@ -566,14 +562,96 @@ function makeExclusive(opt, field, kind) {
                 // innerHTML in LuCI's dom.append() (verified in the container's
                 // luci.js) and `first` is user-controlled.
                 node.appendChild(E('div', { 'class': 'cbi-value-description' }, [
-                    group
-                        ? _('System routing / the firewall is already owned by inbound "%s". Only one inbound may own it.').format(first)
-                        : _('nftables rules already active on inbound "%s"').format(first)
+                    _('System routing / the firewall is already owned by inbound "%s". Only one inbound may own it.').format(first)
                 ]));
             }
             return node;
         };
     }
+}
+
+// depsArmsFor(f, kind, discr, protoName) — the full depends arms for one field:
+// the protocol gate AND every (parent_enabled / advanced / per-value depends)
+// clause. The same field can be declared by several protocols, and each call
+// must produce its own arm so the OR semantics of successive opt.depends() calls
+// gate by the right protocol AND the right advanced/parent state.
+//
+// `depends` mirrors the backend's `requires`: one clause {field,value}, an array
+// of clauses (AND — one LuCI depends object, whose keys ARE an AND), or a clause
+// whose `value` is an array (OR — one arm per value). AND-of-ORs is not
+// expressible and nothing needs it; a clause inside an AND array carries a
+// single value.
+//
+// discr is null for a singleton (NamedSection): there is no type to gate on. Its
+// copy of this understood only the single-clause form, so an AND-array `depends`
+// on a settings field silently produced a garbage arm — the drift that comes of
+// keeping two of these.
+function depsArmsFor(f, kind, discr, protoName) {
+    var clauses = f.depends
+        ? (Array.isArray(f.depends) ? f.depends : [f.depends])
+        : [];
+    var orValues = (clauses.length === 1 && Array.isArray(clauses[0].value))
+        ? clauses[0].value
+        : [null];
+    var noAdvGate = (kind === 'inbound' || kind === 'outbound');
+    return orValues.map(function (v) {
+        var d = {};
+        if (discr) d[discr] = protoName;
+        clauses.forEach(function (c) { d[c.field] = (v !== null) ? v : c.value; });
+        if (f.parent_enabled) d[f.parent_enabled] = '1';
+        if (f.advanced && !noAdvGate) d['_show_advanced_' + f.tab] = '1';
+        return d;
+    });
+}
+
+// decorateField(opt, f, W, gate) — everything a materialized field does to its
+// option that does NOT depend on where the option lives. applyMaterializedNamed
+// carried a copy of this and had already drifted: it never applied `multiline`,
+// so a multiline settings field rendered as a one-line input.
+// Returns the set of static choices it registered (the grid path tracks them so
+// a later protocol declaring the same field can merge in its own values).
+function decorateField(opt, f, W, gate) {
+    if (W === form.MultiValue) armMultiValue(opt);
+    if (f.required)        opt.rmempty = false;
+    if (f.default != null) opt.default = String(f.default);
+    // NOT on a MultiValue. On a text input `placeholder` is ghost text in an
+    // EMPTY field; CBIMultiValue.renderWidget maps the same property to
+    // ui.Dropdown's `select_placeholder` — the caption on the CLOSED bar. So
+    // tls_alpn's "h2 / http/1.1" rendered as a collapsed dropdown that read as
+    // if two values were already picked. A list with choices needs no ghost
+    // text: the choices ARE the hint.
+    if (f.placeholder && W !== form.MultiValue) opt.placeholder = f.placeholder;
+    // UX-2: per-field inline help. `ui_help` must be whitelisted in
+    // schema_dump.uc FIELD_WHITELIST to reach the frontend. No-op when absent.
+    if (f.ui_help) opt.description = _(f.ui_help);
+
+    var values = {};
+    if (!f.dynamic && Array.isArray(f.values))
+        f.values.forEach(function (v) {
+            opt.value(v, v === '' ? _('(none)') : v);
+            values[v] = 1;
+        });
+    if (f.dynamic) attachDynamic(opt, f);
+
+    if (f.multiline) {
+        opt.rows = 12;
+        opt.monospace = true;
+    }
+    // A multiline field renders as a textarea (TextValue); password masking and
+    // the eye-toggle only work on a single-line input, so multiline wins for a
+    // field that is both (e.g. ssh private_key — a masked one-line PEM is
+    // unusable). Such a field renders as a plain monospace textarea.
+    if (f.secret && !f.multiline) {
+        opt.password = true;
+        decorateSecretInput(opt);
+    }
+
+    if (f.virtual) makeVirtual(opt);
+    if (f.requires_pkg) attachPkgNote(opt, f.requires_pkg);
+    attachValidator(opt, f.validate);
+    if (gate.mode === 'disable') disableWithNote(opt, gate.note);
+    tagField(opt, f.name, controlKindFor(W));
+    return values;
 }
 
 function applyMaterialized(s, kind, protoName, materialized) {
@@ -601,38 +679,23 @@ function applyMaterialized(s, kind, protoName, materialized) {
     // them with makeVirtual once per (tab,name) pair — no separate pass
     // required.
 
-    // Build the full depends arms for a (field, protoName) pair: protocol
-    // gate AND every (parent_enabled / advanced / per-value depends) clause.
-    // The same field can be declared by multiple protocols — each call must
-    // produce its own arm so the OR semantics of opt.depends() correctly
-    // gate by the right protocol AND the right advanced/parent state.
-    // `depends` mirrors the backend's `requires`: one clause {field,value}, an
-    // array of clauses (AND — one LuCI depends object, whose keys ARE an AND),
-    // or a clause whose `value` is an array (OR — one arm per value, since
-    // LuCI ORs successive depends() calls). AND-of-ORs is not expressible and
-    // nothing needs it; a clause inside an AND array carries a single value.
-    function depsArmsFor(f, protoName) {
-        var clauses = f.depends
-            ? (Array.isArray(f.depends) ? f.depends : [f.depends])
-            : [];
-        var orValues = (clauses.length === 1 && Array.isArray(clauses[0].value))
-            ? clauses[0].value
-            : [null];
-        var noAdvGate = (kind === 'inbound' || kind === 'outbound');
-        return orValues.map(function (v) {
-            var d = {};
-            d[discr] = protoName;
-            clauses.forEach(function (c) {
-                d[c.field] = (v !== null) ? v : c.value;
-            });
-            if (f.parent_enabled) d[f.parent_enabled] = '1';
-            if (f.advanced && !noAdvGate) d['_show_advanced_' + f.tab] = '1';
-            return d;
-        });
-    }
-
     materialized.fields.forEach(function (f) {
-        var key = f.tab + '\t' + f.name;
+        // Keyed by NAME, not by tab+name. LuCI keys an option by the UCI option
+        // it maps to (cbid.<config>.<sid>.<option>), so two descriptor fields
+        // with the same name on different tabs produced TWO options sharing one
+        // DOM node and one hidden-state — findElement() returns res[0]. Two real
+        // carriers: `detour` (dns/legacy tab basic vs _shared/dial tab dial) and
+        // `udp_timeout` (tun tab basic vs _shared/listen tab listen). The
+        // second-registered option's setActive won, so for udp/tcp/tls/quic/…
+        // the node read as inactive and AbstractValue.parse() went to
+        // remove() -> unset: a DNS server's Detour could not be saved and an
+        // existing one was WIPED on the first modal save. LuCI's own
+        // anti-aliasing guard could not help — neither option set `ucioption`.
+        //
+        // Merging is safe because a duplicate name is by construction the same
+        // UCI option with the same widget; the only visible effect is that the
+        // merged option renders on the tab that registered first.
+        var key = f.name;
         // Two-sided version gate: hide (compatOnly) or disable+note (default).
         // Fail-open when core version is unknown.
         var gate = versionGate(f);
@@ -643,7 +706,7 @@ function applyMaterialized(s, kind, protoName, materialized) {
             // depends() chain with the new protocol's full gate (NOT just
             // discr=proto — that would bypass advanced/parent_enabled and
             // make the field unconditionally visible for the new protocol).
-            depsArmsFor(f, protoName).forEach(function (d) {
+            depsArmsFor(f, kind, discr, protoName).forEach(function (d) {
                 registered.opt.depends(d);
             });
             // Label resolution must not be coupled to protocol registration
@@ -669,55 +732,11 @@ function applyMaterialized(s, kind, protoName, materialized) {
         var W = widgetFor(f);
         var opt = s.taboption(f.tab, W, f.name, _(labelFor(f)));
         opt.modalonly = true;
-        if (W === form.MultiValue) armMultiValue(opt);
 
-        depsArmsFor(f, protoName).forEach(function (d) { opt.depends(d); });
-
-        if (f.required)        opt.rmempty = false;
-        if (f.default != null) opt.default = String(f.default);
-        // NOT on a MultiValue. On a text input `placeholder` is ghost text in an
-        // EMPTY field; CBIMultiValue.renderWidget maps the same property to
-        // ui.Dropdown's `select_placeholder` — the caption on the CLOSED bar. So
-        // tls_alpn's "h2 / http/1.1" rendered as a collapsed dropdown that read as
-        // if two values were already picked. A list with choices needs no ghost
-        // text: the choices ARE the hint.
-        if (f.placeholder && W !== form.MultiValue) opt.placeholder = f.placeholder;
-        // UX-2: surface per-field inline help when the descriptor carries it.
-        // `ui_help` is optional and must be whitelisted in schema_dump.uc
-        // FIELD_WHITELIST to reach the frontend. No-op when not declared.
-        var help = f.ui_help;
-        if (help) opt.description = _(help);
-
-        var values = {};
-        if (!f.dynamic && Array.isArray(f.values))
-            f.values.forEach(function (v) {
-                opt.value(v, v === '' ? _('(none)') : v);
-                values[v] = 1;
-            });
-
-        if (f.dynamic) attachDynamic(opt, f);
-
-        if (f.multiline) {
-            opt.rows = 12;
-            opt.monospace = true;
-        }
-
-        // A multiline field renders as a textarea (TextValue); password masking
-        // and the eye-toggle only work on a single-line input, so multiline wins
-        // for a field that is both (e.g. ssh private_key — a masked one-line PEM
-        // is unusable). Such a field renders as a plain monospace textarea.
-        if (f.secret && !f.multiline) {
-            opt.password = true;
-            decorateSecretInput(opt);
-        }
-
-        if (f.virtual) makeVirtual(opt);
+        depsArmsFor(f, kind, discr, protoName).forEach(function (d) { opt.depends(d); });
+        var values = decorateField(opt, f, W, gate);
         if (f.exclusive) makeExclusive(opt, f, kind);
-        if (f.requires_pkg) attachPkgNote(opt, f.requires_pkg);
 
-        attachValidator(opt, f.validate);
-        if (gate.mode === 'disable') disableWithNote(opt, gate.note);
-        tagField(opt, f.name, controlKindFor(W));
         s._sbMatRegistry[key] = {
             opt: opt, values: values,
             // Track whether THIS first registration already carried an explicit
@@ -740,50 +759,12 @@ function applyMaterializedNamed(s, kind, typeName, materialized) {
         if (gate.mode === 'hide') return;
         var W = widgetFor(f);
         var opt = s.option(W, f.name, _(labelFor(f)));
-        if (W === form.MultiValue) armMultiValue(opt);
-        if (f.required)        opt.rmempty = false;
-        if (f.default != null) opt.default = String(f.default);
-        // NOT on a MultiValue. On a text input `placeholder` is ghost text in an
-        // EMPTY field; CBIMultiValue.renderWidget maps the same property to
-        // ui.Dropdown's `select_placeholder` — the caption on the CLOSED bar. So
-        // tls_alpn's "h2 / http/1.1" rendered as a collapsed dropdown that read as
-        // if two values were already picked. A list with choices needs no ghost
-        // text: the choices ARE the hint.
-        if (f.placeholder && W !== form.MultiValue) opt.placeholder = f.placeholder;
-        var help = f.ui_help;
-        if (help) opt.description = _(help);
-        // depends arms: advanced toggle + per-value depends + parent_enabled.
-        // No discriminator arm — singletons have a single type.
-        if (f.depends) {
-            var vals = Array.isArray(f.depends.value) ? f.depends.value : [f.depends.value];
-            vals.forEach(function (v) {
-                var d = {}; d[f.depends.field] = v;
-                if (f.advanced) d['_show_advanced_' + f.tab] = '1';
-                if (f.parent_enabled) d[f.parent_enabled] = '1';
-                opt.depends(d);
-            });
-        } else if (f.advanced || f.parent_enabled) {
-            // Combine advanced + parent_enabled into ONE arm so a field that
-            // declares both (e.g. cache store_rdrc, clash external_ui) stays
-            // hidden until BOTH the Advanced toggle AND the parent flag are on.
-            // (A two-branch else-if would honor only the first and wrongly show
-            // the field while the section is disabled.)
-            var da = {};
-            if (f.advanced)       da['_show_advanced_' + f.tab] = '1';
-            if (f.parent_enabled) da[f.parent_enabled] = '1';
-            opt.depends(da);
-        }
-        if (!f.dynamic && Array.isArray(f.values))
-            f.values.forEach(function (v) { opt.value(v, v === '' ? _('(none)') : v); });
-        if (f.dynamic) attachDynamic(opt, f);
-        // Same rule as applyMaterialized: masking only works on a single-line
-        // input, so a multiline secret stays a plain textarea.
-        if (f.secret && !f.multiline) { opt.password = true; decorateSecretInput(opt); }
-        if (f.virtual) makeVirtual(opt);
-        if (f.requires_pkg) attachPkgNote(opt, f.requires_pkg);
-        attachValidator(opt, f.validate);
-        if (gate.mode === 'disable') disableWithNote(opt, gate.note);
-        tagField(opt, f.name, controlKindFor(W));
+        // No discriminator arm — a singleton has a single type. An arm with no
+        // keys at all would be an unconditional depends, so skip it entirely.
+        depsArmsFor(f, kind, null, null).forEach(function (d) {
+            if (Object.keys(d).length) opt.depends(d);
+        });
+        decorateField(opt, f, W, gate);
     });
 }
 
@@ -794,4 +775,9 @@ return L.Class.extend({
     warnExclusiveConflicts: warnExclusiveConflicts,
     tagField:               tagField,
     attachPkgNote:          attachPkgNote,
+    // The ONE "fill a selector from existing UCI sections" implementation. There
+    // used to be three (SbCommon.loadOutboundList, tabs/dns.js loadDnsServerList
+    // and this) and they had already drifted: only this one filters rule-sets
+    // through the backend's own predicate and excludes the current section.
+    attachDynamic:          attachDynamic,
 });

@@ -617,7 +617,21 @@ describe("descriptor_form.js — dynamic selectors", () => {
     });
   });
 
+  // `exclusive` is resolved through the SCHEMA (claimsForGroup), because the
+  // owner question has to be answerable for protocols whose applyMaterialized
+  // has not run yet. The legacy `exclusive: true` ("same protocol only") form is
+  // gone — no descriptor has carried it since tproxy.nft_rules moved to the
+  // group form, and only these tests kept its branch alive.
+  const TRANSPARENT_SCHEMA = {
+    inbound: {
+      tproxy: {
+        fields: [{ name: "nft_rules", default: 1, exclusive: "transparent" }],
+      },
+    },
+  };
+
   describe("8. exclusive bool: owner-gating for nft_rules", () => {
+    SbViewState._schema = TRANSPARENT_SCHEMA;
     const { s, opts } = makeSection();
     applyMaterialized(s, "inbound", "tproxy", {
       tabs: ["basic"],
@@ -630,7 +644,7 @@ describe("descriptor_form.js — dynamic selectors", () => {
           type: "bool",
           tab: "basic",
           default: 1,
-          exclusive: true,
+          exclusive: "transparent",
         },
       ],
     });
@@ -661,6 +675,7 @@ describe("descriptor_form.js — dynamic selectors", () => {
 
   describe("9. exclusive: unset first inbound qualifies as owner", () => {
     it("tpA (nft_rules unset) is owner over tpB (nft_rules=1)", () => {
+      SbViewState._schema = TRANSPARENT_SCHEMA;
       const origSections = uci.sections;
       uci.sections = (config: string, type: string) => {
         if (config === "singbox-ui" && type === "inbound") {
@@ -688,7 +703,7 @@ describe("descriptor_form.js — dynamic selectors", () => {
             type: "bool",
             tab: "basic",
             default: 1,
-            exclusive: true,
+            exclusive: "transparent",
           },
         ],
       });

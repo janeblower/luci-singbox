@@ -6,28 +6,13 @@
 set -eu
 cd "$(dirname "$0")/../.."
 
-# This suite runs for real ONLY in the dedicated browser-test CI lane (a host
-# with bun + docker). It must skip gracefully in the other environments where it
-# can be invoked: the OpenWrt qemu VM (SINGBOX_TESTS_IN_VM sentinel below) and
-# the packaging lane (ubuntu, apk-tools but no bun → skip below).
-if [ "${SINGBOX_TESTS_IN_VM:-0}" = "1" ]; then
-    echo "SKIP test_browser: not runnable inside the OpenWrt qemu VM"
-    exit 0
-fi
-
-# Missing bun/docker => this is not the browser lane (e.g. the packaging lane).
-# Skip gracefully rather than erroring; the browser-test job provides bun+docker
-# and runs the suite for real there.
-command -v bun    >/dev/null 2>&1 || { echo "SKIP test_browser: bun not available (browser-test lane only)"; exit 0; }
-command -v docker >/dev/null 2>&1 || { echo "SKIP test_browser: docker not available (browser-test lane only)"; exit 0; }
-
-# Past the guards => this IS the browser lane. run.sh invokes every test via
-# `sh "$t"` (dash on the GitHub ubuntu runner / packaging lane), but the harness
-# below needs bash (set -o pipefail + the playwright driver). dash would die on
-# `set -o pipefail`; the POSIX-safe guards above already ran, so re-exec under
-# bash now for the real run. (Kept after the guards so non-browser lanes skip
-# cleanly under dash without even needing bash present.)
-[ -n "${BASH_VERSION:-}" ] || exec bash "$0" "$@"
+# The ONLY invoker is the browser-test CI job (`bash tests/cross/test_browser.sh`
+# in build.yml) and a developer running that same line. The three skip guards
+# that used to stand here — "not in the qemu VM", "no bun", "no docker" — plus a
+# re-exec under bash, existed for a tests/run.sh dispatcher that walked every
+# *.sh in the tree with `sh "$t"`. That dispatcher is gone, so a missing bun or
+# docker is now a real failure of the lane that asked for this suite, not a
+# reason to exit 0 and report success.
 . "$(dirname "$0")/../lib/sb_helpers.sh"
 set -o pipefail
 
