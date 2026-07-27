@@ -109,7 +109,21 @@ function read_subscription_groups(name) {
 // (the WARP-key audit finding: never leave a credential world-readable).
 const META_PATH = `${TMPDIR}/outbound-meta.json`;
 
+// SINGBOX_DRY_RUN=1 — build the config but touch nothing the LIVE daemon reads.
+//
+// The side-car is production state: rpcd's outbound_meta serves it, and the
+// dashboard renders every node name from it. Clicking "Preview config" ran
+// generate.uc, which unconditionally rewrote it — from UNCOMMITTED UCI, so the
+// dashboard started naming nodes after edits the user had not applied. Worse,
+// init.d's reload pre-flight generates into a temp file and, when `sing-box
+// check` REFUSES it, cancels the reload: the daemon keeps running the old
+// config while the side-car has already been replaced, and the live nodes lose
+// their names.
+//
+// Gating on SINGBOX_CONFIG (i.e. "are we writing somewhere unusual") is not an
+// option — test_outbound_meta sets it deliberately. This is its own seam.
 function write_meta(meta) {
+	if (getenv("SINGBOX_DRY_RUN") === "1") return;
 	fs.mkdir(TMPDIR, 0o755);
 	let f = fs.open(META_PATH, "w", 0o600);
 	if (!f) { warn("outbound.uc: cannot write " + META_PATH + "\n"); return; }

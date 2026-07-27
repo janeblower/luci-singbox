@@ -257,10 +257,11 @@ Name must match `^[a-z0-9_]+$`.
 ### `plugin_install` rpcd method
 
 ```
-ubus call singbox-ui plugin_install '{"package":"luci-singbox-plugin-myplugin"}'
+ubus call singbox-ui plugin_install '{"package":"singbox-ui-plugin-myplugin"}'
 ```
 
-Runs `apk add <package>`. Package name must match `^[a-zA-Z0-9._+-]+$`.
+Runs `apk add <package>`. The name must start with `singbox-ui-plugin-`
+(`PLUGIN_PKG_PREFIX` in the rpcd handler) and match `^[a-zA-Z0-9][a-zA-Z0-9._+-]*$`.
 This method installs a package from feeds already configured on the device.
 It does **not** add a feed or trust a new key — that is the self-provisioning
 pattern described below.

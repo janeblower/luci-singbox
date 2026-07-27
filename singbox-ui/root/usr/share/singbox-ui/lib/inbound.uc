@@ -122,8 +122,7 @@ function referenced_rulesets(inbounds) {
 			// via the `json` protocol escape hatch (raw_json), which bypasses the
 			// descriptor's `coerce: "array"`. `for (let n in <string>)` iterates zero
 			// times in ucode, so without this the tag dangles uncollected.
-			let refs = one[key] ?? [];
-			if (type(refs) === "string") refs = [ refs ];
+			let refs = helpers.as_array(one[key]);
 			for (let n in refs)
 				if (!seen[n]) { push(out, n); seen[n] = true; }
 		}

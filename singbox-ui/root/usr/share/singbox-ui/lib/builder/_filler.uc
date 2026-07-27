@@ -16,6 +16,11 @@ const as_array = helpers.as_array;
 // Maps each shared block to its placement: `key`-style blocks nest their built
 // object under out[key]; `merge`-style blocks fold their keys into out directly.
 // Every block is built from its declarative emit_spec (see _emit_shared).
+//
+// THE list. _unfiller re-declared it byte-for-byte and registry.uc kept a third
+// copy as KNOWN_SHARED; both import it from here now. A shared block that exists
+// in one table and not another is a silent bug in whichever direction is missing
+// it, and "remember to edit three places" is not a mitigation.
 const SHARED_DISPATCH = {
     tls:       { key: "tls" },
     transport: { key: "transport" },
@@ -69,6 +74,24 @@ function _emit_scalar(out, s, f) {
         if (held)
             warn(sprintf("_filler: '%s' %s needs sing-box %s+ (core is %s); omitting\n",
                          s[".name"] ?? "?", f.name, f.min_version, helpers.core_version()));
+        return;
+    }
+    // …and the same in the other direction. A key REMOVED in a newer core is
+    // just as fatal as one that does not exist yet — `json: unknown field`, whole
+    // config refused, service does not start. max_version was validated at
+    // registration, projected to the frontend and honoured by the widget, but
+    // NOTHING read it on the emission path, and disabling a widget does not clear
+    // the value already in UCI. Carriers: direct.override_address (<1.13),
+    // hysteria's up/down/obfs (<1.14), dns_action/match fields.
+    //
+    // The explicit length() check is required: core_at_least() is fail-open and
+    // returns true for an unknown version, which would gate everything off.
+    if (f.max_version != null && length(helpers.core_version()) &&
+        helpers.core_at_least(f.max_version)) {
+        let held2 = (f.coerce === "bool") ? s_bool(s, f.name) : length(s_opt(s, f.name)) > 0;
+        if (held2)
+            warn(sprintf("_filler: '%s' %s was removed in sing-box %s (core is %s); omitting\n",
+                         s[".name"] ?? "?", f.name, f.max_version, helpers.core_version()));
         return;
     }
     // `requires` is a gate on SIBLING UCI values. Three forms, and the third is
@@ -194,7 +217,7 @@ _emit_group = function(out, s, g) {
     if (!_gate(s, g.gate, null)) return;
     let sub = {};
     _emit_seq(sub, s, g.fields);
-    if (length(keys(sub)) > 0 || g.emit_empty) out[g.json_key] = sub;
+    if (length(keys(sub)) > 0) out[g.json_key] = sub;
 };
 
 // _build_block(s, spec, kind, opts) — build a shared-block object from its
@@ -320,4 +343,4 @@ function build(d, s) {
     return out;
 }
 
-return { build };
+return { build, SHARED_DISPATCH };

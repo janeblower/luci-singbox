@@ -50,7 +50,7 @@ const DRIVER = `
       let referenced = r.referenced;
       let seen = {};
       for (let n in referenced) seen[n] = true;
-      for (let n in dns.referenced_rulesets(cur)) {
+      for (let n in dns.referenced_rulesets(dns.build_dns(cur))) {
         if (!seen[n]) { push(referenced, n); seen[n] = true; }
       }
       let sets = ruleset.build_rule_sets(cur, referenced);

@@ -696,4 +696,32 @@ describe("test_subformat", () => {
     const html = await fetchBody("<html><body>login required</body></html>");
     expect(html.lines.length).toBe(0);
   });
+
+  // The converters handed the provider's fingerprint to sing-box VERBATIM,
+  // bypassing the one allowlist (sharelink_map.normalize_fp) that exists to stop
+  // exactly that. An unknown utls.fingerprint is FATAL in sing-box, so a mihomo
+  // subscription serving `randomizedalpn` (an Xray-only name) meant the daemon
+  // did not start at all — for a value the provider chose, not the user.
+  it("a provider's utls fingerprint goes through the allowlist, not verbatim", async () => {
+    const yaml = [
+      "proxies:",
+      "  - {name: OK, type: vless, server: a.x, port: 443, uuid: 11111111-1111-1111-1111-111111111111, tls: true, client-fingerprint: random}",
+      "  - {name: BAD, type: vless, server: b.x, port: 443, uuid: 22222222-2222-2222-2222-222222222222, tls: true, client-fingerprint: randomizedalpn}",
+      "  - {name: NONE, type: vless, server: c.x, port: 443, uuid: 33333333-3333-3333-3333-333333333333, tls: true, client-fingerprint: none}",
+    ].join("\n");
+    const { lines } = await fetchBody(yaml);
+    const byName: Record<string, any> = {};
+    for (const l of lines.filter((x) => !isGroupLine(x))) {
+      const n = JSON.parse(l);
+      byName[n.n] = n.o;
+    }
+
+    // `random` IS a sing-box value — it used to be rewritten to chrome, quietly
+    // undoing an anti-fingerprinting choice.
+    expect(byName.OK.tls.utls.fingerprint).toBe("random");
+    // An Xray-only name is clamped instead of poisoning the config.
+    expect(byName.BAD.tls.utls.fingerprint).toBe("chrome");
+    // "none" means no fingerprint — not chrome, which would turn uTLS ON.
+    expect(byName.NONE.tls.utls).toBeUndefined();
+  });
 });

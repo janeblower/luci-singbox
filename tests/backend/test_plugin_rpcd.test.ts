@@ -84,7 +84,7 @@ EOF
       echo '{"name":"zz_en","enabled":true}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugin_enable >/dev/null
       flag=$(uci -q get singbox-ui.plugins.zz_en_enabled || echo MISSING)
 
-      echo '{"package":"luci-app-singbox-plugin-x"}' | APK_CMD=/tmp/zz_apk UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugin_install >/dev/null
+      echo '{"package":"singbox-ui-plugin-x"}' | APK_CMD=/tmp/zz_apk UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugin_install >/dev/null
       args=$(cat /tmp/zz_apk_called 2>/dev/null || echo NONE)
 
       uci -q delete singbox-ui.plugins.zz_en_enabled || true; uci -q commit singbox-ui || true
@@ -94,6 +94,41 @@ EOF
     const o = JSON.parse(r.stdout);
     expect(o.flag).toBe("1");
     expect(o.args).toContain("add");
-    expect(o.args).toContain("luci-app-singbox-plugin-x");
+    expect(o.args).toContain("singbox-ui-plugin-x");
+  });
+
+  // #9 again, at a different door. cursor.commit() flushes the WHOLE singbox-ui
+  // package, so enabling a plugin while someone has a LuCI edit staged (Save
+  // without Apply) used to commit THEIR work into /etc/config with no Apply —
+  // and Revert then had nothing left to revert.
+  it("plugin_enable refuses while another change is staged", async () => {
+    const r = await exec(`
+      if [ ! -f /etc/config/singbox-ui ]; then
+        cp '${WORK}/singbox-ui/root/etc/config/singbox-ui' /etc/config/singbox-ui
+      fi
+      uci -q revert singbox-ui || true
+      uci -q set singbox-ui.zz_staged=ruleset     # staged, NOT committed
+
+      echo '{"name":"zz_guard","enabled":true}' | UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugin_enable > /tmp/zz_guard.json
+
+      flag=$(uci -q get singbox-ui.plugins.zz_guard_enabled || echo MISSING)
+      still=$(uci -q changes singbox-ui | grep -c zz_staged || true)
+      uci -q revert singbox-ui || true
+      printf '{"out":%s,"flag":"%s","still":"%s"}' "$(cat /tmp/zz_guard.json)" "$flag" "$still"
+    `);
+    expect(r.exitCode).toBe(0);
+    const o = JSON.parse(r.stdout);
+    expect(o.out.status).toBe("error");
+    expect(o.flag).toBe("MISSING"); // nothing written
+    expect(o.still).toBe("1"); // the staged edit is untouched
+  });
+
+  it("the plugin package prefix matches what the feed actually builds", async () => {
+    // PLUGIN_PKG_PREFIX said "luci-app-singbox-plugin-", a name no package in
+    // this repo has ever had, so every Install click was rejected before apk.
+    const r = await exec(
+      `echo '{"package":"singbox-ui-plugin-awg_warp"}' | APK_CMD=/bin/true UCODE_APP_LIB_DIR='${LIB}' ucode -L '${LIB}' '${HANDLER}' call plugin_install`,
+    );
+    expect(JSON.parse(r.stdout).status).toBe("ok");
   });
 });

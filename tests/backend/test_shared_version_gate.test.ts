@@ -173,3 +173,108 @@ describe("listen shared block: _unfiller gates `known` the same way", () => {
     expect(r.extra_gated).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------- max_version
+//
+// The upper bound was validated at registration, projected into the frontend and
+// honoured by the widget — and read by NOTHING on the emission path. A key
+// REMOVED in a newer core is exactly as fatal as one that does not exist yet
+// ("json: unknown field", whole config refused, service does not start), and
+// disabling a widget never clears the value already sitting in UCI: a box that
+// set `override_address` on 1.12 and later upgraded to 1.13 simply stopped
+// booting sing-box.
+//
+// It is asserted HERE and only here. The parity lane pins 99.0, which is ABOVE
+// every max_version in the tree, so its goldens no longer carry these keys at
+// all and cannot notice if the gate disappears again.
+const DIRECT_SRC = `
+  require("builder.protocols.direct");
+  let reg = require("builder.protocols.registry");
+  let filler = require("builder._filler");
+  let s = { [".name"]:"d1", override_address:"1.1.1.1", override_port:"5353" };
+  print(sprintf("%J\\n", filler.build(reg.get("outbound","direct"), s)));
+`;
+
+const HYSTERIA_SRC = `
+  require("builder.protocols.hysteria");
+  let reg = require("builder.protocols.registry");
+  let filler = require("builder._filler");
+  let s = { [".name"]:"h1", server:"e.com", server_port:"443",
+            hysteria_auth_str:"secret", up_mbps:"100", down_mbps:"100",
+            recv_window_conn:"4194304", recv_window:"8388608" };
+  print(sprintf("%J\\n", filler.build(reg.get("outbound","hysteria"), s)));
+`;
+
+// _unfiller has to mirror it, or `known` claims a key _filler will not emit and
+// the JSON editor's diff-apply ("known but absent from the JSON => delete")
+// silently wipes a value that is merely invisible on this core.
+const DIRECT_UNFILL_SRC = `
+  require("builder.protocols.direct");
+  let reg = require("builder.protocols.registry");
+  let unf = require("builder._unfiller");
+  let r = unf.parse(reg.get("outbound","direct"),
+                    { type:"direct", tag:"d1", override_address:"1.1.1.1" });
+  print(sprintf("%J\\n", {
+    known:  r.known.override_address  != null,
+    field:  r.fields.override_address != null,
+    extra:  r.extra.override_address,
+  }));
+`;
+
+describe("max_version gates EMISSION, not just the widget", () => {
+  useGuest();
+
+  it("on 1.12 the keys removed in 1.13/1.14 still emit", async () => {
+    const d = await buildSrc(DIRECT_SRC, "1.12.0");
+    expect(d.override_address).toBe("1.1.1.1");
+    expect(d.override_port).toBe(5353);
+
+    const h = await buildSrc(HYSTERIA_SRC, "1.13.0");
+    expect(h.recv_window_conn).toBe(4194304);
+    expect(h.recv_window).toBe(8388608);
+  });
+
+  it("on the core that removed them they are gone, the rest still builds", async () => {
+    const d = await buildSrc(DIRECT_SRC, "1.13.0");
+    expect(d.override_address).toBeUndefined();
+    expect(d.override_port).toBeUndefined();
+    expect(d.type).toBe("direct");
+
+    const h = await buildSrc(HYSTERIA_SRC, "1.14.0");
+    expect(h.recv_window_conn).toBeUndefined();
+    expect(h.recv_window).toBeUndefined();
+    expect(h.up_mbps).toBe(100);
+  });
+
+  it("fail-open: an undetectable core emits everything", async () => {
+    // core_at_least() returns true for an unknown version, so the gate needs an
+    // explicit "do we even know the version" check — without it EVERY
+    // max_version field would vanish on a box where `sing-box version` fails.
+    const d = await buildSrc(DIRECT_SRC, "");
+    expect(d.override_address).toBe("1.1.1.1");
+  });
+
+  it("_unfiller keeps `known` in step with it", async () => {
+    const gated = JSON.parse(
+      (
+        await runUcode(DIRECT_UNFILL_SRC, [], [], {
+          SINGBOX_CORE_VERSION: "1.13.0",
+        })
+      ).stdout.trim(),
+    );
+    expect(gated.known).toBe(false); // diff-apply cannot delete it
+    expect(gated.field).toBe(false);
+    expect(gated.extra).toBe("1.1.1.1"); // -> json_extra -> re-emitted verbatim
+
+    const live = JSON.parse(
+      (
+        await runUcode(DIRECT_UNFILL_SRC, [], [], {
+          SINGBOX_CORE_VERSION: "1.12.0",
+        })
+      ).stdout.trim(),
+    );
+    expect(live.known).toBe(true);
+    expect(live.field).toBe(true);
+    expect(live.extra).toBeNull();
+  });
+});

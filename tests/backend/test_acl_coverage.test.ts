@@ -32,7 +32,6 @@ const SAFE_READ_METHODS = [
 
 const EXPECTED_WRITE_METHODS = [
   "generate",
-  "nftables",
   "restart",
   "refresh",
   "clash_mutate",

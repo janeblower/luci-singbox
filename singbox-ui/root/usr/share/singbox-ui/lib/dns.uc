@@ -61,16 +61,11 @@ function build_rules(cur, srv_tags, rs_enabled) {
 	let dr_by_name = {};
 	cur.foreach("singbox-ui", "dns_rule", function(s) { dr_by_name[s[".name"]] = s; });
 
-	function ref_list(s) {
-		let refs = s.rules ?? [];
-		if (type(refs) === "string") refs = [ refs ];
-		return refs;
-	}
 	let consumed = {};
 	cur.foreach("singbox-ui", "dns_rule", function(s) {
 		if (s.enabled === "0") return;
 		if ((s.type ?? "default") !== "logical") return;
-		for (let n in ref_list(s)) consumed[n] = true;
+		for (let n in helpers.as_array(s.rules)) consumed[n] = true;
 	});
 
 	function resolve_rulesets(rule) {
@@ -96,7 +91,7 @@ function build_rules(cur, srv_tags, rs_enabled) {
 		if (t === "logical") {
 			rule.type = "logical";
 			let sub = [];
-			for (let n in ref_list(s)) {
+			for (let n in helpers.as_array(s.rules)) {
 				let rs = dr_by_name[n];
 				if (rs == null) continue;
 				if ((rs.type ?? "default") === "logical") continue;   // only default refs
@@ -129,44 +124,28 @@ function build_rules(cur, srv_tags, rs_enabled) {
 	return rules;
 }
 
-// referenced_rulesets(cur, rs_enabled?) -> [name, ...]
-// The deduped set of enabled rulesets referenced by enabled dns_rule sections
-// (reads the rule_set matcher; skips logical rules which carry no rule_set).
-// rs_enabled is optional (computed if absent) so the function stays callable
-// standalone from generate.uc (GEN-4).
-// Mirrors the ref-resolution in build_rules (same enabled/existence filter), so
-// generate.uc can UNION these with route.uc's referenced set before building
-// route.rule_set definitions. Without this, a ruleset referenced only by a
-// dns_rule is emitted as a dns.rules[].rule_set tag with no matching
-// route.rule_set definition, and sing-box refuses to start ("rule-set not
-// found"). Pure: no I/O. See S3.1.
-function referenced_rulesets(cur, rs_enabled) {
-	if (rs_enabled == null) rs_enabled = ruleset_enabled_map(cur);
+// referenced_rulesets(dns_block) -> [name, ...]
+// The deduped rule-set tags the BUILT dns rules reference. generate.uc unions
+// these with route.uc's set before emitting route.rule_set definitions —
+// without that, a rule-set used only by a dns_rule is named with no definition
+// and sing-box refuses to start ("rule-set not found").
+//
+// It reads the BUILT rules, not the cursor, for the same reason inbound.uc does:
+// a second walk over UCI restating build_rules' filters WILL drift, and it had.
+// build_rules drops an action=route rule whose `server` is empty or points at a
+// disabled dns_server BEFORE resolving its rule-sets; this walk did not, so a
+// disabled dns_server left a route.rule_set that sing-box then downloaded and
+// refreshed on a schedule for a rule that was not in the config at all.
+// Pure: no I/O.
+function referenced_rulesets(dns_block) {
 	let out = [];
 	let seen = {};
-	// Compute consumed set: default rules referenced by logical rules are inlined
-	// as headless matchers, so their rule_set matchers are stripped (headless excludes
-	// rule_set). Skip them to avoid orphan route.rule_set definitions.
-	function ref_list(s) {
-		let refs = s.rules ?? [];
-		if (type(refs) === "string") refs = [ refs ];
-		return refs;
-	}
-	let consumed = {};
-	cur.foreach("singbox-ui", "dns_rule", function(s) {
-		if (s.enabled === "0") return;
-		if ((s.type ?? "default") !== "logical") return;
-		for (let n in ref_list(s)) consumed[n] = true;
-	});
-	cur.foreach("singbox-ui", "dns_rule", function(s) {
-		if (s.enabled === "0") return;
-		if ((s.type ?? "default") === "logical") return;
-		if (consumed[s[".name"]]) return;   // consumed → nested only, rule_set stripped
-		let refs = s.rule_set ?? [];
+	for (let rule in (dns_block != null ? (dns_block.rules ?? []) : [])) {
+		let refs = rule.rule_set ?? [];
 		if (type(refs) === "string") refs = [ refs ];
 		for (let n in refs)
-			if (rs_enabled[n] && !seen[n]) { push(out, n); seen[n] = true; }
-	});
+			if (!seen[n]) { push(out, n); seen[n] = true; }
+	}
 	return out;
 }
 

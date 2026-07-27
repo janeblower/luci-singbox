@@ -25,20 +25,11 @@ print(((res.route.rules[0].outbound ?? "(absent)") == "(absent)" || res.route.ru
     expect(r.stdout.trim()).toBe("scrubbed\ndirect\ndirect");
   });
 
-  it("scrub_implicit_refs: route ref to a DANGLING implicit tag IS scrubbed", async () => {
-    const r = await runUcode(`
-let pp = require("post_process");
-let cfg = {
-    outbounds: [{ type: "vless", tag: "p" }],
-    route: { final: "ghost", rules: [{ outbound: "ghost" }] }
-};
-let res = pp.scrub_implicit_refs(cfg, { implicit_tags: ["ghost"] });
-print(((res.route.final ?? "(absent)") == "(absent)" || res.route.final === null ? "scrubbed" : res.route.final) + "\\n");
-print(((res.route.rules[0].outbound ?? "(absent)") == "(absent)" || res.route.rules[0].outbound === null ? "scrubbed" : res.route.rules[0].outbound) + "\\n");
-`);
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout.trim()).toBe("scrubbed\nscrubbed");
-  });
+  // The "dangling implicit tag" branch is gone with the code it tested. Its
+  // guard was "implicit AND not a real outbound", and generate.uc materialises
+  // every implicit tag it declares as a genuine outbound in the same breath —
+  // so the branch could not fire, and the fixture it needed ({implicit_tags:
+  // ["ghost"]} with no `ghost` outbound) is a state the generator cannot produce.
 
   it("scrub_implicit_refs no-op when implicit_tags empty", async () => {
     const r = await runUcode(`

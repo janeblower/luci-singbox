@@ -16,7 +16,7 @@ import { runUcode } from "../helpers/ucode.ts";
 //   9. tproxy.interface is a persisted dynamic device selector (NOT virtual)
 //   9b. BLD-3: per-field min_version reaches the frontend (ssh_cipher)
 //  10. No backend-only props leak (json_key, coerce, omit_when, skip_value, requires, default_when_empty)
-//  11. tproxy.nft_rules has exclusive:true
+//  11. tproxy.nft_rules carries exclusive:"transparent"
 //  12. tproxy has a fwmark field
 //
 // NOTE: mat.tabs = array of tab-name strings; mat.fields = flat array of all fields.

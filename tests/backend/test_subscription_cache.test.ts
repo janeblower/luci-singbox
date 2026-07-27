@@ -424,6 +424,55 @@ describe("test_subscription_cache", () => {
     await exec(`rm -rf ${dir}`);
   });
 
+  it("C2 still fires with sub_cache_persist=0 (the profile marker lives in tmpfs too)", async () => {
+    // The .profile marker used to exist ONLY on flash, and persist=0 deletes the
+    // flash copy after every fetch. So the marker read back as null, both C2
+    // checks (invalidate-in-fetch_one and the staleness clause) went dead, and
+    // changing sub_url + Apply left the router going through the OLD provider
+    // until sub_interval expired — precisely the scenario C2 exists for.
+    const { dir, run } = await setup({
+      sub_cache_persist: "0",
+      sub_interval: "86400",
+    });
+    await run("fetch-subs");
+    expect((await exec(`cat ${dir}/rt/sub_sub1.txt`)).stdout).toContain(
+      "t.example.com",
+    );
+    // persist=0 means nothing on flash…
+    expect(
+      (
+        await exec(`ls ${dir}/cache/sub_sub1.profile 2>/dev/null || echo GONE`)
+      ).stdout.trim(),
+    ).toBe("GONE");
+    // …and the marker in tmpfs instead.
+    expect(
+      (
+        await exec(`ls ${dir}/rt/sub_sub1.profile 2>/dev/null || echo GONE`)
+      ).stdout.trim(),
+    ).toBe(`${dir}/rt/sub_sub1.profile`);
+
+    // fresh within sub_interval: a refresh must not fetch at all
+    await exec(`: >${dir}/curl.log`);
+    await run("refresh");
+    expect((await exec(`wc -l <${dir}/curl.log`)).stdout.trim()).toBe("0");
+
+    // point at another provider -> stale REGARDLESS of mtime, old nodes dropped
+    await putFile(
+      `config outbound 'sub1'\n\toption type 'subscription'\n` +
+        `\toption sub_url 'https://other.test/sub'\n\toption sub_interval '86400'\n` +
+        `\toption sub_cache_persist '0'\n`,
+      `${dir}/uci/singbox-ui`,
+    );
+    await run("refresh", { FAKE_CURL_RC: "7" });
+    expect((await exec(`wc -l <${dir}/curl.log`)).stdout.trim()).not.toBe("0");
+    expect(
+      (
+        await exec(`cat ${dir}/rt/sub_sub1.txt 2>/dev/null || echo GONE`)
+      ).stdout.trim(),
+    ).toBe("GONE");
+    await exec(`rm -rf ${dir}`);
+  });
+
   it("metadata: headers override the body preamble and reach sub_status normalized", async () => {
     const { dir, run } = await setup();
     // preamble in the body carries a title + support url; the header re-states

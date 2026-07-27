@@ -49,7 +49,10 @@ return {
           parent_enabled: "tls_enabled", advanced: true, default: 0 },
         { name: "utls_fingerprint", type: "enum", tab: "tls",
           ui_label: "uTLS fingerprint",
-          values: ["chrome", "firefox", "safari", "ios", "android", "edge", "360", "qq", "random"],
+          // The same 10 values sharelink_map.UTLS_FINGERPRINTS allows — one list,
+          // or the picker offers what the importer rewrites (and vice versa).
+          values: ["chrome", "firefox", "safari", "ios", "android", "edge", "360",
+                   "qq", "random", "randomized"],
           default: "chrome",
           parent_enabled: "utls_enabled", advanced: true },
 

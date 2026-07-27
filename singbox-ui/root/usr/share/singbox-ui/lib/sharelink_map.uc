@@ -36,21 +36,29 @@ function is_true(v) {
     return s === "1" || s === "true" || s === "yes" || s === "on";
 }
 
-// UTLS_FINGERPRINTS — the only values sing-box's utls.fingerprint accepts.
-// A link carrying anything else (a typo, an Xray-only profile) must not reach
-// sing-box: an unknown fingerprint is a FATAL config error, so normalise to
-// chrome (S3).
+// UTLS_FINGERPRINTS — the only values sing-box's utls.fingerprint accepts
+// (common/tls/utls_client.go). A link carrying anything else (a typo, an
+// Xray-only profile) must not reach sing-box: an unknown fingerprint is a FATAL
+// config error, so normalise to chrome (S3).
+//
+// THIS IS THE ONE LIST. It used to disagree with the descriptor's enum and with
+// the frontend importer's copy in both directions: `randomizedalpn` /
+// `randomizednoalpn` are Xray names sing-box rejects (so the allowlist was
+// waving through the exact thing it exists to stop), while `qq` and `random`
+// are real sing-box values it was rewriting to chrome. Mihomo hands out
+// `random` as a matter of course.
 const UTLS_FINGERPRINTS = {
     chrome: true, firefox: true, edge: true, safari: true, "360": true,
-    ios: true, android: true, randomized: true, randomizedalpn: true,
-    randomizednoalpn: true,
+    qq: true, ios: true, android: true, random: true, randomized: true,
 };
 
 function normalize_fp(v) {
     if (v == null) return "";
-    let s = `${v}`;
-    if (!length(s)) return "";
-    return UTLS_FINGERPRINTS[lc(s)] ? lc(s) : "chrome";
+    let s = lc(`${v}`);
+    // "none" is how Clash/Xray spell "no fingerprint at all" — it must come back
+    // empty, not be rewritten to chrome (which would silently turn uTLS ON).
+    if (!length(s) || s === "none") return "";
+    return UTLS_FINGERPRINTS[s] ? s : "chrome";
 }
 
 // alpn_for_transport(list, transport) — the transport constrains the ALPN set:

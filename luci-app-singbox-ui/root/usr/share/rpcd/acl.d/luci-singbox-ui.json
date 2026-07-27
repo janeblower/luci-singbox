@@ -30,7 +30,6 @@
 			"ubus": {
 				"singbox-ui": [
 					"generate",
-					"nftables",
 					"restart",
 					"refresh",
 					"clash_mutate",

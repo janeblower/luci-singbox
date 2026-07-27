@@ -8,10 +8,31 @@
 # already >= CURRENT_SCHEMA, every migration is a no-op and we exit early —
 # this is the canonical idempotency guarantee. (Individual data-shape guards
 # inside each migration_*() are kept as defence-in-depth.)
+#
+# The ladder used to carry ten more steps for legacy shapes older than schema
+# 15 (fakeip list->option, tproxy->inbound, expose_*, fakeip/dns_outbound ->
+# dns_server, ruleset.dns_fakeip, extra_json, inbound mode/json, proxy_type ->
+# type) plus migrate_drop_removed_protocols. They are gone. The last one was
+# not merely dead weight, it was actively destructive: it deleted EVERY inbound
+# with protocol=tun|vmess and every outbound of type vmess|tuic|anytls|ssh|
+# interface. All of those protocols came BACK (tun.uc, vmess.uc, tuic.uc,
+# anytls.uc, ssh.uc all exist and are in the UI dropdowns), so on a fresh
+# install — where the shipped config has no _meta, hence cur_ver=0 — the very
+# first boot deleted the seeded tun_in, and on any upgrade from schema <19 it
+# deleted live user outbounds. `interface` is the only type that never came
+# back, and nothing writes it any more now that proxy_type->type is gone.
 # ---------------------------------------------------------------------------
 CURRENT_SCHEMA=19
 
-cur_ver=$(uci -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
+# uci CLI does not honour UCI_CONFIG_DIR, so tests need an explicit seam (the
+# same one seed-rulesets.sh uses). Default is the real binary. Without it this
+# whole file could only ever be exercised against the live /etc/config, which
+# is why its cross-tests were gated on `command -v uci` and therefore never ran.
+# shellcheck disable=SC2086  # SINGBOX_UCI deliberately carries flags (-c <dir>)
+UCI="${SINGBOX_UCI:-uci}"
+uci_() { $UCI "$@"; }
+
+cur_ver=$(uci_ -q get singbox-ui._meta.schema_version 2>/dev/null || echo 0)
 case "$cur_ver" in
 	''|*[!0-9]*) cur_ver=0 ;;
 esac
@@ -27,84 +48,6 @@ rm -f /tmp/luci-indexcache /tmp/luci-modulecache/* 2>/dev/null
 /etc/init.d/rpcd reload >/dev/null 2>&1
 
 # ---------------------------------------------------------------------------
-# Migrate legacy FakeIP list form (multiple `list inet*_range`) to scalar
-# `option inet*_range`. sing-box 1.12+ rejects array form; we now expose only
-# the first element in the UI. Other elements are dropped with a warning.
-# ---------------------------------------------------------------------------
-migrate_fakeip_list_to_option() {
-	# $1 = inet4_range | inet6_range
-	# `uci get` for a list option returns values space-joined.
-	_mig_raw=$(uci -q get singbox-ui.fakeip."$1" 2>/dev/null || true)
-	[ -n "$_mig_raw" ] || return 0
-
-	# If it was already a scalar option, `uci show` won't include a numeric
-	# index. List form shows like:  singbox-ui.fakeip.inet4_range='1.2.3.0/24 4.5.6.0/16'
-	# in `uci get`, and `uci show` lists multiple `=` lines per element only
-	# in newer uci. The simplest heuristic: count words in $_mig_raw.
-	_mig_first="${_mig_raw%% *}"
-	_mig_rest="${_mig_raw#"$_mig_first"}"
-	if [ -n "$_mig_rest" ]; then
-		logger -t singbox-ui "FakeIP $1 migration: keeping '$_mig_first', dropping: $_mig_rest"
-	fi
-
-	# Re-set as a scalar option (uci delete first removes the list typing).
-	uci -q delete singbox-ui.fakeip."$1" >/dev/null 2>&1 || true
-	uci -q set    singbox-ui.fakeip."$1"="$_mig_first"
-}
-
-migrate_fakeip_list_to_option inet4_range
-migrate_fakeip_list_to_option inet6_range
-
-# ---------------------------------------------------------------------------
-# Migrate the legacy single `tproxy` section into an `inbound` section
-# (protocol=tproxy). The Inbounds tab replaces the old derived model.
-# Idempotent: only runs while a `tproxy` section still exists, and removes it.
-# ---------------------------------------------------------------------------
-migrate_tproxy_to_inbound() {
-	# Section type check: `uci get singbox-ui.tproxy` returns the type name.
-	_t=$(uci -q get singbox-ui.tproxy 2>/dev/null || true)
-	[ "$_t" = "tproxy" ] || return 0
-
-	_en=$(uci -q get singbox-ui.tproxy.enabled 2>/dev/null || echo 0)
-	_port=$(uci -q get singbox-ui.tproxy.port 2>/dev/null || echo 7893)
-	_hj=$(uci -q get singbox-ui.tproxy.hijack_dns 2>/dev/null || echo 0)
-	_ifaces=$(uci -q get singbox-ui.tproxy.interface 2>/dev/null || echo br-lan)
-
-	# Create (or overwrite) the named inbound section.
-	uci -q set singbox-ui.tproxy_in='inbound'
-	uci -q set singbox-ui.tproxy_in.enabled="$_en"
-	uci -q set singbox-ui.tproxy_in.mode='constructor'
-	uci -q set singbox-ui.tproxy_in.protocol='tproxy'
-	uci -q set singbox-ui.tproxy_in.listen='::'
-	uci -q set singbox-ui.tproxy_in.listen_port="$_port"
-	uci -q set singbox-ui.tproxy_in.hijack_dns="$_hj"
-	uci -q set singbox-ui.tproxy_in.nft_rules='1'
-	uci -q delete singbox-ui.tproxy_in.interface 2>/dev/null || true
-	for w in $_ifaces; do
-		uci -q add_list singbox-ui.tproxy_in.interface="$w"
-	done
-
-	uci -q delete singbox-ui.tproxy
-}
-
-migrate_tproxy_to_inbound
-
-# ---------------------------------------------------------------------------
-# Drop the removed per-outbound `expose_*` options from all outbound sections.
-# ---------------------------------------------------------------------------
-migrate_drop_expose() {
-	for _sec in $(uci -q show singbox-ui 2>/dev/null \
-		| sed -n 's/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
-		for _o in expose_proxy expose_type expose_port expose_listen; do
-			uci -q delete "singbox-ui.$_sec.$_o" 2>/dev/null || true
-		done
-	done
-	return 0
-}
-
-migrate_drop_expose
-
-# ---------------------------------------------------------------------------
 # Create default sections for Phase 2 features if they don't exist yet.
 # These match `etc/config/singbox-ui` defaults and let users see the sections
 # in LuCI without manually editing UCI.
@@ -112,103 +55,42 @@ migrate_drop_expose
 ensure_section() {
 	# $1 = section name, $2 = section type
 	# Returns 0 if newly created, 1 if it already existed (caller can branch).
-	if ! uci -q get "singbox-ui.$1" >/dev/null 2>&1; then
-		uci -q set "singbox-ui.$1=$2"
+	if ! uci_ -q get "singbox-ui.$1" >/dev/null 2>&1; then
+		uci_ -q set "singbox-ui.$1=$2"
 		return 0
 	fi
 	return 1
 }
 
 if ensure_section log log; then
-	uci -q set singbox-ui.log.enabled='1'
-	uci -q set singbox-ui.log.level='info'
+	uci_ -q set singbox-ui.log.enabled='1'
+	uci_ -q set singbox-ui.log.level='info'
 fi
 
 if ensure_section cache cache; then
-	uci -q set singbox-ui.cache.enabled='0'
-	uci -q set singbox-ui.cache.path='/tmp/singbox-ui-cache.db'
+	uci_ -q set singbox-ui.cache.enabled='0'
+	uci_ -q set singbox-ui.cache.path='/tmp/singbox-ui-cache.db'
 fi
 
 # Phase E: ensure the 'plugins' manager section exists.
 ensure_section plugins singbox-ui
 
 # ---------------------------------------------------------------------------
-# DNS model migration to typed dns_server/dns_rule/dns (piece C).
-# fakeip list→option migration above runs first, so ranges are scalar here.
-# ---------------------------------------------------------------------------
-migrate_fakeip_to_dns_server() {
-	[ "$(uci -q get singbox-ui.fakeip 2>/dev/null)" = "fakeip" ] || return 0
-	_en=$(uci -q get singbox-ui.fakeip.enabled 2>/dev/null || echo 0)
-	_v4=$(uci -q get singbox-ui.fakeip.inet4_range 2>/dev/null || echo '198.18.0.0/15')
-	_v6=$(uci -q get singbox-ui.fakeip.inet6_range 2>/dev/null || echo 'fc00::/18')
-	uci -q delete singbox-ui.fakeip
-	uci -q set singbox-ui.fakeip='dns_server'
-	uci -q set singbox-ui.fakeip.enabled="$_en"
-	uci -q set singbox-ui.fakeip.type='fakeip'
-	uci -q set singbox-ui.fakeip.inet4_range="$_v4"
-	[ -n "$_v6" ] && uci -q set singbox-ui.fakeip.inet6_range="$_v6"
-}
-migrate_fakeip_to_dns_server
-
-migrate_dns_outbound_to_server() {
-	[ "$(uci -q get singbox-ui.dns_outbound 2>/dev/null)" = "dns_outbound" ] || return 0
-	_addr=$(uci -q get singbox-ui.dns_outbound.address 2>/dev/null || echo '')
-	_det=$(uci -q get singbox-ui.dns_outbound.detour 2>/dev/null || echo 'direct')
-	uci -q set singbox-ui.out_dns='dns_server'
-	uci -q set singbox-ui.out_dns.enabled='1'
-	uci -q set singbox-ui.out_dns.detour="$_det"
-	case "$_addr" in
-		https://*) uci -q set singbox-ui.out_dns.type='https'
-		           _hp=${_addr#https://}; _host=${_hp%%/*}; _path=/${_hp#*/}
-		           uci -q set singbox-ui.out_dns.server="${_host%%:*}"
-		           uci -q set singbox-ui.out_dns.server_port='443'
-		           [ "$_path" != "/$_hp" ] && uci -q set singbox-ui.out_dns.path="$_path" ;;
-		tls://*)   uci -q set singbox-ui.out_dns.type='tls'
-		           uci -q set singbox-ui.out_dns.server="${_addr#tls://}" ;;
-		*)         uci -q set singbox-ui.out_dns.type='udp'
-		           uci -q set singbox-ui.out_dns.server="$_addr" ;;
-	esac
-	uci -q set singbox-ui.dns='dns' 2>/dev/null || true
-	uci -q set singbox-ui.dns.final='out_dns'
-	uci -q delete singbox-ui.dns_outbound
-}
-migrate_dns_outbound_to_server
-
-migrate_ruleset_dns_fakeip() {
-	for _sec in $(uci -q show singbox-ui 2>/dev/null | sed -n 's/^singbox-ui\.\([^.]*\)=ruleset$/\1/p'); do
-		if [ "$(uci -q get "singbox-ui.$_sec.dns_fakeip" 2>/dev/null)" = "1" ]; then
-			_tag=$(uci -q get "singbox-ui.$_sec.dns_fakeip_tag" 2>/dev/null || echo 'fakeip')
-			_rule="dnsrule_$_sec"
-			uci -q set "singbox-ui.$_rule=dns_rule"
-			uci -q set "singbox-ui.$_rule.enabled=1"
-			uci -q delete "singbox-ui.$_rule.ruleset" 2>/dev/null || true
-			uci -q add_list "singbox-ui.$_rule.ruleset=$_sec"
-			uci -q set "singbox-ui.$_rule.server=$_tag"
-		fi
-		for _o in dns_fakeip dns_fakeip_tag; do
-			uci -q delete "singbox-ui.$_sec.$_o" 2>/dev/null || true
-		done
-	done
-	return 0
-}
-migrate_ruleset_dns_fakeip
-
-# ---------------------------------------------------------------------------
 # Ensure a clash_api section exists and has a stable random secret.
 # ---------------------------------------------------------------------------
 if ensure_section clash_api clash_api; then
-	uci -q set singbox-ui.clash_api.enabled='0'
-	uci -q set singbox-ui.clash_api.listen='127.0.0.1'
-	uci -q set singbox-ui.clash_api.port='9090'
+	uci_ -q set singbox-ui.clash_api.enabled='0'
+	uci_ -q set singbox-ui.clash_api.listen='127.0.0.1'
+	uci_ -q set singbox-ui.clash_api.port='9090'
 fi
 
 ensure_clash_api_secret() {
-	[ "$(uci -q get singbox-ui.clash_api 2>/dev/null)" = "clash_api" ] || return 0
-	_sec=$(uci -q get singbox-ui.clash_api.secret 2>/dev/null || true)
+	[ "$(uci_ -q get singbox-ui.clash_api 2>/dev/null)" = "clash_api" ] || return 0
+	_sec=$(uci_ -q get singbox-ui.clash_api.secret 2>/dev/null || true)
 	[ -n "$_sec" ] && return 0
 	_new=$(head -c16 /dev/urandom 2>/dev/null | hexdump -v -e '/1 "%02x"' 2>/dev/null)
 	[ -n "$_new" ] || _new=$(date +%s)$$
-	uci -q set singbox-ui.clash_api.secret="$_new"
+	uci_ -q set singbox-ui.clash_api.secret="$_new"
 }
 ensure_clash_api_secret
 
@@ -217,35 +99,35 @@ ensure_clash_api_secret
 # /tmp path) into the new storage-mode model. Idempotent.
 # ---------------------------------------------------------------------------
 migrate_cache_storage() {
-	[ "$(uci -q get singbox-ui.cache 2>/dev/null)" = "cache" ] || \
-		uci -q set singbox-ui.cache='cache'
+	[ "$(uci_ -q get singbox-ui.cache 2>/dev/null)" = "cache" ] || \
+		uci_ -q set singbox-ui.cache='cache'
 
 	# If storage is already set, the user (or this script) has migrated.
-	[ -n "$(uci -q get singbox-ui.cache.storage 2>/dev/null)" ] && return 0
+	[ -n "$(uci_ -q get singbox-ui.cache.storage 2>/dev/null)" ] && return 0
 
 	_was_legacy=0
-	_path=$(uci -q get singbox-ui.cache.path 2>/dev/null || true)
+	_path=$(uci_ -q get singbox-ui.cache.path 2>/dev/null || true)
 	case "$_path" in
 		""|"/tmp/singbox-ui-cache.db")
-			uci -q set singbox-ui.cache.storage='ram'
-			uci -q delete singbox-ui.cache.path 2>/dev/null || true
+			uci_ -q set singbox-ui.cache.storage='ram'
+			uci_ -q delete singbox-ui.cache.path 2>/dev/null || true
 			_was_legacy=1 ;;
 		"/etc/sing-box/cache.db")
-			uci -q set singbox-ui.cache.storage='flash'
-			uci -q delete singbox-ui.cache.path 2>/dev/null || true ;;
+			uci_ -q set singbox-ui.cache.storage='flash'
+			uci_ -q delete singbox-ui.cache.path 2>/dev/null || true ;;
 		*)
-			uci -q set singbox-ui.cache.storage='custom' ;;
+			uci_ -q set singbox-ui.cache.storage='custom' ;;
 	esac
 
 	# Only flip the shipped-default disabled state. A user who explicitly
 	# disabled cache after customising path keeps their setting.
 	if [ "$_was_legacy" = "1" ]; then
-		uci -q set singbox-ui.cache.enabled='1'
+		uci_ -q set singbox-ui.cache.enabled='1'
 	fi
 
 	# store_fakeip default: only set if absent.
-	_sf=$(uci -q get singbox-ui.cache.store_fakeip 2>/dev/null || echo '')
-	[ "$_sf" = "" ] && uci -q set singbox-ui.cache.store_fakeip='1'
+	_sf=$(uci_ -q get singbox-ui.cache.store_fakeip 2>/dev/null || echo '')
+	[ "$_sf" = "" ] && uci_ -q set singbox-ui.cache.store_fakeip='1'
 }
 migrate_cache_storage
 
@@ -254,154 +136,76 @@ migrate_cache_storage
 # section with that name already exists (user may have customised it).
 # ---------------------------------------------------------------------------
 ensure_dns_inbound() {
-	[ -n "$(uci -q get singbox-ui.dns_in 2>/dev/null)" ] && return 0
-	uci -q set singbox-ui.dns_in='inbound'
-	uci -q set singbox-ui.dns_in.enabled='1'
-	uci -q set singbox-ui.dns_in.protocol='direct'
-	uci -q set singbox-ui.dns_in.listen='127.0.0.53'
-	uci -q set singbox-ui.dns_in.listen_port='53'
-	uci -q set singbox-ui.dns_in.network='udp'
-	uci -q set singbox-ui.dns_in.dns_listener='1'
+	[ -n "$(uci_ -q get singbox-ui.dns_in 2>/dev/null)" ] && return 0
+	uci_ -q set singbox-ui.dns_in='inbound'
+	uci_ -q set singbox-ui.dns_in.enabled='1'
+	uci_ -q set singbox-ui.dns_in.protocol='direct'
+	uci_ -q set singbox-ui.dns_in.listen='127.0.0.53'
+	uci_ -q set singbox-ui.dns_in.listen_port='53'
+	uci_ -q set singbox-ui.dns_in.network='udp'
+	uci_ -q set singbox-ui.dns_in.dns_listener='1'
 }
 ensure_dns_inbound
 
 # ---------------------------------------------------------------------------
-# Drop deprecated `extra_json` option from inbound/outbound sections.
-# The constructor now covers all needed fields; raw-JSON merging is gone.
-# ---------------------------------------------------------------------------
-purge_extra_json() {
-	for _t in inbound outbound; do
-		for _sec in $(uci -q show singbox-ui 2>/dev/null \
-			| sed -n "s/^singbox-ui\\.\\([^.]*\\)=$_t\$/\\1/p"); do
-			uci -q delete "singbox-ui.$_sec.extra_json" 2>/dev/null || true
-		done
-	done
-}
-purge_extra_json
-
-# ---------------------------------------------------------------------------
-# Drop legacy `mode` and `inbound_json` from inbound sections.
-# mode='json' sections lose their raw JSON (can't safely parse arbitrary JSON
-# in /bin/sh); the section is disabled so the daemon doesn't get fed stale
-# config. Users re-import via the new UI button.
-# ---------------------------------------------------------------------------
-purge_inbound_mode_json() {
-	for _sec in $(uci -q show singbox-ui 2>/dev/null \
-		| sed -n 's/^singbox-ui\.\([^.]*\)=inbound$/\1/p'); do
-		_mode=$(uci -q get "singbox-ui.$_sec.mode" 2>/dev/null || echo '')
-		_raw=$(uci -q get "singbox-ui.$_sec.inbound_json" 2>/dev/null || echo '')
-		if [ "$_mode" = "json" ] && [ -n "$_raw" ]; then
-			uci -q set "singbox-ui.$_sec.enabled"='0'
-			logger -t singbox-ui "inbound '$_sec' was mode=json; disabled on upgrade. Re-import via UI."
-		fi
-		uci -q delete "singbox-ui.$_sec.mode" 2>/dev/null || true
-		uci -q delete "singbox-ui.$_sec.inbound_json" 2>/dev/null || true
-	done
-}
-purge_inbound_mode_json
-
-# ---------------------------------------------------------------------------
-# Outbound: rename proxy_type → type, collapse constructor+protocol into one
-# field, drop legacy proxy_type=json (disable + strip).
-# ---------------------------------------------------------------------------
-migrate_outbound_type() {
-	for _sec in $(uci -q show singbox-ui 2>/dev/null \
-		| sed -n 's/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
-		_pt=$(uci -q get "singbox-ui.$_sec.proxy_type" 2>/dev/null || echo '')
-		_proto=$(uci -q get "singbox-ui.$_sec.protocol" 2>/dev/null || echo '')
-		_have_type=$(uci -q get "singbox-ui.$_sec.type" 2>/dev/null || echo '')
-
-		# Already migrated.
-		[ -n "$_have_type" ] && {
-			uci -q delete "singbox-ui.$_sec.proxy_type" 2>/dev/null || true
-			uci -q delete "singbox-ui.$_sec.protocol"   2>/dev/null || true
-			uci -q delete "singbox-ui.$_sec.proxy_json" 2>/dev/null || true
-			continue
-		}
-
-		case "$_pt" in
-			constructor)
-				if [ -n "$_proto" ]; then
-					uci -q set "singbox-ui.$_sec.type"="$_proto"
-				else
-					uci -q set "singbox-ui.$_sec.enabled"='0'
-					logger -t singbox-ui "outbound '$_sec' constructor without protocol; disabled."
-				fi ;;
-			interface|url|subscription)
-				uci -q set "singbox-ui.$_sec.type"="$_pt" ;;
-			json)
-				uci -q set "singbox-ui.$_sec.enabled"='0'
-				logger -t singbox-ui "outbound '$_sec' was proxy_type=json; disabled. Re-import via UI." ;;
-			"")
-				: ;;  # untouched — likely a fresh section
-			*)
-				uci -q set "singbox-ui.$_sec.type"="$_pt" ;;
-		esac
-
-		uci -q delete "singbox-ui.$_sec.proxy_type" 2>/dev/null || true
-		uci -q delete "singbox-ui.$_sec.protocol"   2>/dev/null || true
-		uci -q delete "singbox-ui.$_sec.proxy_json" 2>/dev/null || true
-	done
-}
-migrate_outbound_type
-
-# ---------------------------------------------------------------------------
 # Phase E2 (migration A): rename UCI keys on surviving protocols so the new
 # descriptors (T7–T13) can read them. Idempotent: each rename only fires
-# while the old key is still set.
+# while the old key is still set. Cannot be dropped: a box on schema 15 still
+# holds `security`/`transport`/`utls_fingerprint`, which no descriptor reads —
+# it would lose TLS and its transport silently.
 # ---------------------------------------------------------------------------
 migrate_rename_e2_keys() {
 	local sid
 
-	for sid in $(uci -q show singbox-ui 2>/dev/null \
+	for sid in $(uci_ -q show singbox-ui 2>/dev/null \
 		| sed -n 's/^singbox-ui\.\([^.]*\)=inbound$/\1/p; s/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
 
 		# transport → transport_type
 		local tv
-		tv=$(uci -q get "singbox-ui.$sid.transport" 2>/dev/null || true)
-		if [ -n "$tv" ] && [ -z "$(uci -q get "singbox-ui.$sid.transport_type" 2>/dev/null || true)" ]; then
-			uci -q set "singbox-ui.$sid.transport_type=$tv"
-			uci -q delete "singbox-ui.$sid.transport"
+		tv=$(uci_ -q get "singbox-ui.$sid.transport" 2>/dev/null || true)
+		if [ -n "$tv" ] && [ -z "$(uci_ -q get "singbox-ui.$sid.transport_type" 2>/dev/null || true)" ]; then
+			uci_ -q set "singbox-ui.$sid.transport_type=$tv"
+			uci_ -q delete "singbox-ui.$sid.transport"
 			# httpupgrade host key split
 			if [ "$tv" = "httpupgrade" ]; then
 				local hv
-				hv=$(uci -q get "singbox-ui.$sid.transport_host" 2>/dev/null || true)
+				hv=$(uci_ -q get "singbox-ui.$sid.transport_host" 2>/dev/null || true)
 				if [ -n "$hv" ]; then
-					uci -q set "singbox-ui.$sid.transport_host_httpupgrade=$hv"
-					uci -q delete "singbox-ui.$sid.transport_host"
+					uci_ -q set "singbox-ui.$sid.transport_host_httpupgrade=$hv"
+					uci_ -q delete "singbox-ui.$sid.transport_host"
 				fi
 			fi
 		fi
 
 		# tls_ech → tls_ech_enabled
 		local ev
-		ev=$(uci -q get "singbox-ui.$sid.tls_ech" 2>/dev/null || true)
-		if [ -n "$ev" ] && [ -z "$(uci -q get "singbox-ui.$sid.tls_ech_enabled" 2>/dev/null || true)" ]; then
-			uci -q set "singbox-ui.$sid.tls_ech_enabled=$ev"
-			uci -q delete "singbox-ui.$sid.tls_ech"
+		ev=$(uci_ -q get "singbox-ui.$sid.tls_ech" 2>/dev/null || true)
+		if [ -n "$ev" ] && [ -z "$(uci_ -q get "singbox-ui.$sid.tls_ech_enabled" 2>/dev/null || true)" ]; then
+			uci_ -q set "singbox-ui.$sid.tls_ech_enabled=$ev"
+			uci_ -q delete "singbox-ui.$sid.tls_ech"
 		fi
 
 		# security → tls_enabled + reality_enabled
 		local sec
-		sec=$(uci -q get "singbox-ui.$sid.security" 2>/dev/null || true)
+		sec=$(uci_ -q get "singbox-ui.$sid.security" 2>/dev/null || true)
 		if [ -n "$sec" ]; then
 			case "$sec" in
 				tls)
-					uci -q set "singbox-ui.$sid.tls_enabled=1"
+					uci_ -q set "singbox-ui.$sid.tls_enabled=1"
 					;;
 				reality)
-					uci -q set "singbox-ui.$sid.tls_enabled=1"
-					uci -q set "singbox-ui.$sid.reality_enabled=1"
+					uci_ -q set "singbox-ui.$sid.tls_enabled=1"
+					uci_ -q set "singbox-ui.$sid.reality_enabled=1"
 					;;
 			esac
-			uci -q delete "singbox-ui.$sid.security"
+			uci_ -q delete "singbox-ui.$sid.security"
 		fi
 
 		# utls_fingerprint set → utls_enabled=1 (preserve the value)
 		local uf
-		uf=$(uci -q get "singbox-ui.$sid.utls_fingerprint" 2>/dev/null || true)
-		if [ -n "$uf" ] && [ -z "$(uci -q get "singbox-ui.$sid.utls_enabled" 2>/dev/null || true)" ]; then
-			uci -q set "singbox-ui.$sid.utls_enabled=1"
+		uf=$(uci_ -q get "singbox-ui.$sid.utls_fingerprint" 2>/dev/null || true)
+		if [ -n "$uf" ] && [ -z "$(uci_ -q get "singbox-ui.$sid.utls_enabled" 2>/dev/null || true)" ]; then
+			uci_ -q set "singbox-ui.$sid.utls_enabled=1"
 		fi
 	done
 
@@ -411,51 +215,15 @@ migrate_rename_e2_keys() {
 migrate_rename_e2_keys
 
 # ---------------------------------------------------------------------------
-# Phase E2 (migration B): drop UCI sections for protocols that are no longer
-# supported by the UI (TUN/VMess inbound; VMess/TUIC/AnyTLS/SSH/interface
-# outbound). Spec: docs/superpowers/specs/2026-06-08-protocol-builder-rewrite-design.md
-# ---------------------------------------------------------------------------
-migrate_drop_removed_protocols() {
-	local sid val
-	local dropped=0
-
-	for sid in $(uci -q show singbox-ui 2>/dev/null \
-		| sed -n 's/^singbox-ui\.\([^.]*\)=inbound$/\1/p'); do
-		val=$(uci -q get "singbox-ui.$sid.protocol" 2>/dev/null || true)
-		case "$val" in
-			tun|vmess)
-				uci -q delete "singbox-ui.$sid" && dropped=$((dropped+1))
-				logger -t singbox-ui "E2 migration: dropped inbound $sid (protocol=$val)"
-				;;
-		esac
-	done
-
-	for sid in $(uci -q show singbox-ui 2>/dev/null \
-		| sed -n 's/^singbox-ui\.\([^.]*\)=outbound$/\1/p'); do
-		val=$(uci -q get "singbox-ui.$sid.type" 2>/dev/null || true)
-		case "$val" in
-			vmess|tuic|anytls|ssh|interface)
-				uci -q delete "singbox-ui.$sid" && dropped=$((dropped+1))
-				logger -t singbox-ui "E2 migration: dropped outbound $sid (type=$val)"
-				;;
-		esac
-	done
-
-	return 0
-}
-
-migrate_drop_removed_protocols
-
-# ---------------------------------------------------------------------------
 # Finalise (Phase C2.1.3): set the schema version sentinel and commit ONCE.
 # All migrations above were pure in-memory edits, so this single commit is
 # the only point at which UCI files are rewritten — crash-safe between
 # migrations. Also covers the fresh-install case (no migrations fired) by
 # initialising _meta unconditionally.
 # ---------------------------------------------------------------------------
-uci -q set singbox-ui._meta='_meta'
-uci -q set singbox-ui._meta.schema_version="$CURRENT_SCHEMA"
-uci commit singbox-ui
+uci_ -q set singbox-ui._meta='_meta'
+uci_ -q set singbox-ui._meta.schema_version="$CURRENT_SCHEMA"
+uci_ commit singbox-ui
 
 logger -t singbox-ui "event=migration.completed ts=$(date +%s) schema_version=$CURRENT_SCHEMA"
 

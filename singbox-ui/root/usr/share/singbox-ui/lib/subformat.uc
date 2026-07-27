@@ -34,6 +34,7 @@
 
 let helpers   = require("helpers");
 let sharelink = require("sharelink");
+let sharelink_map = require("sharelink_map");
 
 // sing-box outbound types we accept from a JSON subscription. A subscription
 // has no business shipping `direct`/`block`/`selector`/`urltest` — those are
@@ -279,9 +280,13 @@ function clash_tls(p, force) {
 	if (is_yes(p["skip-cert-verify"])) t.insecure = true;
 	let alpn = alpn_of(p.alpn);
 	if (alpn) t.alpn = alpn;
-	let fp = p["client-fingerprint"];
-	if (fp != null && fp !== "" && fp !== "none")
-		t.utls = { enabled: true, fingerprint: "" + fp };
+	// Through the allowlist, never verbatim. Mihomo routinely serves `random` or
+	// `qq`, and before those were added to the list any unknown value went
+	// straight into the config — where sing-box treats an unknown fingerprint as
+	// FATAL, so the daemon did not start at all.
+	let fp = sharelink_map.normalize_fp(p["client-fingerprint"]);
+	if (length(fp))
+		t.utls = { enabled: true, fingerprint: fp };
 	if (type(reality) === "object") {
 		let r = { enabled: true };
 		if (reality["public-key"] != null) r.public_key = "" + reality["public-key"];
@@ -483,9 +488,9 @@ function xray_stream(ss, out) {
 		if (is_yes(ts.allowInsecure)) t.insecure = true;
 		let alpn = alpn_of(ts.alpn);
 		if (alpn) t.alpn = alpn;
-		let fp = ts.fingerprint;
-		if (fp != null && fp !== "" && fp !== "none")
-			t.utls = { enabled: true, fingerprint: "" + fp };
+		let fp = sharelink_map.normalize_fp(ts.fingerprint);
+		if (length(fp))
+			t.utls = { enabled: true, fingerprint: fp };
 		if (sec === "reality") {
 			let r = { enabled: true };
 			if (ts.publicKey != null && ts.publicKey !== "") r.public_key = "" + ts.publicKey;

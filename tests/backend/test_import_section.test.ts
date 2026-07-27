@@ -37,9 +37,7 @@ config route_rule 'rr1'
 \toption outbound 'v1'
 `;
 
-const ENV =
-  `UCI_CONFIG_DIR=${TMP} UCODE_LIB=${SB}/lib ` +
-  `EXPORT_SECTION_UC=${SB}/export_section.uc IMPORT_SECTION_UC=${SB}/import_section.uc`;
+const ENV = `UCI_CONFIG_DIR=${TMP} UCODE_LIB=${SB}/lib`;
 
 interface ImportResult {
   status: string;

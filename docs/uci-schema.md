@@ -705,7 +705,7 @@ There IS a named `subscriptions` section carrying the auto-update toggle:
 
 ## `global`
 
-Named section `singbox-ui.@global[0]`, seeded by `90-singbox-ui-fwmark`. Security-relevant: these drive the transparent-proxy nft ruleset.
+Anonymous section `singbox-ui.@global[0]`, shipped in `etc/config/singbox-ui`. Security-relevant: these drive the transparent-proxy nft ruleset. The values below are also the backend's own fallbacks (`safe_fwmark(..., 0x40000000)`), so an install whose config predates the section behaves identically.
 
 | Field | Type | Values | Required | Description |
 |---|---|---|---|---|

@@ -38,14 +38,10 @@
 
 let helpers = require("helpers");
 
-const SHARED_DISPATCH = {
-    tls:       { key: "tls" },
-    transport: { key: "transport" },
-    multiplex: { key: "multiplex" },
-    quic:      { merge: true },
-    dial:      { merge: true },
-    listen:    { merge: true },
-};
+// THE list lives in _filler — this file is its inverse, so a second copy could
+// only ever disagree with it. (No cycle: _filler eagerly requires helpers, dial
+// and users, none of which reach back here.)
+const SHARED_DISPATCH = require("builder._filler").SHARED_DISPATCH;
 
 // _gated(e) — the mirror of _filler._emit_scalar's min_version check: an entry the
 // running core is too old for is one _filler will NOT emit, so this file must not
@@ -60,7 +56,14 @@ const SHARED_DISPATCH = {
 //     onto a 1.12 core the failure is LOUD (init.d's `sing-box check` refuses the
 //     start and says which field) instead of the value quietly vanishing.
 function _gated(e) {
-    return e.min_version != null && !helpers.core_at_least(e.min_version);
+    if (e.min_version != null && !helpers.core_at_least(e.min_version)) return true;
+    // The upper bound, symmetrically: a key removed in a newer core is not
+    // emitted either, so `known` must not claim it. The explicit length() guard
+    // keeps core_at_least()'s fail-open (unknown version -> true) from gating
+    // everything off.
+    if (e.max_version != null && length(helpers.core_version()) &&
+        helpers.core_at_least(e.max_version)) return true;
+    return false;
 }
 
 // _uncoerce(f, v) — JSON value -> UCI value. Mirrors _filler._emit_scalar's

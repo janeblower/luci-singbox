@@ -436,6 +436,15 @@ function tmp_paths(name) {
 		txt:  `${TMPDIR}/sub_${name}.txt`,
 		meta: `${TMPDIR}/sub_${name}.meta`,
 		stat: `${TMPDIR}/sub_${name}.stat`,
+		// The .profile marker is the ONLY record of which (url, ua, hwid) the
+		// cached nodes belong to, and it used to live on flash alone. With
+		// sub_cache_persist='0' the flash copy is deleted after every fetch, so
+		// the C2 checks (invalidate-on-profile-change in fetch_one, and the C2
+		// clause in any_subs_stale) never fired: change sub_url, press Apply, and
+		// the router kept routing through the OLD provider until sub_interval ran
+		// out. A tmpfs twin fixes that without putting the token from sub_url on
+		// flash, which is exactly what persist=0 promises.
+		profile: `${TMPDIR}/sub_${name}.profile`,
 	};
 }
 
@@ -445,6 +454,22 @@ function tmp_paths(name) {
 // the dashboard can poll to know where the run is.
 const PROG_PATH = `${TMPDIR}/sub_progress.json`;
 function prog_write(p) { write_atomic(PROG_PATH, sprintf("%J", p), 0o644); }
+
+// prog_finalize() — mark the side-car "not running" without having done a walk.
+//
+// rpcd stamps running:1 BEFORE it forks (so the first poll cannot read the
+// PREVIOUS run's file and declare the refresh over before it began), and the
+// walk below only starts writing progress once it holds the lock. Every path
+// that returns in between therefore left running:1 behind, and the browser sat
+// on `waitSubRefresh` for its full 200 x 1500ms = ~5 minutes.
+//
+// Only TERMINAL branches call this. "Another refresh holds the lock" must NOT:
+// there IS a live run — most often the */15 cron tick — and clearing the flag
+// would tell the browser that someone else's fetch had finished.
+function prog_finalize() {
+	prog_write({ running: 0, total: 0, done: 0, current: "",
+	             started: time(), finished: time(), results: {} });
+}
 
 // sub_proxy — fetch THIS subscription through a proxy (curl -x). Validated, not
 // escaped-and-hoped: the value crosses into curl's argv, and curl reads a
@@ -477,7 +502,7 @@ function profile_of(cur, name) {
 
 function purge(name) {
 	let t = tmp_paths(name), c = cache_paths(name);
-	for (let p in [t.txt, t.meta, t.stat, c.txt, c.meta, c.stat, c.profile, c.ua])
+	for (let p in [t.txt, t.meta, t.stat, t.profile, c.txt, c.meta, c.stat, c.profile, c.ua])
 		helpers.unlink_quiet(p);
 }
 
@@ -560,6 +585,16 @@ function download(job) {
 	for (let i = 0; i < RETRIES; i++) {
 		helpers.unlink_quiet(job.body_path);
 		helpers.unlink_quiet(job.hdr_path);
+		// Create both 0600 BEFORE curl writes them. `curl -o` truncates an
+		// existing file and keeps its mode, so this is what stops the raw
+		// subscription body — passwords, UUIDs, the lot — from landing in
+		// /tmp/singbox-ui world-readable. Everything else in this file is
+		// already 0600/0700; the download itself was the hole, and a curl
+		// killed by the timeout leaves that world-readable dump behind.
+		for (let p in [job.body_path, job.hdr_path]) {
+			let f = fs.open(p, "w", 0o600);
+			if (f) f.close();
+		}
 		_fetcher([job]);
 		let rc = job.rc ?? 0;
 		let st = fs.stat(job.body_path);
@@ -657,7 +692,8 @@ function fetch_one(cur, name, timeout) {
 	}
 	let t = tmp_paths(name);
 	let profile = profile_of(cur, name);
-	let cached_profile = _reader(cache_paths(name).profile);
+	// tmpfs first: with persist off it is the only copy there is.
+	let cached_profile = _reader(t.profile) ?? _reader(cache_paths(name).profile);
 
 	// C2: a changed profile means everything we hold for this section describes a
 	// DIFFERENT subscription. Drop it before fetching — keeping it would leave the
@@ -758,6 +794,8 @@ function fetch_one(cur, name, timeout) {
 		skipped: parsed.skipped, format: parsed.format, user_agent: ua_of(ua_used),
 	});
 	write_atomic(t.stat, stat_json, 0o600);
+	// Unconditional: this is what makes profile invalidation work with persist off.
+	write_atomic(t.profile, profile, 0o600);
 
 	if (helpers.uci_get_or_empty(cur, name, "sub_cache_persist") !== "0")
 		persist(name, profile, ua_used ?? "", body, meta_json, stat_json);
@@ -785,6 +823,7 @@ function cmd_fetch_subs(cur, only) {
 	let names = helpers.sections_of_kind(cur, "outbound", "type", "subscription");
 	if (!length(names)) {
 		log_err("fetch_subs: no subscription outbounds configured");
+		prog_finalize();
 		return 0;
 	}
 
@@ -845,7 +884,7 @@ function any_subs_stale(cur, force, only) {
 		if (only != null && name !== only) continue;
 		if (helpers.uci_get_or_empty(cur, name, "enabled") === "0") continue;
 		// C2: a profile change is staleness, regardless of mtime.
-		let cp = _reader(cache_paths(name).profile);
+		let cp = _reader(tmp_paths(name).profile) ?? _reader(cache_paths(name).profile);
 		if (cp != null && trim(cp) !== trim(profile_of(cur, name))) return true;
 		let iv = +helpers.uci_get_or_empty(cur, name, "sub_interval");
 		// !(iv > 0) catches NaN/0/negatives — +"abc" yields NaN and `iv === 0`
@@ -910,17 +949,20 @@ function subs_refresh_allowed(cur, force) {
 
 function cmd_refresh(cur, force, name) {
 	let no_reload = getenv("SINGBOX_NO_RELOAD") === "1";
-	if (!subs_refresh_allowed(cur, force)) return 0;
-	if (any_subs_stale(cur, force, name)) {
-		let changed = cmd_fetch_subs(cur, name);
-		// C3: reload only when the node set really moved. C4: `changed < 0` means
-		// another refresh holds the lock — it will do the reload itself.
-		// #2: never resurrect a DISABLED service from a background cron tick —
-		// crontab does not consult rc.d symlinks, so an operator's `disable` was
-		// silently undone. `reload` = stop+start would start what they turned off.
-		if (changed > 0 && !no_reload && helpers.service_enabled(SINGBOX_INITD))
-			system([SINGBOX_INITD, "reload"]);
-	}
+	// Both of these return WITHOUT ever entering the progress walk, so the
+	// running:1 rpcd stamped before forking has to be cleared here or the
+	// browser spins for ~5 minutes on a refresh that never started.
+	if (!subs_refresh_allowed(cur, force)) { prog_finalize(); return 0; }
+	if (!any_subs_stale(cur, force, name)) { prog_finalize(); return 0; }
+
+	let changed = cmd_fetch_subs(cur, name);
+	// C3: reload only when the node set really moved. C4: `changed < 0` means
+	// another refresh holds the lock — it will do the reload itself.
+	// #2: never resurrect a DISABLED service from a background cron tick —
+	// crontab does not consult rc.d symlinks, so an operator's `disable` was
+	// silently undone. `reload` = stop+start would start what they turned off.
+	if (changed > 0 && !no_reload && helpers.service_enabled(SINGBOX_INITD))
+		system([SINGBOX_INITD, "reload"]);
 	return 0;
 }
 
@@ -960,18 +1002,12 @@ if (length(ARGV)) {
 
 return {
 	_parse_headers_for_test: parse_headers,
-	_preamble_meta_for_test: preamble_meta,
-	_normalize_meta_for_test: normalize_meta,
-	_signature_for_test: signature,
-	_ua_of_for_test: ua_of,
 	_ua_candidates_for_test: ua_candidates,
-	_proxy_of_for_test: proxy_of,
 	_set_io_for_test,
 	_fetcher_real_for_test: function(jobs) { return _fetcher(jobs); },
 	_read_raw_for_test,
 	_cmd_fetch_subs_for_test: function(cur, only) { return cmd_fetch_subs(cur, only); },
 	_cmd_sub_status_for_test: function(cur) { return cmd_sub_status(cur); },
-	_cmd_refresh_for_test: function(cur, force, name) { return cmd_refresh(cur, force, name); },
 	_any_subs_stale_for_test: function(cur, force, only) { return any_subs_stale(cur, force, only); },
 	_subs_refresh_allowed_for_test: function(cur, force) { return subs_refresh_allowed(cur, force); },
 };

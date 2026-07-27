@@ -1,7 +1,6 @@
 #!/usr/bin/ucode -L/usr/share/singbox-ui/lib
 // rpcd handler for singbox-ui. Methods:
 //   generate            run /usr/share/singbox-ui/generate.uc
-//   nftables {action}   run /usr/share/singbox-ui/nftables.uc apply|remove
 //   restart             restart /etc/init.d/singbox-ui (full service restart)
 //   refresh {what}      subscriptions->subscription.uc, rulesets->nft-rulesets.uc, all->both (force)
 //   status              return JSON: { running, subscriptions[], rulesets[] }
@@ -15,8 +14,8 @@
 //   preview_config      dry-run: generate full config to a tmpfile, return body
 //
 // Env overrides (used by tests):
-//   NFTABLES_CMD GENERATE_UC SINGBOX_INITD SUBSCRIPTION_UC RULESETS_UC SINGBOX_TMPDIR SINGBOX_CONFIG
-//   EXPORT_SECTION_UC IMPORT_SECTION_UC CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
+//   GENERATE_UC SINGBOX_INITD SUBSCRIPTION_UC RULESETS_UC SINGBOX_TMPDIR SINGBOX_CONFIG
+//   CURL CLASH_LISTEN CLASH_PORT CLASH_SECRET UCI_CONFIG_DIR
 //   SINGBOX_VARLIB
 
 'use strict';
@@ -24,13 +23,10 @@
 let fs  = require("fs");
 let uci = require("uci");
 
-const NFTABLES_CMD = getenv("NFTABLES_CMD") || "ucode -L /usr/share/singbox-ui/lib /usr/share/singbox-ui/nftables.uc";
 const GENERATE_UC  = getenv("GENERATE_UC")  || "/usr/share/singbox-ui/generate.uc";
 const SINGBOX_INITD = getenv("SINGBOX_INITD") || "/etc/init.d/singbox-ui";
 const SUBSCRIPTION_UC = getenv("SUBSCRIPTION_UC") || "/usr/share/singbox-ui/subscription.uc";
 const RULESETS_UC      = getenv("RULESETS_UC") || "/usr/share/singbox-ui/nft-rulesets.uc";
-const EXPORT_SECTION_UC = getenv("EXPORT_SECTION_UC") || "/usr/share/singbox-ui/export_section.uc";
-const IMPORT_SECTION_UC = getenv("IMPORT_SECTION_UC") || "/usr/share/singbox-ui/import_section.uc";
 const UCODE_LIB    = getenv("UCODE_LIB")    || "/usr/share/singbox-ui/lib";
 const TMPDIR       = getenv("SINGBOX_TMPDIR") || "/tmp/singbox-ui";
 const CONFIG_JSON  = getenv("SINGBOX_CONFIG") || "/tmp/singbox-ui.json";
@@ -62,6 +58,14 @@ function parse_args() {
 
 // sq(s) — single-quote escape for /bin/sh.
 function sq(s) { return "'" + replace(s, "'", "'\\''") + "'"; }
+
+// shq(argv) — one shell-safe command line from an argv array. The four exec
+// helpers below each had their own copy of this loop.
+function shq(argv) {
+	let quoted = [];
+	for (let a in argv) push(quoted, sq(a));
+	return join(" ", quoted);
+}
 
 // pct_encode(s) — RFC3986 percent-encoding of an arbitrary BYTE string. Clash
 // proxy/subscription tags routinely contain spaces and emoji (e.g. "🇺🇸 US-1"),
@@ -103,10 +107,7 @@ function valid_section_name(name) {
 function run(cmd, ...extra) {
 	let argv = (type(cmd) === "array") ? [...cmd] : filter(split(cmd, /\s+/), a => length(a));
 	for (let a in extra) push(argv, a);
-	let quoted = [];
-	for (let a in argv) push(quoted, sq(a));
-	let shcmd = join(" ", quoted) + " >/dev/null 2>&1";
-	return system(shcmd) === 0;
+	return system(shq(argv) + " >/dev/null 2>&1") === 0;
 }
 
 // run_env(argv, env_map) — like run() but prefixes the shell line with one
@@ -117,13 +118,10 @@ function run(cmd, ...extra) {
 // corrupt our JSON response.
 function run_env(cmd, env_map) {
 	let argv = (type(cmd) === "array") ? [...cmd] : filter(split(cmd, /\s+/), a => length(a));
-	let quoted = [];
-	if (type(env_map) === "object") {
-		for (let k, v in env_map) push(quoted, k + "=" + sq(v));
-	}
-	for (let a in argv) push(quoted, sq(a));
-	let shcmd = join(" ", quoted) + " >/dev/null 2>&1";
-	return system(shcmd) === 0;
+	let env = [];
+	if (type(env_map) === "object")
+		for (let k, v in env_map) push(env, k + "=" + sq(v));
+	return system(join(" ", [ ...env, shq(argv) ]) + " >/dev/null 2>&1") === 0;
 }
 
 // run_bg(argv) — fire-and-forget. The child is disowned by the shell and
@@ -137,18 +135,14 @@ function run_env(cmd, env_map) {
 // channel, procd stopping the service), which is exactly the long fetch this
 // fork exists to protect.
 function run_bg(argv) {
-	let quoted = [];
-	for (let a in argv) push(quoted, sq(a));
 	system(["/bin/sh", "-c",
-	        "trap '' HUP; (" + join(" ", quoted) + " >/dev/null 2>&1 &)"]);
+	        "trap '' HUP; (" + shq(argv) + " >/dev/null 2>&1 &)"]);
 }
 
 // run_capture(argv) — like run() but returns child stdout (string) or null.
 // stderr is discarded so it can't corrupt the captured body.
 function run_capture(argv) {
-	let quoted = [];
-	for (let a in argv) push(quoted, sq(a));
-	let p = fs.popen(join(" ", quoted) + " 2>/dev/null", "r");
+	let p = fs.popen(shq(argv) + " 2>/dev/null", "r");
 	if (!p) return null;
 	let out = p.read("all") ?? "";
 	p.close();
@@ -215,17 +209,6 @@ function call_generate() {
 		try { require("log").log_event("error", "rpc.generate.failed", {}); } catch (_) {}
 		emit_err("generate.uc failed");
 	}
-}
-
-function call_nftables() {
-	let args = parse_args();
-	let action = args.action || "";
-	if (action !== "apply" && action !== "remove") {
-		emit_err("invalid action: " + (length(action) ? action : "<missing>"));
-		return;
-	}
-	if (run(NFTABLES_CMD, action)) emit_ok();
-	else emit_err(`nftables ${action} failed`);
 }
 
 function call_restart() {
@@ -518,86 +501,67 @@ const JSON_KINDS = {
 	inbound: 1, outbound: 1, dns_server: 1, dns_rule: 1, route_rule: 1, ruleset: 1,
 };
 
-// export_section(kind, name) — pure read of a single UCI section, dispatched
-// through the shared lib builder. The actual JSON shape comes from
-// export_section.uc (which has access to lib/ via -L); we just forward its stdout
-// verbatim. No side effects: no file writes, no service restart, no nftables
-// touch.
-function call_export_section() {
+// export_section / import_section — pure reads of ONE UCI section through the
+// shared builder (lib/section_json.uc), which the JSON editor's import path also
+// uses, so export and import cannot drift apart.
+//
+// IN-PROCESS, not forked. These used to shell out to two ~40-line wrapper
+// scripts whose whole body was "parse argv, open a cursor, require the lib, call
+// it, print the result" — and that lib is already on this handler's module path
+// (the shebang carries -L/usr/share/singbox-ui/lib, and we require schema_dump,
+// outbound and plugins.registry in-process right here). The fork bought exactly
+// one thing: isolation from a die() in the callee. try/catch -> emit_err buys the
+// same thing, so what is left is a mktemp, a popen, stdin staging, an unlink and
+// two env constants — for a call that never leaves this process now, which also
+// means the JSON body with its passwords never touches the disk.
+//
+// `kind` is validated here as well as in section_json.KINDS: rpcd is the trust
+// boundary. Neither method has side effects — no writes, no service restart —
+// which is why import_section lives on the READ ACL despite its name.
+//
+//   fields — the UCI options the JSON carried.
+//   known  — every UCI option this descriptor COULD produce. The caller removes
+//            the ones absent from `fields`; anything NOT in `known` is a UCI-only
+//            option (enabled, builtin, nft_rules, sub_*) and must be left alone.
+//   extra  — json keys the descriptor does not model. The caller shows them to
+//            the user, and on confirmation stores them in `json_extra`, which the
+//            filler merges back at build time. Nothing is dropped silently.
+//   tag    — the section name from the JSON. A changed tag is a RENAME.
+function section_json_args() {
 	let args = parse_args();
 	let kind = args.kind || "";
 	let name = args.name || "";
 	if (!JSON_KINDS[kind]) {
 		emit_err("invalid kind: " + (length(kind) ? kind : "<missing>"));
-		return;
+		return null;
 	}
-	// UCI section name contract (S1-3): a UCI section name must be
-	// a non-empty ^[A-Za-z0-9_-]+$ string of at most 64 chars — defense-in-depth
-	// against injection/traversal (shared predicate valid_section_name).
-	if (!valid_section_name(name)) {
-		emit_err("invalid or missing name");
-		return;
-	}
-	// Phase E1: no REVEAL_TOKEN — scrubbing removed. run_capture builds the
-	// identical `… 2>/dev/null` shell line and returns stdout (null only on
-	// popen failure), so behaviour matches the previous inline form.
-	let body = run_capture(uc_argv(EXPORT_SECTION_UC, kind, name));
-	if (body == null) { emit_err("export_section helper failed"); return; }
-	// export_section.uc always emits a single JSON line ({status,...}) — pass
-	// through verbatim so the section object stays a proper JSON value (not
-	// a re-stringified payload).
-	let trimmed = trim(body);
-	if (!length(trimmed)) { emit_err("export_section helper produced no output"); return; }
-	print(trimmed + "\n");
+	// UCI section name contract (S1-3): non-empty ^[A-Za-z0-9_-]+$, <=64 chars —
+	// defence in depth (shared predicate valid_section_name).
+	if (!valid_section_name(name)) { emit_err("invalid or missing name"); return null; }
+	return { kind: kind, name: name, json: args.json };
 }
 
-// import_section(kind, name, json) — the inverse of export_section, and equally
-// side-effect-free: it parses the JSON against the section's descriptor and
-// returns the UCI fields to write ({fields, known, extra, tag}). It writes
-// NOTHING itself. The frontend applies the result into LuCI's own uci changeset,
-// so Save & Apply and Revert work exactly as they do for a hand-edited form —
-// which is why this lives on the READ ACL despite its name.
-//
-// The body goes to the helper on STDIN via a 0600 tmpfile, never on the command
-// line: a section's JSON carries passwords/UUIDs, and argv is world-readable in
-// /proc. mktemp(1) is O_EXCL under the hood, so there is no symlink race.
-// Cleanup is unconditional — a partial write must not linger on disk.
+function section_cursor() {
+	let uci_dir = getenv("UCI_CONFIG_DIR");
+	return uci_dir ? uci.cursor(uci_dir) : uci.cursor();
+}
+
+function call_export_section() {
+	let a = section_json_args();
+	if (a == null) return;
+	try { emit(require("section_json").export_one(section_cursor(), a.kind, a.name)); }
+	catch (e) { emit_err("export_section failed: " + e); }
+}
+
 function call_import_section() {
-	let args = parse_args();
-	let kind = args.kind || "";
-	let name = args.name || "";
-	let body = args.json;
-	if (!JSON_KINDS[kind]) {
-		emit_err("invalid kind: " + (length(kind) ? kind : "<missing>"));
-		return;
-	}
-	if (!valid_section_name(name)) { emit_err("invalid or missing name"); return; }
-	if (type(body) !== "string" || !length(body)) { emit_err("missing json"); return; }
-
-	let path = run_capture(["mktemp", "-p", "/tmp", "singbox-ui-import.XXXXXX"]);
-	if (path == null) { emit_err("mktemp failed"); return; }
-	path = trim(path);
-	if (!length(path)) { emit_err("mktemp failed"); return; }
-
-	let ok = false;
-	try {
-		let f = fs.open(path, "w");
-		if (f) { f.write(body); f.close(); ok = true; }
-	} catch (e) { ok = false; }
-	if (!ok) { try { fs.unlink(path); } catch (_) {} emit_err("cannot stage import body"); return; }
-
-	let argv = [];
-	for (let a in uc_argv(IMPORT_SECTION_UC, kind, name)) push(argv, sq(a));
-	let out = null;
-	let p = fs.popen(join(" ", argv) + " < " + sq(path) + " 2>/dev/null", "r");
-	if (p) { out = p.read("all") ?? ""; p.close(); }
-	try { fs.unlink(path); } catch (_) {}
-
-	if (out == null) { emit_err("import_section helper failed"); return; }
-	let trimmed = trim(out);
-	if (!length(trimmed)) { emit_err("import_section helper produced no output"); return; }
-	// Pass through verbatim so fields/known/extra stay real JSON values.
-	print(trimmed + "\n");
+	let a = section_json_args();
+	if (a == null) return;
+	if (type(a.json) !== "string" || !length(a.json)) { emit_err("missing json"); return; }
+	let obj;
+	try { obj = json(a.json); } catch (e) { emit_err("invalid JSON: " + e); return; }
+	if (obj == null) { emit_err("invalid JSON"); return; }
+	try { emit(require("section_json").import_one(section_cursor(), a.kind, a.name, obj)); }
+	catch (e) { emit_err("import_section failed: " + e); }
 }
 
 // preview_tmp() — atomic tmpfile creation via mktemp(1). mktemp uses
@@ -628,7 +592,11 @@ function call_preview_config() {
 	// Phase E1: scrub removed — preview returns plain JSON.
 	let tmp = preview_tmp();
 	if (tmp == null) { emit_err("cannot create preview tmpfile"); return; }
-	let ok = run_env(uc_argv(GENERATE_UC), { SINGBOX_CONFIG: tmp });
+	// SINGBOX_DRY_RUN: a preview must not touch anything the LIVE daemon or the
+	// dashboard reads. Without it, generate.uc rewrote outbound-meta.json — the
+	// side-car the dashboard renders every node name from — out of UNCOMMITTED
+	// UCI, so a Preview click renamed the running nodes.
+	let ok = run_env(uc_argv(GENERATE_UC), { SINGBOX_CONFIG: tmp, SINGBOX_DRY_RUN: "1" });
 	if (!ok) {
 		try { fs.unlink(tmp); } catch (_) {}
 		emit_err("preview generation failed");
@@ -636,6 +604,7 @@ function call_preview_config() {
 	}
 	let f = fs.open(tmp, "r");
 	if (!f) {
+		try { fs.unlink(tmp); } catch (_) {}
 		emit_err("preview tmp missing after generate");
 		return;
 	}
@@ -842,6 +811,15 @@ function call_plugins() {
 }
 
 // call_plugin_enable — toggle a plugin's enabled flag in the manager section.
+//
+// The UI does NOT use this any more: the flag is an ordinary form.Flag on the
+// `plugins` section, so Save & Apply, the procd reload trigger and Revert all
+// work on their own. This method stays for scripted callers, with the guard
+// that was missing: cursor.commit() flushes the WHOLE singbox-ui package, so
+// firing it while someone has a LuCI edit staged (Save without Apply) committed
+// THEIR work to /etc/config prematurely and irreversibly — the same hazard #9
+// already closed in seed-rulesets.sh. Refuse instead; the caller can retry once
+// the staging is clean.
 function call_plugin_enable() {
 	let a = parse_args();
 	let name = a.name;
@@ -850,6 +828,9 @@ function call_plugin_enable() {
 	let val = a.enabled ? "1" : "0";
 	let uci_dir = getenv("UCI_CONFIG_DIR");
 	let cur = uci_dir ? uci.cursor(uci_dir) : uci.cursor();
+	let pending = cur.changes("singbox-ui");
+	if (pending != null && length(pending))
+		return emit_err("singbox-ui has uncommitted changes; apply or revert them first");
 	if (cur.get("singbox-ui", "plugins") == null) cur.set("singbox-ui", "plugins", "singbox-ui");
 	cur.set("singbox-ui", "plugins", name + "_enabled", val);
 	cur.commit("singbox-ui");
@@ -864,7 +845,14 @@ function call_plugin_enable() {
 // not stop apk from reading the argument as an option — `apk add '--initdb'` ran
 // as root. `--` ends option parsing as a second line of defence. Without the
 // namespace bound this method was "install any package from any repo, as root".
-const PLUGIN_PKG_PREFIX = "luci-app-singbox-plugin-";
+// The prefix must match what build-apk.sh actually BUILDS. It said
+// "luci-app-singbox-plugin-" and no package in this repo has ever carried that
+// name: the only plugin package is `singbox-ui-plugin-awg_warp`, which is
+// exactly the string tabs/plugins.js sends. Every click therefore got
+// "package outside the plugin namespace" before apk was reached — and the test
+// fed the handler its own wrong prefix, so nothing was red. The constant and
+// its single caller live in different packages; that seam is where it rotted.
+const PLUGIN_PKG_PREFIX = "singbox-ui-plugin-";
 function call_plugin_install() {
 	let a = parse_args();
 	let pkg = a.package;
@@ -914,7 +902,6 @@ function call_pkg_install() {
 // tests/backend/test_acl_coverage.test.ts + tests/backend/test_rpcd_acl_sync.test.ts.
 const METHODS = {
 	generate:            { sig: {},                                                   handler: call_generate },
-	nftables:            { sig: { action: "string" },                                 handler: call_nftables },
 	restart:             { sig: {},                                                   handler: call_restart },
 	refresh:             { sig: { what: "string", name: "string" },                   handler: call_refresh },
 	status:              { sig: {},                                                   handler: call_status },

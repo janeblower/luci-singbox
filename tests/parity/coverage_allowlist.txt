@@ -17,3 +17,16 @@ disable_mtu_discovery   # max_version 1.14: removed; emitting it asserts pre-1.1
 address                 # legacy DNS address-string field, removed in 1.14
 address_resolver        # legacy DNS address resolver tag, removed in 1.14
 address_strategy        # legacy DNS address strategy, removed in 1.14
+
+# --- keys removed in a LATER core than the parity pin --------------------
+# The parity lane pins SINGBOX_CORE_VERSION=99.0 so its goldens are
+# deterministic (see helpers/parity.ts). max_version now gates EMISSION as well
+# as the widget — a key the core has dropped is `json: unknown field`, i.e. the
+# whole config refused — so at 99.0 these simply are not emitted and no golden
+# can carry them. Same reasoning as disable_mtu_discovery above. They are
+# asserted with explicit pins in tests/backend/test_shared_version_gate.test.ts
+# ("max_version gates EMISSION, not just the widget").
+recv_window                     # hysteria v1, max_version 1.14
+recv_window_conn                # hysteria v1, max_version 1.14
+rule_set_ip_cidr_accept_empty   # route/dns matcher, max_version 1.16
+strategy                        # dns rule action + legacy dns server, max_version 1.16/1.14

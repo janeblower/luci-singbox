@@ -76,8 +76,21 @@ for name in $SETS; do
 	# Already present — this script ran on a previous install/boot, or the user
 	# created a set with that name. Only stamp the builtin marker; never touch
 	# enabled/url, those are theirs to own.
-	if uci_ -q get "singbox-ui.$name" >/dev/null; then
-		set_if "singbox-ui.$name.builtin" '1'
+	#
+	# The probe MUST compare the section TYPE. `uci get singbox-ui.<name>` is
+	# true for a section of ANY type, and these names (telegram, discord,
+	# youtube, block, google_ai...) are exactly what a user names an OUTBOUND.
+	# Stamping builtin='1' on their outbound made it undeletable in the UI
+	# (lockBuiltinRow greys Edit/Delete) and got it cut from the config
+	# (prune_unreferenced_builtins) — reachable without hand-editing UCI:
+	# default_rulesets='0' -> create outbound `telegram` -> re-enable builtins.
+	_t=$(uci_ -q get "singbox-ui.$name")
+	if [ -n "$_t" ]; then
+		if [ "$_t" = "ruleset" ]; then
+			set_if "singbox-ui.$name.builtin" '1'
+		else
+			logger -t singbox-ui "seed: '$name' already exists as type '$_t', not a ruleset; left alone"
+		fi
 		continue
 	fi
 	uci_ -q set "singbox-ui.$name"='ruleset'

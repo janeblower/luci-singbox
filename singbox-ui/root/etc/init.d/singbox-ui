@@ -295,7 +295,11 @@ reload_service() {
 	# hiccup) or a missing core binary falls through to the normal stop+start and
 	# its own guards — a broken pre-flight must not become a broken reload.
 	_pf=/tmp/singbox-ui/.preflight.json
-	SINGBOX_CONFIG="$_pf" ucode -L "$UCODE_LIB" "$GENERATE_UC"
+	# SINGBOX_DRY_RUN: this generate may be THROWN AWAY (rc 3, or `sing-box check`
+	# refusing the result), and then the daemon keeps running the previous config.
+	# Rewriting outbound-meta.json here would leave the live nodes described by a
+	# config that was never applied — the dashboard loses their names.
+	SINGBOX_DRY_RUN=1 SINGBOX_CONFIG="$_pf" ucode -L "$UCODE_LIB" "$GENERATE_UC"
 	_chk_rc=$?
 	if [ "$_chk_rc" -eq 3 ]; then
 		logger -t singbox-ui "refusing to reload: a tproxy inbound (nft_rules) and a tun inbound (auto_route) both claim system routing; exactly one may. Keeping the running config and its nft rules — disable one and re-apply (see event=config.transparent_conflict in the log for the section names and the fix)."

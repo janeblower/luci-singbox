@@ -133,7 +133,7 @@ let r = route_mod.build_route_rules(uci, valid_ob);
 let referenced = r.referenced;
 let ref_seen = {};
 for (let n in referenced) ref_seen[n] = true;
-for (let n in dns_mod.referenced_rulesets(uci))
+for (let n in dns_mod.referenced_rulesets(config.dns))
 	if (!ref_seen[n]) { push(referenced, n); ref_seen[n] = true; }
 // Third source: a tun inbound's route_address_set / route_exclude_address_set.
 // sing-box resolves those tags itself and refuses the whole config on a dangling
@@ -194,6 +194,19 @@ if (type(config.dns) === "object" && type(config.dns.servers) === "array") {
 				resolver_tag = s.tag; break;
 			}
 		}
+		// Second pass for `dhcp`. It DOES resolve arbitrary domains — it just
+		// asks whatever the WAN lease handed us — so it is a valid last resort,
+		// only a worse one than an explicit upstream (hence a separate pass:
+		// any udp/tls/https server still wins). Excluding it outright meant the
+		// typical OpenWrt box, whose only DNS server is the DHCP one, emitted no
+		// resolver at all — which is the 1.13 warning / 1.14 hard failure this
+		// whole block exists to prevent.
+		if (resolver_tag == null || resolver_tag === "") {
+			for (let s in config.dns.servers)
+				if (length(s.tag) && s.type === "dhcp") { resolver_tag = s.tag; break; }
+		}
+		if (resolver_tag == null || resolver_tag === "")
+			warn("generate.uc: no dns_server can serve as default_domain_resolver; emitting none (sing-box 1.13 warns, 1.14 refuses)\n");
 	}
 	if (resolver_tag != null && length(resolver_tag)) {
 		if (!config.route) config.route = {};
@@ -288,16 +301,23 @@ function publish_atomic(path, body) {
 	// (a concurrent reader saw "no cached config"), and if the final rename then
 	// failed the system was left with NO config at all though a valid one sat in
 	// .prev — a spurious "no cached config" refusal to start.
-	let prev = path + ".prev";
-	try {
-		let src = fs.open(path, "r");
-		if (src) {
-			let old = src.read("all") ?? "";
-			src.close();
-			let pf = fs.open(prev, "w", 0o600);
-			if (pf) { pf.write(old); pf.flush(); pf.close(); }
-		}
-	} catch (_) {}
+	// The .prev backup is a rollback copy of the LIVE config. A dry run (Preview,
+	// or init.d's reload pre-flight) writes to a throwaway path, so it left a
+	// root-owned <tmpfile>.prev — a FULL config, passwords and all — in tmpfs
+	// forever: preview's cleanup only unlinks the tmpfile itself, and the
+	// pre-flight's `.preflight.json.prev` was never removed at all.
+	if (getenv("SINGBOX_DRY_RUN") !== "1") {
+		let prev = path + ".prev";
+		try {
+			let src = fs.open(path, "r");
+			if (src) {
+				let old = src.read("all") ?? "";
+				src.close();
+				let pf = fs.open(prev, "w", 0o600);
+				if (pf) { pf.write(old); pf.flush(); pf.close(); }
+			}
+		} catch (_) {}
+	}
 
 	let renamed = false;
 	try { renamed = fs.rename(tmp, path); } catch (_) { renamed = false; }

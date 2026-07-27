@@ -159,11 +159,27 @@ function safe_port_range(p) {
 	return tok;
 }
 
-// load_rs_rules() — scan /tmp/singbox-ui/rs_*.json and return a list of
+// load_rs_rules(allow) — scan /tmp/singbox-ui/rs_*.json and return a list of
 // { name, idx, v4, v6, network, ports } entries (one per rule with ip_cidr).
 // Each rule may produce a v4 entry, a v6 entry, both, or neither. Idx is the
 // rule's position inside its file so set names stay stable across runs.
-function load_rs_rules() {
+//
+// `allow` is an optional object used as a SET of rule-set names that UCI still
+// says should be captured. Without it this function was pure filesystem: nothing
+// in the tree ever DELETES an rs_*.json (nft-rulesets.uc is the only writer), so
+// unticking "Create nftables rules" — or disabling, or deleting the section
+// outright — left the orphaned file behind, and the next apply happily rebuilt
+// its set and its `ct mark set` rule. Those CIDRs kept being marked into TPROXY
+// for a rule-set the UI showed as off, with nothing in the log; the config's own
+// `rule_set` had already been pruned by then. It survived Apply and restart and
+// cleared only on reboot (tmpfs), and self-healing could not happen either —
+// any_rulesets_stale() only looks at sections with nft_rules='1'.
+//
+// Callers that HAVE a uci cursor pass it. The `emit` CLI path deliberately does
+// not: its contract is "build a ruleset from arguments, no UCI". Deleting the
+// file here instead would break S1-PERF (apply and emit must be byte-identical)
+// and throw away a cache that turning the switch back on would re-download.
+function load_rs_rules(allow) {
 	let out = [];
 	let entries = fs.lsdir(TMPDIR);
 	if (!entries) return out;
@@ -175,6 +191,7 @@ function load_rs_rules() {
 		if (substr(fname, 0, 3) !== "rs_") continue;
 		if (substr(fname, -5) !== ".json") continue;
 		let name = substr(fname, 3, length(fname) - 3 - 5);
+		if (allow != null && !allow[name]) continue;
 
 		let doc = read_json(`${TMPDIR}/${fname}`);
 		if (doc == null || type(doc.rules) !== "array") continue;
@@ -292,17 +309,24 @@ function emit_rs_decision(name, idx, family, l4, port_e, mark) {
 // fakeip4_cidr / fakeip6_cidr are the validated CIDR strings (empty string
 // means "not configured" — skip that family's decision rule entirely so we
 // never emit 'ip6 daddr @fakeip6' when the user left fakeip_range_v6 blank).
-function emit_rs_decision_block(rules, mark, fakeip4_cidr, fakeip6_cidr) {
+// `iif_scoped` — whether the fakeip decisions may carry `iifname @wan_ifaces`.
+// TRUE in prerouting, where an ingress device exists. FALSE in the output chain:
+// NF_INET_LOCAL_OUT has NO ingress device, so an iifname match can never be
+// true there — the two fakeip rules the router-traffic redirect emitted were
+// dead on arrival, i.e. `redirect_router_traffic` never redirected fakeip at
+// all, while still paying for two never-matching rules on every apply.
+function emit_rs_decision_block(rules, mark, fakeip4_cidr, fakeip6_cidr, iif_scoped) {
 	let buf = [];
+	let scope = (iif_scoped === false) ? "" : "iifname @wan_ifaces ";
 	if (length(fakeip4_cidr)) {
 		push(buf, sprintf(
-			"\t\tct state new iifname @wan_ifaces ip  daddr @fakeip4 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
-			mark));
+			"\t\tct state new %sip  daddr @fakeip4 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
+			scope, mark));
 	}
 	if (length(fakeip6_cidr)) {
 		push(buf, sprintf(
-			"\t\tct state new iifname @wan_ifaces ip6 daddr @fakeip6 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
-			mark));
+			"\t\tct state new %sip6 daddr @fakeip6 meta l4proto { tcp, udp } ct mark set ct mark or 0x%x\n",
+			scope, mark));
 	}
 	// rs_* (rule-set) decisions are intentionally NOT iifname-scoped, unlike
 	// the @wan_ifaces-scoped fakeip block above: transparently proxying a
@@ -464,7 +488,7 @@ function emit_output_chain(buf, rules, mark, v4, v6) {
 	push(buf, "\n\tchain output {\n");
 	push(buf, "\t\ttype route hook output priority mangle; policy accept;\n\n");
 	push(buf, "\t\tmeta mark set ct mark\n");
-	push(buf, emit_rs_decision_block(rules, mark, v4, v6));
+	push(buf, emit_rs_decision_block(rules, mark, v4, v6, false));
 	push(buf, "\t\tmeta mark set ct mark\n");
 	push(buf, "\t}\n");
 }
@@ -554,18 +578,6 @@ function count_nft_tproxy(cur) {
 		n++;
 	});
 	return n;
-}
-
-// any_nft_transparent(cur) — true if a tproxy inbound requests our nft rules.
-//
-// A tun inbound NEVER appears here. With auto_route + auto_redirect sing-box
-// installs its OWN nftables rules — including compatibility rules for the OpenWrt
-// fw4 table — so our `inet singbox_ui` table plays no part in TUN mode. The old
-// `s.protocol === "tun" && s.nft_rules === "1"` branch was a stub for a design
-// that was never built (tun has no nft_rules field, and never will); it could only
-// ever have installed a redundant, conflicting table.
-function any_nft_transparent(cur) {
-	return first_nft_tproxy(cur) != null;
 }
 
 // first_fakeip(cur) — ranges of the first enabled dns_server with type=fakeip.
@@ -862,14 +874,32 @@ function gather_apply_params(cur) {
 	let mp = fwmark_pair(mark_raw, mask_raw);
 	let routerout_raw = glob ? glob.redirect_router_traffic : null;
 
+	// The rule-sets UCI still wants captured — the allow-set for load_rs_rules().
+	// Same predicate nft-rulesets.uc fetches by, so a set we no longer download
+	// is a set we no longer install rules for.
+	let rs_allow = {};
+	cur.foreach("singbox-ui", "ruleset", function (s) {
+		if (s.nft_rules === "1" && helpers.ruleset_active(cur, s)) rs_allow[s[".name"]] = 1;
+	});
+
 	return {
-		transparent:  any_nft_transparent(cur) ? 1 : 0,
+		// "Does our nft table apply at all" is exactly "is there a tproxy inbound
+		// asking for it" — reuse the scan above rather than walking UCI again.
+		//
+		// A tun inbound NEVER counts. With auto_route + auto_redirect sing-box
+		// installs its OWN nftables rules — fw4 compatibility rules included — so
+		// our `inet singbox_ui` table plays no part in TUN mode. The old
+		// `protocol === "tun" && nft_rules === "1"` branch was a stub for a design
+		// that was never built (tun has no nft_rules field, and never will) and
+		// could only ever have installed a redundant, conflicting table.
+		transparent:  (tp != null) ? 1 : 0,
 		tproxy_count: count_nft_tproxy(cur),
 		port: port,
 		ifaces: ifaces,
 		v4: fip.v4, v6: fip.v6,
 		mark: mp[0], mask: mp[1],
 		router_out: (routerout_raw === "1" || routerout_raw === 1) ? 1 : 0,
+		rs_allow: rs_allow,
 	};
 }
 
@@ -940,7 +970,7 @@ function _cmd_apply_locked(cur) {
 		return 1;
 	}
 
-	let rules = load_rs_rules();
+	let rules = load_rs_rules(p.rs_allow);
 
 	if (p.v4 === "" && p.v6 === "" && !length(rules)) {
 		nft_delete_table_quiet();
@@ -1054,7 +1084,7 @@ case "print": {
 	let p = gather_apply_params(cur);
 	let core_ruleset = "";
 	if (p.transparent) {
-		let rules = load_rs_rules();
+		let rules = load_rs_rules(p.rs_allow);
 		core_ruleset = build_ruleset(p.port, p.v4, p.v6, p.ifaces, p.mark, p.mask, p.router_out, rules);
 	}
 	let ruleset = append_plugin_fragments(core_ruleset, cur);

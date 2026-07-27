@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { useGuest } from "../helpers/guest.ts";
-import { exec } from "../helpers/ssh.ts";
+import { exec, putFile } from "../helpers/ssh.ts";
 
 // Regression for F-16/U-08. export_section used to gate on
 // helpers.is_outbound_proxy_kind(), a hand-kept list that covered only the proxy
@@ -8,25 +8,31 @@ import { exec } from "../helpers/ssh.ts";
 // direct` on every direct / selector / urltest / json / sharelink section, all of
 // which build_outbounds() builds without complaint. The gate now asks the
 // registry, which is the single source of truth for what a descriptor exists for.
+//
+// Driven through the PRODUCTION path (the rpcd handler), not `ucode -L lib`:
+// export_section runs IN-PROCESS in the handler now — the ~40-line forked
+// wrapper script it used to shell out to is gone — so the handler IS the unit.
+
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
-const LIB =
-  process.env.SB_VM_LIB ?? `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
-const SCRIPT = `${WORK}/singbox-ui/root/usr/share/singbox-ui/export_section.uc`;
+const SB = `${WORK}/singbox-ui/root/usr/share/singbox-ui`;
+const RPCD = `${WORK}/singbox-ui/root/usr/libexec/rpcd/singbox-ui`;
 
 async function exportOutbound(
   name: string,
   uci: string[],
-): Promise<{ exitCode: number; stdout: string }> {
+): Promise<{ status: string; message?: string; section?: any }> {
   const cfg = `/tmp/es_uci_${name}`;
-  const body = uci.map((l) => `        "${l}" \\`).join("\n");
-  return exec(`
-    rm -rf ${cfg}; mkdir -p ${cfg}
-    printf '%s\\n' \\
-${body}
-        > ${cfg}/singbox-ui
-    UCI_CONFIG_DIR=${cfg} ucode -L ${LIB} ${SCRIPT} outbound ${name} 2>&1
-    rm -rf ${cfg}
-  `);
+  await exec(`rm -rf ${cfg} && mkdir -p ${cfg}`);
+  await putFile(`${uci.join("\n")}\n`, `${cfg}/singbox-ui`);
+  const body = JSON.stringify({ kind: "outbound", name }).replace(
+    /'/g,
+    `'\\''`,
+  );
+  const r = await exec(
+    `cd ${WORK} && printf '%s' '${body}' | UCI_CONFIG_DIR=${cfg} UCODE_LIB=${SB}/lib ucode -L ${SB}/lib ${RPCD} call export_section; rm -rf ${cfg}`,
+  );
+  expect(r.exitCode).toBe(0);
+  return JSON.parse(r.stdout);
 }
 
 describe("export_section", () => {
@@ -38,9 +44,8 @@ describe("export_section", () => {
       "\toption type 'direct'",
       "\toption enabled '1'",
     ]);
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout).toMatch(/"status":\s*"ok"/);
-    expect(r.stdout).toMatch(/"type":\s*"direct"/);
+    expect(r.status).toBe("ok");
+    expect(r.section.type).toBe("direct");
   });
 
   it("exports a selector group", async () => {
@@ -48,12 +53,11 @@ describe("export_section", () => {
       "config outbound 'es_sel'",
       "\toption type 'selector'",
       "\toption enabled '1'",
-      "\tlist outbounds 'a'",
-      "\tlist outbounds 'b'",
+      "\tlist group_outbounds 'a'",
+      "\tlist group_outbounds 'b'",
     ]);
-    expect(r.exitCode).toBe(0);
-    expect(r.stdout).toMatch(/"status":\s*"ok"/);
-    expect(r.stdout).toMatch(/"type":\s*"selector"/);
+    expect(r.status).toBe("ok");
+    expect(r.section.type).toBe("selector");
   });
 
   it("still refuses a genuinely unknown type", async () => {
@@ -62,7 +66,8 @@ describe("export_section", () => {
       "\toption type 'not_a_protocol'",
       "\toption enabled '1'",
     ]);
-    expect(r.stdout).toContain("unknown outbound type");
+    expect(r.status).toBe("error");
+    expect(r.message).toContain("unknown outbound type");
   });
 
   it("still refuses the UI-only shapes (subscription)", async () => {
@@ -71,6 +76,17 @@ describe("export_section", () => {
       "\toption type 'subscription'",
       "\toption enabled '1'",
     ]);
-    expect(r.stdout).toContain("does not support type=subscription");
+    expect(r.status).toBe("error");
+    expect(r.message).toContain("does not support type=subscription");
+  });
+
+  it("a builder failure comes back as an error, not a dead handler", async () => {
+    // The fork used to buy isolation from a die() inside the lib. In-process,
+    // try/catch -> emit_err is what buys it — assert the handler still answers.
+    const r = await exportOutbound("es_missing", [
+      "config outbound 'somebody_else'",
+      "\toption type 'direct'",
+    ]);
+    expect(r.status).toBe("error");
   });
 });

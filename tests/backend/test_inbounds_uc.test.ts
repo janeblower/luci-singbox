@@ -5,7 +5,6 @@ import { runUcode } from "../helpers/ucode.ts";
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB = `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
-const PARITY_LIB = `${WORK}/tests/parity`;
 const GENERATE_UC = `${WORK}/singbox-ui/root/usr/share/singbox-ui/generate.uc`;
 
 describe("inbounds_uc (generate.uc inbounds[] + inbound.build_one)", () => {
@@ -31,17 +30,6 @@ describe("inbounds_uc (generate.uc inbounds[] + inbound.build_one)", () => {
     if (r.stdout.includes("GENFAIL"))
       throw new Error(`generate.uc failed: ${r.stderr}`);
     return r.stdout;
-  }
-
-  // Canon-normalize JSON for order-agnostic deep-equal comparison
-  async function canonNorm(jsonStr: string): Promise<string> {
-    const tmpF = `/tmp/inb_cn_${pid}.json`;
-    await putFile(jsonStr, tmpF);
-    const r = await exec(
-      `cd ${WORK} && ucode -L ${LIB} -L ${PARITY_LIB} -e 'let fs=require("fs"); let canon=require("canon").canon; let f=fs.open(ARGV[0],"r"); let j=json(f.read("all")); f.close(); printf("%J", canon(j));' ${tmpF}`,
-    );
-    await exec(`rm -f ${tmpF}`);
-    return r.stdout.trim();
   }
 
   it("tproxy inbound from inbound section", async () => {
@@ -538,8 +526,10 @@ let s = { ".name":"h2_in1", "protocol":"hysteria2", "listen_port":"443",
 printf("%J", inb.build_one(s));
 `);
     expect(r.exitCode).toBe(0);
-    // Use canonical key-sorted comparison for order-agnostic deep-equal
-    expect(await canonNorm(r.stdout.trim())).toBe(await canonNorm(golden));
+    // toEqual is already key-order-agnostic and array-order-significant —
+    // exactly the parity contract. Round-tripping the JSON through a guest
+    // ucode process just to sort keys bought nothing.
+    expect(JSON.parse(r.stdout.trim())).toEqual(JSON.parse(golden));
   });
 
   it("hysteria2 inbound descriptor parity: minimal (D1.5.6 golden)", async () => {

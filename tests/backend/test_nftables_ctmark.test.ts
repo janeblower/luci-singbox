@@ -129,6 +129,21 @@ describe("nftables_ctmark", () => {
     );
     expect(out3).toContain("chain output {");
     expect(out3).toContain("type route hook output priority mangle");
+
+    // The output chain must NOT scope its fakeip decisions by ingress device.
+    // NF_INET_LOCAL_OUT has no ingress device, so `iifname @wan_ifaces` can
+    // never match there: the feature emitted two dead rules per apply and never
+    // redirected a single fakeip'd router connection.
+    const output = out3.slice(out3.indexOf("chain output {"));
+    expect(output).toContain("daddr @fakeip4");
+    expect(output).not.toContain("iifname @wan_ifaces");
+    // …while prerouting keeps the scope (a destination arriving from the WAN
+    // side is not something we transparently proxy for LAN clients).
+    const prerouting = out3.slice(
+      out3.indexOf("chain prerouting {"),
+      out3.indexOf("chain output {"),
+    );
+    expect(prerouting).toContain("iifname @wan_ifaces ip  daddr @fakeip4");
   });
 
   it("t_rs_decision_uses_ct_mark: rs_* decisions use ct mark, not meta mark", async () => {

@@ -297,9 +297,6 @@ function cmd_fetch_rulesets(cur) {
 		return 0;
 	}
 
-	let boot = getenv("SINGBOX_BOOT_FETCH") === "1";
-	let timeout = boot ? 10 : 30;
-
 	// One open per run: bbolt is copy-on-write, so every tag below is extracted
 	// from a single consistent snapshot instead of re-reading the whole file once
 	// per tag (which is what forking the CLI shim per tag used to cost).

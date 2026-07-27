@@ -12,6 +12,17 @@ const UCI = `${TMP}/uci`;
 
 const GOOD_UCI = `config dns_server fakeip\n\toption type 'fakeip'\n\toption enabled '1'\n\toption inet4_range '198.18.0.0/15'\nconfig inbound tp\n\toption protocol 'tproxy'\n\toption enabled '1'\n\toption nft_rules '1'\n\toption listen_port '7895'\n\tlist interface 'br-lan'\n`;
 
+// The rule-set sections these rs_*.json caches belong to. load_rs_rules() now
+// takes an allow-set from UCI, because nothing ever DELETES an rs_*.json: an
+// orphaned file used to keep marking its CIDRs into TPROXY for a rule-set the
+// UI showed as off.
+const RS_SECTIONS = ["aps_inj", "aps_oor", "aps_perf"]
+  .map(
+    (n) =>
+      `config ruleset ${n}\n\toption enabled '1'\n\toption type 'remote'\n\toption nft_rules '1'\n`,
+  )
+  .join("");
+
 // apply runs nftables.uc apply with stub nft, captures stderr, returns result
 async function apply(): Promise<{
   stdout: string;
@@ -39,7 +50,7 @@ describe("nftables_apply_security", () => {
     await putFile(nftStub, `${TMP}/bin/nft`);
     await exec(`chmod +x ${TMP}/bin/nft`);
     // set up good UCI
-    await putFile(GOOD_UCI, `${UCI}/singbox-ui`);
+    await putFile(GOOD_UCI + RS_SECTIONS, `${UCI}/singbox-ui`);
     // clean rs_aps_* files
     await exec(`rm -f ${RS_DIR}/rs_aps_*.json`);
   });
@@ -54,7 +65,7 @@ describe("nftables_apply_security", () => {
       `${RS_DIR}/rs_aps_inj.json`,
     );
     // restore good UCI for this test
-    await putFile(GOOD_UCI, `${UCI}/singbox-ui`);
+    await putFile(GOOD_UCI + RS_SECTIONS, `${UCI}/singbox-ui`);
     const r = await apply();
     expect(r.exitCode, "apply must succeed despite droppable port_range").toBe(
       0,
@@ -70,7 +81,7 @@ describe("nftables_apply_security", () => {
       '{ "rules": [ { "ip_cidr": "10.0.0.0/8", "network": "tcp", "port_range": "99999" } ] }\n',
       `${RS_DIR}/rs_aps_oor.json`,
     );
-    await putFile(GOOD_UCI, `${UCI}/singbox-ui`);
+    await putFile(GOOD_UCI + RS_SECTIONS, `${UCI}/singbox-ui`);
     const r = await apply();
     expect(r.exitCode, "apply must succeed despite out-of-range port").toBe(0);
     const applied = await readApplied();
@@ -84,7 +95,7 @@ describe("nftables_apply_security", () => {
       '{ "rules": [ { "ip_cidr": ["1.2.3.0/24"] } ] }\n',
       `${RS_DIR}/rs_aps_perf.json`,
     );
-    await putFile(GOOD_UCI, `${UCI}/singbox-ui`);
+    await putFile(GOOD_UCI + RS_SECTIONS, `${UCI}/singbox-ui`);
     // apply path
     const applyResult = await apply();
     expect(applyResult.exitCode, "apply must succeed for S1-PERF").toBe(0);
@@ -103,13 +114,55 @@ describe("nftables_apply_security", () => {
     await exec(`rm -f ${RS_DIR}/rs_aps_perf.json`);
   });
 
+  // Nothing in the tree ever deletes an rs_*.json (nft-rulesets.uc is the only
+  // writer), so unticking "Create nftables rules" — or disabling the rule-set,
+  // or deleting the section — left the cache behind and the next apply rebuilt
+  // its set and its `ct mark set` rule from it. Those CIDRs kept being marked
+  // into TPROXY for a rule-set the UI showed as OFF, with nothing in the log,
+  // surviving Apply and restart, cleared only by a reboot (tmpfs).
+  it("an rs_*.json whose section no longer wants nft rules is ignored", async () => {
+    await putFile(
+      '{ "rules": [ { "ip_cidr": ["9.9.9.0/24"] } ] }\n',
+      `${RS_DIR}/rs_aps_orphan.json`,
+    );
+
+    // 1) section present and asking for nft rules -> captured
+    const withSection = `${GOOD_UCI + RS_SECTIONS}config ruleset aps_orphan\n\toption enabled '1'\n\toption type 'remote'\n\toption nft_rules '1'\n`;
+    await putFile(withSection, `${UCI}/singbox-ui`);
+    expect((await apply()).exitCode).toBe(0);
+    expect(await readApplied()).toContain("9.9.9.0/24");
+
+    // 2) same file, nft_rules unticked -> gone
+    await putFile(
+      `${GOOD_UCI + RS_SECTIONS}config ruleset aps_orphan\n\toption enabled '1'\n\toption type 'remote'\n\toption nft_rules '0'\n`,
+      `${UCI}/singbox-ui`,
+    );
+    expect((await apply()).exitCode).toBe(0);
+    expect(await readApplied()).not.toContain("9.9.9.0/24");
+
+    // 3) section disabled -> gone
+    await putFile(
+      `${GOOD_UCI + RS_SECTIONS}config ruleset aps_orphan\n\toption enabled '0'\n\toption type 'remote'\n\toption nft_rules '1'\n`,
+      `${UCI}/singbox-ui`,
+    );
+    expect((await apply()).exitCode).toBe(0);
+    expect(await readApplied()).not.toContain("9.9.9.0/24");
+
+    // 4) section deleted outright -> gone
+    await putFile(GOOD_UCI + RS_SECTIONS, `${UCI}/singbox-ui`);
+    expect((await apply()).exitCode).toBe(0);
+    expect(await readApplied()).not.toContain("9.9.9.0/24");
+
+    await exec(`rm -f ${RS_DIR}/rs_aps_orphan.json`);
+  });
+
   it("S1-2: invalid tproxy listen_port (99999) makes apply FAIL loudly", async () => {
     const badUci = `config dns_server fakeip\n\toption type 'fakeip'\n\toption enabled '1'\n\toption inet4_range '198.18.0.0/15'\nconfig inbound tp\n\toption protocol 'tproxy'\n\toption enabled '1'\n\toption nft_rules '1'\n\toption listen_port '99999'\n\tlist interface 'br-lan'\n`;
-    await putFile(badUci, `${UCI}/singbox-ui`);
+    await putFile(badUci + RS_SECTIONS, `${UCI}/singbox-ui`);
     const r = await apply();
     expect(r.exitCode, "apply must FAIL for invalid listen_port").not.toBe(0);
     expect(r.stderr).toMatch(/invalid listen_port|tproxy/i);
     // restore good UCI for subsequent tests
-    await putFile(GOOD_UCI, `${UCI}/singbox-ui`);
+    await putFile(GOOD_UCI + RS_SECTIONS, `${UCI}/singbox-ui`);
   });
 });

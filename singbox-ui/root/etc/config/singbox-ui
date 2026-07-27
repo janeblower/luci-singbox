@@ -119,6 +119,16 @@ config clash_api 'clash_api'
 config subscriptions 'subscriptions'
 	option auto_update '1'
 
+# Transparent-proxy mark. These are exactly the values nftables.uc already falls
+# back to (safe_fwmark(..., 0x40000000)); they live here so they are visible and
+# editable instead of being invented by a uci-defaults script that wrote the same
+# numbers and then deleted itself. An existing install with no `global` section
+# keeps working on the backend fallback, so nothing needs migrating.
+config global
+	option fwmark '0x40000000'
+	option fwmark_mask '0x40000000'
+	option redirect_router_traffic '0'
+
 config singbox-ui 'main'
 	option ui_compat_only '0'
 	option default_rulesets '1'

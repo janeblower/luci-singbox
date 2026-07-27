@@ -16,33 +16,23 @@ function scrub_implicit_refs(config, opts) {
 	let is_implicit = {};
 	for (let t in implicit) is_implicit[t] = true;
 
-	// GEN-2: route.rules[].outbound / route.final naming an implicit tag are
-	// scrubbed ONLY when the tag does NOT resolve to a real outbound in
-	// config.outbounds. The sole implicit tag today ("direct") IS injected as a
-	// genuine outbound, and routing TO it is valid sing-box — stripping it would
-	// leave a route action with no outbound (which sing-box rejects), so a
-	// resolvable implicit tag must be left intact. The guard still future-proofs
-	// the case the finding flags: a future implicit tag that is NOT materialized
-	// as a standalone outbound would be dangling and gets scrubbed. (DNS detour
-	// is unconditional: sing-box fatally rejects detour to the implicit/empty
-	// direct regardless — see header — so it is not gated on outbound presence.)
-	let real_ob = {};
-	if (type(config.outbounds) === "array")
-		for (let o in config.outbounds) if (length(o.tag)) real_ob[o.tag] = true;
-	function scrub_ref(tag) { return is_implicit[tag] && !real_ob[tag]; }
-
+	// The ONLY implicit tag is `direct`, and generate.uc materialises it as a real
+	// outbound in the same breath as declaring it implicit — so routing TO it is
+	// valid sing-box and must be left intact. That is why only the DNS side is
+	// scrubbed: sing-box fatally rejects a dns detour to the implicit/empty
+	// direct outbound regardless of whether the tag resolves.
+	//
+	// The route.rules[].outbound / route.final branches that used to live here
+	// could not fire at all (their guard was "implicit AND not a real outbound",
+	// and an implicit tag is always a real outbound by construction). They were
+	// written to future-proof an implicit tag that is never materialised; there
+	// is none, and inventing one would be the thing to fix, not this.
 	if (config.dns != null && type(config.dns.servers) === "array") {
 		for (let s in config.dns.servers)
 			if (s.detour != null && is_implicit[s.detour]) delete s.detour;
 	}
 	if (config.dns != null && config.dns.detour != null && is_implicit[config.dns.detour])
 		delete config.dns.detour;
-	if (config.route != null && type(config.route.rules) === "array") {
-		for (let r in config.route.rules)
-			if (r.outbound != null && scrub_ref(r.outbound)) delete r.outbound;
-	}
-	if (config.route != null && config.route.final != null && scrub_ref(config.route.final))
-		delete config.route.final;
 
 	return config;
 }

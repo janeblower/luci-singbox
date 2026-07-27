@@ -58,8 +58,11 @@ describe("registry robustness", () => {
     const s44dir = `/tmp/s44-${process.pid}`;
     const setup = [
       `rm -rf ${s44dir}`,
-      `mkdir -p ${s44dir}/builder/protocols ${s44dir}/builder/_shared`,
-      `cp ${LIB}/builder/protocols/registry.uc ${s44dir}/builder/protocols/registry.uc`,
+      // The WHOLE builder tree, not a hand-picked file list: registry.uc reads
+      // the shared-block table from _filler (one list instead of three copies),
+      // and a curated list breaks the moment any module grows a require.
+      `mkdir -p ${s44dir}`,
+      `cp -r ${LIB}/builder ${s44dir}/builder`,
       `cp ${LIB}/helpers.uc ${s44dir}/helpers.uc`,
       // Shadow multiplex.uc with a file that throws on load
       `printf '%s\\n' 'this_symbol_is_not_defined();' > ${s44dir}/builder/_shared/multiplex.uc`,

@@ -48,7 +48,7 @@ describe("test_rpcd_handler", () => {
 
   // Ucode-gated: the runtime `list` method test — skip when ucode is absent.
   // The .sh runs `ucode -L lib handler list` (no ubus needed) and asserts:
-  //   - critical methods present: generate, nftables, refresh, clash_get, …
+  //   - critical methods present: generate, refresh, clash_get, …
   //   - clash_request ABSENT (removed from the dispatcher)
   it.skipIf(!ucodeAvailable)(
     "ucode-gated: handler list method returns JSON with expected methods",
@@ -65,7 +65,6 @@ describe("test_rpcd_handler", () => {
       // Methods that MUST be present (from the shell's `je 'd.X != null'` checks).
       for (const m of [
         "generate",
-        "nftables",
         "restart",
         "refresh",
         "status",
@@ -79,9 +78,6 @@ describe("test_rpcd_handler", () => {
         expect(parsed, `missing method: ${m}`).toHaveProperty(m);
       }
       // Spot-check a few argument shapes the shell also asserted.
-      expect(parsed.nftables, "nftables.action missing").toHaveProperty(
-        "action",
-      );
       expect(parsed.refresh, "refresh.what missing").toHaveProperty("what");
       expect(
         parsed.export_section,
@@ -94,6 +90,9 @@ describe("test_rpcd_handler", () => {
 
       // clash_request MUST be absent (shell: `je 'd.clash_request == null'`).
       expect(parsed).not.toHaveProperty("clash_request");
+      // …and so must `nftables`: it had zero callers anywhere (no frontend, no
+      // script, no plugin) while sitting on the WRITE ACL as "run nft apply".
+      expect(parsed).not.toHaveProperty("nftables");
     },
   );
 });

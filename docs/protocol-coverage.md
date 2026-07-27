@@ -436,11 +436,11 @@ Descriptor: `plugins/awg_warp/lib/protocols/awg_warp.uc`. sing-box type: **`dire
 
 ## RPC methods
 
-`root/usr/libexec/rpcd/singbox-ui`, current set: `generate`, `nftables`, `restart`, `refresh`, `status`, `read_config`, `clash_request`, `export_section`, `preview_config`.
+`root/usr/libexec/rpcd/singbox-ui`, current set: `generate`, `restart`, `refresh`, `status`, `read_config`, `clash_request`, `export_section`, `preview_config`.
 
 | Method | Status | Phase |
 |---|---|---|
-| `export_section(kind, name)` | есть (rpcd handler + `export_section.uc` helper; UI "Export JSON" button per row, modal with Copy) | Phase 9 (B5) |
+| `export_section(kind, name)` | есть (rpcd handler, in-process через `lib/section_json.uc`; UI «Export JSON» на строке грида, модалка с Copy) | Phase 9 (B5) |
 | `preview_config` (dry-run) | есть (rpcd handler runs `generate.uc` with `SINGBOX_CONFIG` pointed at a per-call tmpfile; UI "Preview config" button in the action bar, modal with Copy) | Phase 11 (B8) |
 
 ---

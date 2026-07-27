@@ -53,21 +53,16 @@ function build_route_rules(cur, valid_ob) {
     let rr_by_name = {};
     cur.foreach("singbox-ui", "route_rule", function(s) { rr_by_name[s[".name"]] = s; });
 
-    function ref_list(s) {
-        let refs = s.rules ?? [];
-        if (type(refs) === "string") refs = [ refs ];
-        return refs;
-    }
     let consumed = {};
     cur.foreach("singbox-ui", "route_rule", function(s) {
         if (s.enabled === "0") return;
         if ((s.type ?? "default") !== "logical") return;
-        for (let n in ref_list(s)) consumed[n] = true;
+        for (let n in helpers.as_array(s.rules)) consumed[n] = true;
     });
     cur.foreach("singbox-ui", "ruleset", function(s) {
         if (s.enabled === "0") return;
         if ((s.type ?? "remote") !== "inline") return;
-        for (let n in ref_list(s)) consumed[n] = true;
+        for (let n in helpers.as_array(s.rules)) consumed[n] = true;
     });
 
     // resolve+track rule_set matcher refs on a built rule (drop disabled/missing).
@@ -84,6 +79,16 @@ function build_route_rules(cur, valid_ob) {
         return true;   // had a rule_set matcher, all refs disabled/missing -> stripped
     }
 
+    // Every dns_server tag a rule may legitimately name. action=resolve's
+    // `server` was the ONE cross-section reference with no dangling guard
+    // anywhere: disable or delete the dns_server it points at and the tag went
+    // straight into the config, where sing-box refuses the whole file.
+    let dns_ok_tags = {};
+    cur.foreach("singbox-ui", "dns_server", function(s) {
+        if (s.enabled === "0") return;
+        dns_ok_tags[s[".name"]] = true;
+    });
+
     // validate action target; return false to drop the rule.
     function action_ok(rule, name) {
         // Only `route` requires an outbound. reject/hijack-dns/sniff/resolve/
@@ -98,6 +103,14 @@ function build_route_rules(cur, valid_ob) {
                 warn(sprintf("route.uc: route_rule '%s' outbound '%s' is not a defined outbound; dropping\n", name, rule.outbound));
                 return false;
             }
+        }
+        // resolve: CLEAR the dangling tag rather than drop the rule. `server` is
+        // optional for resolve — without it sing-box falls back to the default
+        // resolver — so keeping the rule preserves the operator's intent
+        // ("resolve here"), while dropping it would silently change routing.
+        if (rule.action === "resolve" && length(rule.server ?? "") && !dns_ok_tags[rule.server]) {
+            warn(sprintf("route.uc: route_rule '%s' server '%s' is not an enabled dns_server; falling back to the default resolver\n", name, rule.server));
+            delete rule.server;
         }
         return true;
     }
@@ -118,7 +131,7 @@ function build_route_rules(cur, valid_ob) {
         if (t === "logical") {
             rule.type = "logical";
             let sub = [];
-            for (let n in ref_list(s)) {
+            for (let n in helpers.as_array(s.rules)) {
                 let rs = rr_by_name[n];
                 if (rs == null) continue;
                 if ((rs.type ?? "default") === "logical") continue;   // only default refs

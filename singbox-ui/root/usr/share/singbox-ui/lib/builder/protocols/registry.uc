@@ -28,7 +28,10 @@
 let _registry = {};
 let _materialize_cache = {};
 
-const KNOWN_SHARED  = { tls: 1, transport: 1, multiplex: 1, quic: 1, dial: 1, listen: 1 };
+// The shared blocks a descriptor may name — read from _filler, which owns the
+// dispatch table that decides where each one is placed. A third hand-kept copy
+// here could only ever drift from the two that actually do the work.
+const KNOWN_SHARED  = require("builder._filler").SHARED_DISPATCH;
 const KNOWN_TYPES   = { string: 1, number: 1, bool: 1, enum: 1, list: 1 };
 // `dynamic` marks a selector whose choices are populated at render time from
 // live UCI / network state (see descriptor_form.js attachDynamic), not from a
@@ -230,10 +233,23 @@ function validate_field_refs(descriptor, ctx) {
         assert(names[ref] != null,
                sprintf("%s.%s: %s references unknown field '%s'", ctx, fname, what, ref));
     }
+    // `requires`/`depends` have THREE forms: "name" | {field,value} | [clauses]
+    // (AND). The object check alone skipped the array form entirely — and that
+    // is the form the load-bearing gates use (tun's NEEDS_AUTO_REDIRECT,
+    // route_address_set), so the only shape CLAUDE.md calls load-bearing was the
+    // one shape nothing validated.
+    function check_gate(fname, g, what) {
+        if (g == null) return;
+        if (type(g) === "array") {
+            for (let c in g) check_gate(fname, c, what);
+            return;
+        }
+        if (type(g) === "object") check_ref(fname, g.field, what);
+    }
     function _walk(fields) {
         for (let f in (fields || [])) {
-            if (type(f.requires) === "object") check_ref(f.name, f.requires.field, "requires.field");
-            if (type(f.depends) === "object")  check_ref(f.name, f.depends.field, "depends.field");
+            check_gate(f.name, f.requires, "requires.field");
+            check_gate(f.name, f.depends, "depends.field");
             check_ref(f.name, f.parent_enabled, "parent_enabled");
             if (f.default_when_empty != null) {
                 let t = type(f.default_when_empty);
@@ -245,6 +261,10 @@ function validate_field_refs(descriptor, ctx) {
     }
     _walk(descriptor.fields);
     for (let g in (descriptor.groups || [])) _walk(g.fields);
+    // Shared-block fields carry gates too (dial/listen/tls/quic/multiplex), and
+    // they were never walked — a typo in one of THEIR requires/depends made the
+    // field silently never emit, which is exactly what this check exists to stop.
+    _walk(_shared_fields(descriptor));
 }
 
 function register(descriptor) {

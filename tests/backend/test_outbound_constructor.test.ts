@@ -5,7 +5,6 @@ import { runUcode } from "../helpers/ucode.ts";
 
 const WORK = process.env.SB_VM_WORK ?? "/tmp/work";
 const LIB = `${WORK}/singbox-ui/root/usr/share/singbox-ui/lib`;
-const PARITY_LIB = `${WORK}/tests/parity`;
 const GENERATE_UC = `${WORK}/singbox-ui/root/usr/share/singbox-ui/generate.uc`;
 
 // Shape of a generated config outbound / doc, enough to type the JSON.parse
@@ -57,16 +56,6 @@ describe("outbound_constructor (generate.uc outbounds[] + outbound.build_constru
     if (r.stdout.includes("GENFAIL"))
       throw new Error(`generate.uc failed: ${r.stderr}`);
     return { doc: JSON.parse(r.stdout) as Doc, stderr: r.stderr };
-  }
-
-  async function canonNorm(jsonStr: string): Promise<string> {
-    const tmpF = `/tmp/ob_cn_${pid}.json`;
-    await putFile(jsonStr, tmpF);
-    const r = await exec(
-      `cd ${WORK} && ucode -L ${LIB} -L ${PARITY_LIB} -e 'let fs=require("fs"); let canon=require("canon").canon; let f=fs.open(ARGV[0],"r"); let j=json(f.read("all")); f.close(); printf("%J", canon(j));' ${tmpF}`,
-    );
-    await exec(`rm -f ${tmpF}`);
-    return r.stdout.trim();
   }
 
   // seed(subName, lines) — write sub_<subName>.txt lines (node/group records)
@@ -377,8 +366,8 @@ let s = { ".name":"hy2full", "server":"hy2.example.com", "server_port":"8443",
 printf("%J", ob.build_constructor_for(s, "hysteria2"));
 `);
     expect(r.exitCode).toBe(0);
-    // canon-norm for key-order-agnostic deep-equal
-    expect(await canonNorm(r.stdout.trim())).toBe(await canonNorm(golden));
+    // toEqual is already key-order-agnostic (see above).
+    expect(JSON.parse(r.stdout.trim())).toEqual(JSON.parse(golden));
   });
 
   // D1.5 minimal variant

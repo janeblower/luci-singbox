@@ -192,6 +192,30 @@ describe("92-singbox-ui-rulesets seeds the built-in rule-sets", () => {
     await exec(`uci -c ${DIR} revert singbox-ui`); // clear the shared savedir
   });
 
+  // The existence probe is `uci get singbox-ui.<name>`, which is true for a
+  // section of ANY type — and these names (telegram, discord, youtube, block…)
+  // are exactly what someone names an OUTBOUND. Stamping builtin='1' on it made
+  // it undeletable in the UI (lockBuiltinRow greys Edit/Delete) AND cut it from
+  // the generated config (prune_unreferenced_builtins). Reachable with no
+  // hand-editing: default_rulesets='0' -> add outbound `telegram` -> switch the
+  // builtins back on.
+  it("never stamps builtin on a same-named section of another type", async () => {
+    const CLASH = `${DIR}-clash`;
+    await seed(
+      CLASH,
+      `printf "\\nconfig outbound 'telegram'\\n\\toption type 'vless'\\n" >> ${CLASH}/singbox-ui`,
+    );
+    expect(await runScript(CLASH)).toBe(0);
+
+    const u = await rulesets(CLASH);
+    expect(u.telegram).toBe("outbound");
+    expect(u["telegram.builtin"]).toBeUndefined();
+    expect(u["telegram.type"]).toBe("vless");
+    // The other 24 were still seeded — one collision must not abort the reconcile.
+    expect(u.youtube).toBe("ruleset");
+    await exec(`rm -rf ${CLASH}`);
+  });
+
   it("cleanup", async () => {
     await exec(`rm -rf ${DIR}`);
   });

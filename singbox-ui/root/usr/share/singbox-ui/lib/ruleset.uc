@@ -15,6 +15,7 @@
 let reg      = require("builder.route.registry");
 let filler   = require("builder._filler");
 let headless = require("builder.route.headless");
+let helpers  = require("helpers");
 
 // build_rule_sets(cur, referenced_names) -> [{tag, type, ...}, ...]
 function build_rule_sets(cur, referenced_names, valid_ob) {
@@ -33,8 +34,7 @@ function build_rule_sets(cur, referenced_names, valid_ob) {
         let entry = (d != null) ? filler.build(d, rs) : { type: t, tag: name };
 
         if (t === "inline") {
-            let refs = rs.rules ?? [];
-            if (type(refs) === "string") refs = [ refs ];
+            let refs = helpers.as_array(rs.rules);
             // Guards mirror route.uc's logical-inlining loop (null/logical/disabled).
             // Kept duplicated intentionally: the two containers (logical rule vs
             // inline rule_set) have different validity semantics; only 2 call sites.
