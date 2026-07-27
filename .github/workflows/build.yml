@@ -104,6 +104,17 @@ jobs:
               - 'install.sh'
               - 'feed/**'
               - 'tests/cross/**'
+              # 16 of the 30 cross-tests guard backend/UI source, not packaging:
+              # test_requires_pkg_allowlist (descriptors vs INSTALLABLE_PKGS),
+              # test_rpcd_handler, test_capability_drop, test_main_js_syntax,
+              # test_view_modules_layout, test_po_coverage, test_grid_columns,
+              # test_route_tab_structure_js, test_json_import*. Without these
+              # three globs a commit touching ONLY the backend or ONLY the UI ran
+              # none of them — the same hole already fixed the other way round for
+              # acl.d in the `backend` filter above.
+              - 'singbox-ui/**'
+              - 'luci-app-singbox-ui/**'
+              - 'plugins/**'
             shared_core:
               - 'tests/lib/**'
               - 'tests/run*'
