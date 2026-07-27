@@ -30,9 +30,9 @@ msgstr "%d мин назад"
 msgid "%ds ago"
 msgstr "%d с назад"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:193
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:632
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:727
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:192
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:631
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:726
 msgid "(none)"
 msgstr "(нет)"
 
@@ -448,7 +448,7 @@ msgstr "Экспорт"
 msgid "Export JSON — %s %s"
 msgstr "Экспорт JSON — %s %s"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:316
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:315
 #, javascript-format
 msgid "Failed to install %s"
 msgstr "Не удалось установить %s"
@@ -517,7 +517,7 @@ msgstr "Группы (URLTest/Selector)"
 msgid "HWID"
 msgstr "HWID"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:361
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:360
 msgid "Hide"
 msgstr "Скрыть"
 
@@ -619,8 +619,8 @@ msgstr "Независимый кэш"
 msgid "Inline"
 msgstr "Встроенный"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:314
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:319
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:313
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:318
 #: htdocs/luci-static/resources/view/singbox-ui/tabs/plugins.js:43
 msgid "Install"
 msgstr "Установить"
@@ -629,7 +629,7 @@ msgstr "Установить"
 msgid "Installed"
 msgstr "Установлено"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:310
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:309
 msgid "Installed."
 msgstr "Установлено."
 
@@ -637,7 +637,7 @@ msgstr "Установлено."
 msgid "Installed. Reload the page."
 msgstr "Установлено. Перезагрузите страницу."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:305
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:304
 msgid "Installing…"
 msgstr "Установка…"
 
@@ -860,7 +860,7 @@ msgstr "Узлы"
 msgid "Not a JSON object"
 msgstr "Не JSON-объект"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:529
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:528
 #, javascript-format
 msgid ""
 "Not applied: inbounds %s both claim system routing / the firewall. Exactly "
@@ -1029,7 +1029,7 @@ msgstr ""
 "Удалённые (.srs/.json), локальные или встроенные rule-set'ы, на которые "
 "ссылаются правила маршрутизации."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:294
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:293
 #, javascript-format
 msgid "Requires the %s package."
 msgstr "Требуется пакет %s."
@@ -1132,8 +1132,8 @@ msgstr ""
 "на вкладке Rule-Sets. Если выключено — они скрыты и никогда не используются, "
 "не скачиваются и не попадают в конфиг."
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:361
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:363
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:360
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:362
 msgid "Show"
 msgstr "Показать"
 
@@ -1202,7 +1202,7 @@ msgstr "Поддержка"
 msgid "System info"
 msgstr "Системная информация"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:566
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:565
 #, javascript-format
 msgid ""
 "System routing / the firewall is already owned by inbound \"%s\". Only one "
@@ -1241,7 +1241,7 @@ msgstr ""
 msgid "Time"
 msgstr "Время"
 
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:356
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:355
 msgid "Toggle visibility"
 msgstr "Переключить видимость"
 
@@ -1395,12 +1395,12 @@ msgid "preview failed"
 msgstr "ошибка предпросмотра"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:462
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:245
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:244
 msgid "removed in"
 msgstr "удалено в"
 
 #: htdocs/luci-static/resources/view/singbox-ui/lib/common.js:460
-#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:242
+#: htdocs/luci-static/resources/view/singbox-ui/lib/descriptor_form.js:241
 msgid "requires"
 msgstr "требуется"
 
